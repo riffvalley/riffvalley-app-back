@@ -9,6 +9,15 @@ export enum ListType {
   VIDEO = 'video',
 }
 
+export enum SpecialListType {
+  WEB = 'web',
+  APP = 'app',
+  NOTICIAS = 'noticias',
+  VIDEOS = 'videos',
+  RIFF_VALLEY = 'riffValley',
+  OTROS = 'otros',
+}
+
 export enum ListStatus {
   NEW = 'new',
   ASSIGNED = 'assigned',
@@ -35,6 +44,13 @@ export class List {
     nullable: true,
   })
   status?: ListStatus;
+
+  @Column({
+    type: 'enum',
+    enum: SpecialListType,
+    nullable: true,
+  })
+  specialType?: SpecialListType;
 
   @Column({ type: 'boolean', default: false, nullable: true })
   free: boolean;

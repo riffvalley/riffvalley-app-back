@@ -6,7 +6,7 @@ import {
   IsDateString,
   MaxLength,
 } from 'class-validator';
-import { ListStatus, ListType } from '../entities/list.entity';
+import { ListStatus, ListType, SpecialListType } from '../entities/list.entity';
 
 export class CreateListDto {
   @IsString()
@@ -19,6 +19,10 @@ export class CreateListDto {
   @IsOptional()
   @IsEnum(ListStatus)
   status?: ListStatus;
+
+  @IsOptional()
+  @IsEnum(SpecialListType)
+  specialType?: SpecialListType;
 
   @IsBoolean()
   @IsOptional()
