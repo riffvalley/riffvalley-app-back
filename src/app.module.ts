@@ -25,6 +25,7 @@ import { VersionsModule } from './versions/versions.module';
 import { SpotifyModule } from './spotify/spotify.module';
 import { ContentsModule } from './contents/contents.module';
 import { ArticlesModule } from './articles/articles.module';
+import { ExcelModule } from './excel/excel.module';
 import { VideosModule } from './videos/videos.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { NewsModule } from './news/news.module';
@@ -74,6 +75,7 @@ import { ExcelModule } from './excel/excel.module';
     SpotifyModule,
     ContentsModule,
     ArticlesModule,
+    ExcelModule,
     VideosModule,
     TelegramModule,
     NewsModule,
