@@ -1,10 +1,10 @@
-import { Asignation } from 'src/asignations/entities/asignations.entity';
-import { Comment } from 'src/comments/entities/comment.entity';
-import { Favorite } from 'src/favorites/entities/favorite.entity';
-import { Pending } from 'src/pendings/entities/pending.entity';
-import { Rate } from 'src/rates/entities/rate.entity';
-import { Spotify } from 'src/spotify/entities/spotify.entity';
-import { Article } from 'src/articles/entities/article.entity';
+import { Asignation } from '../../asignations/entities/asignations.entity';
+import { Comment } from '../../comments/entities/comment.entity';
+import { Favorite } from '../../favorites/entities/favorite.entity';
+import { Pending } from '../../pendings/entities/pending.entity';
+import { Rate } from '../../rates/entities/rate.entity';
+import { Spotify } from '../../spotify/entities/spotify.entity';
+import { Article } from '../../articles/entities/article.entity';
 import {
   BeforeInsert,
   BeforeUpdate,
