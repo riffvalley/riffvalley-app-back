@@ -4,11 +4,17 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
-  Inject,
-  forwardRef
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, In, LessThan, MoreThan, MoreThanOrEqual, Not, Repository } from 'typeorm';
+import {
+  Between,
+  In,
+  LessThan,
+  MoreThan,
+  MoreThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
 import { List, ListType, ListStatus } from './entities/list.entity';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
@@ -24,7 +30,7 @@ export class ListsService {
     private readonly listRepository: Repository<List>,
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
-  ) { }
+  ) {}
 
   async create(createListDto: CreateListDto) {
     try {
@@ -119,8 +125,14 @@ export class ListsService {
       await this.listRepository.save(list);
 
       // Update associated Content if sync required
-      if (updateListDto.closeDate || updateListDto.releaseDate || updateListDto.listDate) {
-        const content = await this.contentRepository.findOne({ where: { list: { id: list.id } } });
+      if (
+        updateListDto.closeDate ||
+        updateListDto.releaseDate ||
+        updateListDto.listDate
+      ) {
+        const content = await this.contentRepository.findOne({
+          where: { list: { id: list.id } },
+        });
 
         if (content) {
           let changed = false;
@@ -128,8 +140,13 @@ export class ListsService {
           // Sync closeDate
           if (list.closeDate) {
             const listCloseDate = new Date(list.closeDate);
-            const contentCloseDate = content.closeDate ? new Date(content.closeDate) : null;
-            if (!contentCloseDate || contentCloseDate.getTime() !== listCloseDate.getTime()) {
+            const contentCloseDate = content.closeDate
+              ? new Date(content.closeDate)
+              : null;
+            if (
+              !contentCloseDate ||
+              contentCloseDate.getTime() !== listCloseDate.getTime()
+            ) {
               content.closeDate = listCloseDate;
               changed = true;
             }
@@ -138,19 +155,34 @@ export class ListsService {
           // Sync publicationDate with releaseDate (NOT listDate)
           if (list.releaseDate) {
             const releaseDate = new Date(list.releaseDate);
-            const contentDate = content.publicationDate ? new Date(content.publicationDate) : null;
-            if (!contentDate || contentDate.getTime() !== releaseDate.getTime()) {
+            const contentDate = content.publicationDate
+              ? new Date(content.publicationDate)
+              : null;
+            if (
+              !contentDate ||
+              contentDate.getTime() !== releaseDate.getTime()
+            ) {
               content.publicationDate = releaseDate;
               changed = true;
             }
           }
 
           // Sync list.listDate -> content.listDate (for RADAR, BEST, and VIDEO)
-          if (list.type === 'week' || list.type === 'month' || list.type === 'video') { // week = RADAR, month = BEST, video = VIDEO
+          if (
+            list.type === 'week' ||
+            list.type === 'month' ||
+            list.type === 'video'
+          ) {
+            // week = RADAR, month = BEST, video = VIDEO
             if (list.listDate) {
               const listListDate = new Date(list.listDate);
-              const contentListDate = content.listDate ? new Date(content.listDate) : null;
-              if (!contentListDate || contentListDate.getTime() !== listListDate.getTime()) {
+              const contentListDate = content.listDate
+                ? new Date(content.listDate)
+                : null;
+              if (
+                !contentListDate ||
+                contentListDate.getTime() !== listListDate.getTime()
+              ) {
                 content.listDate = listListDate;
                 changed = true;
               }
@@ -177,11 +209,14 @@ export class ListsService {
       throw new NotFoundException(`List with id ${id} not found`);
     }
 
-    // Find and delete associated content
-    const content = await this.contentRepository.findOne({ where: { list: { id: list.id } } });
+    // Delete associated content if exists
+    const content = await this.contentRepository.findOne({
+      where: { list: { id: list.id } },
+    });
     if (content) {
-      await this.contentRepository.remove(content);
-      this.logger.log(`Deleted associated content ${content.id}`);
+      // Unlink list from content before deleting
+      content.list = null;
+      await this.contentRepository.save(content);
     }
 
     return this.listRepository.remove(list);
@@ -322,13 +357,18 @@ export class ListsService {
     });
   }
 
-  async createVideoList(releaseDate?: Date, listDate?: Date, listName?: string, closeDate?: Date) {
+  async createVideoList(
+    releaseDate?: Date,
+    listDate?: Date,
+    listName?: string,
+    closeDate?: Date,
+  ) {
     let targetReleaseDate: Date;
 
     if (releaseDate) {
       targetReleaseDate = new Date(releaseDate);
       // If releaseDate provided, we trust it (including time)
-      // Normalizing to 1st of month ONLY if not provided? 
+      // Normalizing to 1st of month ONLY if not provided?
       // User request implies respecting exact time. If we force 1st of month we change date.
       // Assuming Video lists act like monthly buckets but if specific date given, maybe we should keep it?
       // Logic below uses targetListDate for naming.
@@ -358,8 +398,18 @@ export class ListsService {
 
     // Naming logic
     const monthNames = [
-      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
     ];
 
     const currentMonthName = monthNames[targetListDate.getMonth()];
@@ -383,7 +433,11 @@ export class ListsService {
     }
   }
 
-  async createWeeklyList(releaseDate?: Date, listDate?: Date, closeDate?: Date) {
+  async createWeeklyList(
+    releaseDate?: Date,
+    listDate?: Date,
+    closeDate?: Date,
+  ) {
     let targetReleaseDate: Date;
 
     if (releaseDate) {
@@ -410,10 +464,19 @@ export class ListsService {
       targetListDate.setHours(0, 0, 0, 0); // Default logic
     }
 
-
     const monthNames = [
-      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
     ];
 
     // Use targetListDate for naming
@@ -440,7 +503,11 @@ export class ListsService {
     }
   }
 
-  async createMonthlyList(releaseDate?: Date, listDate?: Date, closeDate?: Date) {
+  async createMonthlyList(
+    releaseDate?: Date,
+    listDate?: Date,
+    closeDate?: Date,
+  ) {
     let targetReleaseDate: Date;
 
     if (releaseDate) {
@@ -464,8 +531,18 @@ export class ListsService {
     }
 
     const monthNames = [
-      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
     ];
 
     // Use targetListDate for naming

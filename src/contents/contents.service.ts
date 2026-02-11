@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, Inject, forwardRef, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  forwardRef,
+  BadRequestException,
+} from '@nestjs/common';
 import { CreateContentDto } from './dto/create-content.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -7,9 +13,23 @@ import { Content, ContentType } from './entities/content.entity';
 import { User } from 'src/auth/entities/user.entity';
 import { Reunion } from 'src/reunions/entities/reunion.entity';
 import { Point } from 'src/points/entities/point.entity';
-import { Spotify, SpotifyStatus, SpotifyType } from 'src/spotify/entities/spotify.entity';
-import { Article, ArticleStatus, ArticleType } from 'src/articles/entities/article.entity';
+import {
+  Spotify,
+  SpotifyStatus,
+  SpotifyType,
+} from 'src/spotify/entities/spotify.entity';
+import {
+  Article,
+  ArticleStatus,
+  ArticleType,
+} from 'src/articles/entities/article.entity';
+import {
+  Video,
+  VideoStatus,
+  VideoType,
+} from 'src/videos/entities/video.entity';
 import { ListsService } from 'src/lists/list.service';
+import { List } from 'src/lists/entities/list.entity';
 
 @Injectable()
 export class ContentsService {
@@ -26,12 +46,34 @@ export class ContentsService {
     private readonly spotifyRepo: Repository<Spotify>,
     @InjectRepository(Article)
     private readonly articleRepo: Repository<Article>,
+    @InjectRepository(Video)
+    private readonly videoRepo: Repository<Video>,
+    @InjectRepository(List)
+    private readonly listRepo: Repository<List>,
     @Inject(forwardRef(() => ListsService))
     private readonly listsService: ListsService,
-  ) { }
+  ) {}
 
   async create(createContentDto: CreateContentDto): Promise<Content> {
-    const { authorId, publicationDate, closeDate, listDate, reunionId, ...rest } = createContentDto;
+    const {
+      authorId,
+      publicationDate,
+      closeDate,
+      listDate,
+      reunionId,
+      ...rest
+    } = createContentDto;
+
+    // RADAR and REUNION always require publicationDate
+    if (
+      (createContentDto.type === ContentType.RADAR ||
+        createContentDto.type === ContentType.REUNION) &&
+      !publicationDate
+    ) {
+      throw new BadRequestException(
+        `El tipo ${createContentDto.type} requiere una fecha de publicación.`,
+      );
+    }
 
     // Verify user exists
     const author = await this.userRepo.findOne({ where: { id: authorId } });
@@ -41,7 +83,9 @@ export class ContentsService {
 
     // Verify reunion exists if provided
     if (reunionId) {
-      const reunion = await this.reunionRepo.findOne({ where: { id: reunionId } });
+      const reunion = await this.reunionRepo.findOne({
+        where: { id: reunionId },
+      });
       if (!reunion) {
         throw new NotFoundException(`Reunion with id ${reunionId} not found`);
       }
@@ -49,15 +93,21 @@ export class ContentsService {
 
     // If spotifyId is provided, fetch the entity to sync initial state (Import state from Entity to Content)
     if ((rest as any).spotifyId) {
-      const existingSpotify = await this.spotifyRepo.findOne({ where: { id: (rest as any).spotifyId } });
+      const existingSpotify = await this.spotifyRepo.findOne({
+        where: { id: (rest as any).spotifyId },
+      });
       if (existingSpotify) {
         // If already PUBLISHED, sync content date from it
-        if (existingSpotify.status === SpotifyStatus.PUBLICADA && existingSpotify.updateDate) {
-          // Only override if content date wasn't explicitly provided? 
+        if (
+          existingSpotify.status === SpotifyStatus.PUBLISHED &&
+          existingSpotify.updateDate
+        ) {
+          // Only override if content date wasn't explicitly provided?
           // Or force sync? Usually if linking, we want consistency.
           if (!publicationDate) {
             (rest as any).publicationDate = existingSpotify.updateDate;
-            createContentDto.publicationDate = existingSpotify.updateDate.toISOString(); // Update DTO for consistency
+            createContentDto.publicationDate =
+              existingSpotify.updateDate.toISOString(); // Update DTO for consistency
           }
         }
       }
@@ -65,12 +115,37 @@ export class ContentsService {
 
     // If articleId is provided, fetch the entity to sync initial state
     if ((rest as any).articleId) {
-      const existingArticle = await this.articleRepo.findOne({ where: { id: (rest as any).articleId } });
+      const existingArticle = await this.articleRepo.findOne({
+        where: { id: (rest as any).articleId },
+      });
       if (existingArticle) {
-        if (existingArticle.status === ArticleStatus.PUBLISHED && existingArticle.updateDate) {
+        if (
+          existingArticle.status === ArticleStatus.PUBLISHED &&
+          existingArticle.updateDate
+        ) {
           if (!publicationDate) {
             (rest as any).publicationDate = existingArticle.updateDate;
-            createContentDto.publicationDate = existingArticle.updateDate.toISOString();
+            createContentDto.publicationDate =
+              existingArticle.updateDate.toISOString();
+          }
+        }
+      }
+    }
+
+    // If videoId is provided, fetch the entity to sync initial state
+    if ((rest as any).videoId) {
+      const existingVideo = await this.videoRepo.findOne({
+        where: { id: (rest as any).videoId },
+      });
+      if (existingVideo) {
+        if (
+          existingVideo.status === VideoStatus.PUBLISHED &&
+          existingVideo.updateDate
+        ) {
+          if (!publicationDate) {
+            (rest as any).publicationDate = existingVideo.updateDate;
+            createContentDto.publicationDate =
+              existingVideo.updateDate.toISOString();
           }
         }
       }
@@ -78,27 +153,37 @@ export class ContentsService {
 
     const content = this.contentRepo.create({
       ...rest,
-      publicationDate: createContentDto.publicationDate ? new Date(createContentDto.publicationDate) : undefined,
+      publicationDate: createContentDto.publicationDate
+        ? new Date(createContentDto.publicationDate)
+        : undefined,
       closeDate: closeDate ? new Date(closeDate) : undefined,
       listDate: listDate ? new Date(listDate) : undefined,
       author,
       reunionId,
-      spotify: (rest as any).spotifyId ? { id: (rest as any).spotifyId } : undefined,
-      article: (rest as any).articleId ? { id: (rest as any).articleId } : undefined,
+      spotify: (rest as any).spotifyId
+        ? { id: (rest as any).spotifyId }
+        : undefined,
+      article: (rest as any).articleId
+        ? { id: (rest as any).articleId }
+        : undefined,
+      video: (rest as any).videoId ? { id: (rest as any).videoId } : undefined,
       ready: createContentDto.publicationDate ? false : rest.ready,
     });
 
     // Auto-create Spotify entity if type is SPOTIFY and no spotifyId provided
-    if (createContentDto.type === ContentType.SPOTIFY && !(rest as any).spotifyId) {
+    if (
+      createContentDto.type === ContentType.SPOTIFY &&
+      !(rest as any).spotifyId
+    ) {
       if (!author) {
-        throw new BadRequestException('Cannot auto-create Spotify entity without an assigned author.');
+        throw new BadRequestException(
+          'Cannot auto-create Spotify entity without an assigned author.',
+        );
       }
 
       const spotifyEntity = this.spotifyRepo.create({
         name: rest.name,
-        // Status before published: PARA_PUBLICAR. (Assuming user wants it ready to receive the date later)
-        // Note: SpotifyService validation says PARA_PUBLICAR needs user. We have author here.
-        status: SpotifyStatus.PARA_PUBLICAR,
+        status: SpotifyStatus.EDITING,
         type: SpotifyType.GENERO, // Default type, user can change later
         link: '', // Default empty link
         updateDate: new Date(),
@@ -111,15 +196,19 @@ export class ContentsService {
     }
 
     // Auto-create Article entity if type is ARTICLE and no articleId provided
-    if (createContentDto.type === ContentType.ARTICLE && !(rest as any).articleId) {
+    if (
+      createContentDto.type === ContentType.ARTICLE &&
+      !(rest as any).articleId
+    ) {
       if (!author) {
-        throw new BadRequestException('Cannot auto-create Article entity without an assigned author.');
+        throw new BadRequestException(
+          'Cannot auto-create Article entity without an assigned author.',
+        );
       }
 
       const articleEntity = this.articleRepo.create({
         name: rest.name,
-        // Status before published: READY
-        status: ArticleStatus.READY,
+        status: ArticleStatus.EDITING,
         type: ArticleType.ARTICULO, // Default type
         updateDate: new Date(),
         user: author,
@@ -127,6 +216,26 @@ export class ContentsService {
       const savedArticle = await this.articleRepo.save(articleEntity);
 
       content.article = savedArticle;
+    }
+
+    // Auto-create Video entity if type is VIDEO and no videoId provided
+    if (createContentDto.type === ContentType.VIDEO && !(rest as any).videoId) {
+      if (!author) {
+        throw new BadRequestException(
+          'Cannot auto-create Video entity without an assigned author.',
+        );
+      }
+
+      const videoEntity = this.videoRepo.create({
+        name: rest.name,
+        status: VideoStatus.EDITING,
+        type: VideoType.CUSTOM,
+        updateDate: new Date(),
+        user: author,
+      });
+      const savedVideo = await this.videoRepo.save(videoEntity);
+
+      content.video = savedVideo;
     }
 
     // Auto-create Reunion if type is REUNION
@@ -165,15 +274,19 @@ export class ContentsService {
 
     // Auto-create Weekly List if type is RADAR or BEST
     if (savedContent.type === ContentType.RADAR) {
-      const list = await this.listsService.createWeeklyList(savedContent.publicationDate, savedContent.listDate, savedContent.closeDate);
+      const list = await this.listsService.createWeeklyList(
+        savedContent.publicationDate,
+        savedContent.listDate,
+        savedContent.closeDate,
+      );
       savedContent.list = list;
       await this.contentRepo.save(savedContent);
     } else if (savedContent.type === ContentType.BEST) {
-      const list = await this.listsService.createMonthlyList(savedContent.publicationDate, savedContent.listDate, savedContent.closeDate);
-      savedContent.list = list;
-      await this.contentRepo.save(savedContent);
-    } else if (savedContent.type === ContentType.VIDEO) {
-      const list = await this.listsService.createVideoList(savedContent.publicationDate, savedContent.listDate, savedContent.name, savedContent.closeDate);
+      const list = await this.listsService.createMonthlyList(
+        savedContent.publicationDate,
+        savedContent.listDate,
+        savedContent.closeDate,
+      );
       savedContent.list = list;
       await this.contentRepo.save(savedContent);
     }
@@ -188,7 +301,19 @@ export class ContentsService {
     }
     return this.contentRepo.find({
       where,
-      relations: ['author', 'list', 'list.asignations', 'spotify', 'article'],
+      relations: [
+        'author',
+        'list',
+        'list.asignations',
+        'spotify',
+        'spotify.user',
+        'article',
+        'article.user',
+        'article.editor',
+        'video',
+        'video.user',
+        'video.editor',
+      ],
       order: { publicationDate: 'DESC' },
     });
   }
@@ -196,7 +321,18 @@ export class ContentsService {
   async findOne(id: string): Promise<Content> {
     const content = await this.contentRepo.findOne({
       where: { id },
-      relations: ['author', 'list', 'spotify', 'article'],
+      relations: [
+        'author',
+        'list',
+        'spotify',
+        'spotify.user',
+        'article',
+        'article.user',
+        'article.editor',
+        'video',
+        'video.user',
+        'video.editor',
+      ],
     });
 
     if (!content) {
@@ -206,10 +342,20 @@ export class ContentsService {
     return content;
   }
 
-  async update(id: string, updateContentDto: UpdateContentDto): Promise<Content> {
+  async update(
+    id: string,
+    updateContentDto: UpdateContentDto,
+  ): Promise<Content> {
     const content = await this.findOne(id);
 
-    const { authorId, publicationDate, closeDate, listDate, reunionId, ...rest } = updateContentDto;
+    const {
+      authorId,
+      publicationDate,
+      closeDate,
+      listDate,
+      reunionId,
+      ...rest
+    } = updateContentDto;
 
     // Update author if provided
     if (authorId !== undefined) {
@@ -225,7 +371,9 @@ export class ContentsService {
       if (reunionId === null) {
         content.reunionId = null;
       } else {
-        const reunion = await this.reunionRepo.findOne({ where: { id: reunionId } });
+        const reunion = await this.reunionRepo.findOne({
+          where: { id: reunionId },
+        });
         if (!reunion) {
           throw new NotFoundException(`Reunion with id ${reunionId} not found`);
         }
@@ -237,13 +385,31 @@ export class ContentsService {
     Object.assign(content, rest);
 
     if (publicationDate !== undefined) {
+      // RADAR and REUNION cannot have publicationDate removed
+      const isNullDate =
+        publicationDate === null ||
+        publicationDate === '' ||
+        (typeof publicationDate === 'string' && publicationDate.trim() === '');
+      if (
+        isNullDate &&
+        (content.type === ContentType.RADAR ||
+          content.type === ContentType.REUNION)
+      ) {
+        throw new BadRequestException(
+          `El tipo ${content.type} requiere una fecha de publicación.`,
+        );
+      }
+
       if ((publicationDate as unknown) instanceof Date) {
         content.publicationDate = publicationDate as unknown as Date;
         content.ready = false;
       } else {
-        const newDate = publicationDate && typeof publicationDate === 'string' && publicationDate.trim() !== ''
-          ? new Date(publicationDate)
-          : null;
+        const newDate =
+          publicationDate &&
+          typeof publicationDate === 'string' &&
+          publicationDate.trim() !== ''
+            ? new Date(publicationDate)
+            : null;
         content.publicationDate = newDate;
         if (newDate) {
           content.ready = false;
@@ -255,9 +421,10 @@ export class ContentsService {
       if ((closeDate as unknown) instanceof Date) {
         content.closeDate = closeDate as unknown as Date;
       } else {
-        content.closeDate = closeDate && typeof closeDate === 'string' && closeDate.trim() !== ''
-          ? new Date(closeDate)
-          : null;
+        content.closeDate =
+          closeDate && typeof closeDate === 'string' && closeDate.trim() !== ''
+            ? new Date(closeDate)
+            : null;
       }
     }
 
@@ -265,19 +432,24 @@ export class ContentsService {
       if ((listDate as unknown) instanceof Date) {
         content.listDate = listDate as unknown as Date;
       } else {
-        content.listDate = listDate && typeof listDate === 'string' && listDate.trim() !== ''
-          ? new Date(listDate)
-          : null;
+        content.listDate =
+          listDate && typeof listDate === 'string' && listDate.trim() !== ''
+            ? new Date(listDate)
+            : null;
       }
     }
 
     const savedContent = await this.contentRepo.save(content);
 
     // Sync with List (RADAR, BEST, VIDEO)
-    if (savedContent.type === ContentType.RADAR || savedContent.type === ContentType.BEST || savedContent.type === ContentType.VIDEO) {
+    if (
+      savedContent.type === ContentType.RADAR ||
+      savedContent.type === ContentType.BEST ||
+      savedContent.type === ContentType.VIDEO
+    ) {
       const contentWithList = await this.contentRepo.findOne({
         where: { id: savedContent.id },
-        relations: ['list']
+        relations: ['list'],
       });
 
       if (contentWithList && contentWithList.list) {
@@ -286,7 +458,9 @@ export class ContentsService {
         // Sync publicationDate -> releaseDate (NOT listDate - listDate is independent)
         if (contentWithList.publicationDate) {
           const contentDate = new Date(contentWithList.publicationDate);
-          const releaseDate = contentWithList.list.releaseDate ? new Date(contentWithList.list.releaseDate) : null;
+          const releaseDate = contentWithList.list.releaseDate
+            ? new Date(contentWithList.list.releaseDate)
+            : null;
 
           if (!releaseDate || releaseDate.getTime() !== contentDate.getTime()) {
             contentWithList.list.releaseDate = contentDate;
@@ -295,12 +469,21 @@ export class ContentsService {
         }
 
         // Sync content.listDate -> list.listDate (for RADAR, BEST, and VIDEO)
-        if (savedContent.type === ContentType.RADAR || savedContent.type === ContentType.BEST || savedContent.type === ContentType.VIDEO) {
+        if (
+          savedContent.type === ContentType.RADAR ||
+          savedContent.type === ContentType.BEST ||
+          savedContent.type === ContentType.VIDEO
+        ) {
           if (contentWithList.listDate) {
             const contentListDate = new Date(contentWithList.listDate);
-            const listListDate = contentWithList.list.listDate ? new Date(contentWithList.list.listDate) : null;
+            const listListDate = contentWithList.list.listDate
+              ? new Date(contentWithList.list.listDate)
+              : null;
 
-            if (!listListDate || listListDate.getTime() !== contentListDate.getTime()) {
+            if (
+              !listListDate ||
+              listListDate.getTime() !== contentListDate.getTime()
+            ) {
               contentWithList.list.listDate = contentListDate;
               listChanged = true;
             }
@@ -310,21 +493,29 @@ export class ContentsService {
         // Sync closeDate -> closeDate
         if (contentWithList.closeDate) {
           const contentCloseDate = new Date(contentWithList.closeDate);
-          const listCloseDate = contentWithList.list.closeDate ? new Date(contentWithList.list.closeDate) : null;
+          const listCloseDate = contentWithList.list.closeDate
+            ? new Date(contentWithList.list.closeDate)
+            : null;
 
-          if (!listCloseDate || listCloseDate.getTime() !== contentCloseDate.getTime()) {
+          if (
+            !listCloseDate ||
+            listCloseDate.getTime() !== contentCloseDate.getTime()
+          ) {
             contentWithList.list.closeDate = contentCloseDate;
             listChanged = true;
           }
         }
 
         if (listChanged) {
-          // Use update on ListsService. 
+          // Use update on ListsService.
           // Note: ListsService.update triggers Content sync back. ListsService uses updated content values so it should be fine.
           // But to be safe and avoid loops just save repo if possible, but ListsService.update is safer for abstraction.
           // The loop is broken because values will match.
           // Cast list to any to satisfy UpdateListDto
-          await this.listsService.update(contentWithList.list.id, contentWithList.list as any);
+          await this.listsService.update(
+            contentWithList.list.id,
+            contentWithList.list as any,
+          );
         }
       }
     }
@@ -334,37 +525,47 @@ export class ContentsService {
       // Ensure we have the relation
       const contentWithSpotify = savedContent.spotify
         ? savedContent
-        : await this.contentRepo.findOne({ where: { id: savedContent.id }, relations: ['spotify'] });
+        : await this.contentRepo.findOne({
+            where: { id: savedContent.id },
+            relations: ['spotify'],
+          });
 
       if (contentWithSpotify && contentWithSpotify.spotify) {
-        const spotifyEntity = await this.spotifyRepo.findOne({ where: { id: contentWithSpotify.spotify.id } });
+        const spotifyEntity = await this.spotifyRepo.findOne({
+          where: { id: contentWithSpotify.spotify.id },
+        });
 
         if (spotifyEntity) {
           let spotifyChanged = false;
 
           if (savedContent.publicationDate) {
-            // Content Published -> Spotify PUBLICADA + Date Sync
+            // Content Published -> Spotify PUBLISHED + Date Sync
             const contentDate = new Date(savedContent.publicationDate);
-            const spotifyDate = spotifyEntity.updateDate ? new Date(spotifyEntity.updateDate) : null;
+            const spotifyDate = spotifyEntity.updateDate
+              ? new Date(spotifyEntity.updateDate)
+              : null;
 
             // Sync Date (ignoring time component discrepancies if we want to be strict, but updating to latest content date usually implies intention)
-            // If the dates are completely different days, definitely update. 
+            // If the dates are completely different days, definitely update.
             // If spotifyDate is timestamp, contentDate is YYYY-MM-DD 00:00:00.
-            if (!spotifyDate || spotifyDate.getTime() !== contentDate.getTime()) {
+            if (
+              !spotifyDate ||
+              spotifyDate.getTime() !== contentDate.getTime()
+            ) {
               spotifyEntity.updateDate = contentDate;
               spotifyChanged = true;
             }
 
-            if (spotifyEntity.status !== SpotifyStatus.PUBLICADA) {
-              spotifyEntity.status = SpotifyStatus.PUBLICADA;
+            if (spotifyEntity.status !== SpotifyStatus.PUBLISHED) {
+              spotifyEntity.status = SpotifyStatus.PUBLISHED;
               spotifyChanged = true;
             }
           } else {
-            // Content Backlog (null date) -> Spotify PARA_PUBLICAR
-            if (spotifyEntity.status !== SpotifyStatus.PARA_PUBLICAR) {
-              // If it was PUBLISHED, and we remove date, it goes to PARA_PUBLICAR.
-              // Assuming it has user assigned (which strictly it should if it was PUBLISHED or PARA_PUBLICAR before).
-              spotifyEntity.status = SpotifyStatus.PARA_PUBLICAR;
+            // Content Backlog (null date) -> Spotify READY
+            if (spotifyEntity.status !== SpotifyStatus.READY) {
+              // If it was PUBLISHED, and we remove date, it goes to READY.
+              // Assuming it has user assigned (which strictly it should if it was PUBLISHED or READY before).
+              spotifyEntity.status = SpotifyStatus.READY;
               spotifyChanged = true;
             }
           }
@@ -380,10 +581,15 @@ export class ContentsService {
     if (savedContent.type === ContentType.ARTICLE) {
       const contentWithArticle = savedContent.article
         ? savedContent
-        : await this.contentRepo.findOne({ where: { id: savedContent.id }, relations: ['article'] });
+        : await this.contentRepo.findOne({
+            where: { id: savedContent.id },
+            relations: ['article'],
+          });
 
       if (contentWithArticle && contentWithArticle.article) {
-        const articleEntity = await this.articleRepo.findOne({ where: { id: contentWithArticle.article.id } });
+        const articleEntity = await this.articleRepo.findOne({
+          where: { id: contentWithArticle.article.id },
+        });
 
         if (articleEntity) {
           let articleChanged = false;
@@ -391,9 +597,14 @@ export class ContentsService {
           if (savedContent.publicationDate) {
             // Content Published -> Article PUBLISHED + Date Sync
             const contentDate = new Date(savedContent.publicationDate);
-            const articleDate = articleEntity.updateDate ? new Date(articleEntity.updateDate) : null;
+            const articleDate = articleEntity.updateDate
+              ? new Date(articleEntity.updateDate)
+              : null;
 
-            if (!articleDate || articleDate.getTime() !== contentDate.getTime()) {
+            if (
+              !articleDate ||
+              articleDate.getTime() !== contentDate.getTime()
+            ) {
               articleEntity.updateDate = contentDate;
               articleChanged = true;
             }
@@ -411,6 +622,47 @@ export class ContentsService {
       }
     }
 
+    // Sync with Video
+    if (savedContent.type === ContentType.VIDEO) {
+      const contentWithVideo = savedContent.video
+        ? savedContent
+        : await this.contentRepo.findOne({
+            where: { id: savedContent.id },
+            relations: ['video'],
+          });
+
+      if (contentWithVideo && contentWithVideo.video) {
+        const videoEntity = await this.videoRepo.findOne({
+          where: { id: contentWithVideo.video.id },
+        });
+
+        if (videoEntity) {
+          let videoChanged = false;
+
+          if (savedContent.publicationDate) {
+            const contentDate = new Date(savedContent.publicationDate);
+            const videoDate = videoEntity.updateDate
+              ? new Date(videoEntity.updateDate)
+              : null;
+
+            if (!videoDate || videoDate.getTime() !== contentDate.getTime()) {
+              videoEntity.updateDate = contentDate;
+              videoChanged = true;
+            }
+
+            if (videoEntity.status !== VideoStatus.PUBLISHED) {
+              videoEntity.status = VideoStatus.PUBLISHED;
+              videoChanged = true;
+            }
+          }
+
+          if (videoChanged) {
+            await this.videoRepo.save(videoEntity);
+          }
+        }
+      }
+    }
+
     // Sync with Reunion (Content.publicationDate -> Reunion.date)
     if (savedContent.type === ContentType.REUNION || savedContent.reunionId) {
       // Ensure we have the relation loaded or use reunionId
@@ -421,24 +673,37 @@ export class ContentsService {
       }
 
       // If we don't have id but know it should exist (rare case if relations not loaded), fetch it
-      if (!reunionIdToUpdate && (savedContent.type === ContentType.REUNION)) {
-        const contentWithReunion = await this.contentRepo.findOne({ where: { id: savedContent.id }, relations: ['reunion'] });
+      if (!reunionIdToUpdate && savedContent.type === ContentType.REUNION) {
+        const contentWithReunion = await this.contentRepo.findOne({
+          where: { id: savedContent.id },
+          relations: ['reunion'],
+        });
         if (contentWithReunion && contentWithReunion.reunion) {
           reunionIdToUpdate = contentWithReunion.reunion.id;
         }
       }
 
-      if (reunionIdToUpdate && (savedContent.publicationDate || savedContent.name)) {
-        const reunionEntity = await this.reunionRepo.findOne({ where: { id: reunionIdToUpdate } });
+      if (
+        reunionIdToUpdate &&
+        (savedContent.publicationDate || savedContent.name)
+      ) {
+        const reunionEntity = await this.reunionRepo.findOne({
+          where: { id: reunionIdToUpdate },
+        });
 
         if (reunionEntity) {
           let reunionChanged = false;
 
           if (savedContent.publicationDate) {
             const contentDate = new Date(savedContent.publicationDate);
-            const reunionDate = reunionEntity.date ? new Date(reunionEntity.date) : null;
+            const reunionDate = reunionEntity.date
+              ? new Date(reunionEntity.date)
+              : null;
 
-            if (!reunionDate || reunionDate.getTime() !== contentDate.getTime()) {
+            if (
+              !reunionDate ||
+              reunionDate.getTime() !== contentDate.getTime()
+            ) {
               reunionEntity.date = contentDate;
               reunionChanged = true;
             }
@@ -462,29 +727,45 @@ export class ContentsService {
   async remove(id: string): Promise<void> {
     const content = await this.contentRepo.findOne({
       where: { id },
-      relations: ['list', 'reunion', 'spotify', 'article']
+      relations: ['list', 'reunion', 'spotify', 'article', 'video'],
     });
 
     if (!content) {
       throw new NotFoundException(`Content with id ${id} not found`);
     }
 
-    await this.contentRepo.remove(content);
+    // Save references before removing content
+    const spotifyId = content.spotify?.id;
+    const articleId = content.article?.id;
+    const videoId = content.video?.id;
+    const listId = content.list?.id;
 
-    if (content.list) {
-      await this.listsService.removeList(content.list.id);
-    }
+    await this.contentRepo.remove(content);
 
     if (content.reunion) {
       await this.reunionRepo.delete(content.reunion.id);
     }
 
-    // Cleanup orphaned Spotify or Article entities if needed. 
-    if (content.spotify) {
-      await this.spotifyRepo.remove(content.spotify);
+    // Delete associated List (like Reunion)
+    if (listId) {
+      await this.listsService.removeList(listId);
     }
-    if (content.article) {
-      await this.articleRepo.remove(content.article);
+
+    // Unlinked entities go back to IN_PROGRESS
+    if (spotifyId) {
+      await this.spotifyRepo.update(spotifyId, {
+        status: SpotifyStatus.IN_PROGRESS,
+      });
+    }
+    if (articleId) {
+      await this.articleRepo.update(articleId, {
+        status: ArticleStatus.IN_PROGRESS,
+      });
+    }
+    if (videoId) {
+      await this.videoRepo.update(videoId, {
+        status: VideoStatus.IN_PROGRESS,
+      });
     }
   }
 
@@ -508,7 +789,13 @@ export class ContentsService {
       .leftJoinAndSelect('content.list', 'list')
       .leftJoinAndSelect('list.asignations', 'asignations')
       .leftJoinAndSelect('content.spotify', 'spotify')
+      .leftJoinAndSelect('spotify.user', 'spotifyUser')
       .leftJoinAndSelect('content.article', 'article')
+      .leftJoinAndSelect('article.user', 'articleUser')
+      .leftJoinAndSelect('article.editor', 'articleEditor')
+      .leftJoinAndSelect('content.video', 'video')
+      .leftJoinAndSelect('video.user', 'videoUser')
+      .leftJoinAndSelect('video.editor', 'videoEditor')
       .where('content.publicationDate >= :startDate', { startDate })
       .andWhere('content.publicationDate <= :endDate', { endDate })
       .orderBy('content.publicationDate', 'DESC')
@@ -527,8 +814,18 @@ export class ContentsService {
     });
   }
 
+  async findOneByVideoId(videoId: string): Promise<Content | null> {
+    return this.contentRepo.findOne({
+      where: { video: { id: videoId } },
+    });
+  }
+
   async getDefaultAuthorId(): Promise<string> {
-    const author = await this.userRepo.findOne({ select: ['id'], where: {}, order: { id: 'ASC' } });
+    const author = await this.userRepo.findOne({
+      select: ['id'],
+      where: {},
+      order: { id: 'ASC' },
+    });
     if (!author) {
       throw new NotFoundException('No default user found');
     }
