@@ -1,4 +1,3 @@
-// src/spotify/dto/list-spotify.query.dto.ts
 import {
   IsInt,
   IsOptional,
@@ -17,11 +16,11 @@ const ESTADOS = [
   'ready',
   'published',
 ] as const;
-const TIPOS = ['festival', 'especial', 'genero', 'otras'] as const;
-type SpotifyStatus = (typeof ESTADOS)[number];
-type SpotifyType = (typeof TIPOS)[number];
+const TIPOS = ['best', 'custom'] as const;
+type VideoStatusType = (typeof ESTADOS)[number];
+type VideoTypeType = (typeof TIPOS)[number];
 
-export class ListSpotifyQueryDto {
+export class ListVideoQueryDto {
   @IsOptional()
   @IsString()
   q?: string;
@@ -31,14 +30,14 @@ export class ListSpotifyQueryDto {
     typeof value === 'string' ? value.toLowerCase() : value,
   )
   @IsIn(ESTADOS as readonly string[])
-  status?: SpotifyStatus;
+  status?: VideoStatusType;
 
   @IsOptional()
   @Transform(({ value }) =>
     typeof value === 'string' ? value.toLowerCase() : value,
   )
   @IsIn(TIPOS as readonly string[])
-  type?: SpotifyType;
+  type?: VideoTypeType;
 
   @IsOptional()
   @Type(() => Number)
@@ -60,4 +59,8 @@ export class ListSpotifyQueryDto {
   @IsOptional()
   @IsISO8601()
   hasta?: string;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }

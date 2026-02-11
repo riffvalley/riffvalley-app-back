@@ -5,6 +5,7 @@ import { Pending } from '../../pendings/entities/pending.entity';
 import { Rate } from '../../rates/entities/rate.entity';
 import { Spotify } from '../../spotify/entities/spotify.entity';
 import { Article } from '../../articles/entities/article.entity';
+import { Video } from '../../videos/entities/video.entity';
 import {
   BeforeInsert,
   BeforeUpdate,
@@ -71,6 +72,9 @@ export class User {
 
   @OneToMany(() => Article, (article) => article.user, { cascade: true })
   articles: Article[];
+
+  @OneToMany(() => Video, (video) => video.user, { cascade: true })
+  videos: Video[];
 
   @BeforeInsert()
   checkFieldsBeforeInsert() {

@@ -9,8 +9,9 @@ import {
 } from 'typeorm';
 import { Content } from 'src/contents/entities/content.entity';
 import { User } from 'src/auth/entities/user.entity';
+import { List } from 'src/lists/entities/list.entity';
 
-export enum SpotifyStatus {
+export enum VideoStatus {
   NOT_STARTED = 'not_started',
   IN_PROGRESS = 'in_progress',
   EDITING = 'editing',
@@ -18,31 +19,30 @@ export enum SpotifyStatus {
   PUBLISHED = 'published',
 }
 
-export enum SpotifyType {
-  FESTIVAL = 'festival',
-  ESPECIAL = 'especial',
-  GENERO = 'genero',
-  OTRAS = 'otras',
+export enum VideoType {
+  BEST = 'best',
+  CUSTOM = 'custom',
 }
 
-@Entity('spotify')
-export class Spotify {
+@Entity('video')
+export class Video {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'varchar', length: 200 })
   name: string;
 
-  @Column({ type: 'enum', enum: SpotifyStatus })
-  status: SpotifyStatus;
+  @Column({ type: 'enum', enum: VideoStatus })
+  status: VideoStatus;
 
-  @Column({ type: 'varchar', length: 500 })
-  link: string;
+  @Column({ type: 'enum', enum: VideoType })
+  type: VideoType;
 
-  @Column({ type: 'enum', enum: SpotifyType })
-  type: SpotifyType;
-
-  @Column({ type: 'timestamp with time zone', name: 'fecha_actualizacion' })
+  @Column({
+    type: 'timestamp with time zone',
+    name: 'fecha_actualizacion',
+    nullable: true,
+  })
   updateDate: Date;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
@@ -51,9 +51,15 @@ export class Spotify {
   @UpdateDateColumn({ type: 'timestamp with time zone' })
   updatedAt: Date;
 
-  @OneToOne(() => Content, (content) => content.spotify)
+  @OneToOne(() => Content, (content) => content.video)
   content: Content;
 
-  @ManyToOne(() => User, (user) => user.spotify, { nullable: true })
+  @ManyToOne(() => User, (user) => user.videos, { nullable: true })
   user: User;
+
+  @ManyToOne(() => User, { nullable: true })
+  editor: User;
+
+  @ManyToOne(() => List, { nullable: true })
+  list: List;
 }

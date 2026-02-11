@@ -21,6 +21,10 @@ export enum SpecialListType {
 export enum ListStatus {
   NEW = 'new',
   ASSIGNED = 'assigned',
+  NOT_STARTED = 'not_started',
+  IN_PROGRESS = 'in_progress',
+  EDITING = 'editing',
+  READY = 'ready',
   PUBLISHED = 'published',
 }
 
@@ -63,8 +67,6 @@ export class List {
 
   @Column({ type: 'timestamp', nullable: true })
   closeDate?: Date;
-
-
 
   @OneToMany(() => Asignation, (asignation) => asignation.list, {
     cascade: true,

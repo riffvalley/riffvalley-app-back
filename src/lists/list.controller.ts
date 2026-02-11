@@ -19,7 +19,7 @@ import { User } from 'src/auth/entities/user.entity';
 
 @Controller('lists')
 export class ListsController {
-  constructor(private readonly listsServices: ListsService) { }
+  constructor(private readonly listsServices: ListsService) {}
 
   @Post()
   create(@Body() createListDto: CreateListDto) {
@@ -69,9 +69,7 @@ export class ListsController {
   findPastVideoByYear(
     @Param('year') year: string, // Only year is passed
   ) {
-    return this.listsServices.findPastVideoListsByYear(
-      parseInt(year),
-    );
+    return this.listsServices.findPastVideoListsByYear(parseInt(year));
   }
 
   @Get('special')
@@ -93,9 +91,7 @@ export class ListsController {
   findPastMonthByYear(
     @Param('year') year: string, // Only year is passed
   ) {
-    return this.listsServices.findPastMonthListsByYear(
-      parseInt(year),
-    );
+    return this.listsServices.findPastMonthListsByYear(parseInt(year));
   }
 
   @Get('video/current')

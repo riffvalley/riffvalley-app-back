@@ -1,7 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, LessThanOrEqual, MoreThanOrEqual, Repository, In } from 'typeorm';
-import { Spotify, SpotifyStatus as SpotifyStatusEnum } from './entities/spotify.entity';
+import {
+  ILike,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Repository,
+  In,
+} from 'typeorm';
+import {
+  Spotify,
+  SpotifyStatus as SpotifyStatusEnum,
+} from './entities/spotify.entity';
 import { ContentsService } from 'src/contents/contents.service';
 import { ContentType } from 'src/contents/entities/content.entity';
 import { CreateSpotifyDto } from './dto/create-spotify.dto';
@@ -9,11 +22,11 @@ import { UpdateSpotifyDto } from './dto/update-spotify.dto';
 
 // si ya tienes estos tipos en otro archivo, reutilízalos
 export type SpotifyStatus =
-  | 'actualizada'
-  | 'publicada'
-  | 'para_publicar'
-  | 'por_actualizar'
-  | 'en_desarrollo';
+  | 'not_started'
+  | 'in_progress'
+  | 'editing'
+  | 'ready'
+  | 'published';
 
 export type SpotifyType = 'festival' | 'especial' | 'genero' | 'otras';
 
@@ -34,15 +47,37 @@ export class SpotifyService {
     @InjectRepository(Spotify)
     private readonly repo: Repository<Spotify>,
     private readonly contentsService: ContentsService,
-  ) { }
+  ) {}
 
   async create(createSpotifyDto: CreateSpotifyDto): Promise<Spotify> {
     const entity = this.repo.create({
       ...createSpotifyDto,
       updateDate: new Date(createSpotifyDto.updateDate),
-      user: createSpotifyDto.userId ? { id: createSpotifyDto.userId } : undefined,
+      user: createSpotifyDto.userId
+        ? { id: createSpotifyDto.userId }
+        : undefined,
     });
-    return this.repo.save(entity);
+    const savedEntity = await this.repo.save(entity);
+
+    // Shortcut: if created with EDITING or READY, auto-create Content
+    if (
+      savedEntity.status === SpotifyStatusEnum.EDITING ||
+      savedEntity.status === SpotifyStatusEnum.READY
+    ) {
+      if (!savedEntity.user) {
+        throw new BadRequestException(
+          'Para crear un Spotify en estado EDITING, debe tener un usuario asignado.',
+        );
+      }
+      await this.contentsService.create({
+        name: savedEntity.name,
+        type: ContentType.SPOTIFY,
+        authorId: createSpotifyDto.userId,
+        spotifyId: savedEntity.id,
+      } as any);
+    }
+
+    return this.findOne(savedEntity.id);
   }
 
   async findAll(params: FindSpotifyParams = {}): Promise<Spotify[]> {
@@ -52,20 +87,16 @@ export class SpotifyService {
     const baseWhere: any = {
       ...(status ? { status } : {}),
       ...(type ? (Array.isArray(type) ? { type: In(type) } : { type }) : {}),
-      ...(desde
-        ? { updateDate: MoreThanOrEqual(new Date(desde)) }
-        : {}),
-      ...(hasta
-        ? { updateDate: LessThanOrEqual(new Date(hasta)) }
-        : {}),
+      ...(desde ? { updateDate: MoreThanOrEqual(new Date(desde)) } : {}),
+      ...(hasta ? { updateDate: LessThanOrEqual(new Date(hasta)) } : {}),
     };
 
     // Si hay q, hacemos OR sobre nombre/enlace con ILIKE
     const where = q
       ? [
-        { ...baseWhere, name: ILike(`%${q}%`) },
-        { ...baseWhere, link: ILike(`%${q}%`) },
-      ]
+          { ...baseWhere, name: ILike(`%${q}%`) },
+          { ...baseWhere, link: ILike(`%${q}%`) },
+        ]
       : baseWhere;
 
     return this.repo.find({
@@ -80,7 +111,7 @@ export class SpotifyService {
   async findOne(id: string): Promise<Spotify> {
     const entity = await this.repo.findOne({
       where: { id },
-      relations: ['user'], // Load user relation
+      relations: ['user', 'content'],
     });
     if (!entity) throw new NotFoundException('Spotify item not found');
     return entity;
@@ -92,7 +123,7 @@ export class SpotifyService {
   ): Promise<Spotify> {
     const entity = await this.findOne(id);
     let shouldSyncContent = false;
-    let contentSyncPayload: any = {};
+    const contentSyncPayload: any = {};
     let contentId: string | undefined;
 
     // Update simple fields
@@ -113,34 +144,51 @@ export class SpotifyService {
 
     // Logic for State Transitions
     if (updateSpotifyDto.status && updateSpotifyDto.status !== entity.status) {
-      if (updateSpotifyDto.status === SpotifyStatusEnum.PARA_PUBLICAR) {
+      if (updateSpotifyDto.status === SpotifyStatusEnum.IN_PROGRESS) {
+        // Transitioning to IN_PROGRESS: delete associated Content
+        const content = await this.contentsService.findOneBySpotifyId(id);
+        if (content) {
+          await this.contentsService.remove(content.id);
+        }
+      } else if (
+        updateSpotifyDto.status === SpotifyStatusEnum.EDITING ||
+        updateSpotifyDto.status === SpotifyStatusEnum.READY
+      ) {
         const assignedUser = entity.user;
         if (!assignedUser) {
-          throw new BadRequestException('Para cambiar el estado a "Para Publicar", la lista de Spotify debe tener un usuario asignado.');
+          throw new BadRequestException(
+            `Para cambiar el estado a "${updateSpotifyDto.status}", el Spotify debe tener un usuario asignado.`,
+          );
         }
 
         const content = await this.contentsService.findOneBySpotifyId(id);
         if (!content) {
           try {
-            await this.contentsService.create({
+            const newContent = await this.contentsService.create({
               name: entity.name,
               type: ContentType.SPOTIFY,
               authorId: assignedUser.id,
               spotifyId: id,
             } as any);
+            entity.content = newContent;
           } catch (error) {
             console.error('Error creating content for Spotify:', error);
-            throw new BadRequestException('Error al crear el contenido asociado: ' + error.message);
+            throw new BadRequestException(
+              'Error al crear el contenido asociado: ' + error.message,
+            );
           }
         } else {
-          // Sync existing content to NULL date
           shouldSyncContent = true;
           contentId = content.id;
           contentSyncPayload.publicationDate = null;
         }
-      } else if (updateSpotifyDto.status === SpotifyStatusEnum.PUBLICADA) {
-        // Transition to PUBLICADA: Set fechaActualizacion to NOW
-        entity.updateDate = new Date();
+      } else if (updateSpotifyDto.status === SpotifyStatusEnum.PUBLISHED) {
+        if (!updateSpotifyDto.updateDate) {
+          throw new BadRequestException(
+            'Para cambiar el estado a "published", debe proporcionar una fecha (updateDate).',
+          );
+        }
+        entity.updateDate = new Date(updateSpotifyDto.updateDate);
         shouldSyncContent = true;
         contentSyncPayload.publicationDate = entity.updateDate;
       }
@@ -170,9 +218,15 @@ export class SpotifyService {
 
   async remove(id: string): Promise<{ ok: true }> {
     const entity = await this.findOne(id);
+
+    const content = await this.contentsService.findOneBySpotifyId(id);
+    if (content) {
+      throw new BadRequestException(
+        'No se puede eliminar un Spotify que tiene un Content asociado. Primero pásalo a IN_PROGRESS.',
+      );
+    }
+
     await this.repo.remove(entity);
     return { ok: true };
   }
-
-
 }

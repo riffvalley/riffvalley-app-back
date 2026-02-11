@@ -1,4 +1,12 @@
-import { IsEnum, IsISO8601, IsOptional, IsString, IsUrl, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  IsUrl,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { SpotifyStatus, SpotifyType } from '../entities/spotify.entity';
 
 export class CreateSpotifyDto {
