@@ -26,6 +26,9 @@ import { SpotifyModule } from './spotify/spotify.module';
 import { ContentsModule } from './contents/contents.module';
 import { ArticlesModule } from './articles/articles.module';
 import { VideosModule } from './videos/videos.module';
+import { TelegramModule } from './telegram/telegram.module';
+import { NewsModule } from './news/news.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { ExcelModule } from './excel/excel.module';
 
 @Module({
@@ -72,6 +75,9 @@ import { ExcelModule } from './excel/excel.module';
     ContentsModule,
     ArticlesModule,
     VideosModule,
+    TelegramModule,
+    NewsModule,
+    UploadsModule,
     ExcelModule,
   ],
 })
