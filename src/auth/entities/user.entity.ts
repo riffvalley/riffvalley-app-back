@@ -50,6 +50,9 @@ export class User {
   @Column('text', { nullable: true })
   notes: string;
 
+  @Column({ type: 'timestamp', nullable: true })
+  lastLogin: Date;
+
   @OneToMany(() => Rate, (rate) => rate.user, { cascade: true })
   rate: Rate;
 
