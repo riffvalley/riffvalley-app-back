@@ -4,6 +4,7 @@ import {
   IsArray,
   IsBoolean,
   IsDate,
+  IsIn,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -68,6 +69,21 @@ export class PaginationDto {
   @IsOptional()
   @IsString()
   country?: string;
+
+  @IsOptional()
+  @IsIn([7, 15, 30])
+  @Type(() => Number)
+  notVotedDays?: 7 | 15 | 30;
+
+  @IsOptional()
+  @IsIn([7, 15, 30])
+  @Type(() => Number)
+  accessDays?: 7 | 15 | 30;
+
+  @IsOptional()
+  @IsIn([7, 15, 30])
+  @Type(() => Number)
+  inactiveDays?: 7 | 15 | 30;
 
   @IsOptional()
   @IsString()

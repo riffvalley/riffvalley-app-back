@@ -6,6 +6,7 @@ import {
   Param,
   Delete,
   Patch,
+  Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -15,6 +16,7 @@ import { User } from './entities/user.entity';
 import { ValidRoles } from './interfaces/valid-roles';
 import { Auth } from './decorators/auth.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PaginationDto } from 'src/common/dtos/pagination.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -58,6 +60,12 @@ export class AuthController {
   @Get('users/superusers')
   findSuperUsers() {
     return this.authService.findSuperUsers();
+  }
+
+  @Get('users/admin-stats')
+  @Auth(ValidRoles.superUser)
+  findAllAdminStats(@Query() paginationDto: PaginationDto) {
+    return this.authService.findAllAdminStats(paginationDto);
   }
 
   @Get(':id')
