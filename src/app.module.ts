@@ -30,11 +30,6 @@ import { TelegramModule } from './telegram/telegram.module';
 import { NewsModule } from './news/news.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ExcelModule } from './excel/excel.module';
-import { VideosModule } from './videos/videos.module';
-import { TelegramModule } from './telegram/telegram.module';
-import { NewsModule } from './news/news.module';
-import { UploadsModule } from './uploads/uploads.module';
-import { ExcelModule } from './excel/excel.module';
 
 @Module({
   imports: [
@@ -84,12 +79,6 @@ import { ExcelModule } from './excel/excel.module';
     NewsModule,
     UploadsModule,
     ExcelModule,
-    VideosModule,
-    TelegramModule,
-    NewsModule,
-    UploadsModule,
-    ExcelModule,
-    NewsModule,
   ],
 })
 export class AppModule {}

@@ -1,4 +1,5 @@
-import { Controller, Get, Res, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Res, Logger, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { ExcelService } from './excel.service';
 
@@ -32,4 +33,21 @@ export class ExcelController {
       res.status(500).send('Error generating Excel file: ' + (error instanceof Error ? error.message : String(error)));
     }
   }
+
+  @Post('template/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadTemplate(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No se ha proporcionado ningún archivo');
+    }
+
+    this.logger.log(`Archivo recibido: ${file.originalname} (${file.size} bytes)`);
+
+    const result = await this.excelService.importDiscs(file.buffer);
+
+    this.logger.log(`Importación completada: ${result.created} creados, ${result.errors.length} errores`);
+
+    return result;
+  }
 }
+
