@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
-import { User } from 'src/auth/entities/user.entity';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { User } from '../../auth/entities/user.entity';
+import { Disc } from '../../discs/entities/disc.entity';
 
 @Entity()
 export class Rate {
