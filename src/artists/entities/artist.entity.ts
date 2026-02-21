@@ -1,5 +1,5 @@
-import { Country } from 'src/countries/entities/country.entity';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Country } from '../../countries/entities/country.entity';
+import { Disc } from '../../discs/entities/disc.entity';
 import {
   Column,
   Entity,

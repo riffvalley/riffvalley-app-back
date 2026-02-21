@@ -1,4 +1,4 @@
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from '../../discs/entities/disc.entity';
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity()

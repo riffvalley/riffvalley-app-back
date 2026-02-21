@@ -1,6 +1,6 @@
-import { Artist } from 'src/artists/entities/artist.entity';
-import { Rate } from 'src/rates/entities/rate.entity';
-import { Genre } from 'src/genres/entities/genre.entity';
+import { Artist } from '../../artists/entities/artist.entity';
+import { Rate } from '../../rates/entities/rate.entity';
+import { Genre } from '../../genres/entities/genre.entity';
 import {
   Column,
   Entity,
@@ -8,10 +8,10 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Asignation } from 'src/asignations/entities/asignations.entity';
-import { Favorite } from 'src/favorites/entities/favorite.entity';
-import { Pending } from 'src/pendings/entities/pending.entity';
-import { Comment } from 'src/comments/entities/comment.entity';
+import { Asignation } from '../../asignations/entities/asignations.entity';
+import { Favorite } from '../../favorites/entities/favorite.entity';
+import { Pending } from '../../pendings/entities/pending.entity';
+import { Comment } from '../../comments/entities/comment.entity';
 
 @Entity()
 export class Disc {
