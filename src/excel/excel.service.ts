@@ -49,6 +49,24 @@ export class ExcelService {
       const countryNames = countries.map(c => c.name);
       const yesNo = ['Si', 'No'];
 
+      // Hidden sheet with dropdown lists to avoid Excel's 255-char inline limit
+      const listsWs = workbook.addWorksheet('Listas');
+      listsWs.state = 'hidden';
+
+      genreNames.forEach((name, i) => {
+        listsWs.getCell(`A${i + 1}`).value = name;
+      });
+      countryNames.forEach((name, i) => {
+        listsWs.getCell(`B${i + 1}`).value = name;
+      });
+      yesNo.forEach((val, i) => {
+        listsWs.getCell(`C${i + 1}`).value = val;
+      });
+
+      const genreRange = `Listas!$A$1:$A$${genreNames.length}`;
+      const countryRange = `Listas!$B$1:$B$${countryNames.length}`;
+      const yesNoRange = `Listas!$C$1:$C$${yesNo.length}`;
+
       // Columns
       ws.columns = [
         { header: 'Fecha', key: 'fecha', width: 15 },
@@ -63,29 +81,25 @@ export class ExcelService {
 
       // Add data validation (dropdowns) for rows 2 to 101
       for (let i = 2; i <= 101; i++) {
-        // Género dropdown
         ws.getCell(`D${i}`).dataValidation = {
           type: 'list',
           allowBlank: true,
-          formulae: [`"${genreNames.join(',')}"`],
+          formulae: [genreRange],
         };
-        // País dropdown
         ws.getCell(`E${i}`).dataValidation = {
           type: 'list',
           allowBlank: true,
-          formulae: [`"${countryNames.join(',')}"`],
+          formulae: [countryRange],
         };
-        // Debut dropdown
         ws.getCell(`F${i}`).dataValidation = {
           type: 'list',
           allowBlank: true,
-          formulae: [`"${yesNo.join(',')}"`],
+          formulae: [yesNoRange],
         };
-        // EP dropdown
         ws.getCell(`G${i}`).dataValidation = {
           type: 'list',
           allowBlank: true,
-          formulae: [`"${yesNo.join(',')}"`],
+          formulae: [yesNoRange],
         };
       }
       console.log('Data validation added');
@@ -126,6 +140,7 @@ export class ExcelService {
     let created = 0;
 
     for (const ws of workbook.worksheets) {
+      if (ws.state === 'hidden' || ws.state === 'veryHidden') continue;
       this.logger.log(`Procesando hoja: ${ws.name}`);
       // Collect row data (eachRow is synchronous, but we need async DB calls)
       const rowsData: { rowNumber: number; values: any }[] = [];
