@@ -55,4 +55,7 @@ export class CreateContentDto {
 
   @IsOptional()
   ready?: boolean;
+
+  @IsOptional()
+  backlog?: boolean;
 }

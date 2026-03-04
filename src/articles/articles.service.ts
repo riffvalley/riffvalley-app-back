@@ -60,6 +60,7 @@ export class ArticlesService {
         type: ContentType.ARTICLE,
         authorId: createArticleDto.userId,
         articleId: savedArticle.id,
+        backlog: true,
       } as any);
     }
 
@@ -156,6 +157,7 @@ export class ArticlesService {
               type: ContentType.ARTICLE,
               authorId: assignedUser.id,
               articleId: id,
+              backlog: true,
             } as any);
             entity.content = newContent;
           } catch (error) {
@@ -168,6 +170,7 @@ export class ArticlesService {
           shouldSyncContent = true;
           contentId = content.id;
           contentSyncPayload.publicationDate = null;
+          contentSyncPayload.backlog = true;
         }
       } else if (updateArticleDto.status === ArticleStatus.PUBLISHED) {
         if (!updateArticleDto.updateDate) {
@@ -178,6 +181,7 @@ export class ArticlesService {
         entity.updateDate = new Date(updateArticleDto.updateDate);
         shouldSyncContent = true;
         contentSyncPayload.publicationDate = entity.updateDate;
+        contentSyncPayload.backlog = false;
       }
     }
 

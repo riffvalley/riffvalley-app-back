@@ -294,11 +294,10 @@ export class ContentsService {
     return savedContent;
   }
 
-  async findAll(ready?: boolean): Promise<Content[]> {
+  async findAll(ready?: boolean, backlog?: boolean): Promise<Content[]> {
     const where: any = {};
-    if (ready !== undefined) {
-      where.ready = ready;
-    }
+    if (ready !== undefined) where.ready = ready;
+    if (backlog !== undefined) where.backlog = backlog;
     return this.contentRepo.find({
       where,
       relations: [
