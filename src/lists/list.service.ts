@@ -214,9 +214,7 @@ export class ListsService {
       where: { list: { id: list.id } },
     });
     if (content) {
-      // Unlink list from content before deleting
-      content.list = null;
-      await this.contentRepository.save(content);
+      await this.contentRepository.remove(content);
     }
 
     return this.listRepository.remove(list);
