@@ -8,6 +8,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { UserAccessLog } from './entities/user-access-log.entity';
+import { Rate } from '../rates/entities/rate.entity';
 import { Repository } from 'typeorm';
 
 import * as bcrypt from 'bcrypt';
@@ -24,6 +25,8 @@ export class AuthService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(UserAccessLog)
     private readonly userAccessLogRepository: Repository<UserAccessLog>,
+    @InjectRepository(Rate)
+    private readonly rateRepository: Repository<Rate>,
     private readonly jwtService: JwtService,
   ) { }
   async create(createUserDto: CreateUserDto) {
@@ -322,6 +325,47 @@ export class AuthService {
     const user = await this.findOne(id);
     user.isActive = isActive;
     return this.userRepository.save(user);
+  }
+
+  async getAllActivity(paginationDto: PaginationDto) {
+    const { limit = 20, offset = 0 } = paginationDto;
+
+    const [data, totalItems] = await this.rateRepository.findAndCount({
+      relations: ['disc', 'user'],
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+
+    return {
+      totalItems,
+      totalPages: Math.ceil(totalItems / limit),
+      currentPage: Math.floor(offset / limit) + 1,
+      limit,
+      data: data.map(({ user, disc, ...rate }) => ({
+        ...rate,
+        user: { id: user.id, username: user.username, image: user.image },
+        disc: { id: disc.id, name: disc.name },
+      })),
+    };
+  }
+
+  async getUserActivity(id: string) {
+    const [votes, logins] = await Promise.all([
+      this.rateRepository.find({
+        where: { user: { id } },
+        relations: ['disc'],
+        order: { createdAt: 'DESC' },
+        select: { id: true, rate: true, cover: true, createdAt: true, editedAt: true },
+      }),
+      this.userAccessLogRepository.find({
+        where: { userId: id },
+        order: { date: 'DESC' },
+        select: { date: true },
+      }),
+    ]);
+
+    return { votes, logins };
   }
 
   private getJwtToken(payload: JwtPayload) {
