@@ -93,7 +93,7 @@ export class AuthService {
   async findAll() {
     try {
       const users = await this.userRepository.find({
-        select: ['id', 'username', 'email', 'roles', 'createdAt', 'notes'],
+        select: ['id', 'username', 'email', 'roles', 'createdAt', 'notes', 'isActive'],
         order: { createdAt: 'DESC' },
       });
 
