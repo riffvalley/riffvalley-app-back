@@ -36,7 +36,7 @@ export class Comment {
   })
   disc: Disc;
 
-  @ManyToOne(() => Comment, (comment) => comment.replies, { nullable: true })
+  @ManyToOne(() => Comment, (comment) => comment.replies, { nullable: true, onDelete: 'CASCADE' })
   parent: Comment;
 
   @OneToMany(() => Comment, (comment) => comment.parent)
