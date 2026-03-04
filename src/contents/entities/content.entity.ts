@@ -77,4 +77,7 @@ export class Content {
 
   @Column({ default: false })
   ready: boolean;
+
+  @Column({ default: false })
+  backlog: boolean;
 }

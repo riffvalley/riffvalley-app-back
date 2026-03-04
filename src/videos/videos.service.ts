@@ -79,6 +79,7 @@ export class VideosService {
         type: ContentType.VIDEO,
         authorId: createVideoDto.userId,
         videoId: savedEntity.id,
+        backlog: true,
       } as any);
     }
 
@@ -177,6 +178,7 @@ export class VideosService {
               type: ContentType.VIDEO,
               authorId: assignedUser.id,
               videoId: id,
+              backlog: true,
             } as any);
             entity.content = newContent;
           } catch (error) {
@@ -189,6 +191,7 @@ export class VideosService {
           shouldSyncContent = true;
           contentId = content.id;
           contentSyncPayload.publicationDate = null;
+          contentSyncPayload.backlog = true;
         }
       } else if (updateVideoDto.status === VideoStatusEnum.PUBLISHED) {
         if (!updateVideoDto.updateDate) {
@@ -199,6 +202,7 @@ export class VideosService {
         entity.updateDate = new Date(updateVideoDto.updateDate);
         shouldSyncContent = true;
         contentSyncPayload.publicationDate = entity.updateDate;
+        contentSyncPayload.backlog = false;
       }
     }
 

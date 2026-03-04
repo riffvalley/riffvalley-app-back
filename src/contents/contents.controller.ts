@@ -34,9 +34,10 @@ export class ContentsController {
   }
 
   @Get()
-  findAll(@Query('ready') ready?: string) {
+  findAll(@Query('ready') ready?: string, @Query('backlog') backlog?: string) {
     const isReady = ready === 'true' ? true : ready === 'false' ? false : undefined;
-    return this.contentsService.findAll(isReady);
+    const isBacklog = backlog === 'true' ? true : backlog === 'false' ? false : undefined;
+    return this.contentsService.findAll(isReady, isBacklog);
   }
 
   @Get(':id')
