@@ -6,6 +6,7 @@ import { Rate } from '../../rates/entities/rate.entity';
 import { Spotify } from '../../spotify/entities/spotify.entity';
 import { Article } from '../../articles/entities/article.entity';
 import { Video } from '../../videos/entities/video.entity';
+import { DiscRequest } from '../../requests/entities/disc-request.entity';
 import {
   BeforeInsert,
   BeforeUpdate,
@@ -78,6 +79,9 @@ export class User {
 
   @OneToMany(() => Video, (video) => video.user, { cascade: true })
   videos: Video[];
+
+  @OneToMany(() => DiscRequest, (request) => request.user, { cascade: true })
+  requests: DiscRequest[];
 
   @BeforeInsert()
   checkFieldsBeforeInsert() {

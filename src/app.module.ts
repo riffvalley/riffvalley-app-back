@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { CommonModule } from './common/common.module';
 import { I18nConfigModule } from './i18n/i18n.module';
 
@@ -30,6 +31,8 @@ import { TelegramModule } from './telegram/telegram.module';
 import { NewsModule } from './news/news.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ExcelModule } from './excel/excel.module';
+import { RequestsModule } from './requests/requests.module';
+import { NationalReleasesModule } from './national-releases/national-releases.module';
 
 @Module({
   imports: [
@@ -50,6 +53,7 @@ import { ExcelModule } from './excel/excel.module';
       synchronize: false,
       migrationsRun: true,
     }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 5 }]),
     I18nConfigModule,
     CommonModule,
 
@@ -79,6 +83,8 @@ import { ExcelModule } from './excel/excel.module';
     NewsModule,
     UploadsModule,
     ExcelModule,
+    RequestsModule,
+    NationalReleasesModule,
   ],
 })
 export class AppModule {}

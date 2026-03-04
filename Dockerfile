@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instala las dependencias
-# RUN apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
 RUN npm install
 
 # Copia todo el proyecto
