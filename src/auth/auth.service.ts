@@ -314,8 +314,14 @@ export class AuthService {
   }
 
   async remove(id: string) {
-    const user = await this.userRepository.delete({ id });
-    return user;
+    const user = await this.findOne(id);
+    return this.userRepository.remove(user);
+  }
+
+  async setActive(id: string, isActive: boolean): Promise<User> {
+    const user = await this.findOne(id);
+    user.isActive = isActive;
+    return this.userRepository.save(user);
   }
 
   private getJwtToken(payload: JwtPayload) {

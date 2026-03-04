@@ -88,7 +88,20 @@ export class AuthController {
     return this.authService.updateUser(updateAuthDto, user);
   }
 
+  @Patch(':id/deactivate')
+  @Auth(ValidRoles.admin, ValidRoles.superUser)
+  deactivate(@Param('id') id: string) {
+    return this.authService.setActive(id, false);
+  }
+
+  @Patch(':id/activate')
+  @Auth(ValidRoles.admin, ValidRoles.superUser)
+  activate(@Param('id') id: string) {
+    return this.authService.setActive(id, true);
+  }
+
   @Delete(':id')
+  @Auth(ValidRoles.admin, ValidRoles.superUser)
   remove(@Param('id') id: string) {
     return this.authService.remove(id);
   }
