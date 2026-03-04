@@ -54,6 +54,6 @@ export class Spotify {
   @OneToOne(() => Content, (content) => content.spotify)
   content: Content;
 
-  @ManyToOne(() => User, (user) => user.spotify, { nullable: true })
+  @ManyToOne(() => User, (user) => user.spotify, { nullable: true, onDelete: 'SET NULL' })
   user: User;
 }

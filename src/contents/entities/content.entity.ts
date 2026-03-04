@@ -49,7 +49,7 @@ export class Content {
   @Column({ type: 'timestamp', nullable: true })
   listDate?: Date;
 
-  @ManyToOne(() => User, { eager: true })
+  @ManyToOne(() => User, { eager: true, onDelete: 'SET NULL', nullable: true })
   author: User;
 
   @Column('uuid', { nullable: true })

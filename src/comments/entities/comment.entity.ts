@@ -28,7 +28,7 @@ export class Comment {
   @UpdateDateColumn({ nullable: true })
   editedAt: Date;
 
-  @ManyToOne(() => User, (user) => user.comments, { eager: true })
+  @ManyToOne(() => User, (user) => user.comments, { eager: true, onDelete: 'CASCADE' })
   user: User;
 
   @ManyToOne(() => Disc, (disc) => disc.comments, {

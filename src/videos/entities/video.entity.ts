@@ -54,10 +54,10 @@ export class Video {
   @OneToOne(() => Content, (content) => content.video)
   content: Content;
 
-  @ManyToOne(() => User, (user) => user.videos, { nullable: true })
+  @ManyToOne(() => User, (user) => user.videos, { nullable: true, onDelete: 'SET NULL' })
   user: User;
 
-  @ManyToOne(() => User, { nullable: true })
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   editor: User;
 
   @ManyToOne(() => List, { nullable: true })
