@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsDateString, IsEnum, IsOptional, IsString, IsUrl, MaxLength, MinLength } from 'class-validator';
 import { DiscType } from '../entities/national-release.entity';
 
 export class CreateNationalReleaseDto {
@@ -26,4 +26,9 @@ export class CreateNationalReleaseDto {
   @IsDateString()
   @IsOptional()
   publishAt?: string;
+
+  @IsUrl()
+  @IsOptional()
+  @MaxLength(500)
+  link?: string;
 }

@@ -29,6 +29,9 @@ export class NationalRelease {
   @Column({ type: 'date', nullable: true })
   publishAt: Date | null;
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  link: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
