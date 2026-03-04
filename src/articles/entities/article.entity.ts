@@ -64,4 +64,7 @@ export class Article {
 
   @ManyToOne(() => User, { nullable: true })
   editor: User;
+
+  @ManyToOne(() => User, { nullable: true })
+  coauthor: User;
 }

@@ -28,4 +28,8 @@ export class CreateArticleDto {
     @IsUUID()
     @IsOptional()
     editorId?: string;
+
+    @IsUUID()
+    @IsOptional()
+    coauthorId?: string;
 }

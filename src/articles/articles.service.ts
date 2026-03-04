@@ -42,6 +42,9 @@ export class ArticlesService {
       editor: createArticleDto.editorId
         ? { id: createArticleDto.editorId }
         : undefined,
+      coauthor: createArticleDto.coauthorId
+        ? { id: createArticleDto.coauthorId }
+        : undefined,
     });
     const savedArticle = await this.repo.save(entity);
 
@@ -69,33 +72,32 @@ export class ArticlesService {
   async findAll(params: FindArticleParams = {}): Promise<Article[]> {
     const { limit = 50, offset = 0, q, status, userId } = params;
 
-    const where: any = {};
+    const baseWhere: any = {};
 
-    if (userId) {
-      where.user = { id: userId };
-    }
+    if (status) baseWhere.status = status;
+    if (q) baseWhere.name = ILike(`%${q}%`);
 
-    if (status) {
-      where.status = status;
-    }
-
-    if (q) {
-      where.name = ILike(`%${q}%`);
-    }
+    const where = userId
+      ? [
+          { ...baseWhere, user: { id: userId } },
+          { ...baseWhere, editor: { id: userId } },
+          { ...baseWhere, coauthor: { id: userId } },
+        ]
+      : baseWhere;
 
     return this.repo.find({
       where,
       order: { updatedAt: 'DESC' },
       take: Math.min(Math.max(0, limit), 200),
       skip: Math.max(0, offset),
-      relations: ['user', 'content', 'editor'],
+      relations: ['user', 'content', 'editor', 'coauthor'],
     });
   }
 
   async findOne(id: string): Promise<Article> {
     const entity = await this.repo.findOne({
       where: { id },
-      relations: ['user', 'content', 'editor'],
+      relations: ['user', 'content', 'editor', 'coauthor'],
     });
     if (!entity) throw new NotFoundException('Article not found');
     return entity;
@@ -123,6 +125,10 @@ export class ArticlesService {
     // Handle User Assignment
     if (updateArticleDto.userId) {
       entity.user = { id: updateArticleDto.userId } as any;
+    }
+
+    if (updateArticleDto.coauthorId) {
+      entity.coauthor = { id: updateArticleDto.coauthorId } as any;
     }
 
     if (updateArticleDto.editorId) {
