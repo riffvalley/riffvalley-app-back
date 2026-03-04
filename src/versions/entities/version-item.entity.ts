@@ -67,11 +67,11 @@ export class VersionItem {
   })
   version: Version;
 
-  @ManyToOne(() => User, { nullable: true, eager: false })
+  @ManyToOne(() => User, { nullable: true, eager: false, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'backUserId' })
   backUser?: User;
 
-  @ManyToOne(() => User, { nullable: true, eager: false })
+  @ManyToOne(() => User, { nullable: true, eager: false, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'frontUserId' })
   frontUser?: User;
 }

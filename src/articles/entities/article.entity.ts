@@ -59,12 +59,12 @@ export class Article {
   @OneToOne(() => Content, (content) => content.article)
   content: Content;
 
-  @ManyToOne(() => User, (user) => user.articles, { nullable: true })
+  @ManyToOne(() => User, (user) => user.articles, { nullable: true, onDelete: 'SET NULL' })
   user: User;
 
-  @ManyToOne(() => User, { nullable: true })
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   editor: User;
 
-  @ManyToOne(() => User, { nullable: true })
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   coauthor: User;
 }

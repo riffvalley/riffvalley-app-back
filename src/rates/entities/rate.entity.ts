@@ -19,7 +19,7 @@ export class Rate {
   @Column('decimal', { precision: 4, scale: 2, nullable: true })
   cover: number;
 
-  @ManyToOne(() => User, (user) => user.rate, { eager: true })
+  @ManyToOne(() => User, (user) => user.rate, { eager: true, onDelete: 'CASCADE' })
   user: User;
 
   @ManyToOne(() => Disc, (disc) => disc.rates, {

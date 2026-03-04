@@ -13,7 +13,7 @@ export class Pending {
   @UpdateDateColumn({ nullable: true })
   editedAt: Date;
 
-  @ManyToOne(() => User, (user) => user.rate, { eager: true })
+  @ManyToOne(() => User, (user) => user.rate, { eager: true, onDelete: 'CASCADE' })
   user: User;
 
   @ManyToOne(() => Disc, (disc) => disc.pendings, {

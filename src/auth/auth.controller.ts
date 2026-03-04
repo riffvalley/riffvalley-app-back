@@ -68,6 +68,18 @@ export class AuthController {
     return this.authService.findAllAdminStats(paginationDto);
   }
 
+  @Get('activity')
+  @Auth(ValidRoles.superUser, ValidRoles.admin)
+  getAllActivity(@Query() paginationDto: PaginationDto) {
+    return this.authService.getAllActivity(paginationDto);
+  }
+
+  @Get(':id/activity')
+  @Auth(ValidRoles.superUser, ValidRoles.admin)
+  getUserActivity(@Param('id') id: string) {
+    return this.authService.getUserActivity(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.authService.findOne(id);

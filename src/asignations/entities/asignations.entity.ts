@@ -14,6 +14,7 @@ export class Asignation {
   @ManyToOne(() => User, (user) => user.asignations, {
     eager: true,
     nullable: true,
+    onDelete: 'SET NULL',
   })
   user: User;
 
