@@ -17,6 +17,12 @@ export class NationalReleasesController {
     return Array.isArray(dto) ? this.service.createMany(dto) : this.service.create(dto);
   }
 
+  @Post('bulk')
+  @Auth(ValidRoles.riffValley, ValidRoles.admin)
+  createBulk(@Body() dto: CreateNationalReleaseDto[]) {
+    return this.service.createMany(dto);
+  }
+
   @Get()
   findAll(@Query('month') month?: string, @Query('year') year?: string) {
     return this.service.findAll(
