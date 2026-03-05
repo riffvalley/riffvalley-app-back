@@ -31,7 +31,7 @@ export class NationalReleasesController {
   }
 
   @Patch(':id')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffValley)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateNationalReleaseDto) {
     return this.service.update(id, dto);
   }
