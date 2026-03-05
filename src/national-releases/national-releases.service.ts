@@ -43,14 +43,17 @@ export class NationalReleasesService {
       .where('r.approved = false')
       .andWhere('EXTRACT(YEAR FROM r.releaseDay) = :currentYear', { currentYear });
 
-    const [data, pendingRows] = await Promise.all([
+    const queries: [Promise<NationalRelease[]>, Promise<any[]>] = [
       dataQb.getMany(),
-      pendingQb.getRawMany(),
-    ]);
+      approved === false ? Promise.resolve([]) : pendingQb.getRawMany(),
+    ];
 
-    const pendingMonths = pendingRows.map((r) => r.month);
+    const [data, pendingRows] = await Promise.all(queries);
 
-    return { data, pendingMonths };
+    const result: any = { data };
+    if (approved !== false) result.pendingMonths = pendingRows.map((r) => r.month);
+
+    return result;
   }
 
   async findOne(id: string): Promise<NationalRelease> {
