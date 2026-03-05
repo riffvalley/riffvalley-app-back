@@ -29,6 +29,15 @@ export class NationalReleasesService {
     return qb.orderBy('r.releaseDay', 'ASC').getMany();
   }
 
+  findAllAdmin(month?: number, year?: number): Promise<NationalRelease[]> {
+    const qb = this.repo.createQueryBuilder('r');
+
+    if (year) qb.andWhere('EXTRACT(YEAR FROM r.releaseDay) = :year', { year });
+    if (month) qb.andWhere('EXTRACT(MONTH FROM r.releaseDay) = :month', { month });
+
+    return qb.orderBy('r.releaseDay', 'ASC').getMany();
+  }
+
   async findOne(id: string): Promise<NationalRelease> {
     const release = await this.repo.findOneBy({ id });
     if (!release) throw new NotFoundException(`NationalRelease ${id} not found`);

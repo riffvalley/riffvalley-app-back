@@ -25,6 +25,15 @@ export class NationalReleasesController {
     );
   }
 
+  @Get('all')
+  @Auth(ValidRoles.riffValley, ValidRoles.admin)
+  findAllAdmin(@Query('month') month?: string, @Query('year') year?: string) {
+    return this.service.findAllAdmin(
+      month ? parseInt(month, 10) : undefined,
+      year ? parseInt(year, 10) : undefined,
+    );
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.findOne(id);
