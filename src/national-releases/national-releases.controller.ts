@@ -33,10 +33,16 @@ export class NationalReleasesController {
 
   @Get('all')
   @Auth(ValidRoles.riffValley, ValidRoles.admin)
-  findAllAdmin(@Query('month') month?: string, @Query('year') year?: string) {
+  findAllAdmin(
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+    @Query('approved') approved?: string,
+  ) {
+    const approvedFilter = approved === 'true' ? true : approved === 'false' ? false : undefined;
     return this.service.findAllAdmin(
       month ? parseInt(month, 10) : undefined,
       year ? parseInt(year, 10) : undefined,
+      approvedFilter,
     );
   }
 
