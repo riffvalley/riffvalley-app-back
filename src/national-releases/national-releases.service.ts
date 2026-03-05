@@ -29,13 +29,31 @@ export class NationalReleasesService {
     return qb.orderBy('r.releaseDay', 'ASC').getMany();
   }
 
-  findAllAdmin(month?: number, year?: number): Promise<NationalRelease[]> {
-    const qb = this.repo.createQueryBuilder('r');
+  async findAllAdmin(month?: number, year?: number, approved?: boolean): Promise<{ data: NationalRelease[]; pendingMonths: number[] }> {
+    const currentYear = year ?? new Date().getFullYear();
 
-    if (year) qb.andWhere('EXTRACT(YEAR FROM r.releaseDay) = :year', { year });
-    if (month) qb.andWhere('EXTRACT(MONTH FROM r.releaseDay) = :month', { month });
+    const dataQb = this.repo.createQueryBuilder('r');
+    if (year)  dataQb.andWhere('EXTRACT(YEAR  FROM r.releaseDay) = :year',  { year });
+    if (month) dataQb.andWhere('EXTRACT(MONTH FROM r.releaseDay) = :month', { month });
+    if (approved !== undefined) dataQb.andWhere('r.approved = :approved', { approved });
+    dataQb.orderBy('r.releaseDay', 'ASC');
 
-    return qb.orderBy('r.releaseDay', 'ASC').getMany();
+    const pendingQb = this.repo.createQueryBuilder('r')
+      .select('DISTINCT EXTRACT(MONTH FROM r.releaseDay)::int', 'month')
+      .where('r.approved = false')
+      .andWhere('EXTRACT(YEAR FROM r.releaseDay) = :currentYear', { currentYear });
+
+    const queries: [Promise<NationalRelease[]>, Promise<any[]>] = [
+      dataQb.getMany(),
+      approved === false ? Promise.resolve([]) : pendingQb.getRawMany(),
+    ];
+
+    const [data, pendingRows] = await Promise.all(queries);
+
+    const result: any = { data };
+    if (approved !== false) result.pendingMonths = pendingRows.map((r) => r.month);
+
+    return result;
   }
 
   async findOne(id: string): Promise<NationalRelease> {
