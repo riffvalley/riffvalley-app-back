@@ -17,9 +17,24 @@ export class NationalReleasesController {
     return Array.isArray(dto) ? this.service.createMany(dto) : this.service.create(dto);
   }
 
+  @Post('bulk')
+  @Auth(ValidRoles.riffValley, ValidRoles.admin)
+  createBulk(@Body() dto: CreateNationalReleaseDto[]) {
+    return this.service.createMany(dto);
+  }
+
   @Get()
   findAll(@Query('month') month?: string, @Query('year') year?: string) {
     return this.service.findAll(
+      month ? parseInt(month, 10) : undefined,
+      year ? parseInt(year, 10) : undefined,
+    );
+  }
+
+  @Get('all')
+  @Auth(ValidRoles.riffValley, ValidRoles.admin)
+  findAllAdmin(@Query('month') month?: string, @Query('year') year?: string) {
+    return this.service.findAllAdmin(
       month ? parseInt(month, 10) : undefined,
       year ? parseInt(year, 10) : undefined,
     );
@@ -31,7 +46,7 @@ export class NationalReleasesController {
   }
 
   @Patch(':id')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffValley)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateNationalReleaseDto) {
     return this.service.update(id, dto);
   }

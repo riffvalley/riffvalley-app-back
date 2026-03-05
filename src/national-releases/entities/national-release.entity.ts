@@ -32,6 +32,9 @@ export class NationalRelease {
   @Column({ type: 'varchar', length: 500, nullable: true })
   link: string | null;
 
+  @Column({ type: 'boolean', default: false })
+  approved: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 
