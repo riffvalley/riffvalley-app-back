@@ -96,12 +96,12 @@ export class ContentSchedulerService {
 
                         if (bandcampResult) {
                             disc.link = bandcampResult.link;
-                            disc.image = bandcampResult.image || disc.image; // Keep existing image if bandcamp doesn't have one? Or prefer bandcamp?
+                            disc.image = bandcampResult.image || disc.image;
                             disc.verified = true;
 
                             await this.discRepo.save(disc);
                             updatedCount++;
-                            this.logger.log(`Updated Bandcamp link for: ${disc.name} - ${disc.artist.name}`);
+                            this.logger.log(`Updated Bandcamp link for: ${disc.name} - ${disc.artist.name} (Bandcamp album: "${bandcampResult.albumName}", artist: "${bandcampResult.artistName}")`);
                         } else {
                             // Fallback: Try loose search (just name + artist)
                             this.logger.log(`Strict search and bandcamp search failed. Trying loose search for: ${disc.name} - ${disc.artist.name}`);
@@ -253,7 +253,7 @@ export class ContentSchedulerService {
             .trim();
     }
 
-    private async searchBandcamp(artist: string, album: string): Promise<{ link: string, image: string | null } | null> {
+    private async searchBandcamp(artist: string, album: string): Promise<{ link: string, image: string | null, albumName: string | null, artistName: string | null } | null> {
         try {
             const query = encodeURIComponent(`${artist} ${album}`);
             const url = `https://bandcamp.com/search?q=${query}&item_type=a`;
@@ -277,20 +277,27 @@ export class ContentSchedulerService {
             const firstResult = $('ul.result-items li.searchresult').first();
 
             if (firstResult.length > 0) {
-                const link = firstResult.find('.itemurl').text().trim(); // itemurl class usually contains the cleanup url text, but usually href is better
-
                 const linkElement = firstResult.find('a').first();
                 let linkUrl = linkElement.attr('href');
 
-                // Clean up link parameter if it has ?q=... (sometimes search result redirects might act funny, but usually direct links)
                 if (linkUrl) {
-                    // Get image
+                    // Get image and upgrade to high-res (1200x1200) by replacing suffix with _10
                     const imgElement = firstResult.find('img').first();
-                    const image = imgElement.attr('src') || null;
+                    let image = imgElement.attr('src') || null;
+                    if (image) {
+                        image = image.replace(/_\d+\./, '_10.');
+                    }
 
-                    // Sometimes bandcamp returns a clean URL like https://artist.bandcamp.com/album/name
-                    // But sometimes it might have query params.
-                    return { link: linkUrl.split('?')[0], image };
+                    // Extract album name from the heading
+                    const albumName = firstResult.find('.heading').text().trim() || null;
+
+                    // Extract artist name from the subhead ("by ArtistName")
+                    const subheadText = firstResult.find('.subhead').text().trim();
+                    const artistName = subheadText ? subheadText.replace(/^by\s+/i, '').trim() : null;
+
+                    this.logger.log(`Bandcamp result — Album: "${albumName}", Artist: "${artistName}", Image: ${image}`);
+
+                    return { link: linkUrl.split('?')[0], image, albumName, artistName };
                 }
             }
 
