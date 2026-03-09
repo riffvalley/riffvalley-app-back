@@ -705,6 +705,61 @@ export class DiscsService {
     };
   }
 
+  async findWeekly(month: number, year: number, week?: number): Promise<{
+    week: number;
+    label: string;
+    discs: { artistName: string; name: string; genre: string; link: string | null; ep: boolean; releaseDate: string }[];
+  }[]> {
+    const startOfMonth = new Date(year, month - 1, 1);
+    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const discs = await this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoinAndSelect('disc.artist', 'artist')
+      .leftJoinAndSelect('disc.genre', 'genre')
+      .where('disc.releaseDate BETWEEN :start AND :end', {
+        start: startOfMonth,
+        end: endOfMonth,
+      })
+      .orderBy('disc.releaseDate', 'ASC')
+      .addOrderBy('artist.name', 'ASC')
+      .getMany();
+
+    const weekRanges = [
+      { week: 1, from: 1,  to: 7  },
+      { week: 2, from: 8,  to: 14 },
+      { week: 3, from: 15, to: 21 },
+      { week: 4, from: 22, to: 31 },
+    ];
+
+    const monthNames = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const monthLabel = monthNames[month - 1];
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    return weekRanges
+      .filter((w) => week === undefined || w.week === week)
+      .map((w) => {
+        const toDay = Math.min(w.to, daysInMonth);
+        const label = `${w.from}-${toDay} ${monthLabel}`;
+
+        const weekDiscs = discs
+          .filter((d) => {
+            const day = new Date(d.releaseDate).getUTCDate();
+            return day >= w.from && day <= w.to;
+          })
+          .map((d) => ({
+            artistName: d.artist?.name ?? '',
+            name: d.name,
+            genre: d.genre?.name ?? '',
+            link: d.link ?? null,
+            ep: d.ep ?? false,
+            releaseDate: new Date(d.releaseDate).toISOString().split('T')[0],
+          }));
+
+        return { week: w.week, label, discs: weekDiscs };
+      });
+  }
+
   private handleDbExceptions(error: any) {
     if (error.code === '23505') throw new BadRequestException(error.detail);
     this.logger.error(error);

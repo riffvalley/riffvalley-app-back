@@ -18,6 +18,7 @@ import { Auth } from 'src/auth/decorators/auth.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';
 import { TopStatsQueryDto } from 'src/common/dtos/top-stats-query.dto';
+import { WeeklyQueryDto } from './dto/weekly-query.dto';
 
 @Controller('discs')
 export class DiscsController {
@@ -26,6 +27,11 @@ export class DiscsController {
   @Post()
   create(@Body() createDiscDto: CreateDiscDto) {
     return this.discsServices.create(createDiscDto);
+  }
+
+  @Get('weekly')
+  findWeekly(@Query() dto: WeeklyQueryDto) {
+    return this.discsServices.findWeekly(dto.month, dto.year, dto.week);
   }
 
   @Get('date')
