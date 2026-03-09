@@ -751,8 +751,10 @@ export class DiscsService {
             artistName: d.artist?.name ?? '',
             name: d.name,
             genre: d.genre?.name ?? '',
+            genreColor: d.genre?.color ?? null,
             link: d.link ?? null,
             ep: d.ep ?? false,
+            image: d.image ?? null,
             releaseDate: new Date(d.releaseDate).toISOString().split('T')[0],
           }));
 
