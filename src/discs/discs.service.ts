@@ -710,7 +710,6 @@ export class DiscsService {
     label: string;
     discs: { artistName: string; name: string; genre: string; link: string | null; ep: boolean; releaseDate: string }[];
   }[]> {
-    const today = new Date();
     const startOfMonth = new Date(year, month - 1, 1);
     const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
 
@@ -720,7 +719,7 @@ export class DiscsService {
       .leftJoinAndSelect('disc.genre', 'genre')
       .where('disc.releaseDate BETWEEN :start AND :end', {
         start: startOfMonth,
-        end: endOfMonth < today ? endOfMonth : today,
+        end: endOfMonth,
       })
       .orderBy('disc.releaseDate', 'ASC')
       .addOrderBy('artist.name', 'ASC')
