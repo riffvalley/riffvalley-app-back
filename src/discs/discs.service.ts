@@ -705,10 +705,39 @@ export class DiscsService {
     };
   }
 
+  private getFridayWeekRanges(month: number, year: number): { week: number; from: number; to: number }[] {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const weeks: { week: number; from: number; to: number }[] = [];
+
+    // Find first Friday of the month (getDay: 0=Sun … 5=Fri)
+    let firstFriday = 1;
+    while (new Date(year, month - 1, firstFriday).getDay() !== 5) {
+      firstFriday++;
+    }
+
+    let weekNum = 1;
+
+    // Week 1: days before the first Friday (if month doesn't start on Friday)
+    if (firstFriday > 1) {
+      weeks.push({ week: weekNum++, from: 1, to: firstFriday - 1 });
+    }
+
+    // Remaining weeks: each starts on a Friday, runs 7 days
+    let start = firstFriday;
+    while (start <= daysInMonth) {
+      weeks.push({ week: weekNum++, from: start, to: Math.min(start + 6, daysInMonth) });
+      start += 7;
+    }
+
+    return weeks;
+  }
+
   async findWeekly(month: number, year: number, week?: number): Promise<{
     week: number;
     label: string;
-    discs: { artistName: string; name: string; genre: string; link: string | null; ep: boolean; releaseDate: string }[];
+    startDate: string;
+    endDate: string;
+    discs: { artistName: string; name: string; genre: string; genreColor: string | null; link: string | null; ep: boolean; image: string | null; releaseDate: string }[];
   }[]> {
     const startOfMonth = new Date(year, month - 1, 1);
     const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
@@ -716,6 +745,7 @@ export class DiscsService {
     const discs = await this.discRepository
       .createQueryBuilder('disc')
       .leftJoinAndSelect('disc.artist', 'artist')
+      .leftJoinAndSelect('artist.country', 'country')
       .leftJoinAndSelect('disc.genre', 'genre')
       .where('disc.releaseDate BETWEEN :start AND :end', {
         start: startOfMonth,
@@ -725,22 +755,17 @@ export class DiscsService {
       .addOrderBy('artist.name', 'ASC')
       .getMany();
 
-    const weekRanges = [
-      { week: 1, from: 1,  to: 7  },
-      { week: 2, from: 8,  to: 14 },
-      { week: 3, from: 15, to: 21 },
-      { week: 4, from: 22, to: 31 },
-    ];
-
+    const weekRanges = this.getFridayWeekRanges(month, year);
     const monthNames = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
     const monthLabel = monthNames[month - 1];
-    const daysInMonth = new Date(year, month, 0).getDate();
+    const pad = (n: number) => String(n).padStart(2, '0');
 
     return weekRanges
       .filter((w) => week === undefined || w.week === week)
       .map((w) => {
-        const toDay = Math.min(w.to, daysInMonth);
-        const label = `${w.from}-${toDay} ${monthLabel}`;
+        const label = `${w.from}-${w.to} ${monthLabel}`;
+        const startDate = `${year}-${pad(month)}-${pad(w.from)}`;
+        const endDate   = `${year}-${pad(month)}-${pad(w.to)}`;
 
         const weekDiscs = discs
           .filter((d) => {
@@ -749,16 +774,18 @@ export class DiscsService {
           })
           .map((d) => ({
             artistName: d.artist?.name ?? '',
+            countryCode: d.artist?.country?.isoCode ?? null,
             name: d.name,
             genre: d.genre?.name ?? '',
             genreColor: d.genre?.color ?? null,
             link: d.link ?? null,
             ep: d.ep ?? false,
+            debut: d.debut ?? false,
             image: d.image ?? null,
             releaseDate: new Date(d.releaseDate).toISOString().split('T')[0],
           }));
 
-        return { week: w.week, label, discs: weekDiscs };
+        return { week: w.week, label, startDate, endDate, discs: weekDiscs };
       });
   }
 
