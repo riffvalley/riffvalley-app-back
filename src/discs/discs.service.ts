@@ -790,6 +790,37 @@ export class DiscsService {
       });
   }
 
+  async findWeeklyWithoutImage(month: number, year: number, week?: number): Promise<{ id: string; artistName: string; name: string }[]> {
+    const startOfMonth = new Date(year, month - 1, 1);
+    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const weekRanges = this.getFridayWeekRanges(month, year);
+    const filtered = weekRanges.filter((w) => week === undefined || w.week === week);
+    if (!filtered.length) return [];
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const start = `${year}-${pad(month)}-${pad(filtered[0].from)}`;
+    const end   = `${year}-${pad(month)}-${pad(filtered[filtered.length - 1].to)}`;
+
+    const discs = await this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoinAndSelect('disc.artist', 'artist')
+      .where('disc.releaseDate BETWEEN :start AND :end', { start, end })
+      .andWhere('(disc.image IS NULL OR disc.image = :empty)', { empty: '' })
+      .orderBy('disc.releaseDate', 'ASC')
+      .getMany();
+
+    return discs.map((d) => ({
+      id: d.id,
+      artistName: d.artist?.name ?? '',
+      name: d.name,
+    }));
+  }
+
+  async updateImage(id: string, image: string): Promise<void> {
+    await this.discRepository.update(id, { image });
+  }
+
   private handleDbExceptions(error: any) {
     if (error.code === '23505') throw new BadRequestException(error.detail);
     this.logger.error(error);

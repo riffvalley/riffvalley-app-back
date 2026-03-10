@@ -23,24 +23,28 @@ export class LastfmService {
     return data.artist;
   }
 
-  async getWeeklyImages(month: number, year: number, week?: number) {
+  async fillWeeklyImages(month: number, year: number, week?: number): Promise<{ updated: number; notFound: string[] }> {
     if (!this.apiKey) throw new InternalServerErrorException('LASTFM_API_KEY not configured');
 
-    const weekly = await this.discsService.findWeekly(month, year, week);
+    const discs = await this.discsService.findWeeklyWithoutImage(month, year, week);
+    if (!discs.length) return { updated: 0, notFound: [] };
 
-    const results = await Promise.all(
-      weekly.map(async (weekData: any) => {
-        const discsWithImages = await Promise.all(
-          weekData.discs.map(async (disc: any) => {
-            const image = await this.fetchAlbumImage(disc.artistName, disc.name);
-            return { ...disc, lastfmImage: image };
-          }),
-        );
-        return { ...weekData, discs: discsWithImages };
+    const notFound: string[] = [];
+    let updated = 0;
+
+    await Promise.all(
+      discs.map(async (disc) => {
+        const image = await this.fetchAlbumImage(disc.artistName, disc.name);
+        if (image) {
+          await this.discsService.updateImage(disc.id, image);
+          updated++;
+        } else {
+          notFound.push(`${disc.artistName} - ${disc.name}`);
+        }
       }),
     );
 
-    return results;
+    return { updated, notFound };
   }
 
   private async fetchAlbumImage(artist: string, album: string): Promise<string | null> {
@@ -52,8 +56,6 @@ export class LastfmService {
       const data = await res.json() as any;
       if (data.error || !data.album?.image) return null;
 
-      // Last.fm images ordered: small, medium, large, extralarge, mega
-      // Pick the largest non-empty one
       const images: { '#text': string; size: string }[] = data.album.image;
       const preferred = ['mega', 'extralarge', 'large'];
       for (const size of preferred) {

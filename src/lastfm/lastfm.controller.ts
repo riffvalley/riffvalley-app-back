@@ -1,6 +1,8 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Query } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { LastfmService } from './lastfm.service';
 
 class WeeklyImagesQueryDto {
@@ -18,8 +20,9 @@ export class LastfmController {
     return this.lastfmService.getArtistInfo(artist);
   }
 
-  @Get('weekly-images')
-  getWeeklyImages(@Query() dto: WeeklyImagesQueryDto) {
-    return this.lastfmService.getWeeklyImages(dto.month, dto.year, dto.week);
+  @Post('fill-images')
+  @Auth(ValidRoles.admin, ValidRoles.superUser)
+  fillWeeklyImages(@Query() dto: WeeklyImagesQueryDto) {
+    return this.lastfmService.fillWeeklyImages(dto.month, dto.year, dto.week);
   }
 }
