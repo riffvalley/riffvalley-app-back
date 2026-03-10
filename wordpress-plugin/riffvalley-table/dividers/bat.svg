@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 50" aria-hidden="true">
+  <line x1="0" y1="25" x2="263" y2="25" stroke="currentColor" stroke-width="1" opacity=".2"/>
+  <line x1="337" y1="25" x2="600" y2="25" stroke="currentColor" stroke-width="1" opacity=".2"/>
+  <g transform="translate(300,25)" fill="currentColor" opacity=".32">
+    <path d="M0,-10 C-2,-16 -12,-18 -22,-14 C-18,-12 -15,-9 -13,-6 C-18,-8 -25,-6 -30,-11 C-28,-4 -22,1 -15,0 C-10,3 -5,2 -2,-1 L0,5 L2,-1 C5,2 10,3 15,0 C22,1 28,-4 30,-11 C25,-6 18,-8 13,-6 C15,-9 18,-12 22,-14 C12,-18 2,-16 0,-10Z"/>
+  </g>
+</svg>

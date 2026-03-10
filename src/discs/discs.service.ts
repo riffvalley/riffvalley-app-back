@@ -775,6 +775,7 @@ export class DiscsService {
           .map((d) => ({
             artistName: d.artist?.name ?? '',
             countryCode: d.artist?.country?.isoCode ?? null,
+            countryName: d.artist?.country?.name ?? null,
             name: d.name,
             genre: d.genre?.name ?? '',
             genreColor: d.genre?.color ?? null,
