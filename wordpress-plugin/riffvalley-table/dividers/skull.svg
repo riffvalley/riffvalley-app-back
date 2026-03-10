@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 50" aria-hidden="true">
+  <line x1="0" y1="25" x2="279" y2="25" stroke="currentColor" stroke-width="1" opacity=".2"/>
+  <line x1="321" y1="25" x2="600" y2="25" stroke="currentColor" stroke-width="1" opacity=".2"/>
+  <g transform="translate(300,27)" fill="currentColor" opacity=".32">
+    <path fill-rule="evenodd" d="M0,-16 C-11,-16 -18,-9 -18,0 C-18,7 -13,12 -5,14 L-5,18 C-5,20 -3,21 0,21 C3,21 5,20 5,18 L5,14 C13,12 18,7 18,0 C18,-9 11,-16 0,-16Z M-2,-3 A4,4.5 0 1,0 -10,-3 A4,4.5 0 1,0 -2,-3Z M10,-3 A4,4.5 0 1,0 2,-3 A4,4.5 0 1,0 10,-3Z"/>
+    <line x1="-3" y1="14" x2="-3" y2="21" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="0"  y1="14" x2="0"  y2="21" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="3"  y1="14" x2="3"  y2="21" stroke="currentColor" stroke-width="1.5"/>
+  </g>
+</svg>

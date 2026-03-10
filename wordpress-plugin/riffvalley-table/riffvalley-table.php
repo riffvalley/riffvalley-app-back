@@ -70,69 +70,47 @@ function rvt_fetch_weekly( string $base_url, int $month, int $year, ?int $week =
 }
 
 // ---------------------------------------------------------------------------
-// Divisores SVG estética metal/punk/hardcore
+// Icono por plataforma
+// ---------------------------------------------------------------------------
+
+function rvt_platform_icon( string $url ): string {
+    $host = strtolower( parse_url( $url, PHP_URL_HOST ) ?? '' );
+
+    if ( str_contains( $host, 'spotify' ) ) {
+        return '<svg class="rvt-link-icon rvt-icon--spotify" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-label="Spotify"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>';
+    }
+    if ( str_contains( $host, 'youtube' ) || str_contains( $host, 'youtu.be' ) ) {
+        return '<svg class="rvt-link-icon rvt-icon--youtube" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-label="YouTube"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>';
+    }
+    if ( str_contains( $host, 'bandcamp' ) ) {
+        return '<svg class="rvt-link-icon rvt-icon--bandcamp" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-label="Bandcamp"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>';
+    }
+    if ( str_contains( $host, 'soundcloud' ) ) {
+        return '<svg class="rvt-link-icon rvt-icon--soundcloud" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-label="SoundCloud"><path d="M1.175 12.225c-.015 0-.023.01-.023.025l-.323 2.101.323 2.072c0 .016.008.025.023.025.014 0 .023-.009.023-.025l.366-2.072-.366-2.1c0-.016-.01-.026-.023-.026zm-.877.68c-.019 0-.031.012-.033.03L0 14.351l.265 1.38c.002.018.014.03.033.03.018 0 .03-.012.033-.03l.301-1.38-.301-1.416c-.003-.018-.015-.03-.033-.03zm1.744-.359c-.021 0-.037.016-.037.037l-.285 2.1.285 2.047c0 .021.016.037.037.037.02 0 .036-.016.036-.037l.324-2.047-.324-2.1c0-.021-.016-.037-.036-.037zm.88-.227c-.024 0-.044.02-.044.044l-.248 2.327.248 2.035c0 .024.02.044.044.044.023 0 .043-.02.043-.044l.282-2.035-.282-2.327c0-.024-.02-.044-.043-.044zm.875-.158c-.027 0-.05.023-.05.05l-.213 2.485.213 2.024c0 .027.023.05.05.05.028 0 .05-.023.05-.05l.242-2.024-.242-2.485c0-.027-.022-.05-.05-.05zm.882-.064c-.03 0-.056.025-.056.056l-.179 2.549.179 2.013c0 .03.026.056.056.056.031 0 .056-.026.056-.056l.203-2.013-.203-2.549c0-.031-.025-.056-.056-.056zm.879.039c-.034 0-.062.028-.062.062l-.145 2.51.145 2.001c0 .034.028.062.062.062.033 0 .061-.028.061-.062l.164-2.001-.164-2.51c0-.034-.028-.062-.061-.062zm.885.022c-.037 0-.068.031-.068.068l-.111 2.488.111 1.99c0 .037.031.068.068.068.038 0 .068-.031.068-.068l.125-1.99-.125-2.488c0-.037-.03-.068-.068-.068zm.888-.007c-.04 0-.074.034-.074.075l-.078 2.495.078 1.978c0 .041.034.075.074.075.041 0 .075-.034.075-.075l.089-1.978-.089-2.495c0-.041-.034-.075-.075-.075zm.885-.03c-.044 0-.08.036-.08.081l-.044 2.525.044 1.965c0 .044.036.08.08.08.045 0 .081-.036.081-.08l.05-1.965-.05-2.525c0-.045-.036-.081-.081-.081zm1.773.09a.09.09 0 0 0-.09-.09.09.09 0 0 0-.09.09l-.009 2.435.009 1.952c0 .05.04.09.09.09s.09-.04.09-.09l.011-1.952-.011-2.435zm.89-.09a.097.097 0 0 0-.097.097l.023 2.528-.023 1.94a.097.097 0 0 0 .097.097.097.097 0 0 0 .097-.097l.026-1.94-.026-2.528a.097.097 0 0 0-.097-.097zm4.573-3.426c-.285 0-.559.056-.809.157C13.15 6.645 11.916 5.5 10.4 5.5c-.406 0-.793.09-1.136.248-.131.058-.166.118-.167.171v8.434c.001.056.044.103.1.11h7.53a1.54 1.54 0 0 0 1.536-1.536 1.54 1.54 0 0 0-1.536-1.535z"/></svg>';
+    }
+    // Genérico
+    return '<svg class="rvt-link-icon rvt-icon--generic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Enlace"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+}
+
+// ---------------------------------------------------------------------------
+// Divisores SVG desde archivos externos (dividers/)
 // ---------------------------------------------------------------------------
 
 function rvt_fallback_dividers(): array {
-    $ll  = '<line x1="0" y1="25" x2="262" y2="25" stroke="currentColor" stroke-width="1" opacity=".18"/>';
-    $lr  = '<line x1="338" y1="25" x2="600" y2="25" stroke="currentColor" stroke-width="1" opacity=".18"/>';
-    $go  = '<g fill="currentColor" opacity=".3" transform="translate(300,25)">';
-    $gc  = '</g>';
-    $svg = '<svg class="rvt-divider-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 50" aria-hidden="true">';
-    $end = '</svg>';
+    $dir   = plugin_dir_path( __FILE__ ) . 'dividers/';
+    $files = glob( $dir . '*.svg' );
+    if ( empty( $files ) ) return [];
 
-    // Barbed wire barbs
-    $barbs = '';
-    foreach ( [ 50, 120, 190, 260, 330, 400, 470, 540 ] as $x ) {
-        $barbs .= '<line x1="' . ($x-7) . '" y1="19" x2="' . ($x+7) . '" y2="31"/>';
-        $barbs .= '<line x1="' . ($x+7) . '" y1="19" x2="' . ($x-7) . '" y2="31"/>';
+    $dividers = [];
+    foreach ( $files as $file ) {
+        $content = file_get_contents( $file );
+        if ( $content && trim( $content ) ) {
+            // Añadir clase para CSS si el SVG no la tiene
+            $dividers[] = str_replace( '<svg ', '<svg class="rvt-divider-svg" ', $content, $count )
+                          ?: $content;
+        }
     }
-
-    return [
-
-        // 1. Murciélago
-        $svg . $ll . $lr . $go .
-        '<path d="M0,-13 C-4,-19-15,-21-25,-14 C-19,-11-15,-7-13,-4 C-19,-7-27,-5-32,-10 C-30,-3-23,3-15,1 C-10,4-5,2-2,-2 L0,5 L2,-2 C5,2 10,4 15,1 C23,3 30,-3 32,-10 C27,-5 19,-7 13,-4 C15,-7 19,-11 25,-14 C15,-21 4,-19 0,-13Z"/>'
-        . $gc . $end,
-
-        // 2. Calavera con mandíbula y dientes
-        $svg . $ll . $lr . $go .
-        '<path fill-rule="evenodd" d="M0,-21 C-13,-21-21,-12-21,-1 C-21,9-14,16-5,18 L-5,23 C-5,25-3,27 0,27 C3,27 5,25 5,23 L5,18 C14,16 21,9 21,-1 C21,-12 13,-21 0,-21Z M-8,-5 A5,5 0 1,0 -8,-6Z M8,-5 A5,5 0 1,0 8,-6Z"/>'
-        . '<line x1="-7" y1="18" x2="-7" y2="27" stroke="currentColor" stroke-width="2" fill="none"/>'
-        . '<line x1="0" y1="18" x2="0" y2="27" stroke="currentColor" stroke-width="2" fill="none"/>'
-        . '<line x1="7" y1="18" x2="7" y2="27" stroke="currentColor" stroke-width="2" fill="none"/>'
-        . $gc . $end,
-
-        // 3. Doble rayo
-        $svg . $ll . $lr . $go .
-        '<path d="M-20,-16 L-12,-16 L-17,-3 L-10,-3 L-23,16 L-19,3 L-27,3 Z"/>'
-        . '<path d="M20,-16 L12,-16 L17,-3 L10,-3 L23,16 L19,3 L27,3 Z"/>'
-        . $gc . $end,
-
-        // 4. Estrella de cinco puntas (pentagrama)
-        $svg . $ll . $lr . $go .
-        '<path d="M0,-20 L4.7,-6.5 L17.1,-5.6 L7.6,2.5 L10.6,14.6 L0,8 L-10.6,14.6 L-7.6,2.5 L-17.1,-5.6 L-4.7,-6.5 Z"/>'
-        . $gc . $end,
-
-        // 5. Alambre de púas (ancho completo)
-        $svg
-        . '<line x1="0" y1="25" x2="600" y2="25" stroke="currentColor" stroke-width="1.5" opacity=".18"/>'
-        . '<g stroke="currentColor" stroke-width="1.5" opacity=".28" fill="none">' . $barbs . '</g>'
-        . $end,
-
-        // 6. Huesos cruzados
-        $svg . $ll . $lr .
-        '<g stroke="currentColor" stroke-width="3.5" fill="currentColor" opacity=".3" transform="translate(300,25)">'
-        . '<line x1="-15" y1="-15" x2="15" y2="15"/>'
-        . '<circle cx="-17" cy="-11" r="5"/><circle cx="-11" cy="-17" r="5"/>'
-        . '<circle cx="17" cy="11" r="5"/><circle cx="11" cy="17" r="5"/>'
-        . '<line x1="15" y1="-15" x2="-15" y2="15"/>'
-        . '<circle cx="17" cy="-11" r="5"/><circle cx="11" cy="-17" r="5"/>'
-        . '<circle cx="-17" cy="11" r="5"/><circle cx="-11" cy="17" r="5"/>'
-        . '</g>'
-        . $end,
-
-    ];
+    return $dividers;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,8 +150,6 @@ function rvt_table_shortcode( $atts ) {
 
     ob_start();
 
-    $svg_link = '<svg class="rvt-link-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
-
     // Índice
     echo '<nav class="rvt-index"><ul>';
     foreach ( $weeks as $w ) {
@@ -192,18 +168,28 @@ function rvt_table_shortcode( $atts ) {
         echo '<div class="rvt-table-wrap"><table class="rvt-table"><tbody>';
 
         foreach ( $w['discs'] as $disc ) {
-            $genre      = $disc['genre']      ?? '';
-            $color      = $disc['genreColor'] ?? '';
-            $artist     = $disc['artistName'] ?? '';
-            $name       = $disc['name']       ?? '';
-            $link       = $disc['link']       ?? '';
-            $ep         = ! empty( $disc['ep'] );
+            $genre       = $disc['genre']       ?? '';
+            $color       = $disc['genreColor']  ?? '';
+            $artist      = $disc['artistName']  ?? '';
+            $country     = $disc['countryCode'] ?? '';
+            $country_name = $disc['countryName'] ?? $country;
+            $name        = $disc['name']        ?? '';
+            $link        = $disc['link']        ?? '';
+            $ep          = ! empty( $disc['ep'] );
+            $debut       = ! empty( $disc['debut'] );
+
+            // Bandera emoji a partir del ISO code (ej: "AR" → 🇦🇷)
+            $flag = '';
+            if ( $country && preg_match( '/^[A-Z]{2}$/', strtoupper( $country ) ) ) {
+                $code  = strtoupper( $country );
+                $flag  = mb_chr( 0x1F1E6 + ord( $code[0] ) - ord( 'A' ), 'UTF-8' )
+                       . mb_chr( 0x1F1E6 + ord( $code[1] ) - ord( 'A' ), 'UTF-8' );
+            }
 
             // Color chip para el género
             if ( $color ) {
-                // Calcular color de texto: negro o blanco según luminancia del fondo
                 list( $r, $g, $b ) = sscanf( ltrim( $color, '#' ), '%02x%02x%02x' );
-                $luminance = ( 0.299 * $r + 0.587 * $g + 0.114 * $b ) / 255;
+                $luminance  = ( 0.299 * $r + 0.587 * $g + 0.114 * $b ) / 255;
                 $text_color = $luminance > 0.55 ? '#111' : '#fff';
                 $chip = '<span class="rvt-genre-chip" style="background:' . esc_attr( $color ) . ';color:' . $text_color . '">' . esc_html( $genre ) . '</span>';
             } else {
@@ -213,12 +199,14 @@ function rvt_table_shortcode( $atts ) {
             echo '<tr class="rvt-row">';
             echo '<td class="rvt-cell rvt-cell--genre">' . $chip . '</td>';
             echo '<td class="rvt-cell rvt-cell--disc">';
+            if ( $flag ) echo '<span class="rvt-flag" title="' . esc_attr( $country_name ) . '">' . $flag . '</span> ';
             echo '<span class="rvt-artist">' . esc_html( $artist ) . '</span>';
             echo '<span class="rvt-sep"> – </span>';
             echo '<span class="rvt-name">' . esc_html( $name ) . '</span>';
-            if ( $ep ) echo ' <span class="rvt-badge">EP</span>';
+            if ( $ep )    echo ' <span class="rvt-badge rvt-badge--ep">EP</span>';
+            if ( $debut ) echo ' <span class="rvt-badge rvt-badge--debut">Debut</span>';
             if ( $link ) {
-                echo ' <a class="rvt-disc-link" href="' . esc_url( $link ) . '" target="_blank" rel="noreferrer noopener">' . $svg_link . '</a>';
+                echo ' <a class="rvt-disc-link" href="' . esc_url( $link ) . '" target="_blank" rel="noreferrer noopener">' . rvt_platform_icon( $link ) . '</a>';
             }
             echo '</td>';
             echo '</tr>';
@@ -231,21 +219,36 @@ function rvt_table_shortcode( $atts ) {
             $week_covers = [];
             foreach ( $w['discs'] as $disc ) {
                 if ( ! empty( $disc['image'] ) ) {
-                    $week_covers[] = [ 'src' => $disc['image'], 'alt' => $disc['artistName'] . ' – ' . $disc['name'] ];
+                    $week_covers[] = [
+                        'src'  => $disc['image'],
+                        'alt'  => $disc['artistName'] . ' – ' . $disc['name'],
+                        'link' => $disc['link'] ?? '',
+                    ];
                 }
             }
 
-            if ( ! empty( $week_covers ) ) {
+            if ( count( $week_covers ) >= 4 ) {
                 shuffle( $week_covers );
                 $picks = array_slice( $week_covers, 0, 4 );
                 echo '<div class="rvt-covers-divider">';
                 foreach ( $picks as $cover ) {
-                    echo '<div class="rvt-cover"><img src="' . esc_url( $cover['src'] ) . '" alt="' . esc_attr( $cover['alt'] ) . '" loading="lazy" /></div>';
+                    $img = '<img src="' . esc_url( $cover['src'] ) . '" alt="' . esc_attr( $cover['alt'] ) . '" loading="lazy" />';
+                    echo '<div class="rvt-cover">';
+                    if ( $cover['link'] ) {
+                        echo '<a href="' . esc_url( $cover['link'] ) . '" target="_blank" rel="noreferrer noopener">' . $img . '</a>';
+                    } else {
+                        echo $img;
+                    }
+                    echo '</div>';
                 }
                 echo '</div>';
             } else {
                 $dividers = rvt_fallback_dividers();
-                echo '<div class="rvt-divider-wrap">' . $dividers[ array_rand( $dividers ) ] . '</div>';
+                if ( ! empty( $dividers ) ) {
+                    echo '<div class="rvt-divider-wrap">' . $dividers[ array_rand( $dividers ) ] . '</div>';
+                } else {
+                    echo '<hr class="rvt-divider-line"/>';
+                }
             }
         }
     }
@@ -281,17 +284,26 @@ function rvt_table_shortcode( $atts ) {
 .rvt-artist { font-weight: 700; }
 .rvt-sep { opacity: .4; margin: 0 .2em; }
 .rvt-name { }
-.rvt-badge { display: inline-block; font-size: .65em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; border: 1px solid currentColor; opacity: .5; padding: .1em .4em; border-radius: 2px; vertical-align: middle; margin-left: .3em; }
-.rvt-disc-link { display: inline-flex; align-items: center; margin-left: .5em; opacity: .35; text-decoration: none; vertical-align: middle; transition: opacity .15s; }
+.rvt-flag { font-size: 1em; line-height: 1; }
+.rvt-badge { display: inline-block; font-size: .62em; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: .15em .45em; border-radius: 3px; vertical-align: middle; margin-left: .3em; }
+.rvt-badge--ep    { background: #e67e22; color: #fff; }
+.rvt-badge--debut { background: #8e44ad; color: #fff; }
+.rvt-disc-link { display: inline-flex; align-items: center; margin-left: .5em; opacity: .5; text-decoration: none; vertical-align: middle; transition: opacity .15s; }
 .rvt-disc-link:hover { opacity: 1; }
-.rvt-link-icon { width: .8em; height: .8em; }
+.rvt-link-icon { width: 1em; height: 1em; }
+.rvt-icon--spotify  { color: #1DB954; }
+.rvt-icon--youtube  { color: #FF0000; }
+.rvt-icon--bandcamp { color: #1da0c3; }
+.rvt-icon--soundcloud { color: #ff5500; }
 
 /* Separadores */
-.rvt-covers-divider { display: flex; gap: .5em; margin: 2.5em 0; }
+.rvt-covers-divider { display: flex; gap: .5em; margin-top: .75em; margin-bottom: 3em; }
 .rvt-cover { flex: 1; aspect-ratio: 1; overflow: hidden; border-radius: 4px; }
+.rvt-cover a { display: block; width: 100%; height: 100%; }
 .rvt-cover img { width: 100%; height: 100%; object-fit: cover; display: block; filter: brightness(.85); transition: filter .2s; }
-.rvt-cover img:hover { filter: brightness(1); }
-.rvt-divider-wrap { margin: 2.5em 0; }
+.rvt-cover a:hover img { filter: brightness(1); }
+.rvt-divider-wrap { margin-top: .75em; margin-bottom: 3em; }
+.rvt-divider-line { margin-top: .75em; margin-bottom: 3em; border: none; border-top: 1px solid rgba(128,128,128,.2); }
 .rvt-divider-svg { display: block; width: 100%; height: auto; max-height: 50px; }
 </style>';
 
