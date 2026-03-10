@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { CommonModule } from './common/common.module';
 import { I18nConfigModule } from './i18n/i18n.module';
 
@@ -53,6 +54,7 @@ import { LastfmModule } from './lastfm/lastfm.module';
       synchronize: false,
       migrationsRun: true,
     }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
     I18nConfigModule,
     CommonModule,
 
