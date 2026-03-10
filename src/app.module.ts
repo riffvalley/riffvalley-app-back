@@ -33,6 +33,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { ExcelModule } from './excel/excel.module';
 import { RequestsModule } from './requests/requests.module';
 import { NationalReleasesModule } from './national-releases/national-releases.module';
+import { LastfmModule } from './lastfm/lastfm.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { NationalReleasesModule } from './national-releases/national-releases.mo
     ExcelModule,
     RequestsModule,
     NationalReleasesModule,
+    LastfmModule,
   ],
 })
 export class AppModule {}
