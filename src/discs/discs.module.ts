@@ -6,8 +6,9 @@ import { Disc } from './entities/disc.entity';
 import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
-  controllers: [DiscsController], // Controllers go here
-  providers: [DiscsService], // Providers (services) go here
-  imports: [TypeOrmModule.forFeature([Disc]), AuthModule], // Ensure the Disc entity is registered
+  controllers: [DiscsController],
+  providers: [DiscsService],
+  imports: [TypeOrmModule.forFeature([Disc]), AuthModule],
+  exports: [DiscsService],
 })
 export class DiscModule {}
