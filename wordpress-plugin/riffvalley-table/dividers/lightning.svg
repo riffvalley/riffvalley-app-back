@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 50" aria-hidden="true">
+  <line x1="0" y1="25" x2="261" y2="25" stroke="currentColor" stroke-width="1" opacity=".2"/>
+  <line x1="339" y1="25" x2="600" y2="25" stroke="currentColor" stroke-width="1" opacity=".2"/>
+  <g transform="translate(300,25)" fill="currentColor" opacity=".32">
+    <path d="M-21,-15 L-13,-15 L-18,-3 L-11,-3 L-24,15 L-20,3 L-28,3 Z"/>
+    <path d="M21,-15 L13,-15 L18,-3 L11,-3 L24,15 L20,3 L28,3 Z"/>
+  </g>
+</svg>

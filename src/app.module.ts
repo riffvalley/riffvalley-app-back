@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { CommonModule } from './common/common.module';
 import { I18nConfigModule } from './i18n/i18n.module';
 
@@ -33,6 +32,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { ExcelModule } from './excel/excel.module';
 import { RequestsModule } from './requests/requests.module';
 import { NationalReleasesModule } from './national-releases/national-releases.module';
+import { LastfmModule } from './lastfm/lastfm.module';
 
 @Module({
   imports: [
@@ -53,7 +53,6 @@ import { NationalReleasesModule } from './national-releases/national-releases.mo
       synchronize: false,
       migrationsRun: true,
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 5 }]),
     I18nConfigModule,
     CommonModule,
 
@@ -85,6 +84,7 @@ import { NationalReleasesModule } from './national-releases/national-releases.mo
     ExcelModule,
     RequestsModule,
     NationalReleasesModule,
+    LastfmModule,
   ],
 })
 export class AppModule {}
