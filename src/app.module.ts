@@ -54,7 +54,7 @@ import { LastfmModule } from './lastfm/lastfm.module';
       synchronize: false,
       migrationsRun: true,
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
     I18nConfigModule,
     CommonModule,
 
