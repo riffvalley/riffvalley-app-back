@@ -591,7 +591,7 @@ export class ListsService {
     for (const position of sortedPositions) {
       const discs = byPosition.get(position);
       const title = `prueba ${position}`;
-      const content = this.buildPostContent(discs);
+      const content = this.buildPostContent(discs, position, list);
 
       const post = await this.wordpressService.createPost(title, content, 'draft');
       createdPosts.push({ position, wpPostId: post.id, link: post.link, title });
@@ -600,19 +600,83 @@ export class ListsService {
     return { created: createdPosts.length, posts: createdPosts };
   }
 
-  private buildPostContent(discs: any[]): string {
-    const items = discs
+  private buildPostContent(discs: any[], position: number, list: any): string {
+    const ordinals = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta'];
+    const ordinal = ordinals[position - 1] ?? `${position}ª`;
+
+    const releaseDate = list.releaseDate ? new Date(list.releaseDate) : new Date();
+    const day = releaseDate.getDate().toString().padStart(2, '0');
+    const month = (releaseDate.getMonth() + 1).toString().padStart(2, '0');
+    const year = releaseDate.getFullYear();
+    const dateStr = `${day}/${month}/${year}`;
+
+    const artistNames = discs.map((a) => a.disc?.artist?.name ?? '');
+    const artistNamesHtml = artistNames
+      .map((name, i) =>
+        i === artistNames.length - 1 && artistNames.length > 1
+          ? `y <strong>${name}</strong>`
+          : `<strong>${name}</strong>`,
+      )
+      .join(', ');
+
+    const intro = `<div style="height:7px" aria-hidden="true" class="wp-block-spacer"></div>
+
+<p class="text-justify">${ordinal} entrega de novedades de esta semana. Hoy os hablamos de ${discs.length} nuevos discos que se han lanzado esta semana del ${dateStr}: ${artistNamesHtml}.</p>
+
+<p class="text-justify">No olvides contarnos en nuestras <a href="https://www.instagram.com/riffvalleyes/" target="_blank" rel="noreferrer noopener">redes sociales</a> qué os han parecido estas bandas.</p>
+
+<p class="text-justify">Si quieres saber qué otros discos han sido lanzados esta semana, no dudes en echarle un ojo a nuestra <a href="https://www.riffvalley.es/novedades/discos-metal-rock-hardcore-2025">guía de lanzamientos de 2026</a>.</p>
+
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+
+<h4 class="wp-block-heading"><strong>Los nuevos discos lanzados esta semana:</strong></h4>
+
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>`;
+
+    const discSections = discs
       .map((a) => {
         const artist = a.disc?.artist?.name ?? '';
         const discName = a.disc?.name ?? '';
-        const genre = a.disc?.genre?.name ?? '';
-        const country = a.disc?.artist?.country?.name ?? '';
+        const genre = a.disc?.genre?.name ?? 'xx';
+        const image = a.disc?.image ?? '';
+        const link = a.disc?.link ?? '';
         const debut = a.disc?.debut ? ' <em>(Debut)</em>' : '';
-        return `<li><strong>${artist}</strong> - ${discName} <em>(${genre})</em> · ${country}${debut}</li>`;
-      })
-      .join('\n');
 
-    return `<ul>\n${items}\n</ul>`;
+        let imageBlock = '';
+        if (image) {
+          imageBlock = `\n\n<div class="wp-block-image is-style-zoooom">\n<figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${artist} - ${discName}" style="aspect-ratio:1;object-fit:cover;width:300px;height:undefinedpx"/></figure>\n</div>`;
+        }
+
+        let spotifyEmbed = '';
+        const trackMatch = link.match(/track\/([a-zA-Z0-9]+)/);
+        const albumMatch = link.match(/album\/([a-zA-Z0-9]+)/);
+        if (trackMatch) {
+          spotifyEmbed = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/${trackMatch[1]}?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+        } else if (albumMatch) {
+          spotifyEmbed = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/album/${albumMatch[1]}?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+        }
+
+        return `${imageBlock}
+
+<p class="text-justify"><strong>${artist}</strong> &#8211; <em>${discName}</em>${debut}: </p>
+
+<p class="text-justify"><strong>Género: </strong>${genre}</p>
+
+<p class="text-justify"><strong>Bandas similares:</strong> xx, xx, xx</p>${spotifyEmbed}
+
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>`;
+      })
+      .join('\n\n');
+
+    const footer = `<hr class="wp-block-separator has-css-opacity is-style-wide"/>
+
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+
+<p class="text-justify">¡Muchas gracias por leer este artículo! ¿Qué os han parecido estos lanzamientos? ¿Nos hemos dejado <strong>algún disco imprescindible</strong>? No dudéis comentar y en seguirnos en <a href="https://www.riffvalley.es/quienes-somos/quienes-somos" target="_blank" rel="noreferrer noopener">nuestras redes sociales</a>:</p>
+
+<p class="text-justify"><strong>Comunidad de Telegram:</strong>&nbsp;<a href="https://t.me/RiffValleyES" target="_blank" rel="noreferrer noopener">t.me/RiffValleyES</a><br><strong>Facebook:</strong>&nbsp;<a href="https://www.facebook.com/RiffValleyEs/" target="_blank" rel="noreferrer noopener">facebook.com/RiffValleyEs</a><br><strong>Instagram:</strong>&nbsp;<a href="https://www.instagram.com/riffvalleyes/" target="_blank" rel="noreferrer noopener">instagram.com/riffvalleyes</a><br><strong>Threads</strong>: <a href="https://www.threads.net/@riffvalleyes" target="_blank" rel="noreferrer noopener">https://www.threads.net/@riffvalleyes</a><br><strong>Twitter &#8211; X:&nbsp;</strong><a href="https://twitter.com/Riffvalleyes" target="_blank" rel="noreferrer noopener">twitter.com/Riffvalleyes</a><br><strong>Bluesky</strong>: <a href="https://bsky.app/profile/riffvalleyes.bsky.social" target="_blank" rel="noreferrer noopener">bsky.app/profile/riffvalleyes.bsky.social</a></p>`;
+
+    return `${intro}\n\n${discSections}\n\n${footer}`;
   }
 
   private handleDbExceptions(error: any) {
