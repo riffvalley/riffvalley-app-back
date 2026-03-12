@@ -109,6 +109,11 @@ export class ListsController {
     return this.listsServices.createWeeklyList();
   }
 
+  @Post(':id/wp-posts')
+  generateWpPosts(@Param('id', ParseUUIDPipe) id: string) {
+    return this.listsServices.generateWordPressPosts(id);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.listsServices.findOne(id);

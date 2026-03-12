@@ -20,6 +20,7 @@ import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Content } from 'src/contents/entities/content.entity';
+import { WordpressService } from 'src/wordpress/wordpress.service';
 
 @Injectable()
 export class ListsService {
@@ -30,6 +31,7 @@ export class ListsService {
     private readonly listRepository: Repository<List>,
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
+    private readonly wordpressService: WordpressService,
   ) {}
 
   async create(createListDto: CreateListDto) {
@@ -565,6 +567,52 @@ export class ListsService {
     } catch (error) {
       this.handleDbExceptions(error);
     }
+  }
+
+  async generateWordPressPosts(listId: string) {
+    const list = await this.findOne(listId);
+
+    // Group asignations by position (skip null)
+    const byPosition = new Map<number, typeof list.asignations>();
+    for (const asignation of list.asignations) {
+      if (asignation.position === null || asignation.position === undefined) {
+        continue;
+      }
+      if (!byPosition.has(asignation.position)) {
+        byPosition.set(asignation.position, []);
+      }
+      byPosition.get(asignation.position).push(asignation);
+    }
+
+    const sortedPositions = Array.from(byPosition.keys()).sort((a, b) => a - b);
+
+    const createdPosts = [];
+
+    for (const position of sortedPositions) {
+      const discs = byPosition.get(position);
+      const title = `prueba ${position}`;
+      const content = this.buildPostContent(discs);
+
+      const post = await this.wordpressService.createPost(title, content, 'draft');
+      createdPosts.push({ position, wpPostId: post.id, link: post.link, title });
+    }
+
+    return { created: createdPosts.length, posts: createdPosts };
+  }
+
+  private buildPostContent(discs: any[]): string {
+    const items = discs
+      .map((a) => {
+        const artist = a.disc?.artist?.name ?? '';
+        const discName = a.disc?.name ?? '';
+        const genre = a.disc?.genre?.name ?? '';
+        const country = a.disc?.artist?.country?.name ?? '';
+        const debut = a.disc?.debut ? ' <em>(Debut)</em>' : '';
+        return `<li><strong>${artist}</strong> - ${discName} <em>(${genre})</em> · ${country}${debut}</li>`;
+      })
+      .join('\n');
+
+    return `<ul>\n${items}\n</ul>`;
   }
 
   private handleDbExceptions(error: any) {
