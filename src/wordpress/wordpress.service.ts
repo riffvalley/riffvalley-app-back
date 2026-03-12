@@ -28,6 +28,7 @@ export class WordpressService {
     title: string,
     content: string,
     status: 'draft' | 'publish' = 'draft',
+    meta?: Record<string, any>,
   ): Promise<WpPost> {
     const response = await fetch(`${this.apiUrl}/posts`, {
       method: 'POST',
@@ -35,7 +36,7 @@ export class WordpressService {
         'Content-Type': 'application/json',
         Authorization: `Basic ${this.credentials}`,
       },
-      body: JSON.stringify({ title, content, status }),
+      body: JSON.stringify({ title, content, status, ...(meta ? { meta } : {}) }),
     });
 
     if (!response.ok) {

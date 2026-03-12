@@ -586,14 +586,39 @@ export class ListsService {
 
     const sortedPositions = Array.from(byPosition.keys()).sort((a, b) => a - b);
 
+    const releaseDate = list.releaseDate ? new Date(list.releaseDate) : new Date();
+    const day = releaseDate.getDate().toString().padStart(2, '0');
+    const month = (releaseDate.getMonth() + 1).toString().padStart(2, '0');
+    const year = releaseDate.getFullYear();
+    const dateStr = `${day}/${month}/${year}`;
+
+    const monthNames = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+    ];
+    const monthName = monthNames[releaseDate.getMonth()];
+
+    const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
     const createdPosts = [];
 
     for (const position of sortedPositions) {
       const discs = byPosition.get(position);
-      const title = `prueba ${position}`;
+      const roman = romanNumerals[position - 1] ?? `${position}`;
+
+      const title = `Nuevos discos - ${dateStr} (${roman})`;
+      const seoTitle = `Nuevos discos - ${dateStr} (${roman}) • Riff Valley ${year}`;
+      const seoDescription = `En el artículo de hoy os recopilamos los nuevos discos que se publican la semana del ${dateStr} y que no te puedes perder.`;
       const content = this.buildPostContent(discs, position, list);
 
-      const post = await this.wordpressService.createPost(title, content, 'draft');
+      const meta = {
+        rank_math_title: seoTitle,
+        rank_math_description: seoDescription,
+        rank_math_focus_keyword: 'nuevos discos',
+        rank_math_keywords: `nuevos discos,${monthName},${year}`,
+      };
+
+      const post = await this.wordpressService.createPost(title, content, 'draft', meta);
       createdPosts.push({ position, wpPostId: post.id, link: post.link, title });
     }
 
@@ -644,10 +669,12 @@ export class ListsService {
 
         let imageBlock = '';
         if (image) {
-          imageBlock = `\n\n<div class="wp-block-image is-style-zoooom">\n<figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${artist} - ${discName}" style="aspect-ratio:1;object-fit:cover;width:300px;height:undefinedpx"/></figure>\n</div>`;
+          imageBlock = `\n\n<div class="wp-block-image is-style-zoooom">\n<figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${artist} - ${discName}" style="aspect-ratio:1;object-fit:cover;width:300px;height:300px"/></figure>\n</div>`;
         }
 
-        let spotifyEmbed = '';
+        const DEFAULT_SPOTIFY_EMBED = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/7zooVkrSOht9btsTRRdM41?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+
+        let spotifyEmbed = DEFAULT_SPOTIFY_EMBED;
         const trackMatch = link.match(/track\/([a-zA-Z0-9]+)/);
         const albumMatch = link.match(/album\/([a-zA-Z0-9]+)/);
         if (trackMatch) {
