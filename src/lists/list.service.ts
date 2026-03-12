@@ -590,7 +590,7 @@ export class ListsService {
 
     for (const position of sortedPositions) {
       const discs = byPosition.get(position);
-      const title = `${list.name} - Parte ${position}`;
+      const title = `prueba ${position}`;
       const content = this.buildPostContent(discs);
 
       const post = await this.wordpressService.createPost(title, content, 'draft');
