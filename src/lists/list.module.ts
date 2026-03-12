@@ -5,11 +5,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { List } from './entities/list.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { Content } from 'src/contents/entities/content.entity';
+import { WordpressModule } from 'src/wordpress/wordpress.module';
 
 @Module({
   controllers: [ListsController],
   providers: [ListsService],
-  imports: [TypeOrmModule.forFeature([List, Content]), AuthModule],
+  imports: [TypeOrmModule.forFeature([List, Content]), AuthModule, WordpressModule],
   exports: [ListsService],
 })
 export class ListsModule {}
