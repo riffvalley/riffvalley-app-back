@@ -345,6 +345,17 @@ export class DiscsService {
     const totalPages = Math.ceil(totalItems / limit);
     const currentPage = Math.floor(offset / limit) + 1;
 
+    // Obtener national releases vinculadas a estos discos
+    const discIds = discs.map((d) => d.id);
+    let nationalReleaseMap = new Map<string, string>();
+    if (discIds.length > 0) {
+      const nrRows: { discId: string; id: string }[] = await this.discRepository.manager.query(
+        `SELECT "discId", id FROM national_release WHERE "discId" = ANY($1)`,
+        [discIds],
+      );
+      nationalReleaseMap = new Map(nrRows.map((r) => [r.discId, r.id]));
+    }
+
     // Agrupar discos por fechas de lanzamiento
     const groupedDiscs = discs.reduce((acc, disc) => {
       const dateKey = new Date(disc.releaseDate).toISOString().split('T')[0];
@@ -363,11 +374,12 @@ export class DiscsService {
           },
         },
         userRate: disc.rates.length > 0 ? disc.rates[0] : null,
-        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null, // Enviar el ID del favorito
+        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null,
         pendingId:
           disc.pendings && disc.pendings.length > 0
             ? disc.pendings[0].id
             : null,
+        nationalReleaseId: nationalReleaseMap.get(disc.id) ?? null,
         asignations: disc.asignations.map((asignation) => ({
           id: asignation.id,
           done: asignation.done,
