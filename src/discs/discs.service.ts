@@ -16,6 +16,7 @@ import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
 import { Pending } from 'src/pendings/entities/pending.entity';
+import { NationalRelease } from '../national-releases/entities/national-release.entity';
 @Injectable()
 export class DiscsService {
   private readonly logger = new Logger('DiscsService');
@@ -25,6 +26,8 @@ export class DiscsService {
     private readonly discRepository: Repository<Disc>,
     @InjectRepository(Artist)
     private readonly artistRepository: Repository<Artist>,
+    @InjectRepository(NationalRelease)
+    private readonly nationalReleaseRepository: Repository<NationalRelease>,
   ) { }
 
   async create(createDiscDto: CreateDiscDto) {
@@ -436,6 +439,14 @@ export class DiscsService {
       }
 
       await this.discRepository.save(disc);
+
+      if (updateDiscDto.link !== undefined) {
+        await this.nationalReleaseRepository.update(
+          { discId: id },
+          { link: updateDiscDto.link ?? null },
+        );
+      }
+
       return disc;
     } catch (error) {
       this.handleDbExceptions(error);
