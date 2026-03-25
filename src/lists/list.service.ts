@@ -609,7 +609,7 @@ export class ListsService {
       const title = `Nuevos discos - ${dateStr} (${roman})`;
       const seoTitle = `Nuevos discos - ${dateStr} (${roman}) • Riff Valley ${year}`;
       const seoDescription = `En el artículo de hoy os recopilamos los nuevos discos que se publican la semana del ${dateStr} y que no te puedes perder.`;
-      const content = this.buildPostContent(discs, position, list);
+      const content = this.buildPostContent(discs, position, list, title);
 
       const meta = {
         rank_math_title: seoTitle,
@@ -625,7 +625,7 @@ export class ListsService {
     return { created: createdPosts.length, posts: createdPosts };
   }
 
-  private buildPostContent(discs: any[], position: number, list: any): string {
+  private buildPostContent(discs: any[], position: number, list: any, title = ''): string {
     const ordinals = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta'];
     const ordinal = ordinals[position - 1] ?? `${position}ª`;
 
@@ -666,10 +666,12 @@ export class ListsService {
         const image = a.disc?.image ?? '';
         const link = a.disc?.link ?? '';
         const debut = a.disc?.debut ? ' <em>(Debut)</em>' : '';
+        const description = a.disc?.description ?? '';
 
         let imageBlock = '';
         if (image) {
-          imageBlock = `\n\n<div class="wp-block-image is-style-zoooom">\n<figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${artist} - ${discName}" style="aspect-ratio:1;object-fit:cover;width:300px;height:300px"/></figure>\n</div>`;
+          const altText = title ? `${artist} - ${discName} ${title}` : `${artist} - ${discName}`;
+          imageBlock = `\n\n<div class="wp-block-image is-style-zoooom">\n<figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${altText}" style="aspect-ratio:1;object-fit:cover;width:300px;height:300px"/></figure>\n</div>`;
         }
 
         const DEFAULT_SPOTIFY_EMBED = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/7zooVkrSOht9btsTRRdM41?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
@@ -683,9 +685,11 @@ export class ListsService {
           spotifyEmbed = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/album/${albumMatch[1]}?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
         }
 
+        const descriptionSuffix = description ? `: ${description}` : '';
+
         return `${imageBlock}
 
-<p class="text-justify"><strong>${artist}</strong> &#8211; <em>${discName}</em>${debut}: </p>
+<p class="text-justify"><strong>${artist}</strong> &#8211; <em>${discName}</em>${debut}${descriptionSuffix}</p>
 
 <p class="text-justify"><strong>Género: </strong>${genre}</p>
 
