@@ -31,6 +31,7 @@ export class WordpressService {
     meta?: Record<string, any>,
     categories?: number[],
     tags?: number[],
+    slug?: string,
   ): Promise<WpPost> {
     const response = await fetch(`${this.apiUrl}/posts`, {
       method: 'POST',
@@ -45,6 +46,7 @@ export class WordpressService {
         ...(meta ? { meta } : {}),
         ...(categories?.length ? { categories } : {}),
         ...(tags?.length ? { tags } : {}),
+        ...(slug ? { slug } : {}),
       }),
     });
 

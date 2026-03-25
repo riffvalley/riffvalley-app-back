@@ -619,6 +619,7 @@ export class ListsService {
       const seoTitle = `Nuevos discos - ${dateStr} (${roman}) • Riff Valley ${year}`;
       const seoDescription = `En el artículo de hoy os recopilamos los nuevos discos que se publican la semana del ${dateStr} y que no te puedes perder.`;
       const content = this.buildPostContent(discs, position, list, title);
+      const slug = `nuevos-discos${day}${month}${String(year).slice(-2)}${roman.toLowerCase()}`;
 
       const meta = {
         rank_math_title: seoTitle,
@@ -627,7 +628,7 @@ export class ListsService {
         rank_math_keywords: `nuevos discos,${monthName},${year}`,
       };
 
-      const post = await this.wordpressService.createPost(title, content, 'draft', meta, CATEGORIES, tags);
+      const post = await this.wordpressService.createPost(title, content, 'draft', meta, CATEGORIES, tags, slug);
       createdPosts.push({ position, wpPostId: post.id, link: post.link, title });
     }
 
