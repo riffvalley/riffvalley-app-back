@@ -271,7 +271,8 @@ export class DiscsService {
   }
 
   async findAllByDate(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange } = paginationDto;
+    const { limit = 10, offset = 0, query, dateRange, genre, country, countryId } = paginationDto;
+    const countryFilter = country || countryId;
 
     const userId = user.id;
 
@@ -309,6 +310,19 @@ export class DiscsService {
       );
     }
 
+    if (genre) {
+      queryBuilder.andWhere('disc.genreId = :genre', { genre });
+    }
+
+    if (countryFilter) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      if (isUUID) {
+        queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
+      } else {
+        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
+      }
+    }
+
     if (dateRange && dateRange.length === 2) {
       const [startDate, endDate] = dateRange;
       queryBuilder.andWhere(
@@ -323,13 +337,24 @@ export class DiscsService {
     queryBuilder
       .take(limit)
       .skip(offset)
-      .orderBy('disc.releaseDate', 'ASC') // Cambia a 'ASC' si quieres orden ascendente
-      .addOrderBy('artist.name', 'ASC'); // Luego ordenar por name en orden ascendente
+      .orderBy('disc.releaseDate', 'ASC')
+      .addOrderBy('artist.name', 'ASC');
 
     const [discs, totalItems] = await queryBuilder.getManyAndCount();
 
     const totalPages = Math.ceil(totalItems / limit);
     const currentPage = Math.floor(offset / limit) + 1;
+
+    // Obtener national releases vinculadas a estos discos
+    const discIds = discs.map((d) => d.id);
+    let nationalReleaseMap = new Map<string, string>();
+    if (discIds.length > 0) {
+      const nrRows: { discId: string; id: string }[] = await this.discRepository.manager.query(
+        `SELECT "discId", id FROM national_release WHERE "discId" = ANY($1)`,
+        [discIds],
+      );
+      nationalReleaseMap = new Map(nrRows.map((r) => [r.discId, r.id]));
+    }
 
     // Agrupar discos por fechas de lanzamiento
     const groupedDiscs = discs.reduce((acc, disc) => {
@@ -349,11 +374,12 @@ export class DiscsService {
           },
         },
         userRate: disc.rates.length > 0 ? disc.rates[0] : null,
-        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null, // Enviar el ID del favorito
+        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null,
         pendingId:
           disc.pendings && disc.pendings.length > 0
             ? disc.pendings[0].id
             : null,
+        nationalReleaseId: nationalReleaseMap.get(disc.id) ?? null,
         asignations: disc.asignations.map((asignation) => ({
           id: asignation.id,
           done: asignation.done,

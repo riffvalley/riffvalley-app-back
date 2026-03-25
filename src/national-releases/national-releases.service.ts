@@ -5,6 +5,7 @@ import { NationalRelease, DiscType } from './entities/national-release.entity';
 import { CreateNationalReleaseDto } from './dto/create-national-release.dto';
 import { UpdateNationalReleaseDto } from './dto/update-national-release.dto';
 import { LinkDiscDto } from './dto/link-disc.dto';
+import { CreateNationalReleaseFromDiscDto } from './dto/create-national-release-from-disc.dto';
 import { MailService } from '../mail/mail.service';
 import { Disc } from '../discs/entities/disc.entity';
 import { Artist } from '../artists/entities/artist.entity';
@@ -96,6 +97,32 @@ export class NationalReleasesService {
     if (approved !== false) result.pendingMonths = pendingRows.map((r) => r.month);
 
     return result;
+  }
+
+  async createFromDisc(dto: CreateNationalReleaseFromDiscDto): Promise<NationalRelease> {
+    const disc = await this.discRepo.findOne({
+      where: { id: dto.discId },
+      relations: ['artist', 'genre'],
+    });
+    if (!disc) throw new NotFoundException(`Disc ${dto.discId} not found`);
+
+    const discType = dto.discType ?? (disc.ep ? DiscType.EP : DiscType.ALBUM);
+    const genre = dto.genre ?? disc.genre?.name ?? '';
+
+    const release = this.repo.create({
+      discId: disc.id,
+      disc,
+      artistName: disc.artist?.name ?? '',
+      discName: disc.name,
+      discType,
+      genre,
+      releaseDay: new Date(dto.releaseDay),
+      approved: dto.approved ?? false,
+      publishAt: dto.publishAt ? new Date(dto.publishAt) : null,
+      link: dto.link ?? disc.link ?? null,
+    });
+
+    return this.repo.save(release);
   }
 
   async linkDisc(id: string, dto: LinkDiscDto): Promise<NationalRelease> {
