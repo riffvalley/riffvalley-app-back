@@ -6,9 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CreateDiscDto } from './dto/create-discs.dto';
+import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, ILike } from 'typeorm';
 import { Disc } from './entities/disc.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { User } from 'src/auth/entities/user.entity';
@@ -22,6 +23,8 @@ export class DiscsService {
   constructor(
     @InjectRepository(Disc)
     private readonly discRepository: Repository<Disc>,
+    @InjectRepository(Artist)
+    private readonly artistRepository: Repository<Artist>,
   ) { }
 
   async create(createDiscDto: CreateDiscDto) {
@@ -32,6 +35,41 @@ export class DiscsService {
     } catch (error) {
       this.handleDbExceptions(error);
     }
+  }
+
+  async createWithArtist(dto: CreateDiscWithArtistDto): Promise<Disc> {
+    let artist = await this.artistRepository.findOne({
+      where: { name: ILike(dto.artistName) },
+    });
+
+    if (!artist) {
+      const normalized = dto.artistName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+      artist = await this.artistRepository.save(
+        this.artistRepository.create({
+          name: dto.artistName,
+          nameNormalized: normalized,
+          ...(dto.countryId && { countryId: dto.countryId }),
+        }),
+      );
+    }
+
+    const disc = this.discRepository.create({
+      name: dto.discName,
+      artist,
+      ...(dto.genreId && { genre: { id: dto.genreId } as Genre }),
+      ...(dto.releaseDate && { releaseDate: new Date(dto.releaseDate) }),
+      ep: dto.ep ?? false,
+      debut: dto.debut ?? false,
+      link: dto.link,
+      image: dto.image,
+      description: dto.description,
+    });
+
+    return this.discRepository.save(disc);
   }
 
   async findAll(paginationDto: PaginationDto, user: User) {
