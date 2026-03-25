@@ -4,16 +4,20 @@ import { Repository } from 'typeorm';
 import { NationalRelease } from './entities/national-release.entity';
 import { CreateNationalReleaseDto } from './dto/create-national-release.dto';
 import { UpdateNationalReleaseDto } from './dto/update-national-release.dto';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class NationalReleasesService {
   constructor(
     @InjectRepository(NationalRelease)
     private readonly repo: Repository<NationalRelease>,
+    private readonly mailService: MailService,
   ) {}
 
-  create(dto: CreateNationalReleaseDto): Promise<NationalRelease> {
-    return this.repo.save(this.repo.create(dto));
+  async create(dto: CreateNationalReleaseDto): Promise<NationalRelease> {
+    const release = await this.repo.save(this.repo.create(dto));
+    await this.mailService.sendNationalReleaseNotification(dto);
+    return release;
   }
 
   createMany(dtos: CreateNationalReleaseDto[]): Promise<NationalRelease[]> {
