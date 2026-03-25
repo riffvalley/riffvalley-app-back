@@ -675,11 +675,11 @@ export class ListsService {
 
         const spotifyEmbed = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/75EVwxItVYmK59hhfSsBoD?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
 
-        const descriptionSuffix = description ? `: ${description}` : '';
+        const descriptionText = description ? ` ${description}` : '';
 
         return `${imageBlock}
 
-<p class="text-justify"><strong>${artist}</strong> &#8211; <em>${discName}</em>${debut}${descriptionSuffix}</p>
+<p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong>${descriptionText}</p>
 
 <p class="text-justify"><strong>Género: </strong>${genre}</p>
 
