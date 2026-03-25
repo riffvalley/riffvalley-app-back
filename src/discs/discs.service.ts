@@ -271,7 +271,8 @@ export class DiscsService {
   }
 
   async findAllByDate(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange } = paginationDto;
+    const { limit = 10, offset = 0, query, dateRange, genre, country, countryId } = paginationDto;
+    const countryFilter = country || countryId;
 
     const userId = user.id;
 
@@ -309,6 +310,19 @@ export class DiscsService {
       );
     }
 
+    if (genre) {
+      queryBuilder.andWhere('disc.genreId = :genre', { genre });
+    }
+
+    if (countryFilter) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      if (isUUID) {
+        queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
+      } else {
+        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
+      }
+    }
+
     if (dateRange && dateRange.length === 2) {
       const [startDate, endDate] = dateRange;
       queryBuilder.andWhere(
@@ -323,8 +337,8 @@ export class DiscsService {
     queryBuilder
       .take(limit)
       .skip(offset)
-      .orderBy('disc.releaseDate', 'ASC') // Cambia a 'ASC' si quieres orden ascendente
-      .addOrderBy('artist.name', 'ASC'); // Luego ordenar por name en orden ascendente
+      .orderBy('disc.releaseDate', 'ASC')
+      .addOrderBy('artist.name', 'ASC');
 
     const [discs, totalItems] = await queryBuilder.getManyAndCount();
 
