@@ -3,6 +3,7 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { NationalReleasesService } from './national-releases.service';
 import { CreateNationalReleaseDto } from './dto/create-national-release.dto';
 import { UpdateNationalReleaseDto } from './dto/update-national-release.dto';
+import { LinkDiscDto } from './dto/link-disc.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
@@ -49,6 +50,12 @@ export class NationalReleasesController {
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.findOne(id);
+  }
+
+  @Patch(':id/link-disc')
+  @Auth(ValidRoles.riffValley, ValidRoles.admin)
+  linkDisc(@Param('id', ParseUUIDPipe) id: string, @Body() dto: LinkDiscDto) {
+    return this.service.linkDisc(id, dto);
   }
 
   @Patch(':id')

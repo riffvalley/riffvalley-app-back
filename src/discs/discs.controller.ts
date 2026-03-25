@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { DiscsService } from './discs.service';
 import { CreateDiscDto } from './dto/create-discs.dto';
+import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 
@@ -27,6 +28,12 @@ export class DiscsController {
   @Post()
   create(@Body() createDiscDto: CreateDiscDto) {
     return this.discsServices.create(createDiscDto);
+  }
+
+  @Post('with-artist')
+  @Auth()
+  createWithArtist(@Body() dto: CreateDiscWithArtistDto) {
+    return this.discsServices.createWithArtist(dto);
   }
 
   @Get('weekly')
