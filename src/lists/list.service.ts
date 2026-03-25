@@ -628,6 +628,13 @@ export class ListsService {
         rank_math_keywords: `nuevos discos,${monthName},${year}`,
       };
 
+      const existing = await this.wordpressService.findPostBySlug(slug);
+      if (existing) {
+        this.logger.log(`WP post already exists for slug ${slug} (#${existing.id}), skipping`);
+        createdPosts.push({ position, wpPostId: existing.id, link: existing.link, title, skipped: true });
+        continue;
+      }
+
       const post = await this.wordpressService.createPost(title, content, 'draft', meta, CATEGORIES, tags, slug);
       createdPosts.push({ position, wpPostId: post.id, link: post.link, title });
     }

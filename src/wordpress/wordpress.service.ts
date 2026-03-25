@@ -61,6 +61,15 @@ export class WordpressService {
     return post;
   }
 
+  async findPostBySlug(slug: string): Promise<WpPost | null> {
+    const res = await fetch(`${this.apiUrl}/posts?slug=${encodeURIComponent(slug)}&status=any`, {
+      headers: { Authorization: `Basic ${this.credentials}` },
+    });
+    const posts: any[] = await res.json();
+    if (!posts.length) return null;
+    return { id: posts[0].id, link: posts[0].link, title: posts[0].title, status: posts[0].status };
+  }
+
   async getOrCreateTag(name: string): Promise<number> {
     const searchRes = await fetch(
       `${this.apiUrl}/tags?search=${encodeURIComponent(name)}&per_page=5`,
