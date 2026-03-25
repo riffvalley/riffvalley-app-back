@@ -600,6 +600,15 @@ export class ListsService {
 
     const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
+    const CATEGORIES = [2049, 184]; // Novedades, Radar de Novedades
+    const FIXED_TAGS = [189, 2088, 188]; // novedades, nuevos discos semanales, radar
+
+    const [yearTagId, monthTagId] = await Promise.all([
+      this.wordpressService.getOrCreateTag(String(year)),
+      this.wordpressService.getOrCreateTag(monthName),
+    ]);
+    const tags = [...FIXED_TAGS, yearTagId, monthTagId];
+
     const createdPosts = [];
 
     for (const position of sortedPositions) {
@@ -618,7 +627,7 @@ export class ListsService {
         rank_math_keywords: `nuevos discos,${monthName},${year}`,
       };
 
-      const post = await this.wordpressService.createPost(title, content, 'draft', meta);
+      const post = await this.wordpressService.createPost(title, content, 'draft', meta, CATEGORIES, tags);
       createdPosts.push({ position, wpPostId: post.id, link: post.link, title });
     }
 
