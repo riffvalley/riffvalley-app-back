@@ -1,4 +1,5 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Disc } from '../../discs/entities/disc.entity';
 
 export enum DiscType {
   SINGLE = 'single',
@@ -34,6 +35,13 @@ export class NationalRelease {
 
   @Column({ type: 'boolean', default: false })
   approved: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  discId: string | null;
+
+  @ManyToOne(() => Disc, { nullable: true, eager: false })
+  @JoinColumn({ name: 'discId' })
+  disc: Disc | null;
 
   @CreateDateColumn()
   createdAt: Date;

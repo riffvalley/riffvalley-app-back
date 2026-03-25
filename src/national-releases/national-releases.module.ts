@@ -5,9 +5,10 @@ import { NationalReleasesService } from './national-releases.service';
 import { NationalReleasesController } from './national-releases.controller';
 import { AuthModule } from '../auth/auth.module';
 import { MailModule } from '../mail/mail.module';
+import { Disc } from '../discs/entities/disc.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([NationalRelease]), AuthModule, MailModule],
+  imports: [TypeOrmModule.forFeature([NationalRelease, Disc]), AuthModule, MailModule],
   controllers: [NationalReleasesController],
   providers: [NationalReleasesService],
 })
