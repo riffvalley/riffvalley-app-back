@@ -3,6 +3,8 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { NationalReleasesService } from './national-releases.service';
 import { CreateNationalReleaseDto } from './dto/create-national-release.dto';
 import { UpdateNationalReleaseDto } from './dto/update-national-release.dto';
+import { LinkDiscDto } from './dto/link-disc.dto';
+import { CreateNationalReleaseFromDiscDto } from './dto/create-national-release-from-disc.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
@@ -15,6 +17,12 @@ export class NationalReleasesController {
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   create(@Body() dto: CreateNationalReleaseDto | CreateNationalReleaseDto[]) {
     return Array.isArray(dto) ? this.service.createMany(dto) : this.service.create(dto);
+  }
+
+  @Post('from-disc')
+  @Auth(ValidRoles.riffValley, ValidRoles.admin)
+  createFromDisc(@Body() dto: CreateNationalReleaseFromDiscDto) {
+    return this.service.createFromDisc(dto);
   }
 
   @Post('bulk')
@@ -49,6 +57,12 @@ export class NationalReleasesController {
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.findOne(id);
+  }
+
+  @Patch(':id/link-disc')
+  @Auth(ValidRoles.riffValley, ValidRoles.admin)
+  linkDisc(@Param('id', ParseUUIDPipe) id: string, @Body() dto: LinkDiscDto) {
+    return this.service.linkDisc(id, dto);
   }
 
   @Patch(':id')

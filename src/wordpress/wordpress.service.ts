@@ -29,6 +29,9 @@ export class WordpressService {
     content: string,
     status: 'draft' | 'publish' = 'draft',
     meta?: Record<string, any>,
+    categories?: number[],
+    tags?: number[],
+    slug?: string,
   ): Promise<WpPost> {
     const response = await fetch(`${this.apiUrl}/posts`, {
       method: 'POST',
@@ -36,7 +39,15 @@ export class WordpressService {
         'Content-Type': 'application/json',
         Authorization: `Basic ${this.credentials}`,
       },
-      body: JSON.stringify({ title, content, status, ...(meta ? { meta } : {}) }),
+      body: JSON.stringify({
+        title,
+        content,
+        status,
+        ...(meta ? { meta } : {}),
+        ...(categories?.length ? { categories } : {}),
+        ...(tags?.length ? { tags } : {}),
+        ...(slug ? { slug } : {}),
+      }),
     });
 
     if (!response.ok) {
@@ -48,5 +59,35 @@ export class WordpressService {
     const post: WpPost = await response.json();
     this.logger.log(`Created WP post #${post.id}: ${title}`);
     return post;
+  }
+
+  async findPostBySlug(slug: string): Promise<WpPost | null> {
+    const res = await fetch(`${this.apiUrl}/posts?slug=${encodeURIComponent(slug)}&status=any`, {
+      headers: { Authorization: `Basic ${this.credentials}` },
+    });
+    const posts: any[] = await res.json();
+    if (!posts.length) return null;
+    return { id: posts[0].id, link: posts[0].link, title: posts[0].title, status: posts[0].status };
+  }
+
+  async getOrCreateTag(name: string): Promise<number> {
+    const searchRes = await fetch(
+      `${this.apiUrl}/tags?search=${encodeURIComponent(name)}&per_page=5`,
+      { headers: { Authorization: `Basic ${this.credentials}` } },
+    );
+    const found: any[] = await searchRes.json();
+    const exact = found.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (exact) return exact.id;
+
+    const createRes = await fetch(`${this.apiUrl}/tags`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${this.credentials}`,
+      },
+      body: JSON.stringify({ name }),
+    });
+    const created: any = await createRes.json();
+    return created.id;
   }
 }

@@ -6,9 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CreateDiscDto } from './dto/create-discs.dto';
+import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, ILike } from 'typeorm';
 import { Disc } from './entities/disc.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { User } from 'src/auth/entities/user.entity';
@@ -22,6 +23,8 @@ export class DiscsService {
   constructor(
     @InjectRepository(Disc)
     private readonly discRepository: Repository<Disc>,
+    @InjectRepository(Artist)
+    private readonly artistRepository: Repository<Artist>,
   ) { }
 
   async create(createDiscDto: CreateDiscDto) {
@@ -32,6 +35,41 @@ export class DiscsService {
     } catch (error) {
       this.handleDbExceptions(error);
     }
+  }
+
+  async createWithArtist(dto: CreateDiscWithArtistDto): Promise<Disc> {
+    let artist = await this.artistRepository.findOne({
+      where: { name: ILike(dto.artistName) },
+    });
+
+    if (!artist) {
+      const normalized = dto.artistName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+      artist = await this.artistRepository.save(
+        this.artistRepository.create({
+          name: dto.artistName,
+          nameNormalized: normalized,
+          ...(dto.countryId && { countryId: dto.countryId }),
+        }),
+      );
+    }
+
+    const disc = this.discRepository.create({
+      name: dto.discName,
+      artist,
+      ...(dto.genreId && { genre: { id: dto.genreId } as Genre }),
+      ...(dto.releaseDate && { releaseDate: new Date(dto.releaseDate) }),
+      ep: dto.ep ?? false,
+      debut: dto.debut ?? false,
+      link: dto.link,
+      image: dto.image,
+      description: dto.description,
+    });
+
+    return this.discRepository.save(disc);
   }
 
   async findAll(paginationDto: PaginationDto, user: User) {
@@ -233,7 +271,8 @@ export class DiscsService {
   }
 
   async findAllByDate(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange } = paginationDto;
+    const { limit = 10, offset = 0, query, dateRange, genre, country, countryId } = paginationDto;
+    const countryFilter = country || countryId;
 
     const userId = user.id;
 
@@ -271,6 +310,19 @@ export class DiscsService {
       );
     }
 
+    if (genre) {
+      queryBuilder.andWhere('disc.genreId = :genre', { genre });
+    }
+
+    if (countryFilter) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      if (isUUID) {
+        queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
+      } else {
+        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
+      }
+    }
+
     if (dateRange && dateRange.length === 2) {
       const [startDate, endDate] = dateRange;
       queryBuilder.andWhere(
@@ -285,13 +337,24 @@ export class DiscsService {
     queryBuilder
       .take(limit)
       .skip(offset)
-      .orderBy('disc.releaseDate', 'ASC') // Cambia a 'ASC' si quieres orden ascendente
-      .addOrderBy('artist.name', 'ASC'); // Luego ordenar por name en orden ascendente
+      .orderBy('disc.releaseDate', 'ASC')
+      .addOrderBy('artist.name', 'ASC');
 
     const [discs, totalItems] = await queryBuilder.getManyAndCount();
 
     const totalPages = Math.ceil(totalItems / limit);
     const currentPage = Math.floor(offset / limit) + 1;
+
+    // Obtener national releases vinculadas a estos discos
+    const discIds = discs.map((d) => d.id);
+    let nationalReleaseMap = new Map<string, string>();
+    if (discIds.length > 0) {
+      const nrRows: { discId: string; id: string }[] = await this.discRepository.manager.query(
+        `SELECT "discId", id FROM national_release WHERE "discId" = ANY($1)`,
+        [discIds],
+      );
+      nationalReleaseMap = new Map(nrRows.map((r) => [r.discId, r.id]));
+    }
 
     // Agrupar discos por fechas de lanzamiento
     const groupedDiscs = discs.reduce((acc, disc) => {
@@ -311,11 +374,12 @@ export class DiscsService {
           },
         },
         userRate: disc.rates.length > 0 ? disc.rates[0] : null,
-        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null, // Enviar el ID del favorito
+        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null,
         pendingId:
           disc.pendings && disc.pendings.length > 0
             ? disc.pendings[0].id
             : null,
+        nationalReleaseId: nationalReleaseMap.get(disc.id) ?? null,
         asignations: disc.asignations.map((asignation) => ({
           id: asignation.id,
           done: asignation.done,

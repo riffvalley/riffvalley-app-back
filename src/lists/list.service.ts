@@ -600,6 +600,15 @@ export class ListsService {
 
     const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
+    const CATEGORIES = [2049, 184]; // Novedades, Radar de Novedades
+    const FIXED_TAGS = [189, 2088, 188]; // novedades, nuevos discos semanales, radar
+
+    const [yearTagId, monthTagId] = await Promise.all([
+      this.wordpressService.getOrCreateTag(String(year)),
+      this.wordpressService.getOrCreateTag(monthName),
+    ]);
+    const tags = [...FIXED_TAGS, yearTagId, monthTagId];
+
     const createdPosts = [];
 
     for (const position of sortedPositions) {
@@ -610,6 +619,7 @@ export class ListsService {
       const seoTitle = `Nuevos discos - ${dateStr} (${roman}) • Riff Valley ${year}`;
       const seoDescription = `En el artículo de hoy os recopilamos los nuevos discos que se publican la semana del ${dateStr} y que no te puedes perder.`;
       const content = this.buildPostContent(discs, position, list, title);
+      const slug = `nuevos-discos${day}${month}${String(year).slice(-2)}${roman.toLowerCase()}`;
 
       const meta = {
         rank_math_title: seoTitle,
@@ -618,7 +628,14 @@ export class ListsService {
         rank_math_keywords: `nuevos discos,${monthName},${year}`,
       };
 
-      const post = await this.wordpressService.createPost(title, content, 'draft', meta);
+      const existing = await this.wordpressService.findPostBySlug(slug);
+      if (existing) {
+        this.logger.log(`WP post already exists for slug ${slug} (#${existing.id}), skipping`);
+        createdPosts.push({ position, wpPostId: existing.id, link: existing.link, title, skipped: true });
+        continue;
+      }
+
+      const post = await this.wordpressService.createPost(title, content, 'draft', meta, CATEGORIES, tags, slug);
       createdPosts.push({ position, wpPostId: post.id, link: post.link, title });
     }
 
