@@ -644,19 +644,33 @@ export class ListsService {
       )
       .join(', ');
 
-    const intro = `<div style="height:7px" aria-hidden="true" class="wp-block-spacer"></div>
+    const intro = `<!-- wp:spacer {"height":"7px"} -->
+<div style="height:7px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->
 
+<!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify">${ordinal} entrega de novedades de esta semana. Hoy os hablamos de ${discs.length} nuevos discos que se han lanzado esta semana del ${dateStr}: ${artistNamesHtml}.</p>
+<!-- /wp:paragraph -->
 
+<!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify">No olvides contarnos en nuestras <a href="https://www.instagram.com/riffvalleyes/" target="_blank" rel="noreferrer noopener">redes sociales</a> qué os han parecido estas bandas.</p>
+<!-- /wp:paragraph -->
 
+<!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify">Si quieres saber qué otros discos han sido lanzados esta semana, no dudes en echarle un ojo a nuestra <a href="https://www.riffvalley.es/novedades/discos-metal-rock-hardcore-2025">guía de lanzamientos de 2026</a>.</p>
+<!-- /wp:paragraph -->
 
+<!-- wp:spacer {"height":"20px"} -->
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->
 
+<!-- wp:heading {"level":4,"className":"wp-block-heading"} -->
 <h4 class="wp-block-heading" id="los-mejores-discos-lanzados-esta-semana-son"><strong>Los nuevos discos lanzados esta semana:</strong></h4>
+<!-- /wp:heading -->
 
-<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>`;
+<!-- wp:spacer {"height":"20px"} -->
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->`;
 
     const discSections = discs
       .map((a) => {
@@ -670,32 +684,52 @@ export class ListsService {
         let imageBlock = '';
         if (image) {
           const altText = title ? `${artist} - ${discName} ${title}` : `${artist} - ${discName}`;
-          imageBlock = `\n\n<div class="wp-block-image is-style-zoooom">\n<figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${altText}" style="aspect-ratio:1;object-fit:cover;width:300px;height:300px"/></figure>\n</div>`;
+          imageBlock = `\n\n<!-- wp:image {"className":"is-style-zoooom"} -->
+<div class="wp-block-image is-style-zoooom"><figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${altText}" style="aspect-ratio:1;object-fit:cover;width:300px;height:300px"/></figure></div>
+<!-- /wp:image -->`;
         }
 
-        const spotifyEmbed = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/75EVwxItVYmK59hhfSsBoD?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+        const spotifyEmbed = `\n\n<!-- wp:html -->
+<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/75EVwxItVYmK59hhfSsBoD?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+<!-- /wp:html -->`;
 
         const descriptionText = description ? ` ${description}` : '';
 
         return `${imageBlock}
 
+<!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong>${descriptionText}</p>
+<!-- /wp:paragraph -->
 
+<!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify"><strong>Género: </strong>${genre}</p>
+<!-- /wp:paragraph -->
 
-<p class="text-justify"><strong>Bandas similares:</strong> xx, xx, xx</p>${spotifyEmbed}
+<!-- wp:paragraph {"className":"text-justify"} -->
+<p class="text-justify"><strong>Bandas similares:</strong> xx, xx, xx</p>
+<!-- /wp:paragraph -->${spotifyEmbed}
 
-<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>`;
+<!-- wp:spacer {"height":"20px"} -->
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->`;
       })
       .join('\n\n');
 
-    const footer = `<hr class="wp-block-separator has-css-opacity is-style-wide"/>
+    const footer = `<!-- wp:separator {"className":"is-style-wide","opacity":"css"} -->
+<hr class="wp-block-separator has-css-opacity is-style-wide"/>
+<!-- /wp:separator -->
 
+<!-- wp:spacer {"height":"20px"} -->
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->
 
+<!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify">¡Muchas gracias por leer este artículo! ¿Qué os han parecido estos lanzamientos? ¿Nos hemos dejado <strong>algún disco imprescindible</strong>? No dudéis comentar y en seguirnos en <a href="https://www.riffvalley.es/quienes-somos/quienes-somos" target="_blank" rel="noreferrer noopener">nuestras redes sociales</a>:</p>
+<!-- /wp:paragraph -->
 
-<p class="text-justify"><strong>Comunidad de Telegram:</strong>&nbsp;<a href="https://t.me/RiffValleyES" target="_blank" rel="noreferrer noopener">t.me/RiffValleyES</a><br><strong>Facebook:</strong>&nbsp;<a href="https://www.facebook.com/RiffValleyEs/" target="_blank" rel="noreferrer noopener">facebook.com/RiffValleyEs</a><br><strong>Instagram:</strong>&nbsp;<a href="https://www.instagram.com/riffvalleyes/" target="_blank" rel="noreferrer noopener">instagram.com/riffvalleyes</a><br><strong>Threads</strong>: <a href="https://www.threads.net/@riffvalleyes" target="_blank" rel="noreferrer noopener">https://www.threads.net/@riffvalleyes</a><br><strong>Twitter &#8211; X:&nbsp;</strong><a href="https://twitter.com/Riffvalleyes" target="_blank" rel="noreferrer noopener">twitter.com/Riffvalleyes</a><br><strong>Bluesky</strong>: <a href="https://bsky.app/profile/riffvalleyes.bsky.social" target="_blank" rel="noreferrer noopener">bsky.app/profile/riffvalleyes.bsky.social</a></p>`;
+<!-- wp:paragraph {"className":"text-justify"} -->
+<p class="text-justify"><strong>Comunidad de Telegram:</strong>&nbsp;<a href="https://t.me/RiffValleyES" target="_blank" rel="noreferrer noopener">t.me/RiffValleyES</a><br><strong>Facebook:</strong>&nbsp;<a href="https://www.facebook.com/RiffValleyEs/" target="_blank" rel="noreferrer noopener">facebook.com/RiffValleyEs</a><br><strong>Instagram:</strong>&nbsp;<a href="https://www.instagram.com/riffvalleyes/" target="_blank" rel="noreferrer noopener">instagram.com/riffvalleyes</a><br><strong>Threads</strong>: <a href="https://www.threads.net/@riffvalleyes" target="_blank" rel="noreferrer noopener">https://www.threads.net/@riffvalleyes</a><br><strong>Twitter &#8211; X:&nbsp;</strong><a href="https://twitter.com/Riffvalleyes" target="_blank" rel="noreferrer noopener">twitter.com/Riffvalleyes</a><br><strong>Bluesky</strong>: <a href="https://bsky.app/profile/riffvalleyes.bsky.social" target="_blank" rel="noreferrer noopener">bsky.app/profile/riffvalleyes.bsky.social</a></p>
+<!-- /wp:paragraph -->`;
 
     return `${intro}\n\n${discSections}\n\n${footer}`;
   }
