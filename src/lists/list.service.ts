@@ -654,7 +654,7 @@ export class ListsService {
 
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
 
-<h4 class="wp-block-heading"><strong>Los nuevos discos lanzados esta semana:</strong></h4>
+<h4 class="wp-block-heading" id="los-mejores-discos-lanzados-esta-semana-son"><strong>Los nuevos discos lanzados esta semana:</strong></h4>
 
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>`;
 
@@ -664,7 +664,6 @@ export class ListsService {
         const discName = a.disc?.name ?? '';
         const genre = a.disc?.genre?.name ?? 'xx';
         const image = a.disc?.image ?? '';
-        const link = a.disc?.link ?? '';
         const debut = a.disc?.debut ? ' <em>(Debut)</em>' : '';
         const description = a.disc?.description ?? '';
 
@@ -674,16 +673,7 @@ export class ListsService {
           imageBlock = `\n\n<div class="wp-block-image is-style-zoooom">\n<figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${altText}" style="aspect-ratio:1;object-fit:cover;width:300px;height:300px"/></figure>\n</div>`;
         }
 
-        const DEFAULT_SPOTIFY_EMBED = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/7zooVkrSOht9btsTRRdM41?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
-
-        let spotifyEmbed = DEFAULT_SPOTIFY_EMBED;
-        const trackMatch = link.match(/track\/([a-zA-Z0-9]+)/);
-        const albumMatch = link.match(/album\/([a-zA-Z0-9]+)/);
-        if (trackMatch) {
-          spotifyEmbed = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/${trackMatch[1]}?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
-        } else if (albumMatch) {
-          spotifyEmbed = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/album/${albumMatch[1]}?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
-        }
+        const spotifyEmbed = `\n\n<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/75EVwxItVYmK59hhfSsBoD?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
 
         const descriptionSuffix = description ? `: ${description}` : '';
 
