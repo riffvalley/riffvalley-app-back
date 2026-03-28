@@ -586,7 +586,11 @@ export class ListsService {
 
     const sortedPositions = Array.from(byPosition.keys()).sort((a, b) => a - b);
 
-    const releaseDate = list.releaseDate ? new Date(list.releaseDate) : new Date();
+    const rawReleaseDate = list.releaseDate ? new Date(list.releaseDate) : new Date();
+    // Music releases happen on Fridays — always use the Friday of the release week
+    const releaseDate = new Date(rawReleaseDate);
+    const daysSinceFriday = (rawReleaseDate.getDay() + 2) % 7; // Fri=0, Sat=1, Sun=2, Mon=3...
+    releaseDate.setDate(releaseDate.getDate() - daysSinceFriday);
     const day = releaseDate.getDate().toString().padStart(2, '0');
     const month = (releaseDate.getMonth() + 1).toString().padStart(2, '0');
     const year = releaseDate.getFullYear();
@@ -646,7 +650,11 @@ export class ListsService {
     const ordinals = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta'];
     const ordinal = ordinals[position - 1] ?? `${position}ª`;
 
-    const releaseDate = list.releaseDate ? new Date(list.releaseDate) : new Date();
+    const rawReleaseDate = list.releaseDate ? new Date(list.releaseDate) : new Date();
+    // Music releases happen on Fridays — always use the Friday of the release week
+    const releaseDate = new Date(rawReleaseDate);
+    const daysSinceFriday = (rawReleaseDate.getDay() + 2) % 7; // Fri=0, Sat=1, Sun=2, Mon=3...
+    releaseDate.setDate(releaseDate.getDate() - daysSinceFriday);
     const day = releaseDate.getDate().toString().padStart(2, '0');
     const month = (releaseDate.getMonth() + 1).toString().padStart(2, '0');
     const year = releaseDate.getFullYear();
