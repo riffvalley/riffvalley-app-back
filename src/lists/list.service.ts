@@ -700,9 +700,11 @@ export class ListsService {
 
         let imageBlock = '';
         if (image) {
-          const altText = title ? `${artist} - ${discName} ${title}` : `${artist} - ${discName}`;
+          const altText = `${artist} - ${discName}`;
           imageBlock = `\n\n<!-- wp:html -->
-<div class="wp-block-image is-style-zoooom"><figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${altText}" style="aspect-ratio:1;object-fit:cover;width:300px;height:300px"/></figure></div>
+<div class="wp-block-image is-style-zoooom">
+<figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${altText}" style="aspect-ratio:1;object-fit:cover;width:300px"/></figure>
+</div>
 <!-- /wp:html -->`;
         }
 
