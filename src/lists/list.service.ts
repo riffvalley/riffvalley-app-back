@@ -628,8 +628,7 @@ export class ListsService {
       const meta = {
         rank_math_title: seoTitle,
         rank_math_description: seoDescription,
-        rank_math_focus_keyword: 'nuevos discos',
-        rank_math_keywords: `nuevos discos,${monthName},${year}`,
+        rank_math_focus_keyword: `nuevos discos,${monthName},${year}`,
       };
 
       const existing = await this.wordpressService.findPostBySlug(slug);
@@ -689,8 +688,8 @@ export class ListsService {
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
 <!-- /wp:spacer -->
 
-<!-- wp:heading {"level":4,"className":"wp-block-heading"} -->
-<h4 class="wp-block-heading" id="los-mejores-discos-lanzados-esta-semana-son"><strong>Los nuevos discos lanzados esta semana:</strong></h4>
+<!-- wp:heading {"level":2,"className":"wp-block-heading"} -->
+<h2 class="wp-block-heading" id="los-mejores-discos-lanzados-esta-semana-son"><strong>Los nuevos discos lanzados esta semana:</strong></h2>
 <!-- /wp:heading -->
 
 <!-- wp:spacer {"height":"20px"} -->
@@ -708,7 +707,7 @@ export class ListsService {
 
         let imageBlock = '';
         if (image) {
-          const altText = `${artist} - ${discName}`;
+          const altText = `${artist} - ${discName} | ${title}`;
           imageBlock = `\n\n<!-- wp:html -->
 <div class="wp-block-image is-style-zoooom">
 <figure class="alignright size-large is-resized"><img decoding="async" src="${image}" alt="${altText}" style="aspect-ratio:1;object-fit:cover;width:300px"/></figure>
@@ -751,7 +750,7 @@ export class ListsService {
 <!-- /wp:spacer -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify">¡Muchas gracias por leer este artículo! ¿Qué os han parecido estos lanzamientos? ¿Nos hemos dejado <strong>algún disco imprescindible</strong>? No dudéis comentar y en seguirnos en <a href="https://www.riffvalley.es/quienes-somos/quienes-somos" target="_blank" rel="noreferrer noopener">nuestras redes sociales</a>:</p>
+<p class="text-justify">¡Muchas gracias por leer este artículo! ¿Qué os han parecido estos nuevos discos? ¿Nos hemos dejado <strong>algún disco imprescindible</strong>? No dudéis comentar y en seguirnos en <a href="https://www.riffvalley.es/quienes-somos/quienes-somos" target="_blank" rel="noreferrer noopener">nuestras redes sociales</a>:</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
