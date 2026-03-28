@@ -628,7 +628,7 @@ export class ListsService {
       const meta = {
         rank_math_title: seoTitle,
         rank_math_description: seoDescription,
-        rank_math_focus_keyword: `nuevos discos publicados ${day} ${monthName} ${year}`,
+        rank_math_focus_keyword: `nuevos discos publicados ${day} ${monthName} ${year} ${roman}`,
       };
 
       const existing = await this.wordpressService.findPostBySlug(slug);
