@@ -620,15 +620,15 @@ export class ListsService {
       const roman = romanNumerals[position - 1] ?? `${position}`;
 
       const title = `Nuevos discos - ${dateStr} (${roman})`;
-      const seoTitle = `Nuevos discos - ${dateStr} (${roman}) • Riff Valley ${year}`;
-      const seoDescription = `En el artículo de hoy os recopilamos los nuevos discos que se publican la semana del ${dateStr} y que no te puedes perder.`;
+      const seoTitle = `Nuevos discos ${day} de ${monthName} de ${year} (${roman}) • Riff Valley`;
+      const seoDescription = `Nuevos discos de ${monthName} de ${year}: os recopilamos los lanzamientos de la semana del ${dateStr} que no te puedes perder.`;
       const content = this.buildPostContent(discs, position, list, title);
       const slug = `nuevos-discos${day}${month}${String(year).slice(-2)}${roman.toLowerCase()}`;
 
       const meta = {
         rank_math_title: seoTitle,
         rank_math_description: seoDescription,
-        rank_math_focus_keyword: `nuevos discos publicados ${day} ${monthName} ${year} ${roman}`,
+        rank_math_focus_keyword: `nuevos discos,${monthName},${year},${roman.toLowerCase()}`,
       };
 
       const existing = await this.wordpressService.findPostBySlug(slug);
@@ -673,7 +673,7 @@ export class ListsService {
 <!-- /wp:spacer -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify">${ordinal} entrega de novedades de esta semana. Hoy os hablamos de ${discs.length} nuevos discos que se han lanzado esta semana del ${dateStr}: ${artistNamesHtml}.</p>
+<p class="text-justify">Nuevos discos del ${dateStr}: ${ordinal} entrega de novedades de esta semana. Hoy os hablamos de ${discs.length} lanzamientos: ${artistNamesHtml}.</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
