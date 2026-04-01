@@ -781,13 +781,12 @@ export class DiscsService {
 
     let weekNum = 1;
 
-    // Week 1: days before the first Friday (if month doesn't start on Friday)
-    if (firstFriday > 1) {
-      weeks.push({ week: weekNum++, from: 1, to: firstFriday - 1 });
-    }
+    // Week 1: from day 1 through firstFriday+6 (pre-Friday days merged into first Friday week)
+    const firstWeekEnd = Math.min(firstFriday + 6, daysInMonth);
+    weeks.push({ week: weekNum++, from: 1, to: firstWeekEnd });
 
     // Remaining weeks: each starts on a Friday, runs 7 days
-    let start = firstFriday;
+    let start = firstFriday + 7;
     while (start <= daysInMonth) {
       weeks.push({ week: weekNum++, from: start, to: Math.min(start + 6, daysInMonth) });
       start += 7;
