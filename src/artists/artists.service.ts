@@ -192,7 +192,7 @@ export class ArtistsService {
     }
   }
 
-  async findByName(name: string): Promise<Artist[]> {
+  async findByName(name: string) {
     if (!name) {
       throw new BadRequestException('Name parameter is required');
     }
@@ -200,12 +200,64 @@ export class ArtistsService {
     const q = `%${normalizeForSearch(name)}%`;
 
     try {
-      return await this.artistRepository
+      const artists = await this.artistRepository
         .createQueryBuilder('artist')
         .leftJoinAndSelect('artist.country', 'country')
         .where('artist.name_normalized LIKE :q', { q })
         .orderBy('artist.name', 'ASC')
         .getMany();
+
+      if (artists.length === 0) return [];
+
+      const artistIds = artists.map((a) => a.id);
+
+      const discsRaw = await this.discRepository
+        .createQueryBuilder('disc')
+        .leftJoinAndSelect('disc.genre', 'genre')
+        .leftJoinAndSelect('disc.artist', 'discArtist')
+        .addSelect((sub) =>
+          sub.select('COUNT(rate.id)', 'rateCount')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+          'rateCount',
+        )
+        .addSelect((sub) =>
+          sub.select('AVG(rate.rate)', 'averageRate')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+          'averageRate',
+        )
+        .where('discArtist.id IN (:...artistIds)', { artistIds })
+        .orderBy('disc.releaseDate', 'DESC')
+        .getRawAndEntities();
+
+      const discsByArtist = new Map<string, any[]>();
+      discsRaw.entities.forEach((disc, i) => {
+        const artistId = disc.artist?.id;
+        if (!artistId) return;
+        if (!discsByArtist.has(artistId)) discsByArtist.set(artistId, []);
+        discsByArtist.get(artistId).push({
+          id: disc.id,
+          name: disc.name,
+          releaseDate: disc.releaseDate,
+          ep: disc.ep,
+          debut: disc.debut,
+          image: disc.image,
+          link: disc.link,
+          genre: disc.genre ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color } : null,
+          rateCount: parseInt(discsRaw.raw[i].rateCount, 10) || 0,
+          averageRate: discsRaw.raw[i].averageRate != null ? parseFloat(discsRaw.raw[i].averageRate) : null,
+        });
+      });
+
+      return artists.map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        description: artist.description,
+        image: artist.image,
+        country: artist.country ?? null,
+        discs: discsByArtist.get(artist.id) ?? [],
+      }));
     } catch (error) {
       this.handleDbExceptions(error);
     }
