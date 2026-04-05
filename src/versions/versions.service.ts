@@ -115,6 +115,17 @@ export class VersionsService {
     return this.itemsRepo.find({ where: { version: { id: version.id } } });
   }
 
+  async listCurrentVersionItems(): Promise<VersionItem[]> {
+    const version = await this.versionsRepo.findOne({
+      where: { status: VersionStatus.EN_DESARROLLO },
+    });
+    if (!version) return [];
+    return this.itemsRepo.find({
+      where: { version: { id: version.id } },
+      order: { state: 'ASC' },
+    });
+  }
+
   async listIndependentItems(): Promise<VersionItem[]> {
     return this.itemsRepo.find({
       where: { version: IsNull() },

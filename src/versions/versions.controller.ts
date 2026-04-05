@@ -32,6 +32,11 @@ export class VersionsController {
     return this.versionsService.listIndependentItems();
   }
 
+  @Get('current/items')
+  listCurrentVersionItems() {
+    return this.versionsService.listCurrentVersionItems();
+  }
+
   @Post('items')
   createIndependentItem(@Body() dto: CreateVersionItemDto) {
     return this.versionsService.createItem(dto);
