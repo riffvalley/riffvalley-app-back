@@ -22,6 +22,11 @@ export enum SuggestionPriority {
   HIGH = 'high',
 }
 
+export enum SuggestionType {
+  SUGGESTION = 'suggestion',
+  BUG = 'bug',
+}
+
 @Entity('suggestion')
 export class Suggestion {
   @PrimaryGeneratedColumn('uuid')
@@ -32,6 +37,9 @@ export class Suggestion {
 
   @Column('text')
   description: string;
+
+  @Column({ type: 'enum', enum: SuggestionType, default: SuggestionType.SUGGESTION })
+  type: SuggestionType;
 
   @Column({ type: 'enum', enum: SuggestionStatus, default: SuggestionStatus.IN_PROGRESS })
   status: SuggestionStatus;

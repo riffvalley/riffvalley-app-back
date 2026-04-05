@@ -1,5 +1,5 @@
 import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
-import { SuggestionPriority } from '../entities/suggestion.entity';
+import { SuggestionPriority, SuggestionType } from '../entities/suggestion.entity';
 
 export class UpdateSuggestionDto {
   @IsString()
@@ -12,6 +12,10 @@ export class UpdateSuggestionDto {
   @MinLength(1)
   @IsOptional()
   description?: string;
+
+  @IsEnum(SuggestionType)
+  @IsOptional()
+  type?: SuggestionType;
 
   @IsEnum(SuggestionPriority)
   @IsOptional()

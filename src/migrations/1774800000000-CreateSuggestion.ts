@@ -22,7 +22,7 @@ export class CreateSuggestion1774800000000 implements MigrationInterface {
         "updatedAt"       TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "PK_suggestion" PRIMARY KEY ("id"),
         CONSTRAINT "FK_suggestion_user"
-          FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL,
+          FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL,
         CONSTRAINT "FK_suggestion_version_item"
           FOREIGN KEY ("versionItemId") REFERENCES "version_item"("id") ON DELETE SET NULL
       )
