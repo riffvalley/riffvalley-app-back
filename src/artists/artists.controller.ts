@@ -33,11 +33,13 @@ export class ArtistsController {
     @Query('query') query?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('genreId') genreId?: string,
   ) {
     return this.artistsService.findAllForManagement(
       query,
       limit ? parseInt(limit, 10) : 15,
       offset ? parseInt(offset, 10) : 0,
+      genreId,
     );
   }
 

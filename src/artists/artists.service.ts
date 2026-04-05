@@ -61,7 +61,7 @@ export class ArtistsService {
     };
   }
 
-  async findAllForManagement(query?: string, limit = 15, offset = 0) {
+  async findAllForManagement(query?: string, limit = 15, offset = 0, genreId?: string) {
     const qb = this.artistRepository
       .createQueryBuilder('artist')
       .leftJoinAndSelect('artist.country', 'country')
@@ -73,6 +73,19 @@ export class ArtistsService {
       qb.where('artist.name_normalized LIKE :q', {
         q: `%${normalizeForSearch(query)}%`,
       });
+    }
+
+    if (genreId) {
+      qb.andWhere((sub) =>
+        `EXISTS (${sub
+          .subQuery()
+          .select('1')
+          .from('disc', 'd')
+          .where('d.artistId = artist.id')
+          .andWhere('d.genreId = :genreId')
+          .getQuery()})`,
+        { genreId },
+      );
     }
 
     const [artists, totalItems] = await qb.getManyAndCount();
