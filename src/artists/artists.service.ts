@@ -42,20 +42,27 @@ export class ArtistsService {
   }
 
   async findAll(paginationDto: PaginationDto) {
-    const { limit = 10, offset = 0 } = paginationDto;
+    const { limit = 15, offset = 0, query } = paginationDto;
 
-    const [artists, totalItems] = await this.artistRepository.findAndCount({
-      take: limit,
-      skip: offset,
-    });
+    const qb = this.artistRepository
+      .createQueryBuilder('artist')
+      .leftJoinAndSelect('artist.country', 'country')
+      .orderBy('artist.name', 'ASC')
+      .take(limit)
+      .skip(offset);
 
-    const totalPages = Math.ceil(totalItems / limit);
-    const currentPage = Math.floor(offset / limit) + 1;
+    if (query) {
+      qb.where('artist.name_normalized LIKE :q', {
+        q: `%${normalizeForSearch(query)}%`,
+      });
+    }
+
+    const [artists, totalItems] = await qb.getManyAndCount();
 
     return {
       totalItems,
-      totalPages,
-      currentPage,
+      totalPages: Math.ceil(totalItems / limit),
+      currentPage: Math.floor(offset / limit) + 1,
       limit,
       data: artists,
     };
