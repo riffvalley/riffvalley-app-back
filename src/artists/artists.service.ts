@@ -65,18 +65,6 @@ export class ArtistsService {
     const qb = this.artistRepository
       .createQueryBuilder('artist')
       .leftJoinAndSelect('artist.country', 'country')
-      .addSelect((sub) =>
-        sub.select('COUNT(disc.id)', 'discCount')
-          .from('disc', 'disc')
-          .where('disc.artistId = artist.id'),
-        'discCount',
-      )
-      .addSelect((sub) =>
-        sub.select('COUNT(nr.id)', 'nationalReleaseCount')
-          .from('national_release', 'nr')
-          .where('LOWER(nr.artistName) = LOWER(artist.name)'),
-        'nationalReleaseCount',
-      )
       .orderBy('artist.name', 'ASC')
       .take(limit)
       .skip(offset);
@@ -87,21 +75,95 @@ export class ArtistsService {
       });
     }
 
-    const { entities, raw } = await qb.getRawAndEntities();
-    const totalItems = await qb.getCount();
+    const [artists, totalItems] = await qb.getManyAndCount();
+
+    if (artists.length === 0) {
+      return { totalItems: 0, totalPages: 0, currentPage: 1, limit, data: [] };
+    }
+
+    const artistIds = artists.map((a) => a.id);
+    const artistNames = artists.map((a) => a.name);
+
+    // Discos de estos artistas con stats
+    const discsRaw = await this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoinAndSelect('disc.genre', 'genre')
+      .leftJoin('disc.artist', 'discArtist')
+      .addSelect('discArtist.id', 'artistId')
+      .addSelect((sub) =>
+        sub.select('COUNT(rate.id)', 'rateCount')
+          .from('rate', 'rate')
+          .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+        'rateCount',
+      )
+      .addSelect((sub) =>
+        sub.select('AVG(rate.rate)', 'averageRate')
+          .from('rate', 'rate')
+          .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+        'averageRate',
+      )
+      .where('discArtist.id IN (:...artistIds)', { artistIds })
+      .orderBy('disc.releaseDate', 'DESC')
+      .getRawAndEntities();
+
+    // National releases de estos artistas
+    const nationalReleases = await this.nationalReleaseRepository
+      .createQueryBuilder('nr')
+      .where('LOWER(nr.artistName) IN (:...names)', {
+        names: artistNames.map((n) => n.toLowerCase()),
+      })
+      .orderBy('nr.releaseDay', 'DESC')
+      .getMany();
+
+    // Agrupar discos por artistId (viene en raw como discArtist_id)
+    const discsByArtist = new Map<string, any[]>();
+    discsRaw.entities.forEach((disc, i) => {
+      const artistId = discsRaw.raw[i].discArtist_id;
+      if (!discsByArtist.has(artistId)) discsByArtist.set(artistId, []);
+      discsByArtist.get(artistId).push({
+        id: disc.id,
+        name: disc.name,
+        releaseDate: disc.releaseDate,
+        ep: disc.ep,
+        debut: disc.debut,
+        image: disc.image,
+        link: disc.link,
+        genre: disc.genre ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color } : null,
+        rateCount: parseInt(discsRaw.raw[i].rateCount, 10) || 0,
+        averageRate: discsRaw.raw[i].averageRate != null ? parseFloat(discsRaw.raw[i].averageRate) : null,
+      });
+    });
+
+    // Agrupar national releases por nombre de artista (lowercase)
+    const nrByArtistName = new Map<string, any[]>();
+    nationalReleases.forEach((nr) => {
+      const key = nr.artistName.toLowerCase();
+      if (!nrByArtistName.has(key)) nrByArtistName.set(key, []);
+      nrByArtistName.get(key).push({
+        id: nr.id,
+        discName: nr.discName,
+        discType: nr.discType,
+        genre: nr.genre,
+        releaseDay: nr.releaseDay,
+        approved: nr.approved,
+        link: nr.link,
+        discId: nr.discId,
+      });
+    });
 
     return {
       totalItems,
       totalPages: Math.ceil(totalItems / limit),
       currentPage: Math.floor(offset / limit) + 1,
       limit,
-      data: entities.map((artist, i) => ({
+      data: artists.map((artist) => ({
         id: artist.id,
         name: artist.name,
+        description: artist.description,
         image: artist.image,
         country: artist.country ?? null,
-        discCount: parseInt(raw[i].discCount, 10) || 0,
-        nationalReleaseCount: parseInt(raw[i].nationalReleaseCount, 10) || 0,
+        discs: discsByArtist.get(artist.id) ?? [],
+        nationalReleases: nrByArtistName.get(artist.name.toLowerCase()) ?? [],
       })),
     };
   }
