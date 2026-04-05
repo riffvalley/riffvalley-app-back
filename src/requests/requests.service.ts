@@ -129,4 +129,20 @@ export class RequestsService {
     if (adminNotes) request.adminNotes = adminNotes;
     return this.requestRepo.save(request);
   }
+
+  async reopen(id: string): Promise<DiscRequest> {
+    const request = await this.findOne(id);
+
+    if (request.status === RequestStatus.APPROVED) {
+      throw new BadRequestException('No se puede reabrir una petición ya aprobada');
+    }
+
+    if (request.status === RequestStatus.PENDING) {
+      throw new BadRequestException('La petición ya está pendiente');
+    }
+
+    request.status = RequestStatus.PENDING;
+    request.adminNotes = null;
+    return this.requestRepo.save(request);
+  }
 }

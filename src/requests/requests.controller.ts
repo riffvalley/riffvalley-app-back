@@ -57,6 +57,12 @@ export class RequestsController {
     return this.requestsService.approve(id);
   }
 
+  @Post(':id/reopen')
+  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  reopen(@Param('id', ParseUUIDPipe) id: string) {
+    return this.requestsService.reopen(id);
+  }
+
   @Delete(':id')
   @Auth(ValidRoles.admin, ValidRoles.riffValley)
   reject(
