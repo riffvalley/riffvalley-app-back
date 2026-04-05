@@ -88,8 +88,7 @@ export class ArtistsService {
     const discsRaw = await this.discRepository
       .createQueryBuilder('disc')
       .leftJoinAndSelect('disc.genre', 'genre')
-      .leftJoin('disc.artist', 'discArtist')
-      .addSelect('discArtist.id', 'artistId')
+      .leftJoinAndSelect('disc.artist', 'discArtist')
       .addSelect((sub) =>
         sub.select('COUNT(rate.id)', 'rateCount')
           .from('rate', 'rate')
@@ -115,10 +114,11 @@ export class ArtistsService {
       .orderBy('nr.releaseDay', 'DESC')
       .getMany();
 
-    // Agrupar discos por artistId (viene en raw como discArtist_id)
+    // Agrupar discos por artistId usando la entidad cargada
     const discsByArtist = new Map<string, any[]>();
     discsRaw.entities.forEach((disc, i) => {
-      const artistId = discsRaw.raw[i].discArtist_id;
+      const artistId = disc.artist?.id;
+      if (!artistId) return;
       if (!discsByArtist.has(artistId)) discsByArtist.set(artistId, []);
       discsByArtist.get(artistId).push({
         id: disc.id,
