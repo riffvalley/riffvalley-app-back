@@ -29,7 +29,7 @@ export class ArtistsService {
         ...dto,
         nameNormalized: normalizeForSearch(dto.name),
       });
-      return artist;
+      return await this.artistRepository.save(artist);
     } catch (error) {
       this.handleDbExceptions(error);
     }
