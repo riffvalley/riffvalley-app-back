@@ -101,13 +101,13 @@ export class PendingsService {
         return subQuery
           .select('AVG(rate.rate)', 'averageRate')
           .from('rate', 'rate')
-          .where('rate.discId = disc.id');
+          .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
       }, 'averageRate')
       .addSelect((subQuery) => {
         return subQuery
           .select('AVG(rate.cover)', 'averageCover')
           .from('rate', 'rate')
-          .where('rate.discId = disc.id');
+          .where('rate.discId = disc.id AND rate.cover IS NOT NULL');
       }, 'averageCover');
 
     // Filtros según fecha, búsqueda y género
