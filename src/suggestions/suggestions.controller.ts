@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { SuggestionsService } from './suggestions.service';
 import { CreateSuggestionDto } from './dto/create-suggestion.dto';
 import { UpdateSuggestionDto, RejectSuggestionDto, DoneSuggestionDto } from './dto/update-suggestion.dto';
@@ -6,6 +6,7 @@ import { Auth } from 'src/auth/decorators/auth.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { SuggestionStatus, SuggestionType } from './entities/suggestion.entity';
 
 @Controller('suggestions')
 export class SuggestionsController {
@@ -19,14 +20,21 @@ export class SuggestionsController {
 
   @Get()
   @Auth(ValidRoles.admin, ValidRoles.riffValley)
-  findAll() {
-    return this.suggestionsService.findAll();
+  findAll(
+    @Query('type') type?: SuggestionType,
+    @Query('status') status?: SuggestionStatus,
+  ) {
+    return this.suggestionsService.findAll({ type, status });
   }
 
   @Get('my')
   @Auth()
-  findMine(@GetUser() user: User) {
-    return this.suggestionsService.findByUser(user);
+  findMine(
+    @GetUser() user: User,
+    @Query('type') type?: SuggestionType,
+    @Query('status') status?: SuggestionStatus,
+  ) {
+    return this.suggestionsService.findByUser(user, { type, status });
   }
 
   @Get(':id')

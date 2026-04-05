@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Suggestion, SuggestionStatus } from './entities/suggestion.entity';
+import { Suggestion, SuggestionStatus, SuggestionType } from './entities/suggestion.entity';
 import { CreateSuggestionDto } from './dto/create-suggestion.dto';
 import { UpdateSuggestionDto, RejectSuggestionDto, DoneSuggestionDto } from './dto/update-suggestion.dto';
 import { User } from '../auth/entities/user.entity';
@@ -21,16 +21,23 @@ export class SuggestionsService {
     return this.repo.save(suggestion);
   }
 
-  findAll(): Promise<Suggestion[]> {
+  findAll(filters: { type?: SuggestionType; status?: SuggestionStatus }): Promise<Suggestion[]> {
+    const where: any = {};
+    if (filters.type) where.type = filters.type;
+    if (filters.status) where.status = filters.status;
     return this.repo.find({
+      where,
       relations: ['versionItem'],
       order: { createdAt: 'DESC' },
     });
   }
 
-  findByUser(user: User): Promise<Suggestion[]> {
+  findByUser(user: User, filters: { type?: SuggestionType; status?: SuggestionStatus }): Promise<Suggestion[]> {
+    const where: any = { userId: user.id };
+    if (filters.type) where.type = filters.type;
+    if (filters.status) where.status = filters.status;
     return this.repo.find({
-      where: { userId: user.id },
+      where,
       relations: ['versionItem'],
       order: { createdAt: 'DESC' },
     });
