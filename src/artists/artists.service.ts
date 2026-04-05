@@ -200,11 +200,12 @@ export class ArtistsService {
     const q = `%${normalizeForSearch(name)}%`;
 
     try {
-      const artists = await this.artistRepository
+      return await this.artistRepository
         .createQueryBuilder('artist')
+        .leftJoinAndSelect('artist.country', 'country')
         .where('artist.name_normalized LIKE :q', { q })
+        .orderBy('artist.name', 'ASC')
         .getMany();
-      return artists;
     } catch (error) {
       this.handleDbExceptions(error);
     }
