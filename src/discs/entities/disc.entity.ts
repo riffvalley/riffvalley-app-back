@@ -45,7 +45,7 @@ export class Disc {
   @Column('boolean', { nullable: true })
   featured: boolean = false;
 
-  @ManyToOne(() => Artist, (artist) => artist.disc, { eager: true })
+  @ManyToOne(() => Artist, (artist) => artist.disc, { eager: true, onDelete: 'CASCADE' })
   artist: Artist;
 
   @ManyToOne(() => Genre, (genre) => genre.disc, { eager: true })
