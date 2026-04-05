@@ -10,6 +10,8 @@ import { UpdateArtistDto } from './dto/update-artist.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Artist } from './entities/artist.entity';
+import { Disc } from '../discs/entities/disc.entity';
+import { NationalRelease } from '../national-releases/entities/national-release.entity';
 import { Country } from 'src/countries/entities/country.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { normalizeForSearch } from '../common/utils/normalize';
@@ -21,6 +23,10 @@ export class ArtistsService {
   constructor(
     @InjectRepository(Artist)
     private readonly artistRepository: Repository<Artist>,
+    @InjectRepository(Disc)
+    private readonly discRepository: Repository<Disc>,
+    @InjectRepository(NationalRelease)
+    private readonly nationalReleaseRepository: Repository<NationalRelease>,
   ) {}
 
   async create(dto: CreateArtistDto) {
@@ -135,6 +141,73 @@ export class ArtistsService {
 
     // Devolvemos la lista de los artistas que fueron borrados
     return deletedArtists;
+  }
+
+  async findOneWithDetails(id: string) {
+    const artist = await this.artistRepository.findOne({
+      where: { id },
+      relations: ['country'],
+    });
+    if (!artist) throw new NotFoundException(`Artist with id ${id} not found`);
+
+    const [discs, nationalReleases] = await Promise.all([
+      this.discRepository
+        .createQueryBuilder('disc')
+        .leftJoinAndSelect('disc.genre', 'genre')
+        .addSelect((sub) =>
+          sub.select('COUNT(rate.id)', 'rateCount')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+          'rateCount',
+        )
+        .addSelect((sub) =>
+          sub.select('AVG(rate.rate)', 'averageRate')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+          'averageRate',
+        )
+        .where('disc.artistId = :id', { id })
+        .orderBy('disc.releaseDate', 'DESC')
+        .getRawAndEntities(),
+
+      this.nationalReleaseRepository
+        .createQueryBuilder('nr')
+        .where('LOWER(nr.artistName) = LOWER(:name)', { name: artist.name })
+        .orderBy('nr.releaseDay', 'DESC')
+        .getMany(),
+    ]);
+
+    const processedDiscs = discs.entities.map((disc, i) => ({
+      id: disc.id,
+      name: disc.name,
+      releaseDate: disc.releaseDate,
+      ep: disc.ep,
+      debut: disc.debut,
+      image: disc.image,
+      link: disc.link,
+      genre: disc.genre ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color } : null,
+      rateCount: parseInt(discs.raw[i].rateCount, 10) || 0,
+      averageRate: discs.raw[i].averageRate != null ? parseFloat(discs.raw[i].averageRate) : null,
+    }));
+
+    return {
+      id: artist.id,
+      name: artist.name,
+      description: artist.description,
+      image: artist.image,
+      country: artist.country ?? null,
+      discs: processedDiscs,
+      nationalReleases: nationalReleases.map((nr) => ({
+        id: nr.id,
+        discName: nr.discName,
+        discType: nr.discType,
+        genre: nr.genre,
+        releaseDay: nr.releaseDay,
+        approved: nr.approved,
+        link: nr.link,
+        discId: nr.discId,
+      })),
+    };
   }
 
   private handleDbExceptions(error: any) {

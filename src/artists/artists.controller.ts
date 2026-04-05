@@ -33,6 +33,11 @@ export class ArtistsController {
     return this.artistsService.findOne(id);
   }
 
+  @Get(':id/details')
+  findOneWithDetails(@Param('id', ParseUUIDPipe) id: string) {
+    return this.artistsService.findOneWithDetails(id);
+  }
+
   @Get('/search/by-name')
   findByName(@Query('name') name: string) {
     return this.artistsService.findByName(name);
