@@ -899,13 +899,17 @@ export class DiscsService {
     }
 
     const match = matches.find((a) => a.countryId === countryId);
-    if (!match) {
-      throw new BadRequestException(
-        `No existe un artista con nombre "${artistName}" y el país indicado.`,
-      );
-    }
+    if (match) return match;
 
-    return match;
+    // No hay ninguno con ese país → es un artista distinto, se crea
+    const normalized = artistName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+    return this.artistRepository.save(
+      this.artistRepository.create({ name: artistName, nameNormalized: normalized, countryId }),
+    );
   }
 
   private handleDbExceptions(error: any) {
