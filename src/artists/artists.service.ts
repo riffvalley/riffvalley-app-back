@@ -62,7 +62,7 @@ export class ArtistsService {
     };
   }
 
-  async findAllForManagement(query?: string, limit = 15, offset = 0, genreId?: string) {
+  async findAllForManagement(query?: string, limit = 15, offset = 0, genreId?: string, needsReview?: boolean) {
     const qb = this.artistRepository
       .createQueryBuilder('artist')
       .leftJoinAndSelect('artist.country', 'country')
@@ -87,6 +87,10 @@ export class ArtistsService {
           .getQuery()})`,
         { genreId },
       );
+    }
+
+    if (needsReview !== undefined) {
+      qb.andWhere('artist.needsReview = :needsReview', { needsReview });
     }
 
     const [artists, totalItems] = await qb.getManyAndCount();

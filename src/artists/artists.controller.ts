@@ -34,12 +34,14 @@ export class ArtistsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('genreId') genreId?: string,
+    @Query('needsReview') needsReview?: string,
   ) {
     return this.artistsService.findAllForManagement(
       query,
       limit ? parseInt(limit, 10) : 15,
       offset ? parseInt(offset, 10) : 0,
       genreId,
+      needsReview !== undefined ? needsReview === 'true' : undefined,
     );
   }
 
