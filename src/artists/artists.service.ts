@@ -42,11 +42,41 @@ export class ArtistsService {
   }
 
   async findAll(paginationDto: PaginationDto) {
-    const { limit = 15, offset = 0, query } = paginationDto;
+    const { limit = 10, offset = 0 } = paginationDto;
 
+    const [artists, totalItems] = await this.artistRepository.findAndCount({
+      take: limit,
+      skip: offset,
+    });
+
+    const totalPages = Math.ceil(totalItems / limit);
+    const currentPage = Math.floor(offset / limit) + 1;
+
+    return {
+      totalItems,
+      totalPages,
+      currentPage,
+      limit,
+      data: artists,
+    };
+  }
+
+  async findAllForManagement(query?: string, limit = 15, offset = 0) {
     const qb = this.artistRepository
       .createQueryBuilder('artist')
       .leftJoinAndSelect('artist.country', 'country')
+      .addSelect((sub) =>
+        sub.select('COUNT(disc.id)', 'discCount')
+          .from('disc', 'disc')
+          .where('disc.artistId = artist.id'),
+        'discCount',
+      )
+      .addSelect((sub) =>
+        sub.select('COUNT(nr.id)', 'nationalReleaseCount')
+          .from('national_release', 'nr')
+          .where('LOWER(nr.artistName) = LOWER(artist.name)'),
+        'nationalReleaseCount',
+      )
       .orderBy('artist.name', 'ASC')
       .take(limit)
       .skip(offset);
@@ -57,14 +87,22 @@ export class ArtistsService {
       });
     }
 
-    const [artists, totalItems] = await qb.getManyAndCount();
+    const { entities, raw } = await qb.getRawAndEntities();
+    const totalItems = await qb.getCount();
 
     return {
       totalItems,
       totalPages: Math.ceil(totalItems / limit),
       currentPage: Math.floor(offset / limit) + 1,
       limit,
-      data: artists,
+      data: entities.map((artist, i) => ({
+        id: artist.id,
+        name: artist.name,
+        image: artist.image,
+        country: artist.country ?? null,
+        discCount: parseInt(raw[i].discCount, 10) || 0,
+        nationalReleaseCount: parseInt(raw[i].nationalReleaseCount, 10) || 0,
+      })),
     };
   }
 

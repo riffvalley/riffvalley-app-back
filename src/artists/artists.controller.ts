@@ -28,6 +28,19 @@ export class ArtistsController {
     return this.artistsService.findAll(paginationDto);
   }
 
+  @Get('management')
+  findAllForManagement(
+    @Query('query') query?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.artistsService.findAllForManagement(
+      query,
+      limit ? parseInt(limit, 10) : 15,
+      offset ? parseInt(offset, 10) : 0,
+    );
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.artistsService.findOne(id);
