@@ -111,13 +111,13 @@ export class FavoritesService {
         return subQuery
           .select('AVG(rate.rate)', 'averageRate')
           .from('rate', 'rate')
-          .where('rate.discId = disc.id');
+          .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
       }, 'averageRate')
       .addSelect((subQuery) => {
         return subQuery
           .select('AVG(rate.cover)', 'averageCover')
           .from('rate', 'rate')
-          .where('rate.discId = disc.id');
+          .where('rate.discId = disc.id AND rate.cover IS NOT NULL');
       }, 'averageCover');
 
     // Filtros según el rango de fechas, búsqueda y género
@@ -200,8 +200,8 @@ export class FavoritesService {
           }
           : null,
         userPending: raw[index].pendingId ? { id: raw[index].pendingId } : null,
-        averageRate: parseFloat(raw[index].averageRate) || null,
-        averageCover: parseFloat(raw[index].averageCover) || null,
+        averageRate: raw[index].averageRate != null ? parseFloat(raw[index].averageRate) : null,
+        averageCover: raw[index].averageCover != null ? parseFloat(raw[index].averageCover) : null,
       },
     }));
 

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -128,13 +129,13 @@ export class RatesService {
         return subQuery
           .select('AVG(rate.rate)', 'averageRate')
           .from('rate', 'rate')
-          .where('rate.discId = disc.id');
+          .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
       }, 'averageRate')
       .addSelect((subQuery) => {
         return subQuery
           .select('AVG(rate.cover)', 'averageCover')
           .from('rate', 'rate')
-          .where('rate.discId = disc.id');
+          .where('rate.discId = disc.id AND rate.cover IS NOT NULL');
       }, 'averageCover')
       // Agrega el conteo de votos para cada disco
       .addSelect((subQuery) => {
@@ -258,8 +259,8 @@ export class RatesService {
         },
         voteCount: parseInt(raw[index].rateCount, 10) || null,
         commentCount: parseInt(raw[index].commentCount, 10) || 0,
-        averageRate: parseFloat(raw[index].averageRate) || null,
-        averageCover: parseFloat(raw[index].averageCover) || null,
+        averageRate: raw[index].averageRate != null ? parseFloat(raw[index].averageRate) : null,
+        averageCover: raw[index].averageCover != null ? parseFloat(raw[index].averageCover) : null,
         favoriteId: raw[index].favoriteId || null, // Agregar el ID del favorito si existe
         pendingId: raw[index].pendingId || null,
       },
@@ -291,15 +292,25 @@ export class RatesService {
     }
   }
 
-  async update(id: string, updateRateDto: UpdateRateDto) {
+  async update(id: string, updateRateDto: UpdateRateDto, user: User) {
+    const existing = await this.rateRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Rate with id ${id} not found`);
+    }
+
+    if (existing.user.id !== user.id) {
+      throw new ForbiddenException('You can only edit your own rates');
+    }
+
     const rate = await this.rateRepository.preload({
       id,
       ...updateRateDto,
+      editedAt: new Date(),
     });
-
-    if (!rate) {
-      throw new NotFoundException(`Rate with id ${id} not found`);
-    }
 
     try {
       await this.rateRepository.save(rate);
@@ -309,11 +320,21 @@ export class RatesService {
     }
   }
 
-  async remove(id: string) {
-    const result = await this.rateRepository.delete({ id });
-    if (result.affected === 0) {
+  async remove(id: string, user: User) {
+    const existing = await this.rateRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!existing) {
       throw new NotFoundException(`Rate with id ${id} not found`);
     }
+
+    if (existing.user.id !== user.id) {
+      throw new ForbiddenException('You can only delete your own rates');
+    }
+
+    await this.rateRepository.delete({ id });
     return { message: `Rate with id ${id} has been removed` };
   }
 

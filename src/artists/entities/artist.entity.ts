@@ -29,6 +29,9 @@ export class Artist {
   @Column({ nullable: true })
   countryId: string;
 
+  @Column({ type: 'boolean', default: true })
+  needsReview: boolean;
+
   @ManyToOne(() => Country, (country) => country.artist, {
     eager: true,
     nullable: true,

@@ -90,15 +90,18 @@ export class RatesController {
   }
 
   @Patch(':id')
+  @Auth()
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateRateDto: UpdateRateDto,
+    @GetUser() user: User,
   ) {
-    return this.ratesService.update(id, updateRateDto);
+    return this.ratesService.update(id, updateRateDto, user);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.ratesService.remove(id);
+  @Auth()
+  remove(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.ratesService.remove(id, user);
   }
 }

@@ -38,24 +38,7 @@ export class DiscsService {
   }
 
   async createWithArtist(dto: CreateDiscWithArtistDto): Promise<Disc> {
-    let artist = await this.artistRepository.findOne({
-      where: { name: ILike(dto.artistName) },
-    });
-
-    if (!artist) {
-      const normalized = dto.artistName
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
-      artist = await this.artistRepository.save(
-        this.artistRepository.create({
-          name: dto.artistName,
-          nameNormalized: normalized,
-          ...(dto.countryId && { countryId: dto.countryId }),
-        }),
-      );
-    }
+    const artist = await this.resolveArtist(dto.artistName, dto.countryId);
 
     const disc = this.discRepository.create({
       name: dto.discName,
@@ -882,6 +865,51 @@ export class DiscsService {
 
   async updateImage(id: string, image: string): Promise<void> {
     await this.discRepository.update(id, { image });
+  }
+
+  private async resolveArtist(artistName: string, countryId?: string): Promise<Artist> {
+    const matches = await this.artistRepository.find({
+      where: { name: ILike(artistName) },
+    });
+
+    if (matches.length === 0) {
+      const normalized = artistName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+      return this.artistRepository.save(
+        this.artistRepository.create({
+          name: artistName,
+          nameNormalized: normalized,
+          ...(countryId && { countryId }),
+        }),
+      );
+    }
+
+    if (matches.length === 1) {
+      return matches[0];
+    }
+
+    // Más de un artista con el mismo nombre → necesitamos countryId para desambiguar
+    if (!countryId) {
+      throw new BadRequestException(
+        `Hay ${matches.length} artistas con el nombre "${artistName}". Especifica countryId para desambiguar.`,
+      );
+    }
+
+    const match = matches.find((a) => a.countryId === countryId);
+    if (match) return match;
+
+    // No hay ninguno con ese país → es un artista distinto, se crea
+    const normalized = artistName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+    return this.artistRepository.save(
+      this.artistRepository.create({ name: artistName, nameNormalized: normalized, countryId }),
+    );
   }
 
   private handleDbExceptions(error: any) {
