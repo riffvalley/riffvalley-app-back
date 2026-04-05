@@ -22,12 +22,38 @@ export class NationalReleasesService {
   ) {}
 
   async create(dto: CreateNationalReleaseDto): Promise<NationalRelease> {
+    await this.checkDuplicate(dto.artistName, dto.discName);
     const release = await this.repo.save(this.repo.create(dto));
     await this.mailService.sendNationalReleaseNotification(dto);
     return release;
   }
 
-  createMany(dtos: CreateNationalReleaseDto[]): Promise<NationalRelease[]> {
+  async createMany(dtos: CreateNationalReleaseDto[]): Promise<NationalRelease[]> {
+    // Check duplicates within the batch
+    const seen = new Set<string>();
+    for (const dto of dtos) {
+      const key = `${dto.artistName.toLowerCase()}|${dto.discName.toLowerCase()}`;
+      if (seen.has(key)) {
+        throw new BadRequestException(`Novedad duplicada en el lote: ${dto.artistName} – ${dto.discName}`);
+      }
+      seen.add(key);
+    }
+
+    // Check duplicates against existing DB records in a single query
+    if (dtos.length > 0) {
+      const qb = this.repo.createQueryBuilder('r');
+      dtos.forEach((dto, i) => {
+        const condition = `(LOWER(r.artistName) = LOWER(:artist${i}) AND LOWER(r.discName) = LOWER(:disc${i}))`;
+        const params = { [`artist${i}`]: dto.artistName, [`disc${i}`]: dto.discName };
+        i === 0 ? qb.where(condition, params) : qb.orWhere(condition, params);
+      });
+      const conflicts = await qb.getMany();
+      if (conflicts.length > 0) {
+        const names = conflicts.map((c) => `${c.artistName} – ${c.discName}`).join(', ');
+        throw new BadRequestException(`Novedades duplicadas: ${names}`);
+      }
+    }
+
     return this.repo.save(this.repo.create(dtos));
   }
 
@@ -106,6 +132,8 @@ export class NationalReleasesService {
     });
     if (!disc) throw new NotFoundException(`Disc ${dto.discId} not found`);
 
+    await this.checkDuplicate(disc.artist?.name ?? '', disc.name);
+
     const discType = dto.discType ?? (disc.ep ? DiscType.EP : DiscType.ALBUM);
     const genre = dto.genre ?? disc.genre?.name ?? '';
 
@@ -170,5 +198,17 @@ export class NationalReleasesService {
   async remove(id: string): Promise<void> {
     const release = await this.findOne(id);
     await this.repo.remove(release);
+  }
+
+  private async checkDuplicate(artistName: string, discName: string): Promise<void> {
+    const existing = await this.repo
+      .createQueryBuilder('r')
+      .where('LOWER(r.artistName) = LOWER(:artistName)', { artistName })
+      .andWhere('LOWER(r.discName) = LOWER(:discName)', { discName })
+      .getOne();
+
+    if (existing) {
+      throw new BadRequestException(`Novedad duplicada: ${artistName} – ${discName}`);
+    }
   }
 }
