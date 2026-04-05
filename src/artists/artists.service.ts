@@ -34,6 +34,7 @@ export class ArtistsService {
       const artist = this.artistRepository.create({
         ...dto,
         nameNormalized: normalizeForSearch(dto.name),
+        needsReview: true,
       });
       return await this.artistRepository.save(artist);
     } catch (error) {
@@ -269,11 +270,10 @@ export class ArtistsService {
     const artist = await this.artistRepository.preload({
       id,
       ...rest,
-      ...(name !== undefined ? { name } : {}), // <-- actualiza name si viene
-      ...(name !== undefined
-        ? { nameNormalized: normalizeForSearch(name) }
-        : {}),
+      ...(name !== undefined ? { name } : {}),
+      ...(name !== undefined ? { nameNormalized: normalizeForSearch(name) } : {}),
       country: countryId ? { id: countryId } : undefined,
+      needsReview: false,
     });
 
     if (!artist) throw new NotFoundException(`Artist with id ${id} not found`);
