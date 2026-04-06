@@ -65,7 +65,10 @@ export class ArtistsService {
   async findAllForManagement(query?: string, limit = 15, offset = 0, genreId?: string, needsReview?: boolean) {
     const qb = this.artistRepository
       .createQueryBuilder('artist')
-      .leftJoinAndSelect('artist.country', 'country');
+      .leftJoinAndSelect('artist.country', 'country')
+      .orderBy('artist.updatedAt', 'DESC')
+      .take(limit)
+      .skip(offset);
 
     if (query) {
       qb.where('artist.name_normalized LIKE :q', { q: `%${normalizeForSearch(query)}%` });
@@ -82,17 +85,45 @@ export class ArtistsService {
       qb.andWhere('artist.needsReview = :needsReview', { needsReview });
     }
 
-    const allArtists = await qb.getMany();
-    const totalItems = allArtists.length;
-
-    if (totalItems === 0) {
-      return { totalItems: 0, totalPages: 0, currentPage: 1, limit, data: [] };
+    const countQb = this.artistRepository.createQueryBuilder('artist');
+    if (query) {
+      countQb.where('artist.name_normalized LIKE :q', { q: `%${normalizeForSearch(query)}%` });
+    }
+    if (genreId) {
+      countQb.andWhere((sub) =>
+        `EXISTS (${sub.subQuery().select('1').from('disc', 'd').where('d.artistId = artist.id').andWhere('d.genreId = :genreId').getQuery()})`,
+        { genreId },
+      );
+    }
+    if (needsReview !== undefined) {
+      countQb.andWhere('artist.needsReview = :needsReview', { needsReview });
     }
 
-    const allArtistIds = allArtists.map((a) => a.id);
-    const allArtistNames = allArtists.map((a) => a.name);
+    const orphanCountQb = this.artistRepository
+      .createQueryBuilder('artist')
+      .leftJoin('artist.disc', 'disc')
+      .where('disc.id IS NULL')
+      .andWhere(`NOT EXISTS (SELECT 1 FROM national_release nr WHERE LOWER(nr."artistName") = LOWER(artist.name))`);
+    if (query) {
+      orphanCountQb.andWhere('artist.name_normalized LIKE :q', { q: `%${normalizeForSearch(query)}%` });
+    }
+    if (needsReview !== undefined) {
+      orphanCountQb.andWhere('artist.needsReview = :needsReview', { needsReview });
+    }
 
-    // Cargar discos y national releases de todos los artistas filtrados
+    const [artists, totalItems, orphanCount] = await Promise.all([
+      qb.getMany(),
+      countQb.getCount(),
+      orphanCountQb.getCount(),
+    ]);
+
+    if (artists.length === 0) {
+      return { totalItems: 0, totalPages: 0, currentPage: 1, limit, orphanCount: 0, data: [] };
+    }
+
+    const artistIds = artists.map((a) => a.id);
+    const artistNames = artists.map((a) => a.name);
+
     const [discsRaw, nationalReleases] = await Promise.all([
       this.discRepository
         .createQueryBuilder('disc')
@@ -110,20 +141,19 @@ export class ArtistsService {
             .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
           'averageRate',
         )
-        .where('discArtist.id IN (:...artistIds)', { artistIds: allArtistIds })
+        .where('discArtist.id IN (:...artistIds)', { artistIds })
         .orderBy('disc.releaseDate', 'DESC')
         .getRawAndEntities(),
 
       this.nationalReleaseRepository
         .createQueryBuilder('nr')
         .where('LOWER(nr.artistName) IN (:...names)', {
-          names: allArtistNames.map((n) => n.toLowerCase()),
+          names: artistNames.map((n) => n.toLowerCase()),
         })
         .orderBy('nr.releaseDay', 'DESC')
         .getMany(),
     ]);
 
-    // Agrupar discos por artistId
     const discsByArtist = new Map<string, any[]>();
     discsRaw.entities.forEach((disc, i) => {
       const artistId = disc.artist?.id;
@@ -143,7 +173,6 @@ export class ArtistsService {
       });
     });
 
-    // Agrupar national releases por nombre de artista (lowercase)
     const nrByArtistName = new Map<string, any[]>();
     nationalReleases.forEach((nr) => {
       const key = nr.artistName.toLowerCase();
@@ -160,48 +189,21 @@ export class ArtistsService {
       });
     });
 
-    // Construir objetos completos
-    const fullData = allArtists.map((artist) => {
-      const discs = discsByArtist.get(artist.id) ?? [];
-      const nrs = nrByArtistName.get(artist.name.toLowerCase()) ?? [];
-      const latestLinkedDisc = discs
-        .filter((d) => d.link)
-        .map((d) => d.releaseDate ? new Date(d.releaseDate).getTime() : 0)
-        .reduce((max, t) => (t > max ? t : max), 0);
-      return {
-        id: artist.id,
-        name: artist.name,
-        description: artist.description,
-        image: artist.image,
-        country: artist.country ?? null,
-        discs,
-        nationalReleases: nrs,
-        _isOrphan: discs.length === 0 && nrs.length === 0,
-        _hasCountry: artist.country !== null,
-        _latestLinkedDisc: latestLinkedDisc,
-      };
-    });
-
-    // Ordenar: huérfanos primero → con país antes que sin país → disco reciente con link DESC → random
-    fullData.sort((a, b) => {
-      if (a._isOrphan !== b._isOrphan) return a._isOrphan ? -1 : 1;
-      if (a._hasCountry !== b._hasCountry) return a._hasCountry ? -1 : 1;
-      if (b._latestLinkedDisc !== a._latestLinkedDisc) return b._latestLinkedDisc - a._latestLinkedDisc;
-      return Math.random() - 0.5;
-    });
-
-    // Paginar y limpiar campos internos
-    const paginated = fullData.slice(offset, offset + limit).map(({ _isOrphan, _hasCountry, _latestLinkedDisc, ...rest }) => rest);
-
-    const orphanCount = fullData.filter((a) => a._isOrphan).length;
-
     return {
       totalItems,
       totalPages: Math.ceil(totalItems / limit),
       currentPage: Math.floor(offset / limit) + 1,
       limit,
       orphanCount,
-      data: paginated,
+      data: artists.map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        description: artist.description,
+        image: artist.image,
+        country: artist.country ?? null,
+        discs: discsByArtist.get(artist.id) ?? [],
+        nationalReleases: nrByArtistName.get(artist.name.toLowerCase()) ?? [],
+      })),
     };
   }
 
