@@ -74,6 +74,10 @@ export class ArtistsService {
         'ASC',
       )
       .addOrderBy(
+        `CASE WHEN artist."countryId" IS NULL THEN 1 ELSE 0 END`,
+        'ASC',
+      )
+      .addOrderBy(
         `(SELECT MAX(d."releaseDate") FROM disc d WHERE d."artistId" = artist.id AND d.link IS NOT NULL AND d.link != '')`,
         'DESC',
         'NULLS LAST',
