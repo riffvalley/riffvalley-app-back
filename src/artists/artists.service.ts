@@ -66,7 +66,19 @@ export class ArtistsService {
     const qb = this.artistRepository
       .createQueryBuilder('artist')
       .leftJoinAndSelect('artist.country', 'country')
-      .orderBy('artist.name', 'ASC')
+      .orderBy(
+        `CASE WHEN
+          NOT EXISTS (SELECT 1 FROM disc WHERE disc."artistId" = artist.id)
+          AND NOT EXISTS (SELECT 1 FROM national_release WHERE LOWER(national_release."artistName") = LOWER(artist.name))
+        THEN 0 ELSE 1 END`,
+        'ASC',
+      )
+      .addOrderBy(
+        `(SELECT MAX(d."releaseDate") FROM disc d WHERE d."artistId" = artist.id AND d.link IS NOT NULL AND d.link != '')`,
+        'DESC',
+        'NULLS LAST',
+      )
+      .addOrderBy('RANDOM()')
       .take(limit)
       .skip(offset);
 
