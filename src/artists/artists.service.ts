@@ -65,42 +65,15 @@ export class ArtistsService {
   async findAllForManagement(query?: string, limit = 15, offset = 0, genreId?: string, needsReview?: boolean) {
     const qb = this.artistRepository
       .createQueryBuilder('artist')
-      .leftJoinAndSelect('artist.country', 'country')
-      .orderBy(
-        `CASE WHEN
-          NOT EXISTS (SELECT 1 FROM disc WHERE disc."artistId" = artist.id)
-          AND NOT EXISTS (SELECT 1 FROM national_release WHERE LOWER(national_release."artistName") = LOWER(artist.name))
-        THEN 0 ELSE 1 END`,
-        'ASC',
-      )
-      .addOrderBy(
-        `CASE WHEN artist."countryId" IS NULL THEN 1 ELSE 0 END`,
-        'ASC',
-      )
-      .addOrderBy(
-        `(SELECT MAX(d."releaseDate") FROM disc d WHERE d."artistId" = artist.id AND d.link IS NOT NULL AND d.link != '')`,
-        'DESC',
-        'NULLS LAST',
-      )
-      .addOrderBy('RANDOM()')
-      .take(limit)
-      .skip(offset);
+      .leftJoinAndSelect('artist.country', 'country');
 
     if (query) {
-      qb.where('artist.name_normalized LIKE :q', {
-        q: `%${normalizeForSearch(query)}%`,
-      });
+      qb.where('artist.name_normalized LIKE :q', { q: `%${normalizeForSearch(query)}%` });
     }
 
     if (genreId) {
       qb.andWhere((sub) =>
-        `EXISTS (${sub
-          .subQuery()
-          .select('1')
-          .from('disc', 'd')
-          .where('d.artistId = artist.id')
-          .andWhere('d.genreId = :genreId')
-          .getQuery()})`,
+        `EXISTS (${sub.subQuery().select('1').from('disc', 'd').where('d.artistId = artist.id').andWhere('d.genreId = :genreId').getQuery()})`,
         { genreId },
       );
     }
@@ -109,46 +82,48 @@ export class ArtistsService {
       qb.andWhere('artist.needsReview = :needsReview', { needsReview });
     }
 
-    const [artists, totalItems] = await qb.getManyAndCount();
+    const allArtists = await qb.getMany();
+    const totalItems = allArtists.length;
 
-    if (artists.length === 0) {
+    if (totalItems === 0) {
       return { totalItems: 0, totalPages: 0, currentPage: 1, limit, data: [] };
     }
 
-    const artistIds = artists.map((a) => a.id);
-    const artistNames = artists.map((a) => a.name);
+    const allArtistIds = allArtists.map((a) => a.id);
+    const allArtistNames = allArtists.map((a) => a.name);
 
-    // Discos de estos artistas con stats
-    const discsRaw = await this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoinAndSelect('disc.genre', 'genre')
-      .leftJoinAndSelect('disc.artist', 'discArtist')
-      .addSelect((sub) =>
-        sub.select('COUNT(rate.id)', 'rateCount')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
-        'rateCount',
-      )
-      .addSelect((sub) =>
-        sub.select('AVG(rate.rate)', 'averageRate')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
-        'averageRate',
-      )
-      .where('discArtist.id IN (:...artistIds)', { artistIds })
-      .orderBy('disc.releaseDate', 'DESC')
-      .getRawAndEntities();
+    // Cargar discos y national releases de todos los artistas filtrados
+    const [discsRaw, nationalReleases] = await Promise.all([
+      this.discRepository
+        .createQueryBuilder('disc')
+        .leftJoinAndSelect('disc.genre', 'genre')
+        .leftJoinAndSelect('disc.artist', 'discArtist')
+        .addSelect((sub) =>
+          sub.select('COUNT(rate.id)', 'rateCount')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+          'rateCount',
+        )
+        .addSelect((sub) =>
+          sub.select('AVG(rate.rate)', 'averageRate')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+          'averageRate',
+        )
+        .where('discArtist.id IN (:...artistIds)', { artistIds: allArtistIds })
+        .orderBy('disc.releaseDate', 'DESC')
+        .getRawAndEntities(),
 
-    // National releases de estos artistas
-    const nationalReleases = await this.nationalReleaseRepository
-      .createQueryBuilder('nr')
-      .where('LOWER(nr.artistName) IN (:...names)', {
-        names: artistNames.map((n) => n.toLowerCase()),
-      })
-      .orderBy('nr.releaseDay', 'DESC')
-      .getMany();
+      this.nationalReleaseRepository
+        .createQueryBuilder('nr')
+        .where('LOWER(nr.artistName) IN (:...names)', {
+          names: allArtistNames.map((n) => n.toLowerCase()),
+        })
+        .orderBy('nr.releaseDay', 'DESC')
+        .getMany(),
+    ]);
 
-    // Agrupar discos por artistId usando la entidad cargada
+    // Agrupar discos por artistId
     const discsByArtist = new Map<string, any[]>();
     discsRaw.entities.forEach((disc, i) => {
       const artistId = disc.artist?.id;
@@ -185,20 +160,45 @@ export class ArtistsService {
       });
     });
 
-    return {
-      totalItems,
-      totalPages: Math.ceil(totalItems / limit),
-      currentPage: Math.floor(offset / limit) + 1,
-      limit,
-      data: artists.map((artist) => ({
+    // Construir objetos completos
+    const fullData = allArtists.map((artist) => {
+      const discs = discsByArtist.get(artist.id) ?? [];
+      const nrs = nrByArtistName.get(artist.name.toLowerCase()) ?? [];
+      const latestLinkedDisc = discs
+        .filter((d) => d.link)
+        .map((d) => d.releaseDate ? new Date(d.releaseDate).getTime() : 0)
+        .reduce((max, t) => (t > max ? t : max), 0);
+      return {
         id: artist.id,
         name: artist.name,
         description: artist.description,
         image: artist.image,
         country: artist.country ?? null,
-        discs: discsByArtist.get(artist.id) ?? [],
-        nationalReleases: nrByArtistName.get(artist.name.toLowerCase()) ?? [],
-      })),
+        discs,
+        nationalReleases: nrs,
+        _isOrphan: discs.length === 0 && nrs.length === 0,
+        _hasCountry: artist.country !== null,
+        _latestLinkedDisc: latestLinkedDisc,
+      };
+    });
+
+    // Ordenar: huérfanos primero → con país antes que sin país → disco reciente con link DESC → random
+    fullData.sort((a, b) => {
+      if (a._isOrphan !== b._isOrphan) return a._isOrphan ? -1 : 1;
+      if (a._hasCountry !== b._hasCountry) return a._hasCountry ? -1 : 1;
+      if (b._latestLinkedDisc !== a._latestLinkedDisc) return b._latestLinkedDisc - a._latestLinkedDisc;
+      return Math.random() - 0.5;
+    });
+
+    // Paginar y limpiar campos internos
+    const paginated = fullData.slice(offset, offset + limit).map(({ _isOrphan, _hasCountry, _latestLinkedDisc, ...rest }) => rest);
+
+    return {
+      totalItems,
+      totalPages: Math.ceil(totalItems / limit),
+      currentPage: Math.floor(offset / limit) + 1,
+      limit,
+      data: paginated,
     };
   }
 
