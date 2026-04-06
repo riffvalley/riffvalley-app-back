@@ -313,27 +313,21 @@ export class ArtistsService {
     return artist;
   }
 
-  async removeArtistsWithoutDiscs(): Promise<Artist[]> {
-    // Primero, obtén todos los artistas sin discos
-    const artistsWithoutDiscs = await this.artistRepository
+  async removeOrphanArtists(): Promise<{ deleted: number; artists: string[] }> {
+    const orphans = await this.artistRepository
       .createQueryBuilder('artist')
-      .leftJoinAndSelect('artist.disc', 'disc')
+      .leftJoin('artist.disc', 'disc')
       .where('disc.id IS NULL')
+      .andWhere(
+        `NOT EXISTS (SELECT 1 FROM national_release nr WHERE LOWER(nr."artistName") = LOWER(artist.name))`,
+      )
       .getMany();
 
-    // Si no hay artistas sin discos, devolvemos un array vacío o puedes manejar la lógica que prefieras
-    if (!artistsWithoutDiscs.length) {
-      return [];
-    }
+    if (!orphans.length) return { deleted: 0, artists: [] };
 
-    // Guardamos una copia de los artistas para devolverlos antes de eliminarlos
-    const deletedArtists = [...artistsWithoutDiscs];
-
-    // Removemos los artistas en bloque
-    await this.artistRepository.remove(artistsWithoutDiscs);
-
-    // Devolvemos la lista de los artistas que fueron borrados
-    return deletedArtists;
+    const names = orphans.map((a) => a.name);
+    await this.artistRepository.remove(orphans);
+    return { deleted: names.length, artists: names };
   }
 
   async findOneWithDetails(id: string) {

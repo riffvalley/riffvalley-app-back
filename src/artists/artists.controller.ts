@@ -70,6 +70,12 @@ export class ArtistsController {
     return this.artistsService.update(id, updateArtistDto);
   }
 
+  @Delete('orphans/all')
+  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  removeOrphans() {
+    return this.artistsService.removeOrphanArtists();
+  }
+
   @Delete(':id')
   @Auth(ValidRoles.admin, ValidRoles.riffValley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
