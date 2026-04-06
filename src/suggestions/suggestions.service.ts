@@ -21,26 +21,42 @@ export class SuggestionsService {
     return this.repo.save(suggestion);
   }
 
-  findAll(filters: { type?: SuggestionType; status?: SuggestionStatus }): Promise<Suggestion[]> {
+  private async getCounts(filters: { type?: SuggestionType; userId?: string }) {
+    const qb = this.repo
+      .createQueryBuilder('s')
+      .select('s.status', 'status')
+      .addSelect('COUNT(*)', 'count');
+    if (filters.type) qb.where('s.type = :type', { type: filters.type });
+    if (filters.userId) qb.andWhere('s.userId = :userId', { userId: filters.userId });
+    const rows = await qb.groupBy('s.status').getRawMany();
+    return {
+      in_progress: 0,
+      done: 0,
+      rejected: 0,
+      ...Object.fromEntries(rows.map((r) => [r.status, parseInt(r.count, 10)])),
+    };
+  }
+
+  async findAll(filters: { type?: SuggestionType; status?: SuggestionStatus }) {
     const where: any = {};
     if (filters.type) where.type = filters.type;
     if (filters.status) where.status = filters.status;
-    return this.repo.find({
-      where,
-      relations: ['versionItem'],
-      order: { createdAt: 'DESC' },
-    });
+    const [data, counts] = await Promise.all([
+      this.repo.find({ where, relations: ['versionItem'], order: { createdAt: 'DESC' } }),
+      this.getCounts({ type: filters.type }),
+    ]);
+    return { data, counts };
   }
 
-  findByUser(user: User, filters: { type?: SuggestionType; status?: SuggestionStatus }): Promise<Suggestion[]> {
+  async findByUser(user: User, filters: { type?: SuggestionType; status?: SuggestionStatus }) {
     const where: any = { userId: user.id };
     if (filters.type) where.type = filters.type;
     if (filters.status) where.status = filters.status;
-    return this.repo.find({
-      where,
-      relations: ['versionItem'],
-      order: { createdAt: 'DESC' },
-    });
+    const [data, counts] = await Promise.all([
+      this.repo.find({ where, relations: ['versionItem'], order: { createdAt: 'DESC' } }),
+      this.getCounts({ type: filters.type, userId: user.id }),
+    ]);
+    return { data, counts };
   }
 
   async findOne(id: string): Promise<Suggestion> {
