@@ -193,11 +193,14 @@ export class ArtistsService {
     // Paginar y limpiar campos internos
     const paginated = fullData.slice(offset, offset + limit).map(({ _isOrphan, _hasCountry, _latestLinkedDisc, ...rest }) => rest);
 
+    const orphanCount = fullData.filter((a) => a._isOrphan).length;
+
     return {
       totalItems,
       totalPages: Math.ceil(totalItems / limit),
       currentPage: Math.floor(offset / limit) + 1,
       limit,
+      orphanCount,
       data: paginated,
     };
   }
