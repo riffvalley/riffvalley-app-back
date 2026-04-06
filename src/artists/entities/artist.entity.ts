@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
 @Entity()
@@ -31,6 +32,9 @@ export class Artist {
 
   @Column({ type: 'boolean', default: true })
   needsReview: boolean;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 
   @ManyToOne(() => Country, (country) => country.artist, {
     eager: true,
