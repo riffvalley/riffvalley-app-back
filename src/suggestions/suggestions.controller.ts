@@ -67,6 +67,12 @@ export class SuggestionsController {
     return this.suggestionsService.markDone(id, dto);
   }
 
+  @Patch(':id/read')
+  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  markRead(@Param('id', ParseUUIDPipe) id: string) {
+    return this.suggestionsService.markRead(id);
+  }
+
   @Delete(':id')
   @Auth(ValidRoles.admin, ValidRoles.riffValley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
