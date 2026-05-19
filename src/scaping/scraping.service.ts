@@ -52,7 +52,7 @@ export class ScrapingService {
   async processManualData(
     dto: ProcessManualDataDto,
   ): Promise<{ savedDiscs: string[]; existingDiscs: string[] }> {
-    const { date, albums, genreId, countryId } = dto;
+    const { date, albums, genreId, countryId, ep = false, debut = false } = dto;
     this.log(`Processing manual data for date: ${date}`);
 
     const releaseDate = this.parseDateString(date);
@@ -132,6 +132,8 @@ export class ScrapingService {
           artist,
           genre,
           country,
+          ep,
+          debut,
           releaseDate: releaseDate ?? null,
         });
         disc = await this.discRepository.save(disc);

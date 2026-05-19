@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class ProcessManualDataDto {
   @IsString()
@@ -17,4 +17,12 @@ export class ProcessManualDataDto {
   @IsUUID()
   @IsNotEmpty()
   countryId: string;
+
+  @IsBoolean()
+  @IsOptional()
+  ep?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  debut?: boolean;
 }
