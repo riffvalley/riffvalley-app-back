@@ -52,7 +52,7 @@ export class ScrapingService {
   async processManualData(
     dto: ProcessManualDataDto,
   ): Promise<{ savedDiscs: string[]; existingDiscs: string[] }> {
-    const { date, albums, genreId, countryId, ep = false, debut = false } = dto;
+    const { date, albums } = dto;
     this.log(`Processing manual data for date: ${date}`);
 
     const releaseDate = this.parseDateString(date);
@@ -61,14 +61,9 @@ export class ScrapingService {
       throw new Error(`Invalid date: ${date}`);
     }
 
-    const [genre, country, defaultCountry] = await Promise.all([
-      this.genreRepository.findOne({ where: { id: genreId } }),
-      this.countryRepository.findOne({ where: { id: countryId } }),
-      this.countryRepository.findOne({ where: { name: 'Sin pais' } }),
-    ]);
-
-    if (!genre) throw new NotFoundException(`Genre ${genreId} not found`);
-    if (!country) throw new NotFoundException(`Country ${countryId} not found`);
+    const defaultCountry = await this.countryRepository.findOne({
+      where: { name: 'Sin pais' },
+    });
 
     // Arrays para acumular el reporte
     const report = {
@@ -76,7 +71,9 @@ export class ScrapingService {
       existingDiscs: [] as string[],
     };
 
-    for (const albumLine of albums) {
+    for (const album of albums) {
+      const { line: albumLine, genreId, countryId, ep = false, debut = false } = album;
+
       if (albumLine.toLowerCase().includes('re-release')) {
         this.log(`Skipping album (Re-Release): ${albumLine}`);
         continue;
@@ -94,6 +91,20 @@ export class ScrapingService {
       const match = discName.match(/\(([^)]+)\)$/);
       if (match) {
         discName = discName.replace(`(${match[1]})`, '').trim();
+      }
+
+      const [genre, country] = await Promise.all([
+        genreId ? this.genreRepository.findOne({ where: { id: genreId } }) : Promise.resolve(null),
+        countryId ? this.countryRepository.findOne({ where: { id: countryId } }) : Promise.resolve(null),
+      ]);
+
+      if (genreId && !genre) {
+        this.log(`Genre ${genreId} not found for album: ${albumLine}`);
+        throw new NotFoundException(`Genre ${genreId} not found`);
+      }
+      if (countryId && !country) {
+        this.log(`Country ${countryId} not found for album: ${albumLine}`);
+        throw new NotFoundException(`Country ${countryId} not found`);
       }
 
       // Búsqueda del artista de forma insensible a mayúsculas/minúsculas
@@ -130,8 +141,8 @@ export class ScrapingService {
           verified: false,
           link: '',
           artist,
-          genre,
-          country,
+          ...(genre && { genre }),
+          ...(country && { country }),
           ep,
           debut,
           releaseDate: releaseDate ?? null,

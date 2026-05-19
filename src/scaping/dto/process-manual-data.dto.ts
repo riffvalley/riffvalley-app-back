@@ -1,22 +1,18 @@
-import { IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
 
-export class ProcessManualDataDto {
+export class AlbumItemDto {
   @IsString()
   @IsNotEmpty()
-  date: string;
-
-  @IsArray()
-  @IsString({ each: true })
-  @IsNotEmpty()
-  albums: string[];
+  line: string;
 
   @IsUUID()
-  @IsNotEmpty()
-  genreId: string;
+  @IsOptional()
+  genreId?: string;
 
   @IsUUID()
-  @IsNotEmpty()
-  countryId: string;
+  @IsOptional()
+  countryId?: string;
 
   @IsBoolean()
   @IsOptional()
@@ -25,4 +21,15 @@ export class ProcessManualDataDto {
   @IsBoolean()
   @IsOptional()
   debut?: boolean;
+}
+
+export class ProcessManualDataDto {
+  @IsString()
+  @IsNotEmpty()
+  date: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AlbumItemDto)
+  albums: AlbumItemDto[];
 }
