@@ -32,8 +32,16 @@ export class NewsController {
   }
 
   @Get('feed')
-  getFeed() {
-    return this.newsService.getFeed();
+  getFeed(
+    @Query('source') source?: string,
+    @Query('type') type?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.newsService.getFeed({
+      source,
+      type,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
   }
 
   @Get(':id')
