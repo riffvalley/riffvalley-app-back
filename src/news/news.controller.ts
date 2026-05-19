@@ -32,12 +32,17 @@ export class NewsController {
   }
 
   @Get('feed')
-  getFeed(
+  getFeed() {
+    return this.newsService.getFeed();
+  }
+
+  @Get('source-feed')
+  getSourceFeed(
     @Query('source') source?: string,
     @Query('type') type?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.newsService.getFeed({
+    return this.newsService.getSourceFeed({
       source,
       type,
       limit: limit ? parseInt(limit, 10) : undefined,

@@ -106,69 +106,7 @@ export class NewsService {
     return { message: `News with id ${id} has been removed` };
   }
 
-  async getFeed(filters: { source?: string; type?: string; limit?: number } = {}): Promise<{ posts: FeedPost[] }> {
-    const { source, type, limit = 6 } = filters;
-
-    if (source === 'app') {
-      const where: any = { status: NewsStatus.PUBLISHED };
-      if (type) where.type = type;
-      const appNews = await this.newsRepository.find({
-        where,
-        order: { createdAt: 'DESC' },
-        take: limit,
-      });
-      const posts: FeedPost[] = appNews.map((n) => ({
-        id: n.id,
-        title: n.title,
-        link: null,
-        image: n.image,
-        date: n.createdAt.toISOString(),
-        source: 'app',
-        type: n.type,
-        body: n.body,
-      }));
-      return { posts };
-    }
-
-    if (source === 'riffvalley.es') {
-      const wpPosts = await this.fetchWordPressPosts();
-      const posts: FeedPost[] = wpPosts.slice(0, limit).map((post, i) => {
-        let image: string | null = null;
-        try {
-          image = post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
-        } catch {
-          image = null;
-        }
-        return {
-          id: `wp-${i}`,
-          title: post.title?.rendered ?? '',
-          link: post.link ?? null,
-          image,
-          date: post.date ?? new Date().toISOString(),
-          source: 'riffvalley.es',
-          type: null,
-          body: null,
-        };
-      });
-      return { posts };
-    }
-
-    if (source === 'telegram') {
-      const tgPosts = await this.telegramService.getChannelPosts('conciertosrockmetal', limit);
-      const posts: FeedPost[] = tgPosts.slice(0, limit).map((post, i) => ({
-        id: `tg-${i}`,
-        title: post.text,
-        link: post.link,
-        image: post.image,
-        date: post.date ?? new Date().toISOString(),
-        source: 'telegram',
-        type: null,
-        body: null,
-      }));
-      return { posts };
-    }
-
-    // Sin source: comportamiento mixto con distribución
+  async getFeed(): Promise<{ posts: FeedPost[] }> {
     const [appNews, wpPosts, tgPosts] = await Promise.all([
       this.newsRepository.find({
         where: { status: NewsStatus.PUBLISHED },
@@ -179,6 +117,7 @@ export class NewsService {
       this.telegramService.getChannelPosts('conciertosrockmetal', 6),
     ]);
 
+    // Distribution rules
     let wpLimit: number;
     let tgLimit: number;
 
@@ -207,10 +146,12 @@ export class NewsService {
     const wpFeed: FeedPost[] = wpPosts.slice(0, wpLimit).map((post, i) => {
       let image: string | null = null;
       try {
-        image = post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
+        image =
+          post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
       } catch {
         image = null;
       }
+
       return {
         id: `wp-${i}`,
         title: post.title?.rendered ?? '',
@@ -236,9 +177,77 @@ export class NewsService {
 
     const posts = [...appFeed, ...wpFeed, ...tgFeed]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, limit);
+      .slice(0, 6);
 
     return { posts };
+  }
+
+  async getSourceFeed(filters: { source?: string; type?: string; limit?: number }): Promise<{ posts: FeedPost[] }> {
+    const { source, type, limit = 6 } = filters;
+
+    if (source === 'app') {
+      const where: any = { status: NewsStatus.PUBLISHED };
+      if (type) where.type = type;
+      const appNews = await this.newsRepository.find({
+        where,
+        order: { createdAt: 'DESC' },
+        take: limit,
+      });
+      return {
+        posts: appNews.map((n) => ({
+          id: n.id,
+          title: n.title,
+          link: null,
+          image: n.image,
+          date: n.createdAt.toISOString(),
+          source: 'app',
+          type: n.type,
+          body: n.body,
+        })),
+      };
+    }
+
+    if (source === 'riffvalley.es') {
+      const wpPosts = await this.fetchWordPressPosts();
+      return {
+        posts: wpPosts.slice(0, limit).map((post, i) => {
+          let image: string | null = null;
+          try {
+            image = post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
+          } catch {
+            image = null;
+          }
+          return {
+            id: `wp-${i}`,
+            title: post.title?.rendered ?? '',
+            link: post.link ?? null,
+            image,
+            date: post.date ?? new Date().toISOString(),
+            source: 'riffvalley.es',
+            type: null,
+            body: null,
+          };
+        }),
+      };
+    }
+
+    if (source === 'telegram') {
+      const tgPosts = await this.telegramService.getChannelPosts('conciertosrockmetal', limit);
+      return {
+        posts: tgPosts.slice(0, limit).map((post, i) => ({
+          id: `tg-${i}`,
+          title: post.text,
+          link: post.link,
+          image: post.image,
+          date: post.date ?? new Date().toISOString(),
+          source: 'telegram',
+          type: null,
+          body: null,
+        })),
+      };
+    }
+
+    return { posts: [] };
   }
 
   private async fetchWordPressPosts(): Promise<any[]> {
