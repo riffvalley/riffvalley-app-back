@@ -73,8 +73,9 @@ export class CommentsService {
       query,
       dateRange,
       genre,
+      country,
       type,
-    } = paginationDto;
+    } = paginationDto as any;
     const userId = user.id;
 
     let startDate: Date | undefined;
@@ -131,6 +132,11 @@ export class CommentsService {
     if (genre) {
       queryBuilder.andWhere('disc.genreId = :genre', { genre });
       totalItemsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
+    }
+
+    if (country) {
+      queryBuilder.andWhere('artist.countryId = :country', { country });
+      totalItemsQueryBuilder.andWhere('artist.countryId = :country', { country });
     }
 
     queryBuilder
