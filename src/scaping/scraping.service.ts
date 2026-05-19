@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 
+import { ProcessManualDataDto } from './dto/process-manual-data.dto';
 import { Artist } from 'src/artists/entities/artist.entity';
 import { Disc } from 'src/discs/entities/disc.entity';
 import { Country } from 'src/countries/entities/country.entity';
@@ -49,9 +50,9 @@ export class ScrapingService {
   }
 
   async processManualData(
-    date: string,
-    albums: string[],
+    dto: ProcessManualDataDto,
   ): Promise<{ savedDiscs: string[]; existingDiscs: string[] }> {
+    const { date, albums, genreId, countryId } = dto;
     this.log(`Processing manual data for date: ${date}`);
 
     const releaseDate = this.parseDateString(date);
@@ -60,12 +61,14 @@ export class ScrapingService {
       throw new Error(`Invalid date: ${date}`);
     }
 
-    const defaultCountry = await this.countryRepository.findOne({
-      where: { name: 'Sin pais' },
-    });
-    const defaultGenre = await this.genreRepository.findOne({
-      where: { name: '?' },
-    });
+    const [genre, country, defaultCountry] = await Promise.all([
+      this.genreRepository.findOne({ where: { id: genreId } }),
+      this.countryRepository.findOne({ where: { id: countryId } }),
+      this.countryRepository.findOne({ where: { name: 'Sin pais' } }),
+    ]);
+
+    if (!genre) throw new NotFoundException(`Genre ${genreId} not found`);
+    if (!country) throw new NotFoundException(`Country ${countryId} not found`);
 
     // Arrays para acumular el reporte
     const report = {
@@ -127,7 +130,8 @@ export class ScrapingService {
           verified: false,
           link: '',
           artist,
-          genre: defaultGenre ?? undefined,
+          genre,
+          country,
           releaseDate: releaseDate ?? null,
         });
         disc = await this.discRepository.save(disc);
