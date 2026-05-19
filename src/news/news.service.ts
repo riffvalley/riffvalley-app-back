@@ -182,6 +182,74 @@ export class NewsService {
     return { posts };
   }
 
+  async getSourceFeed(filters: { source?: string; type?: string; limit?: number }): Promise<{ posts: FeedPost[] }> {
+    const { source, type, limit = 6 } = filters;
+
+    if (source === 'app') {
+      const where: any = { status: NewsStatus.PUBLISHED };
+      if (type) where.type = type;
+      const appNews = await this.newsRepository.find({
+        where,
+        order: { createdAt: 'DESC' },
+        take: limit,
+      });
+      return {
+        posts: appNews.map((n) => ({
+          id: n.id,
+          title: n.title,
+          link: null,
+          image: n.image,
+          date: n.createdAt.toISOString(),
+          source: 'app',
+          type: n.type,
+          body: n.body,
+        })),
+      };
+    }
+
+    if (source === 'riffvalley.es') {
+      const wpPosts = await this.fetchWordPressPosts();
+      return {
+        posts: wpPosts.slice(0, limit).map((post, i) => {
+          let image: string | null = null;
+          try {
+            image = post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
+          } catch {
+            image = null;
+          }
+          return {
+            id: `wp-${i}`,
+            title: post.title?.rendered ?? '',
+            link: post.link ?? null,
+            image,
+            date: post.date ?? new Date().toISOString(),
+            source: 'riffvalley.es',
+            type: null,
+            body: null,
+          };
+        }),
+      };
+    }
+
+    if (source === 'telegram') {
+      const tgPosts = await this.telegramService.getChannelPosts('conciertosrockmetal', limit);
+      return {
+        posts: tgPosts.slice(0, limit).map((post, i) => ({
+          id: `tg-${i}`,
+          title: post.text,
+          link: post.link,
+          image: post.image,
+          date: post.date ?? new Date().toISOString(),
+          source: 'telegram',
+          type: null,
+          body: null,
+        })),
+      };
+    }
+
+    return { posts: [] };
+  }
+
   private async fetchWordPressPosts(): Promise<any[]> {
     if (this.wpCache && Date.now() - this.wpCache.timestamp < this.WP_CACHE_TTL) {
       return this.wpCache.data;

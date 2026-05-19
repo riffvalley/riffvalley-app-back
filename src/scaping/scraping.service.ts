@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 
+import { ProcessManualDataDto } from './dto/process-manual-data.dto';
 import { Artist } from 'src/artists/entities/artist.entity';
 import { Disc } from 'src/discs/entities/disc.entity';
 import { Country } from 'src/countries/entities/country.entity';
@@ -49,9 +50,9 @@ export class ScrapingService {
   }
 
   async processManualData(
-    date: string,
-    albums: string[],
+    dto: ProcessManualDataDto,
   ): Promise<{ savedDiscs: string[]; existingDiscs: string[] }> {
+    const { date, albums } = dto;
     this.log(`Processing manual data for date: ${date}`);
 
     const releaseDate = this.parseDateString(date);
@@ -63,9 +64,6 @@ export class ScrapingService {
     const defaultCountry = await this.countryRepository.findOne({
       where: { name: 'Sin pais' },
     });
-    const defaultGenre = await this.genreRepository.findOne({
-      where: { name: '?' },
-    });
 
     // Arrays para acumular el reporte
     const report = {
@@ -73,7 +71,9 @@ export class ScrapingService {
       existingDiscs: [] as string[],
     };
 
-    for (const albumLine of albums) {
+    for (const album of albums) {
+      const { line: albumLine, genreId, countryId, ep = false, debut = false } = album;
+
       if (albumLine.toLowerCase().includes('re-release')) {
         this.log(`Skipping album (Re-Release): ${albumLine}`);
         continue;
@@ -91,6 +91,20 @@ export class ScrapingService {
       const match = discName.match(/\(([^)]+)\)$/);
       if (match) {
         discName = discName.replace(`(${match[1]})`, '').trim();
+      }
+
+      const [genre, country] = await Promise.all([
+        genreId ? this.genreRepository.findOne({ where: { id: genreId } }) : Promise.resolve(null),
+        countryId ? this.countryRepository.findOne({ where: { id: countryId } }) : Promise.resolve(null),
+      ]);
+
+      if (genreId && !genre) {
+        this.log(`Genre ${genreId} not found for album: ${albumLine}`);
+        throw new NotFoundException(`Genre ${genreId} not found`);
+      }
+      if (countryId && !country) {
+        this.log(`Country ${countryId} not found for album: ${albumLine}`);
+        throw new NotFoundException(`Country ${countryId} not found`);
       }
 
       // Búsqueda del artista de forma insensible a mayúsculas/minúsculas
@@ -127,7 +141,10 @@ export class ScrapingService {
           verified: false,
           link: '',
           artist,
-          genre: defaultGenre ?? undefined,
+          ...(genre && { genre }),
+          ...(country && { country }),
+          ep,
+          debut,
           releaseDate: releaseDate ?? null,
         });
         disc = await this.discRepository.save(disc);

@@ -16,7 +16,34 @@ export class MailService {
         user: process.env.MAIL_USER,
         pass: process.env.MAIL_PASS,
       },
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
     });
+  }
+
+  async sendAccessRequestNotification(email: string, alias: string): Promise<void> {
+    const subject = 'Solicitud de acceso de nuevo usuario';
+
+    const html = `
+      <h2>Solicitud de acceso de nuevo usuario</h2>
+      <table cellpadding="8" cellspacing="0" border="1" style="border-collapse:collapse;">
+        <tr><td><strong>Email</strong></td><td>${email}</td></tr>
+        <tr><td><strong>Alias</strong></td><td>${alias}</td></tr>
+      </table>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+        to: 'contacto@riffvalley.es',
+        subject,
+        html,
+      });
+    } catch (error) {
+      this.logger.error('Error sending access request email', error);
+      throw error;
+    }
   }
 
   async sendNationalReleaseNotification(dto: CreateNationalReleaseDto): Promise<void> {

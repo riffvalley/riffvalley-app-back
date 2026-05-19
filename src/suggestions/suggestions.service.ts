@@ -108,6 +108,12 @@ export class SuggestionsService {
     return this.repo.save(suggestion);
   }
 
+  async markRead(id: string): Promise<Suggestion> {
+    const suggestion = await this.findOne(id);
+    suggestion.isRead = true;
+    return this.repo.save(suggestion);
+  }
+
   async remove(id: string): Promise<void> {
     const suggestion = await this.findOne(id);
     await this.repo.remove(suggestion);

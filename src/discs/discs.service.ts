@@ -655,7 +655,7 @@ export class DiscsService {
       WHERE r.rate IS NOT NULL${statsDateCondition}
       GROUP BY u.id, u.username
       ORDER BY "rateCount" DESC
-      LIMIT 3;
+      LIMIT 10;
     `;
     const topUsersByRates =
       await this.discRepository.query(topUsersByRatesQuery, statsParams);
@@ -669,7 +669,7 @@ export class DiscsService {
       WHERE r.cover IS NOT NULL${statsDateCondition}
       GROUP BY u.id, u.username
       ORDER BY "coverCount" DESC
-      LIMIT 3;
+      LIMIT 10;
     `;
     const topUsersByCover =
       await this.discRepository.query(topUsersByCoverQuery, statsParams);

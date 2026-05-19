@@ -47,6 +47,9 @@ export class Suggestion {
   @Column({ type: 'enum', enum: SuggestionPriority, default: SuggestionPriority.MEDIUM })
   priority: SuggestionPriority;
 
+  @Column({ type: 'boolean', default: false })
+  isRead: boolean;
+
   @Column('text', { nullable: true })
   rejectionReason: string | null;
 
