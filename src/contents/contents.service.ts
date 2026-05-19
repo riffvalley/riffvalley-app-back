@@ -695,21 +695,21 @@ export class ContentsService {
 
           if (savedContent.publicationDate) {
             const contentDate = new Date(savedContent.publicationDate);
-            const reunionDate = reunionEntity.date
-              ? new Date(reunionEntity.date)
+            const reunionDate = reunionEntity.fecha
+              ? new Date(reunionEntity.fecha)
               : null;
 
             if (
               !reunionDate ||
               reunionDate.getTime() !== contentDate.getTime()
             ) {
-              reunionEntity.date = contentDate;
+              reunionEntity.fecha = contentDate;
               reunionChanged = true;
             }
           }
 
-          if (savedContent.name && reunionEntity.title !== savedContent.name) {
-            reunionEntity.title = savedContent.name;
+          if (savedContent.name && reunionEntity.titulo !== savedContent.name) {
+            reunionEntity.titulo = savedContent.name;
             reunionChanged = true;
           }
 
