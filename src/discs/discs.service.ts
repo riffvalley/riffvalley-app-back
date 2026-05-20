@@ -205,6 +205,11 @@ export class DiscsService {
 
           const dbField = validFields[field];
           if (dbField) {
+            if (field === 'disc.averageRate') {
+              queryBuilder.andWhere(
+                '(SELECT AVG(r.rate) FROM rate r WHERE r."discId" = disc.id) IS NOT NULL',
+              );
+            }
             queryBuilder.addOrderBy(dbField, direction.toUpperCase() as 'ASC' | 'DESC');
           }
         }
