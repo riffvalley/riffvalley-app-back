@@ -200,7 +200,7 @@ export class DiscsService {
             'artist.name': 'artist.name',
             'disc.createdAt': 'disc.createdAt',
             'disc.name': 'disc.name',
-            'disc.averageRate': 'averageRate',
+            'disc.averageRate': '"averageRate"',
           };
 
           const dbField = validFields[field];
