@@ -94,7 +94,7 @@ export class DiscsService {
           .select('AVG(rate.rate)', 'averageRate')
           .from('rate', 'rate')
           .where('rate.discId = disc.id');
-      }, 'averageRate')
+      }, 'averagerate')
       .addSelect((subQuery) => {
         return subQuery
           .select('AVG(rate.cover)', 'averageCover')
@@ -200,11 +200,16 @@ export class DiscsService {
             'artist.name': 'artist.name',
             'disc.createdAt': 'disc.createdAt',
             'disc.name': 'disc.name',
-            // Add more allowed fields as needed
+            'disc.averageRate': 'averagerate',
           };
 
           const dbField = validFields[field];
           if (dbField) {
+            if (field === 'disc.averageRate') {
+              queryBuilder.andWhere(
+                '(SELECT AVG(r.rate) FROM rate r WHERE r."discId" = disc.id) IS NOT NULL',
+              );
+            }
             queryBuilder.addOrderBy(dbField, direction.toUpperCase() as 'ASC' | 'DESC');
           }
         }
@@ -231,7 +236,7 @@ export class DiscsService {
         },
       },
       userRate: disc.rates.length > 0 ? disc.rates[0] : null,
-      averageRate: parseFloat(raw[index].averageRate) || null,
+      averageRate: parseFloat(raw[index].averagerate) || null,
       averageCover: parseFloat(raw[index].averageCover) || null,
       commentCount: parseInt(raw[index].commentCount, 10) || 0,
       voteCount: parseInt(raw[index].rateCount, 10) || 0, // <-- Add rateCount here
