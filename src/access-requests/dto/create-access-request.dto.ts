@@ -7,7 +7,7 @@ export class CreateAccessRequestDto {
 
   @IsString({ message: 'El alias debe ser una cadena de texto' })
   @IsNotEmpty({ message: 'El alias es obligatorio' })
-  @MinLength(3, { message: 'El alias debe tener al menos 3 caracteres' })
+  @MinLength(4, { message: 'El alias debe tener al menos 4 caracteres' })
   @MaxLength(50, { message: 'El alias no puede superar los 50 caracteres' })
   alias: string;
 }
