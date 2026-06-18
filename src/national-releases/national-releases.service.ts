@@ -22,7 +22,7 @@ export class NationalReleasesService {
   ) {}
 
   async create(dto: CreateNationalReleaseDto): Promise<NationalRelease> {
-    await this.checkDuplicate(dto.artistName, dto.discName);
+    await this.checkDuplicate(dto.artistName, dto.discName, dto.discType);
     const release = await this.repo.save(this.repo.create(dto));
     await this.mailService.sendNationalReleaseNotification(dto);
     return release;
@@ -32,7 +32,7 @@ export class NationalReleasesService {
     // Check duplicates within the batch
     const seen = new Set<string>();
     for (const dto of dtos) {
-      const key = `${dto.artistName.toLowerCase()}|${dto.discName.toLowerCase()}`;
+      const key = `${dto.artistName.toLowerCase()}|${dto.discName.toLowerCase()}|${dto.discType}`;
       if (seen.has(key)) {
         throw new BadRequestException(`Novedad duplicada en el lote: ${dto.artistName} – ${dto.discName}`);
       }
@@ -43,8 +43,8 @@ export class NationalReleasesService {
     if (dtos.length > 0) {
       const qb = this.repo.createQueryBuilder('r');
       dtos.forEach((dto, i) => {
-        const condition = `(LOWER(r.artistName) = LOWER(:artist${i}) AND LOWER(r.discName) = LOWER(:disc${i}))`;
-        const params = { [`artist${i}`]: dto.artistName, [`disc${i}`]: dto.discName };
+        const condition = `(LOWER(r.artistName) = LOWER(:artist${i}) AND LOWER(r.discName) = LOWER(:disc${i}) AND r.discType = :discType${i})`;
+        const params = { [`artist${i}`]: dto.artistName, [`disc${i}`]: dto.discName, [`discType${i}`]: dto.discType };
         i === 0 ? qb.where(condition, params) : qb.orWhere(condition, params);
       });
       const conflicts = await qb.getMany();
@@ -132,9 +132,8 @@ export class NationalReleasesService {
     });
     if (!disc) throw new NotFoundException(`Disc ${dto.discId} not found`);
 
-    await this.checkDuplicate(disc.artist?.name ?? '', disc.name);
-
     const discType = dto.discType ?? (disc.ep ? DiscType.EP : DiscType.ALBUM);
+    await this.checkDuplicate(disc.artist?.name ?? '', disc.name, discType);
     const genre = dto.genre ?? disc.genre?.name ?? '';
 
     const release = this.repo.create({
@@ -200,11 +199,12 @@ export class NationalReleasesService {
     await this.repo.remove(release);
   }
 
-  private async checkDuplicate(artistName: string, discName: string): Promise<void> {
+  private async checkDuplicate(artistName: string, discName: string, discType: DiscType): Promise<void> {
     const existing = await this.repo
       .createQueryBuilder('r')
       .where('LOWER(r.artistName) = LOWER(:artistName)', { artistName })
       .andWhere('LOWER(r.discName) = LOWER(:discName)', { discName })
+      .andWhere('r.discType = :discType', { discType })
       .getOne();
 
     if (existing) {
