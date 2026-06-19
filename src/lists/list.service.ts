@@ -21,6 +21,7 @@ import { UpdateListDto } from './dto/update-list.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Content } from 'src/contents/entities/content.entity';
 import { WordpressService } from 'src/wordpress/wordpress.service';
+import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
 
 @Injectable()
 export class ListsService {
@@ -32,6 +33,7 @@ export class ListsService {
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
     private readonly wordpressService: WordpressService,
+    private readonly spotifyApiService: SpotifyApiService,
   ) {}
 
   async create(createListDto: CreateListDto) {
@@ -622,7 +624,17 @@ export class ListsService {
       const title = `Nuevos discos - ${dateStr} (${roman})`;
       const seoTitle = `Nuevos discos ${day} de ${monthName} de ${year} (${roman}) • Riff Valley`;
       const seoDescription = `Nuevos discos de ${monthName} de ${year}: os recopilamos los lanzamientos de la semana del ${dateStr} que no te puedes perder.`;
-      const content = this.buildPostContent(discs, position, list, title);
+
+      const spotifyTrackIds = await Promise.all(
+        discs.map((a) =>
+          this.spotifyApiService.findSingleTrackForAlbum(
+            a.disc?.artist?.name ?? '',
+            a.disc?.name ?? '',
+          ),
+        ),
+      );
+
+      const content = this.buildPostContent(discs, position, list, title, spotifyTrackIds);
       const slug = `nuevos-discos${day}${month}${String(year).slice(-2)}${roman.toLowerCase()}`;
 
       const meta = {
@@ -645,7 +657,7 @@ export class ListsService {
     return { created: createdPosts.length, posts: createdPosts };
   }
 
-  private buildPostContent(discs: any[], position: number, list: any, title = ''): string {
+  private buildPostContent(discs: any[], position: number, list: any, title = '', spotifyTrackIds: (string | null)[] = []): string {
     const ordinals = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta'];
     const ordinal = ordinals[position - 1] ?? `${position}ª`;
 
@@ -696,8 +708,10 @@ export class ListsService {
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
 <!-- /wp:spacer -->`;
 
+    const FALLBACK_TRACK_ID = '75EVwxItVYmK59hhfSsBoD';
+
     const discSections = discs
-      .map((a) => {
+      .map((a, i) => {
         const artist = a.disc?.artist?.name ?? '';
         const discName = a.disc?.name ?? '';
         const genre = a.disc?.genre?.name ?? 'xx';
@@ -715,8 +729,9 @@ export class ListsService {
 <!-- /wp:html -->`;
         }
 
+        const trackId = spotifyTrackIds[i] ?? FALLBACK_TRACK_ID;
         const spotifyEmbed = `\n\n<!-- wp:html -->
-<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/75EVwxItVYmK59hhfSsBoD?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/${trackId}?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
 <!-- /wp:html -->`;
 
         const descriptionText = description ? ` ${description}` : '';
