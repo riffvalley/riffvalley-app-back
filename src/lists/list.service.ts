@@ -672,13 +672,11 @@ export class ListsService {
     const dateStr = `${day}/${month}/${year}`;
 
     const artistNames = discs.map((a) => a.disc?.artist?.name ?? '');
-    const artistNamesHtml = artistNames
-      .map((name, i) =>
-        i === artistNames.length - 1 && artistNames.length > 1
-          ? `y <strong>${name}</strong>`
-          : `<strong>${name}</strong>`,
-      )
-      .join(', ');
+    const artistNamesBold = artistNames.map((name) => `<strong>${name}</strong>`);
+    const artistNamesHtml =
+      artistNamesBold.length > 1
+        ? `${artistNamesBold.slice(0, -1).join(', ')} y ${artistNamesBold[artistNamesBold.length - 1]}`
+        : (artistNamesBold[0] ?? '');
 
     const intro = `<!-- wp:spacer {"height":"7px"} -->
 <div style="height:7px" aria-hidden="true" class="wp-block-spacer"></div>
