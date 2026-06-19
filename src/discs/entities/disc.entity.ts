@@ -45,6 +45,9 @@ export class Disc {
   @Column('boolean', { nullable: true })
   featured: boolean = false;
 
+  @Column('boolean', { nullable: true, default: false })
+  pinned: boolean = false;
+
   @ManyToOne(() => Artist, (artist) => artist.disc, { eager: true, onDelete: 'CASCADE' })
   artist: Artist;
 

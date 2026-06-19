@@ -601,6 +601,7 @@ export class DiscsService {
       ${genreCondition}
       ${countryCondition}
       GROUP BY d.id, a.name, g.name, g.color, f.id, c.id, c.name, c."isoCode"
+      HAVING COUNT(r.id) > 0 OR d."pinned" = true
       ORDER BY "weightedScore" DESC
       LIMIT 20;
     `;
