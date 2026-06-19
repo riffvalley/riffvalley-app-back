@@ -720,11 +720,12 @@ export class ListsService {
 <!-- /wp:html -->`;
 
         const descriptionText = description ? ` ${description}` : '';
+        const username = a.user?.username ?? '';
 
         return `${imageBlock}
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong>${descriptionText}</p>
+<p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong> ${username}${descriptionText}</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
