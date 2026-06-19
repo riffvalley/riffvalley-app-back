@@ -672,13 +672,11 @@ export class ListsService {
     const dateStr = `${day}/${month}/${year}`;
 
     const artistNames = discs.map((a) => a.disc?.artist?.name ?? '');
-    const artistNamesHtml = artistNames
-      .map((name, i) =>
-        i === artistNames.length - 1 && artistNames.length > 1
-          ? `y <strong>${name}</strong>`
-          : `<strong>${name}</strong>`,
-      )
-      .join(', ');
+    const artistNamesBold = artistNames.map((name) => `<strong>${name}</strong>`);
+    const artistNamesHtml =
+      artistNamesBold.length > 1
+        ? `${artistNamesBold.slice(0, -1).join(', ')} y ${artistNamesBold[artistNamesBold.length - 1]}`
+        : (artistNamesBold[0] ?? '');
 
     const intro = `<!-- wp:spacer {"height":"7px"} -->
 <div style="height:7px" aria-hidden="true" class="wp-block-spacer"></div>
@@ -770,7 +768,7 @@ export class ListsService {
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify"><strong>Comunidad de Telegram:</strong>&nbsp;<a href="https://t.me/RiffValleyES" target="_blank" rel="noreferrer noopener">t.me/RiffValleyES</a><br><strong>Facebook:</strong>&nbsp;<a href="https://www.facebook.com/RiffValleyEs/" target="_blank" rel="noreferrer noopener">facebook.com/RiffValleyEs</a><br><strong>Instagram:</strong>&nbsp;<a href="https://www.instagram.com/riffvalleyes/" target="_blank" rel="noreferrer noopener">instagram.com/riffvalleyes</a><br><strong>Threads</strong>: <a href="https://www.threads.net/@riffvalleyes" target="_blank" rel="noreferrer noopener">https://www.threads.net/@riffvalleyes</a><br><strong>Twitter &#8211; X:&nbsp;</strong><a href="https://twitter.com/Riffvalleyes" target="_blank" rel="noreferrer noopener">twitter.com/Riffvalleyes</a><br><strong>Bluesky</strong>: <a href="https://bsky.app/profile/riffvalleyes.bsky.social" target="_blank" rel="noreferrer noopener">bsky.app/profile/riffvalleyes.bsky.social</a></p>
+<p class="text-justify"><strong>Riff Valley App: </strong><a href="http://app.riffvalley.es/login" target="_blank" rel="noreferrer noopener">app.riffvalley.es/login</a><br><strong>Comunidad de Telegram:</strong>&nbsp;<a href="https://t.me/RiffValleyES" target="_blank" rel="noreferrer noopener">t.me/RiffValleyES</a><br><strong>Facebook:</strong>&nbsp;<a href="https://www.facebook.com/RiffValleyEs/" target="_blank" rel="noreferrer noopener">facebook.com/RiffValleyEs</a><br><strong>Instagram:</strong>&nbsp;<a href="https://www.instagram.com/riffvalleyes/" target="_blank" rel="noreferrer noopener">instagram.com/riffvalleyes</a><br><strong>Threads</strong>: <a href="https://www.threads.net/@riffvalleyes" target="_blank" rel="noreferrer noopener">https://www.threads.net/@riffvalleyes</a><br><strong>Twitter &#8211; X:&nbsp;</strong><a href="https://twitter.com/Riffvalleyes" target="_blank" rel="noreferrer noopener">twitter.com/Riffvalleyes</a><br><strong>Bluesky</strong>: <a href="https://bsky.app/profile/riffvalleyes.bsky.social" target="_blank" rel="noreferrer noopener">bsky.app/profile/riffvalleyes.bsky.social</a></p>
 <!-- /wp:paragraph -->`;
 
     return `${intro}\n\n${discSections}\n\n${footer}`;
