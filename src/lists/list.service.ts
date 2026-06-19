@@ -627,7 +627,7 @@ export class ListsService {
 
       const spotifyTrackIds = await Promise.all(
         discs.map((a) =>
-          this.spotifyApiService.findSingleTrackForAlbum(
+          this.spotifyApiService.findTrackForAlbum(
             a.disc?.artist?.name ?? '',
             a.disc?.name ?? '',
           ),

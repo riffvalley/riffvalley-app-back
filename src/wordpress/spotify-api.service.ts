@@ -49,9 +49,9 @@ export class SpotifyApiService {
     return res.json();
   }
 
-  async findSingleTrackForAlbum(artistName: string, albumName: string): Promise<string | null> {
+  async findTrackForAlbum(artistName: string, albumName: string): Promise<string | null> {
     try {
-      // 1. Buscar el álbum para obtener sus tracks
+      // 1. Buscar el álbum y obtener sus tracks
       const albumSearch = await this.get(
         `/search?q=album:${encodeURIComponent(albumName)}+artist:${encodeURIComponent(artistName)}&type=album&limit=1`,
       );
@@ -59,35 +59,34 @@ export class SpotifyApiService {
       if (!album) return null;
 
       const tracksData = await this.get(`/albums/${album.id}/tracks?limit=50`);
-      const albumTrackNames: string[] = (tracksData?.items ?? []).map((t: any) =>
-        t.name.toLowerCase(),
-      );
-      if (!albumTrackNames.length) return null;
+      const albumTracks: { id: string; name: string }[] = tracksData?.items ?? [];
+      if (!albumTracks.length) return null;
 
       // 2. Buscar singles del artista
       const artistSearch = await this.get(
         `/search?q=artist:${encodeURIComponent(artistName)}&type=artist&limit=1`,
       );
       const artist = artistSearch?.artists?.items?.[0];
-      if (!artist) return null;
 
-      const singlesData = await this.get(
-        `/artists/${artist.id}/albums?include_groups=single&market=ES&limit=50`,
-      );
-      const singles: any[] = singlesData?.items ?? [];
-
-      // 3. Cruzar singles con tracks del álbum
-      for (const single of singles) {
-        const singleTracks = await this.get(`/albums/${single.id}/tracks?limit=5`);
-        const match = (singleTracks?.items ?? []).find((t: any) =>
-          albumTrackNames.includes(t.name.toLowerCase()),
+      if (artist) {
+        const singlesData = await this.get(
+          `/artists/${artist.id}/albums?include_groups=single&market=ES&limit=50`,
         );
-        if (match) return match.id;
+        const singleNames: string[] = (singlesData?.items ?? []).map((s: any) =>
+          s.name.toLowerCase(),
+        );
+
+        // 3. Si algún single coincide con un track del álbum, devolver ese track del álbum
+        const matchedTrack = albumTracks.find((t) =>
+          singleNames.includes(t.name.toLowerCase()),
+        );
+        if (matchedTrack) return matchedTrack.id;
       }
 
-      return null;
+      // 4. Sin single → devolver el 3er track (o el último si hay menos de 3)
+      return (albumTracks[2] ?? albumTracks[albumTracks.length - 1]).id;
     } catch (err) {
-      this.logger.error(`findSingleTrackForAlbum failed: ${err.message}`);
+      this.logger.error(`findTrackForAlbum failed: ${err.message}`);
       return null;
     }
   }
