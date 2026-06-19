@@ -50,4 +50,8 @@ export class CreateDiscDto {
 
   @IsOptional()
   featured?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  pinned?: boolean;
 }
