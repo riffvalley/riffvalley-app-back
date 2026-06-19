@@ -602,7 +602,7 @@ export class DiscsService {
       ${countryCondition}
       GROUP BY d.id, a.name, g.name, g.color, f.id, c.id, c.name, c."isoCode"
       HAVING COUNT(r.id) > 0 OR d."pinned" = true
-      ORDER BY d."pinned" DESC NULLS LAST, "weightedScore" DESC
+      ORDER BY "weightedScore" DESC
       LIMIT 20;
     `;
 
