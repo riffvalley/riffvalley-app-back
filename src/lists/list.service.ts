@@ -693,7 +693,7 @@ export class ListsService {
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify">Si quieres saber qué otros discos han sido lanzados esta semana, no dudes en echarle un ojo a nuestra <a href="https://www.riffvalley.es/novedades/discos-metal-rock-hardcore-2025">guía de lanzamientos de 2026</a>.</p>
+<p class="text-justify">Si quieres saber qué otros discos han sido lanzados esta semana, no dudes en echarle un ojo a nuestra <a href="https://www.riffvalley.es/novedades/discos-metal-rock-hardcore-2025">guía de lanzamientos de 2026</a>. Y, si además quieres votarlos y poder filtrarlos por género, país o tus propios gustos, te recomendamos usar <a href="http://app.riffvalley.es/login" target="_blank" rel="noreferrer noopener">nuestra app</a> de forma gratuita.</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:spacer {"height":"20px"} -->
