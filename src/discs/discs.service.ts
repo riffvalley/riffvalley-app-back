@@ -577,8 +577,8 @@ export class DiscsService {
         c."isoCode" AS "countryIsoCode",
         g.name AS "genreName", 
         g.color AS "genreColor", 
-        COUNT(r.id) AS "voteCount", 
-        COALESCE(AVG(r.rate), 0) AS "averageRate", 
+        COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) AS "voteCount",
+        COALESCE(AVG(r.rate), 0) AS "averageRate",
         COALESCE(AVG(r.cover), 0) AS "averageCover",
         (SELECT r.id FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userRateId",
         (SELECT f.id FROM favorite f WHERE f."discId" = d.id AND f."userId" = $1 LIMIT 1) AS "userFavoriteId",
@@ -587,9 +587,9 @@ export class DiscsService {
         (SELECT r.cover FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userCover",
         (SELECT COUNT(c.id) FROM comment c WHERE c."discId" = d.id) AS "commentCount",
         (
-          (COALESCE(AVG(r.rate), 0) * COUNT(r.id)) 
+          (COALESCE(AVG(r.rate), 0) * COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END))
           + (${globalAvgRate} * ${medianVotes})
-        ) / (COUNT(r.id) + ${medianVotes}) AS "weightedScore"
+        ) / (COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) + ${medianVotes}) AS "weightedScore"
       FROM disc d
       LEFT JOIN artist a ON d."artistId" = a.id
       LEFT JOIN country c ON a."countryId" = c.id
@@ -601,7 +601,7 @@ export class DiscsService {
       ${genreCondition}
       ${countryCondition}
       GROUP BY d.id, a.name, g.name, g.color, f.id, c.id, c.name, c."isoCode"
-      HAVING COUNT(r.id) > 0 OR d."pinned" = true
+      HAVING COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) > 0 OR d."pinned" = true
       ORDER BY "weightedScore" DESC
       LIMIT 20;
     `;
