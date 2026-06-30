@@ -37,6 +37,8 @@ import { LastfmModule } from './lastfm/lastfm.module';
 import { SuggestionsModule } from './suggestions/suggestions.module';
 import { AccessRequestsModule } from './access-requests/access-requests.module';
 import { SocialModule } from './social/social.module';
+import { LocalizacionesModule } from './localizaciones/localizaciones.module';
+import { EventosModule } from './eventos/eventos.module';
 
 @Module({
   imports: [
@@ -93,6 +95,8 @@ import { SocialModule } from './social/social.module';
     SuggestionsModule,
     AccessRequestsModule,
     SocialModule,
+    LocalizacionesModule,
+    EventosModule,
   ],
 })
 export class AppModule {}
