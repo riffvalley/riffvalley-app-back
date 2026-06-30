@@ -7,6 +7,8 @@ import {
   Param,
   Delete,
   ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { LocalizacionesService } from './localizaciones.service';
 import { CreateLocalizacionDto } from './dto/create-localizacion.dto';
@@ -41,6 +43,13 @@ export class LocalizacionesController {
     @Body() dto: UpdateLocalizacionDto,
   ) {
     return this.localizacionesService.update(id, dto);
+  }
+
+  @Post(':id/geocode')
+  @HttpCode(HttpStatus.OK)
+  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  geocode(@Param('id', ParseUUIDPipe) id: string) {
+    return this.localizacionesService.geocode(id);
   }
 
   @Delete(':id')
