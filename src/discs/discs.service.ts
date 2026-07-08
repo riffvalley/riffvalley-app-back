@@ -12,6 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { Disc } from './entities/disc.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
+import { RandomQueryDto } from './dto/random-query.dto';
 import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
@@ -256,6 +257,122 @@ export class DiscsService {
       limit,
       data: processedDiscs,
     };
+  }
+
+  async findRandom(dto: RandomQueryDto, user: User) {
+    const { genre, year, limit = 5 } = dto;
+    const countryFilter = dto.country || dto.countryId;
+    const userId = user.id;
+    const today = new Date();
+
+    // Pick random disc ids first (no joins), then hydrate them below.
+    // Combining ORDER BY RANDOM() with the joined/paginated query below
+    // triggers TypeORM's automatic SELECT DISTINCT, which Postgres rejects
+    // because RANDOM() isn't in the select list.
+    const idsQueryBuilder = this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoin('disc.artist', 'artist')
+      .leftJoin('artist.country', 'country')
+      .select('disc.id', 'id')
+      .where('disc.releaseDate <= :today', { today });
+
+    if (genre) {
+      idsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
+    }
+
+    if (countryFilter) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      if (isUUID) {
+        idsQueryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
+      } else {
+        idsQueryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
+      }
+    }
+
+    if (year) {
+      idsQueryBuilder.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', { year });
+    }
+
+    const randomIds = (
+      await idsQueryBuilder.orderBy('RANDOM()').limit(limit).getRawMany()
+    ).map((row) => row.id);
+
+    if (randomIds.length === 0) return [];
+
+    const queryBuilder = this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoinAndSelect('disc.artist', 'artist')
+      .leftJoinAndSelect('artist.country', 'country')
+      .leftJoinAndSelect('disc.genre', 'genre')
+      .leftJoinAndSelect('disc.rates', 'rate', 'rate.userId = :userId', {
+        userId,
+      })
+      .leftJoinAndSelect(
+        'disc.favorites',
+        'favorite',
+        'favorite.userId = :userId',
+        { userId },
+      )
+      .leftJoinAndSelect(
+        'disc.pendings',
+        'pending',
+        'pending.userId = :userId',
+        { userId },
+      )
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('AVG(rate.rate)', 'averageRate')
+          .from('rate', 'rate')
+          .where('rate.discId = disc.id');
+      }, 'averagerate')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('AVG(rate.cover)', 'averageCover')
+          .from('rate', 'rate')
+          .where('rate.discId = disc.id');
+      }, 'averageCover')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('COUNT(rate.id)', 'rateCount')
+          .from('rate', 'rate')
+          .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
+      }, 'rateCount')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('COUNT(comment.id)', 'commentCount')
+          .from('comment', 'comment')
+          .where('comment.discId = disc.id');
+      }, 'commentCount')
+      .where('disc.id IN (:...randomIds)', { randomIds });
+
+    const { entities: discs, raw } = await queryBuilder.getRawAndEntities();
+
+    // Preserve the random order decided by the ids query above.
+    const order = new Map(randomIds.map((id, index) => [id, index]));
+    const rawById = new Map(discs.map((disc, index) => [disc.id, raw[index]]));
+    discs.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+
+    return discs.map((disc) => {
+      const raw = rawById.get(disc.id);
+      return {
+        ...disc,
+        artist: {
+          ...disc.artist,
+          country: {
+            ...disc.artist.country,
+            name: disc.artist?.country?.name || null,
+          },
+        },
+        userRate: disc.rates.length > 0 ? disc.rates[0] : null,
+        averageRate: parseFloat(raw.averagerate) || null,
+        averageCover: parseFloat(raw.averageCover) || null,
+        commentCount: parseInt(raw.commentCount, 10) || 0,
+        voteCount: parseInt(raw.rateCount, 10) || 0,
+        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null,
+        pendingId:
+          disc.pendings && disc.pendings.length > 0 ? disc.pendings[0].id : null,
+      };
+    });
   }
 
   async findAllByDate(paginationDto: PaginationDto, user: User) {

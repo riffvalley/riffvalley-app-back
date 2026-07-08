@@ -20,6 +20,7 @@ import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';
 import { TopStatsQueryDto } from 'src/common/dtos/top-stats-query.dto';
 import { WeeklyQueryDto } from './dto/weekly-query.dto';
+import { RandomQueryDto } from './dto/random-query.dto';
 
 @Controller('discs')
 export class DiscsController {
@@ -39,6 +40,12 @@ export class DiscsController {
   @Get('weekly')
   findWeekly(@Query() dto: WeeklyQueryDto) {
     return this.discsServices.findWeekly(dto.month, dto.year, dto.week);
+  }
+
+  @Get('random')
+  @Auth()
+  findRandom(@Query() dto: RandomQueryDto, @GetUser() user: User) {
+    return this.discsServices.findRandom(dto, user);
   }
 
   @Get('date')
