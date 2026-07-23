@@ -66,6 +66,7 @@ export class AuthService {
         id: true,
         roles: true,
         image: true,
+        dashboardConfig: true,
       },
     });
 

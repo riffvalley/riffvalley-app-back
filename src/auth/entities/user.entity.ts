@@ -17,6 +17,11 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+export interface DashboardModuleConfig {
+  id: string;
+  enabled: boolean;
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -44,6 +49,9 @@ export class User {
 
   @Column('text', { nullable: true })
   image: string;
+
+  @Column('jsonb', { nullable: true })
+  dashboardConfig: DashboardModuleConfig[] | null;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;

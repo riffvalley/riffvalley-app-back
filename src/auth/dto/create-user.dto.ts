@@ -1,13 +1,24 @@
+import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsEmail,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+
+export class DashboardModuleConfigDto {
+  @IsString()
+  id: string;
+
+  @IsBoolean()
+  enabled: boolean;
+}
 
 export class CreateUserDto {
   @IsString()
@@ -36,6 +47,12 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   image: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DashboardModuleConfigDto)
+  dashboardConfig?: DashboardModuleConfigDto[];
 
   @IsOptional()
   @IsString()
