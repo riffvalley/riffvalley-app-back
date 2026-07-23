@@ -1,5 +1,6 @@
-import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsPositive, IsString, Max } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Max } from 'class-validator';
+import { toBoolean } from './options-query.dto';
 
 export class RandomQueryDto {
   @IsOptional()
@@ -18,6 +19,16 @@ export class RandomQueryDto {
   @IsInt()
   @Type(() => Number)
   year?: number;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  ep?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  debut?: boolean;
 
   @IsOptional()
   @IsPositive()

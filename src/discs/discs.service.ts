@@ -13,6 +13,7 @@ import { Repository, ILike } from 'typeorm';
 import { Disc } from './entities/disc.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
+import { OptionsQueryDto } from './dto/options-query.dto';
 import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
@@ -260,7 +261,7 @@ export class DiscsService {
   }
 
   async findRandom(dto: RandomQueryDto, user: User) {
-    const { genre, year, limit = 5 } = dto;
+    const { genre, year, ep, debut, limit = 5 } = dto;
     const countryFilter = dto.country || dto.countryId;
     const userId = user.id;
     const today = new Date();
@@ -291,6 +292,14 @@ export class DiscsService {
 
     if (year) {
       idsQueryBuilder.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', { year });
+    }
+
+    if (ep !== undefined) {
+      idsQueryBuilder.andWhere('disc.ep = :ep', { ep });
+    }
+
+    if (debut !== undefined) {
+      idsQueryBuilder.andWhere('disc.debut = :debut', { debut });
     }
 
     const randomIds = (
@@ -373,6 +382,55 @@ export class DiscsService {
           disc.pendings && disc.pendings.length > 0 ? disc.pendings[0].id : null,
       };
     });
+  }
+
+  async findOptions(dto: OptionsQueryDto) {
+    const { field, country, genre, year, ep, debut, limit = 3 } = dto;
+    const today = new Date();
+
+    const qb = this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoin('disc.artist', 'artist')
+      .leftJoin('artist.country', 'country')
+      .leftJoin('disc.genre', 'genre')
+      .where('disc.releaseDate <= :today', { today });
+
+    // Filtros de lo YA elegido (nunca se filtra por el campo que se está pidiendo)
+    if (field !== 'country' && country) qb.andWhere('country.id = :country', { country });
+    if (field !== 'genre' && genre) qb.andWhere('genre.id = :genre', { genre });
+    if (field !== 'year' && year) qb.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', { year });
+    if (field !== 'ep' && ep !== undefined) qb.andWhere('disc.ep = :ep', { ep });
+    if (field !== 'debut' && debut !== undefined) qb.andWhere('disc.debut = :debut', { debut });
+
+    if (field === 'country') {
+      qb.select('country.id', 'id').addSelect('country.name', 'name').addSelect('country.isoCode', 'isoCode')
+        .andWhere('country.id IS NOT NULL')
+        .groupBy('country.id').addGroupBy('country.name').addGroupBy('country.isoCode');
+    } else if (field === 'genre') {
+      qb.select('genre.id', 'id').addSelect('genre.name', 'name').addSelect('genre.color', 'color')
+        .andWhere('genre.id IS NOT NULL')
+        .groupBy('genre.id').addGroupBy('genre.name').addGroupBy('genre.color');
+    } else if (field === 'ep') {
+      qb.select('disc.ep', 'ep')
+        .andWhere('disc.ep IS NOT NULL')
+        .groupBy('disc.ep');
+    } else if (field === 'debut') {
+      qb.select('disc.debut', 'debut')
+        .andWhere('disc.debut IS NOT NULL')
+        .groupBy('disc.debut');
+    } else {
+      qb.select('EXTRACT(YEAR FROM disc.releaseDate)', 'year')
+        .groupBy('EXTRACT(YEAR FROM disc.releaseDate)');
+    }
+
+    // ORDER BY RANDOM() sobre valores YA agrupados (no sobre discos), así que
+    // aquí sí es seguro combinarlo con el groupBy sin el conflicto de DISTINCT.
+    const rows = await qb.orderBy('RANDOM()').limit(limit).getRawMany();
+
+    if (field === 'year') return rows.map((r) => Number(r.year));
+    if (field === 'ep') return rows.map((r) => Boolean(r.ep));
+    if (field === 'debut') return rows.map((r) => Boolean(r.debut));
+    return rows;
   }
 
   async findAllByDate(paginationDto: PaginationDto, user: User) {
