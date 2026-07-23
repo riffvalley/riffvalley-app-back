@@ -21,6 +21,7 @@ import { User } from 'src/auth/entities/user.entity';
 import { TopStatsQueryDto } from 'src/common/dtos/top-stats-query.dto';
 import { WeeklyQueryDto } from './dto/weekly-query.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
+import { OptionsQueryDto } from './dto/options-query.dto';
 
 @Controller('discs')
 export class DiscsController {
@@ -46,6 +47,12 @@ export class DiscsController {
   @Auth()
   findRandom(@Query() dto: RandomQueryDto, @GetUser() user: User) {
     return this.discsServices.findRandom(dto, user);
+  }
+
+  @Get('options')
+  @Auth()
+  findOptions(@Query() dto: OptionsQueryDto) {
+    return this.discsServices.findOptions(dto);
   }
 
   @Get('date')
