@@ -14,6 +14,25 @@ import { PaginationDto } from '../common/dtos/pagination.dto';
 import { List } from 'src/lists/entities/list.entity';
 import { User } from 'src/auth/entities/user.entity';
 import { Disc } from 'src/discs/entities/disc.entity';
+import { ListsService } from 'src/lists/list.service';
+import sanitizeHtml = require('sanitize-html');
+
+// El campo "description" ahora puede llevar el HTML del editor WYSIWYG del
+// front (negrita, cursiva, enlaces, párrafos). Se sanea aquí, al entrar,
+// porque ese texto termina publicado tal cual en los posts de WordPress.
+const DESCRIPTION_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: ['p', 'strong', 'em', 'b', 'i', 'a', 'br'],
+  allowedAttributes: {
+    a: ['href', 'target', 'rel'],
+  },
+};
+
+// "Bandas similares" es texto plano (un listado de nombres separados por
+// comas): no admite ninguna etiqueta, se limpia cualquier HTML.
+const PLAIN_TEXT_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: [],
+  allowedAttributes: {},
+};
 
 @Injectable()
 export class AsignationsService {
@@ -32,11 +51,21 @@ export class AsignationsService {
     @InjectRepository(List)
     private readonly listRepository: Repository<List>,
 
+    private readonly listsService: ListsService,
+
     // private readonly discRespository: Repository<Disc>,
   ) {}
 
   async create(createAsignationDto: CreateAsignationDto) {
-    const { userId, discId, listId, ...rest } = createAsignationDto;
+    const {
+      userId,
+      discId,
+      listId,
+      description,
+      similarBands,
+      spotifyTrackId,
+      ...rest
+    } = createAsignationDto;
 
     try {
       const list = await this.listRepository.findOneBy({ id: listId });
@@ -56,6 +85,15 @@ export class AsignationsService {
 
       const asignation = this.asignationRepository.create({
         ...rest,
+        description:
+          description !== undefined
+            ? sanitizeHtml(description, DESCRIPTION_SANITIZE_OPTIONS)
+            : undefined,
+        similarBands:
+          similarBands !== undefined
+            ? sanitizeHtml(similarBands, PLAIN_TEXT_SANITIZE_OPTIONS)
+            : undefined,
+        spotifyTrackId: spotifyTrackId || null,
         user: user || null,
         disc: disc || null,
         list,
@@ -103,12 +141,32 @@ export class AsignationsService {
 
   async update(id: string, updateAsignationDto: UpdateAsignationDto) {
     // Sacamos genreId aparte
-    const { userId, ...restDto } = updateAsignationDto;
+    const { userId, description, similarBands, spotifyTrackId, ...restDto } =
+      updateAsignationDto;
 
     // Cargamos un parcial de disc con preload
     const asignation = await this.asignationRepository.preload({
       id,
       ...restDto,
+      ...(description !== undefined
+        ? {
+            description: sanitizeHtml(
+              description,
+              DESCRIPTION_SANITIZE_OPTIONS,
+            ),
+          }
+        : {}),
+      ...(similarBands !== undefined
+        ? {
+            similarBands: sanitizeHtml(
+              similarBands,
+              PLAIN_TEXT_SANITIZE_OPTIONS,
+            ),
+          }
+        : {}),
+      ...(spotifyTrackId !== undefined
+        ? { spotifyTrackId: spotifyTrackId || null }
+        : {}),
     });
 
     if (!asignation)
@@ -128,6 +186,26 @@ export class AsignationsService {
       }
 
       await this.asignationRepository.save(asignation);
+
+      // Si se ha tocado el texto, las bandas similares o la canción, y
+      // esta asignación pertenece a una lista mensual que ya tiene post en
+      // WordPress, empujamos el cambio al momento en vez de esperar a que
+      // alguien pulse "generar/actualizar" para toda la lista.
+      if (
+        description !== undefined ||
+        similarBands !== undefined ||
+        spotifyTrackId !== undefined
+      ) {
+        const withList = await this.asignationRepository.findOne({
+          where: { id },
+          relations: ['list'],
+        });
+
+        if (withList?.list) {
+          await this.listsService.syncDiscToWordPress(withList.list.id, id);
+        }
+      }
+
       return asignation;
     } catch (error) {
       this.handleDbExceptions(error);

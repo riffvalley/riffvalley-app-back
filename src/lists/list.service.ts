@@ -631,12 +631,7 @@ export class ListsService {
       const seoDescription = `Nuevos discos de ${monthName} de ${year}: os recopilamos los lanzamientos de la semana del ${dateStr} que no te puedes perder.`;
 
       const spotifyTrackIds = await Promise.all(
-        discs.map((a) =>
-          this.spotifyApiService.findTrackForAlbum(
-            a.disc?.artist?.name ?? '',
-            a.disc?.name ?? '',
-          ),
-        ),
+        discs.map((a) => this.resolveSpotifyTrackId(a)),
       );
 
       const content = this.buildPostContent(discs, position, list, title, spotifyTrackIds);
@@ -740,18 +735,26 @@ export class ListsService {
         const descriptionText = description ? ` ${description}` : '';
         const username = a.user?.username ?? '';
 
+        const richParagraphs = this.extractParagraphs(a.description);
+        const firstParagraph = richParagraphs.length
+          ? richParagraphs[0]
+          : `${username}${descriptionText}`;
+        const extraParagraphBlocks = this.buildExtraParagraphBlocks(
+          richParagraphs.slice(1),
+        );
+
         return `${imageBlock}
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong> ${username}${descriptionText}</p>
-<!-- /wp:paragraph -->
+<p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong> ${firstParagraph}</p>
+<!-- /wp:paragraph -->${extraParagraphBlocks}
 
 <!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify"><strong>Género: </strong>${genre}</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify"><strong>Bandas similares:</strong> xx, xx, xx</p>
+<p class="text-justify"><strong>Bandas similares:</strong> ${a.similarBands || 'xx, xx, xx'}</p>
 <!-- /wp:paragraph -->${spotifyEmbed}
 
 <!-- wp:spacer {"height":"20px"} -->
@@ -761,6 +764,73 @@ export class ListsService {
       .join('\n\n');
 
     return `${intro}\n\n${discSections}\n\n${this.buildSocialFooter()}`;
+  }
+
+  // Empuja el disco de una sola asignación al post real de WordPress al
+  // momento (usado cuando se guarda el texto desde el modal de edición),
+  // sin esperar a que alguien pulse "generar/actualizar" para toda la
+  // lista. Reutiliza exactamente la misma lógica de "pisar" el bloque del
+  // disco que ya usa el flujo de actualización por lotes.
+  async syncDiscToWordPress(listId: string, asignationId: string) {
+    const list = await this.findOne(listId);
+
+    if (list.type !== ListType.MONTH || !list.wpPostId) {
+      // Todavía no hay post que actualizar: se recogerá con el próximo
+      // "generar/actualizar" manual.
+      return { synced: false };
+    }
+
+    const asignation = list.asignations.find(
+      (a) => a.id === asignationId && a.disc,
+    );
+    if (!asignation) {
+      return { synced: false };
+    }
+
+    const existingPost = await this.wordpressService.getPost(list.wpPostId);
+    if (!existingPost || existingPost.status === 'trash') {
+      // El post enlazado ya no existe o está en la papelera: no forzamos
+      // nada aquí, que se resuelva con el flujo normal de
+      // "generar/actualizar" (que ya sabe recrear el post si hace falta).
+      return { synced: false };
+    }
+
+    const [spotifyTrackId, authors] = await Promise.all([
+      this.resolveSpotifyTrackId(asignation),
+      this.resolveAuthors([asignation]),
+    ]);
+
+    const block = this.buildDiscSections(
+      [asignation],
+      [spotifyTrackId],
+      authors,
+    );
+
+    const publishedDiscs = list.wpPublishedDiscs ?? [];
+    const alreadyPublished = publishedDiscs.some(
+      (d) => d.discId === asignation.disc.id,
+    );
+
+    const replaced = alreadyPublished
+      ? this.replaceDiscSection(existingPost.content, asignation.disc.id, block)
+      : null;
+    const updatedContent =
+      replaced ?? this.insertBeforeFooter(existingPost.content, block);
+
+    await this.wordpressService.updatePostContent(
+      list.wpPostId,
+      updatedContent,
+    );
+
+    if (!alreadyPublished) {
+      list.wpPublishedDiscs = [
+        ...publishedDiscs,
+        this.toPublishedDiscRecord(asignation),
+      ];
+      await this.listRepository.save(list);
+    }
+
+    return { synced: true };
   }
 
   async generateBestDiscsWordPressPost(listId: string) {
@@ -879,14 +949,7 @@ export class ListsService {
       [
         this.wordpressService.getOrCreateTag(String(year)),
         this.wordpressService.getOrCreateTag(monthName),
-        Promise.all(
-          allDiscs.map((a) =>
-            this.spotifyApiService.findTrackForAlbum(
-              a.disc?.artist?.name ?? '',
-              a.disc?.name ?? '',
-            ),
-          ),
-        ),
+        Promise.all(allDiscs.map((a) => this.resolveSpotifyTrackId(a))),
         this.resolveAuthors(allDiscs),
       ],
     );
@@ -948,38 +1011,59 @@ export class ListsService {
     const currentIds = new Set(allDiscs.map((a) => a.disc.id));
 
     const newDiscs = allDiscs.filter((a) => !publishedIds.has(a.disc.id));
+    // Discos que ya estaban en el post: se regeneran y se pisan siempre,
+    // sin comparar nada, para que cualquier edición del texto se refleje.
+    const existingDiscs = allDiscs.filter((a) => publishedIds.has(a.disc.id));
     const removedDiscs = publishedDiscs.filter(
       (d) => !currentIds.has(d.discId),
     );
 
-    if (newDiscs.length) {
+    let updatedContent = currentContent;
+    let notFoundForUpdate = 0;
+
+    const discsNeedingRender = [...newDiscs, ...existingDiscs];
+    if (discsNeedingRender.length) {
       const [spotifyTrackIds, authors] = await Promise.all([
         Promise.all(
-          newDiscs.map((a) =>
-            this.spotifyApiService.findTrackForAlbum(
-              a.disc?.artist?.name ?? '',
-              a.disc?.name ?? '',
-            ),
-          ),
+          discsNeedingRender.map((a) => this.resolveSpotifyTrackId(a)),
         ),
-        this.resolveAuthors(newDiscs),
+        this.resolveAuthors(discsNeedingRender),
       ]);
 
-      const newSections = this.buildDiscSections(
-        newDiscs,
-        spotifyTrackIds,
-        authors,
-      );
+      if (newDiscs.length) {
+        const newSections = this.buildDiscSections(
+          newDiscs,
+          spotifyTrackIds.slice(0, newDiscs.length),
+          authors.slice(0, newDiscs.length),
+        );
+        updatedContent = this.insertBeforeFooter(updatedContent, newSections);
+      }
 
-      const updatedContent = this.insertBeforeFooter(
-        currentContent,
-        newSections,
-      );
+      existingDiscs.forEach((a, i) => {
+        const offset = newDiscs.length + i;
+        const block = this.buildDiscSections(
+          [a],
+          [spotifyTrackIds[offset]],
+          [authors[offset]],
+        );
+        const replaced = this.replaceDiscSection(
+          updatedContent,
+          a.disc.id,
+          block,
+        );
+        if (replaced === null) {
+          notFoundForUpdate++;
+        } else {
+          updatedContent = replaced;
+        }
+      });
 
-      await this.wordpressService.updatePostContent(
-        list.wpPostId,
-        updatedContent,
-      );
+      if (updatedContent !== currentContent) {
+        await this.wordpressService.updatePostContent(
+          list.wpPostId,
+          updatedContent,
+        );
+      }
     }
 
     if (newDiscs.length || removedDiscs.length) {
@@ -996,6 +1080,7 @@ export class ListsService {
       link: string;
       title: string;
       added: number;
+      updated: number;
       message?: string;
       removed?: number;
       warning?: string;
@@ -1004,9 +1089,10 @@ export class ListsService {
       link: list.wpPostUrl,
       title,
       added: newDiscs.length,
+      updated: existingDiscs.length - notFoundForUpdate,
     };
 
-    if (!newDiscs.length && !removedDiscs.length) {
+    if (!newDiscs.length && !existingDiscs.length && !removedDiscs.length) {
       result.message = 'No new discs to add';
     }
 
@@ -1018,31 +1104,99 @@ export class ListsService {
       result.warning = `${removedDiscs.length} disco(s) eliminado(s) de la lista seguían publicados en WordPress y no se han quitado del post automáticamente: ${names}. Revisa y edita el post manualmente si corresponde.`;
     }
 
+    if (notFoundForUpdate > 0) {
+      const extra = `${notFoundForUpdate} disco(s) editado(s) no se encontraron en el post (¿se borró su marcador manualmente en el editor de WordPress?) y no se pudieron actualizar automáticamente.`;
+      result.warning = result.warning ? `${result.warning} ${extra}` : extra;
+    }
+
     return result;
   }
 
   private insertBeforeFooter(content: string, addition: string): string {
-    // Localizamos el bloque wp:separator que lleve nuestra clase marcadora
-    // (ver FOOTER_MARKER_CLASS), no el primer wp:separator a secas: así no
-    // confundimos nuestro footer con un separador que alguien haya metido a
-    // mano en el post, y seguimos encontrándolo aunque Gutenberg reordene los
-    // atributos del comentario JSON al guardar desde el editor de bloques.
-    const separatorBlockRegex = /<!--\s*wp:separator[\s\S]*?-->/g;
-    let markerIndex = -1;
-    let match: RegExpExecArray | null;
-
-    while ((match = separatorBlockRegex.exec(content)) !== null) {
-      if (match[0].includes(ListsService.FOOTER_MARKER_CLASS)) {
-        markerIndex = match.index;
-        break;
-      }
-    }
+    const markerIndex = this.findFooterMarkerIndex(content);
 
     if (markerIndex === -1) {
       return `${content}\n\n${addition}`;
     }
 
     return `${content.slice(0, markerIndex)}${addition}\n\n${content.slice(markerIndex)}`;
+  }
+
+  private findFooterMarkerIndex(content: string): number {
+    // Localizamos el bloque wp:separator que lleve nuestra clase marcadora
+    // (ver FOOTER_MARKER_CLASS), no el primer wp:separator a secas: así no
+    // confundimos nuestro footer con un separador que alguien haya metido a
+    // mano en el post, y seguimos encontrándolo aunque Gutenberg reordene los
+    // atributos del comentario JSON al guardar desde el editor de bloques.
+    const separatorBlockRegex = /<!--\s*wp:separator[\s\S]*?-->/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = separatorBlockRegex.exec(content)) !== null) {
+      if (match[0].includes(ListsService.FOOTER_MARKER_CLASS)) {
+        return match.index;
+      }
+    }
+
+    return -1;
+  }
+
+  // Cada disco viene envuelto en un wp:group con la clase rv-disc-<discId>
+  // (ver buildDiscSections), así que el bloque entero tiene un inicio y un
+  // final inequívocos: no hace falta adivinar dónde termina mirando el
+  // siguiente disco.
+  private findDiscSectionBoundaries(
+    content: string,
+  ): { discId: string; start: number; end: number }[] {
+    const groupOpenRegex = /<!--\s*wp:group[\s\S]*?-->/g;
+    const boundaries: { discId: string; start: number; end: number }[] = [];
+    let openMatch: RegExpExecArray | null;
+
+    while ((openMatch = groupOpenRegex.exec(content)) !== null) {
+      const discIdMatch = openMatch[0].match(/rv-disc-([0-9a-f-]+)/i);
+      if (!discIdMatch) continue;
+
+      const closeRegex = /<!--\s*\/wp:group\s*-->/g;
+      closeRegex.lastIndex = openMatch.index + openMatch[0].length;
+      const closeMatch = closeRegex.exec(content);
+      if (!closeMatch) continue;
+
+      boundaries.push({
+        discId: discIdMatch[1],
+        start: openMatch.index,
+        end: closeMatch.index + closeMatch[0].length,
+      });
+    }
+
+    return boundaries;
+  }
+
+  // Sustituye el bloque wp:group completo de un disco por una versión
+  // recién generada. Se usa para que, si editas el texto de un disco ya
+  // publicado, el post real de WordPress se pise con lo que haya ahora
+  // mismo en la app.
+  private replaceDiscSection(
+    content: string,
+    discId: string,
+    newBlock: string,
+  ): string | null {
+    const boundary = this.findDiscSectionBoundaries(content).find(
+      (b) => b.discId === discId,
+    );
+    if (!boundary) return null;
+
+    return `${content.slice(0, boundary.start)}${newBlock}${content.slice(boundary.end)}`;
+  }
+
+  // Si el disco tiene una canción elegida a mano (spotifyTrackId), se usa
+  // tal cual sin gastar llamadas a la API de Spotify; si no, cae en la
+  // selección automática de siempre.
+  private resolveSpotifyTrackId(a: any): Promise<string | null> {
+    if (a.spotifyTrackId) return Promise.resolve(a.spotifyTrackId);
+
+    return this.spotifyApiService.findTrackForAlbum(
+      a.disc?.artist?.name ?? '',
+      a.disc?.name ?? '',
+    );
   }
 
   private async resolveAuthors(
@@ -1062,6 +1216,36 @@ export class ListsService {
         return author;
       }),
     );
+  }
+
+  // El HTML del editor WYSIWYG del front llega ya saneado (ver
+  // AsignationsService) con un <p> por párrafo. Lo partimos para poder
+  // fundir el primero con la línea en negrita del título y meter el resto
+  // como bloques wp:paragraph independientes y consecutivos.
+  private extractParagraphs(html?: string | null): string[] {
+    if (!html) return [];
+    const matches = html.match(/<p[^>]*>[\s\S]*?<\/p>/gi);
+    const paragraphs = matches?.length
+      ? matches.map((p) =>
+          p
+            .replace(/^<p[^>]*>/i, '')
+            .replace(/<\/p>$/i, '')
+            .trim(),
+        )
+      : [html.trim()];
+    return paragraphs.filter((p) => p.length > 0);
+  }
+
+  private buildExtraParagraphBlocks(paragraphs: string[]): string {
+    if (!paragraphs.length) return '';
+    const blocks = paragraphs
+      .map(
+        (p) => `<!-- wp:paragraph {"className":"text-justify"} -->
+<p class="text-justify">${p}</p>
+<!-- /wp:paragraph -->`,
+      )
+      .join('\n\n');
+    return `\n\n${blocks}`;
   }
 
   private buildBestDiscsPostContent(
@@ -1143,18 +1327,31 @@ export class ListsService {
           ? `<a href="${author.link}" target="_blank" rel="noreferrer noopener">${author.name}</a>`
           : (a.user?.username ?? '');
 
-        return `${imageBlock}
+        const richParagraphs = this.extractParagraphs(a.description);
+        const firstParagraph = richParagraphs.length
+          ? richParagraphs[0]
+          : description;
+        const extraParagraphBlocks = this.buildExtraParagraphBlocks(
+          richParagraphs.slice(1),
+        );
+
+        // Envolvemos todo el disco en un wp:group con la clase
+        // rv-disc-<discId>: así el bloque tiene un inicio y un final
+        // inequívocos que nos permiten localizarlo y sustituirlo entero
+        // más adelante si el texto se edita, sin tocar el resto del post.
+        return `<!-- wp:group {"className":"rv-disc-${a.disc.id}"} -->
+<div class="wp-block-group rv-disc-${a.disc.id}">${imageBlock}
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong> ${description}</p>
-<!-- /wp:paragraph -->
+<p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong> ${firstParagraph}</p>
+<!-- /wp:paragraph -->${extraParagraphBlocks}
 
 <!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify"><strong>Género: </strong>${genre}</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
-<p class="text-justify"><strong>Bandas similares:</strong> xx, xx, xx</p>
+<p class="text-justify"><strong>Bandas similares:</strong> ${a.similarBands || 'xx, xx, xx'}</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph {"className":"text-justify"} -->
@@ -1163,7 +1360,9 @@ export class ListsService {
 
 <!-- wp:spacer {"height":"20px"} -->
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
-<!-- /wp:spacer -->`;
+<!-- /wp:spacer -->
+</div>
+<!-- /wp:group -->`;
       })
       .join('\n\n');
   }
