@@ -85,6 +85,11 @@ export class DiscsController {
     return this.discsServices.findOne(id);
   }
 
+  @Get(':id/spotify-tracks')
+  getSpotifyTracks(@Param('id', ParseUUIDPipe) id: string) {
+    return this.discsServices.getSpotifyTracks(id);
+  }
+
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,

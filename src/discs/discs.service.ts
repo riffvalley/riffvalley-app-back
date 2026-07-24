@@ -18,6 +18,7 @@ import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
 import { Pending } from 'src/pendings/entities/pending.entity';
+import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
 @Injectable()
 export class DiscsService {
   private readonly logger = new Logger('DiscsService');
@@ -27,7 +28,19 @@ export class DiscsService {
     private readonly discRepository: Repository<Disc>,
     @InjectRepository(Artist)
     private readonly artistRepository: Repository<Artist>,
+    private readonly spotifyApiService: SpotifyApiService,
   ) { }
+
+  // Tracklist de Spotify de un disco, para que el front deje elegir la
+  // canción a embeber en los posts de WordPress en vez de que se elija
+  // automáticamente.
+  async getSpotifyTracks(id: string) {
+    const disc = await this.findOne(id);
+    return this.spotifyApiService.getAlbumTracks(
+      disc.artist?.name ?? '',
+      disc.name,
+    );
+  }
 
   async create(createDiscDto: CreateDiscDto) {
     try {

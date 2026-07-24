@@ -49,17 +49,35 @@ export class SpotifyApiService {
     return res.json();
   }
 
-  async findTrackForAlbum(artistName: string, albumName: string): Promise<string | null> {
+  // Álbum + tracklist de Spotify para un disco, reutilizado tanto por la
+  // selección automática (findTrackForAlbum) como por el endpoint que
+  // alimenta el <select> del front para elegir la canción a mano.
+  async getAlbumTracks(
+    artistName: string,
+    albumName: string,
+  ): Promise<{ id: string; name: string; trackNumber: number }[]> {
+    const albumSearch = await this.get(
+      `/search?q=album:${encodeURIComponent(albumName)}+artist:${encodeURIComponent(artistName)}&type=album&limit=1`,
+    );
+    const album = albumSearch?.albums?.items?.[0];
+    if (!album) return [];
+
+    const tracksData = await this.get(`/albums/${album.id}/tracks?limit=50`);
+    const items: any[] = tracksData?.items ?? [];
+    return items.map((t) => ({
+      id: t.id,
+      name: t.name,
+      trackNumber: t.track_number,
+    }));
+  }
+
+  async findTrackForAlbum(
+    artistName: string,
+    albumName: string,
+  ): Promise<string | null> {
     try {
       // 1. Buscar el álbum y obtener sus tracks
-      const albumSearch = await this.get(
-        `/search?q=album:${encodeURIComponent(albumName)}+artist:${encodeURIComponent(artistName)}&type=album&limit=1`,
-      );
-      const album = albumSearch?.albums?.items?.[0];
-      if (!album) return null;
-
-      const tracksData = await this.get(`/albums/${album.id}/tracks?limit=50`);
-      const albumTracks: { id: string; name: string }[] = tracksData?.items ?? [];
+      const albumTracks = await this.getAlbumTracks(artistName, albumName);
       if (!albumTracks.length) return null;
 
       // 2. Buscar singles del artista

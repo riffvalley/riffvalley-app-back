@@ -33,4 +33,13 @@ export class Asignation {
 
   @Column('text', { nullable: true })
   description: string;
+
+  @Column('text', { nullable: true })
+  similarBands: string;
+
+  // Id exacto de la pista de Spotify a embeber en el post, elegida a mano
+  // (ver GET /discs/:id/spotify-tracks). Si no hay ninguno, se usa la
+  // selección automática de siempre (single del artista / 3er track).
+  @Column('varchar', { length: 32, nullable: true })
+  spotifyTrackId: string;
 }
