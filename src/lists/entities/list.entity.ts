@@ -28,6 +28,12 @@ export enum ListStatus {
   PUBLISHED = 'published',
 }
 
+export interface PublishedDiscRecord {
+  discId: string;
+  artist: string;
+  name: string;
+}
+
 @Entity()
 export class List {
   @PrimaryGeneratedColumn('uuid')
@@ -67,6 +73,15 @@ export class List {
 
   @Column({ type: 'timestamp', nullable: true })
   closeDate?: Date;
+
+  @Column({ type: 'int', nullable: true })
+  wpPostId?: number;
+
+  @Column({ type: 'text', nullable: true })
+  wpPostUrl?: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  wpPublishedDiscs?: PublishedDiscRecord[];
 
   @OneToMany(() => Asignation, (asignation) => asignation.list, {
     cascade: true,

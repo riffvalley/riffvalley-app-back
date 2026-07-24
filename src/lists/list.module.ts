@@ -10,7 +10,11 @@ import { WordpressModule } from 'src/wordpress/wordpress.module';
 @Module({
   controllers: [ListsController],
   providers: [ListsService],
-  imports: [TypeOrmModule.forFeature([List, Content]), AuthModule, WordpressModule],
+  imports: [
+    TypeOrmModule.forFeature([List, Content]),
+    AuthModule,
+    WordpressModule,
+  ],
   exports: [ListsService],
 })
 export class ListsModule {}

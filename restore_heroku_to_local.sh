@@ -101,9 +101,13 @@ recreate_db() {
   echo ">> Terminando conexiones a '${DBNAME}'…"
   run_psql "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DBNAME}';" || true
   echo ">> DROP DATABASE ${DBNAME}…"
-  run_psql "DROP DATABASE IF EXISTS ${DBNAME};"
+  # DBNAME va entre comillas dobles como identificador SQL: sin ellas, Postgres
+  # pliega el nombre a minúsculas y esto acaba operando sobre una BD distinta
+  # (p.ej. "SpamMusicDB" -> spammusicdb) dejando la BD real intacta pero
+  # luego corrompida a medias por el restore --clean posterior.
+  run_psql "DROP DATABASE IF EXISTS \"${DBNAME}\";"
   echo ">> CREATE DATABASE ${DBNAME}…"
-  run_psql "CREATE DATABASE ${DBNAME};"
+  run_psql "CREATE DATABASE \"${DBNAME}\";"
 }
 
 restore_from_dump() {

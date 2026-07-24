@@ -114,6 +114,11 @@ export class ListsController {
     return this.listsServices.generateWordPressPosts(id);
   }
 
+  @Post(':id/wp-best-post')
+  generateWpBestPost(@Param('id', ParseUUIDPipe) id: string) {
+    return this.listsServices.generateBestDiscsWordPressPost(id);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.listsServices.findOne(id);

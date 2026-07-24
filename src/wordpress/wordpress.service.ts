@@ -52,7 +52,9 @@ export class WordpressService {
 
     if (!response.ok) {
       const error = await response.text();
-      this.logger.error(`Failed to create WP post: ${response.status} - ${error}`);
+      this.logger.error(
+        `Failed to create WP post: ${response.status} - ${error}`,
+      );
       throw new Error(`WordPress API error: ${response.status}`);
     }
 
@@ -61,13 +63,79 @@ export class WordpressService {
     return post;
   }
 
-  async findPostBySlug(slug: string): Promise<WpPost | null> {
-    const res = await fetch(`${this.apiUrl}/posts?slug=${encodeURIComponent(slug)}&status=any`, {
+  // Devuelve null si el post fue borrado permanentemente (404), para que el
+  // caller pueda auto-recuperarse en vez de reventar. Ojo: un post movido a
+  // la papelera NO da 404 (WordPress lo sigue sirviendo con status "trash"),
+  // por eso se expone el status y no solo el contenido.
+  async getPost(
+    postId: number,
+  ): Promise<{ content: string; status: string } | null> {
+    const res = await fetch(`${this.apiUrl}/posts/${postId}?context=edit`, {
       headers: { Authorization: `Basic ${this.credentials}` },
     });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const error = await res.text();
+      this.logger.error(
+        `Failed to fetch WP post ${postId}: ${res.status} - ${error}`,
+      );
+      throw new Error(`WordPress API error: ${res.status}`);
+    }
+    const post: any = await res.json();
+    return { content: post.content.raw as string, status: post.status };
+  }
+
+  async updatePostContent(postId: number, content: string): Promise<WpPost> {
+    const response = await fetch(`${this.apiUrl}/posts/${postId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${this.credentials}`,
+      },
+      body: JSON.stringify({ content }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      this.logger.error(
+        `Failed to update WP post ${postId}: ${response.status} - ${error}`,
+      );
+      throw new Error(`WordPress API error: ${response.status}`);
+    }
+
+    const post: WpPost = await response.json();
+    this.logger.log(`Updated WP post #${post.id}`);
+    return post;
+  }
+
+  async findPostBySlug(slug: string): Promise<WpPost | null> {
+    const res = await fetch(
+      `${this.apiUrl}/posts?slug=${encodeURIComponent(slug)}&status=any`,
+      {
+        headers: { Authorization: `Basic ${this.credentials}` },
+      },
+    );
     const posts: any[] = await res.json();
     if (!posts.length) return null;
-    return { id: posts[0].id, link: posts[0].link, title: posts[0].title, status: posts[0].status };
+    return {
+      id: posts[0].id,
+      link: posts[0].link,
+      title: posts[0].title,
+      status: posts[0].status,
+    };
+  }
+
+  async findAuthorBySlug(
+    slug: string,
+  ): Promise<{ id: number; name: string; link: string } | null> {
+    const res = await fetch(
+      `${this.apiUrl}/users?slug=${encodeURIComponent(slug)}`,
+      { headers: { Authorization: `Basic ${this.credentials}` } },
+    );
+    if (!res.ok) return null;
+    const users: any[] = await res.json();
+    if (!users.length) return null;
+    return { id: users[0].id, name: users[0].name, link: users[0].link };
   }
 
   async getOrCreateTag(name: string): Promise<number> {
@@ -76,7 +144,9 @@ export class WordpressService {
       { headers: { Authorization: `Basic ${this.credentials}` } },
     );
     const found: any[] = await searchRes.json();
-    const exact = found.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    const exact = found.find(
+      (t) => t.name.toLowerCase() === name.toLowerCase(),
+    );
     if (exact) return exact.id;
 
     const createRes = await fetch(`${this.apiUrl}/tags`, {

@@ -15,7 +15,12 @@ import {
   Not,
   Repository,
 } from 'typeorm';
-import { List, ListType, ListStatus } from './entities/list.entity';
+import {
+  List,
+  ListType,
+  ListStatus,
+  PublishedDiscRecord,
+} from './entities/list.entity';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
@@ -755,8 +760,419 @@ export class ListsService {
       })
       .join('\n\n');
 
-    const footer = `<!-- wp:separator {"className":"is-style-wide","opacity":"css"} -->
-<hr class="wp-block-separator has-css-opacity is-style-wide"/>
+    return `${intro}\n\n${discSections}\n\n${this.buildSocialFooter()}`;
+  }
+
+  async generateBestDiscsWordPressPost(listId: string) {
+    const list = await this.findOne(listId);
+
+    if (list.type !== ListType.MONTH) {
+      throw new BadRequestException(
+        'Only monthly lists can generate a "Mejores discos" post',
+      );
+    }
+
+    const allDiscs = list.asignations
+      .filter((a) => a.disc)
+      .sort(
+        (a, b) =>
+          (a.position ?? Number.MAX_SAFE_INTEGER) -
+          (b.position ?? Number.MAX_SAFE_INTEGER),
+      );
+
+    if (!allDiscs.length) {
+      throw new BadRequestException('List has no assigned discs');
+    }
+
+    const listDate = list.listDate ? new Date(list.listDate) : new Date();
+    const year = listDate.getFullYear();
+
+    const monthNames = [
+      'enero',
+      'febrero',
+      'marzo',
+      'abril',
+      'mayo',
+      'junio',
+      'julio',
+      'agosto',
+      'septiembre',
+      'octubre',
+      'noviembre',
+      'diciembre',
+    ];
+    const monthName = monthNames[listDate.getMonth()];
+    const title = `Mejores discos de ${monthName} ${year}`;
+
+    if (list.wpPostId) {
+      const existingPost = await this.wordpressService.getPost(list.wpPostId);
+
+      // El post enlazado ya no existe (404) o lo movieron a la papelera
+      // (WordPress lo sigue sirviendo con status "trash", no da 404): la
+      // referencia guardada está muerta, así que la soltamos y generamos
+      // un post nuevo desde cero en vez de reventar o escribir a ciegas
+      // sobre un post que nadie va a ver.
+      if (!existingPost || existingPost.status === 'trash') {
+        this.logger.warn(
+          `Linked WP post #${list.wpPostId} for list ${listId} is missing or trashed, creating a new one`,
+        );
+        list.wpPostId = null;
+        list.wpPostUrl = null;
+        list.wpPublishedDiscs = null;
+
+        const created = await this.createBestDiscsPost(
+          list,
+          allDiscs,
+          title,
+          monthName,
+          year,
+        );
+        return { ...created, recreated: true };
+      }
+
+      return this.appendNewDiscsToBestPost(
+        list,
+        allDiscs,
+        title,
+        existingPost.content,
+      );
+    }
+
+    return this.createBestDiscsPost(list, allDiscs, title, monthName, year);
+  }
+
+  private async createBestDiscsPost(
+    list: List,
+    allDiscs: any[],
+    title: string,
+    monthName: string,
+    year: number,
+  ) {
+    const seoTitle = `Mejores discos de ${monthName} de ${year} • Riff Valley`;
+    const seoDescription = `Os dejamos un listado con una selección de los mejores discos del mes de ${monthName} de ${year}. ¡No te los pierdas!`;
+    const slug = `mejores-discos-de-${monthName}-${year}`;
+
+    const CATEGORIES = [72, 597]; // Artículos, Mejores discos del mes
+    const FIXED_TAGS = [219, 235, 2030, 2031]; // Discos, Mejores, Bandas mainstream, Bandas underground
+
+    const meta = {
+      rank_math_title: seoTitle,
+      rank_math_description: seoDescription,
+      rank_math_focus_keyword: `mejores discos,${monthName},${year}`,
+    };
+
+    const existing = await this.wordpressService.findPostBySlug(slug);
+    if (existing) {
+      this.logger.log(
+        `WP post already exists for slug ${slug} (#${existing.id}), linking list to it`,
+      );
+      await this.linkListToWpPost(list, allDiscs, existing.id, existing.link);
+      return {
+        wpPostId: existing.id,
+        link: existing.link,
+        title,
+        skipped: true,
+      };
+    }
+
+    const [yearTagId, monthTagId, spotifyTrackIds, authors] = await Promise.all(
+      [
+        this.wordpressService.getOrCreateTag(String(year)),
+        this.wordpressService.getOrCreateTag(monthName),
+        Promise.all(
+          allDiscs.map((a) =>
+            this.spotifyApiService.findTrackForAlbum(
+              a.disc?.artist?.name ?? '',
+              a.disc?.name ?? '',
+            ),
+          ),
+        ),
+        this.resolveAuthors(allDiscs),
+      ],
+    );
+    const tags = [...FIXED_TAGS, yearTagId, monthTagId];
+
+    const content = this.buildBestDiscsPostContent(
+      allDiscs,
+      monthName,
+      year,
+      spotifyTrackIds,
+      authors,
+    );
+
+    const post = await this.wordpressService.createPost(
+      title,
+      content,
+      'draft',
+      meta,
+      CATEGORIES,
+      tags,
+      slug,
+    );
+
+    await this.linkListToWpPost(list, allDiscs, post.id, post.link);
+
+    return { wpPostId: post.id, link: post.link, title };
+  }
+
+  private toPublishedDiscRecord(a: any): PublishedDiscRecord {
+    return {
+      discId: a.disc.id,
+      artist: a.disc?.artist?.name ?? '',
+      name: a.disc?.name ?? '',
+    };
+  }
+
+  private async linkListToWpPost(
+    list: List,
+    publishedDiscs: any[],
+    wpPostId: number,
+    wpPostUrl: string,
+  ) {
+    list.wpPostId = wpPostId;
+    list.wpPostUrl = wpPostUrl;
+    list.wpPublishedDiscs = publishedDiscs.map((a) =>
+      this.toPublishedDiscRecord(a),
+    );
+    await this.listRepository.save(list);
+  }
+
+  private async appendNewDiscsToBestPost(
+    list: List,
+    allDiscs: any[],
+    title: string,
+    currentContent: string,
+  ) {
+    const publishedDiscs = list.wpPublishedDiscs ?? [];
+    const publishedIds = new Set(publishedDiscs.map((d) => d.discId));
+    const currentIds = new Set(allDiscs.map((a) => a.disc.id));
+
+    const newDiscs = allDiscs.filter((a) => !publishedIds.has(a.disc.id));
+    const removedDiscs = publishedDiscs.filter(
+      (d) => !currentIds.has(d.discId),
+    );
+
+    if (newDiscs.length) {
+      const [spotifyTrackIds, authors] = await Promise.all([
+        Promise.all(
+          newDiscs.map((a) =>
+            this.spotifyApiService.findTrackForAlbum(
+              a.disc?.artist?.name ?? '',
+              a.disc?.name ?? '',
+            ),
+          ),
+        ),
+        this.resolveAuthors(newDiscs),
+      ]);
+
+      const newSections = this.buildDiscSections(
+        newDiscs,
+        spotifyTrackIds,
+        authors,
+      );
+
+      const updatedContent = this.insertBeforeFooter(
+        currentContent,
+        newSections,
+      );
+
+      await this.wordpressService.updatePostContent(
+        list.wpPostId,
+        updatedContent,
+      );
+    }
+
+    if (newDiscs.length || removedDiscs.length) {
+      const stillTracked = publishedDiscs.filter((d) =>
+        currentIds.has(d.discId),
+      );
+      const newlyPublished = newDiscs.map((a) => this.toPublishedDiscRecord(a));
+      list.wpPublishedDiscs = [...stillTracked, ...newlyPublished];
+      await this.listRepository.save(list);
+    }
+
+    const result: {
+      wpPostId: number;
+      link: string;
+      title: string;
+      added: number;
+      message?: string;
+      removed?: number;
+      warning?: string;
+    } = {
+      wpPostId: list.wpPostId,
+      link: list.wpPostUrl,
+      title,
+      added: newDiscs.length,
+    };
+
+    if (!newDiscs.length && !removedDiscs.length) {
+      result.message = 'No new discs to add';
+    }
+
+    if (removedDiscs.length) {
+      const names = removedDiscs
+        .map((d) => `${d.artist} – ${d.name}`)
+        .join(', ');
+      result.removed = removedDiscs.length;
+      result.warning = `${removedDiscs.length} disco(s) eliminado(s) de la lista seguían publicados en WordPress y no se han quitado del post automáticamente: ${names}. Revisa y edita el post manualmente si corresponde.`;
+    }
+
+    return result;
+  }
+
+  private insertBeforeFooter(content: string, addition: string): string {
+    // Localizamos el bloque wp:separator que lleve nuestra clase marcadora
+    // (ver FOOTER_MARKER_CLASS), no el primer wp:separator a secas: así no
+    // confundimos nuestro footer con un separador que alguien haya metido a
+    // mano en el post, y seguimos encontrándolo aunque Gutenberg reordene los
+    // atributos del comentario JSON al guardar desde el editor de bloques.
+    const separatorBlockRegex = /<!--\s*wp:separator[\s\S]*?-->/g;
+    let markerIndex = -1;
+    let match: RegExpExecArray | null;
+
+    while ((match = separatorBlockRegex.exec(content)) !== null) {
+      if (match[0].includes(ListsService.FOOTER_MARKER_CLASS)) {
+        markerIndex = match.index;
+        break;
+      }
+    }
+
+    if (markerIndex === -1) {
+      return `${content}\n\n${addition}`;
+    }
+
+    return `${content.slice(0, markerIndex)}${addition}\n\n${content.slice(markerIndex)}`;
+  }
+
+  private async resolveAuthors(
+    discs: any[],
+  ): Promise<({ name: string; link: string } | null)[]> {
+    const cache = new Map<string, { name: string; link: string } | null>();
+
+    return Promise.all(
+      discs.map(async (a) => {
+        const username = a.user?.username;
+        if (!username) return null;
+        if (cache.has(username)) return cache.get(username);
+
+        const slug = username.toLowerCase().replace(/_/g, '-');
+        const author = await this.wordpressService.findAuthorBySlug(slug);
+        cache.set(username, author);
+        return author;
+      }),
+    );
+  }
+
+  private buildBestDiscsPostContent(
+    discs: any[],
+    monthName: string,
+    year: number,
+    spotifyTrackIds: (string | null)[],
+    authors: ({ name: string; link: string } | null)[],
+  ): string {
+    const artistNames = discs.map((a) => a.disc?.artist?.name ?? '');
+    const artistNamesBold = artistNames.map(
+      (name) => `<strong>${name}</strong>`,
+    );
+    const artistNamesHtml =
+      artistNamesBold.length > 1
+        ? `${artistNamesBold.slice(0, -1).join(', ')} y ${artistNamesBold[artistNamesBold.length - 1]}`
+        : (artistNamesBold[0] ?? '');
+
+    const intro = `<!-- wp:paragraph {"className":"text-justify"} -->
+<p class="text-justify">Aquí os traemos los mejores discos que se han publicado en el <strong>mes de ${monthName} de ${year}</strong>. Os hablaremos de los nuevos trabajos de ${artistNamesHtml}.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>📱 <strong>Descubre todos estos discos (y muchos más) en la <a href="https://app.riffvalley.es/login" target="_blank" rel="noreferrer noopener">app de <em>Riff Valley</em></a></strong>: filtra por género o país, escucha novedades al momento, vota tus favoritos (incluyendo su portada) y sigue en directo cómo evolucionan los rankings, con acceso directo a <em>Spotify </em>y otras plataformas.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:spacer {"height":"20px"} -->
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->
+
+<!-- wp:heading {"level":3} -->
+<h3 class="wp-block-heading">Los mejores discos del mes de <strong>${monthName}</strong> de ${year} son:</h3>
+<!-- /wp:heading -->
+
+<!-- wp:spacer {"height":"20px"} -->
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->`;
+
+    const discSections = this.buildDiscSections(
+      discs,
+      spotifyTrackIds,
+      authors,
+    );
+
+    return `${intro}\n\n${discSections}\n\n${this.buildSocialFooter()}`;
+  }
+
+  private buildDiscSections(
+    discs: any[],
+    spotifyTrackIds: (string | null)[],
+    authors: ({ name: string; link: string } | null)[],
+  ): string {
+    const FALLBACK_TRACK_ID = '75EVwxItVYmK59hhfSsBoD';
+
+    return discs
+      .map((a, i) => {
+        const artist = a.disc?.artist?.name ?? '';
+        const discName = a.disc?.name ?? '';
+        const genre = a.disc?.genre?.name ?? 'xx';
+        const image = a.disc?.image ?? '';
+        const debut = a.disc?.debut ? ' <em>(Debut)</em>' : '';
+        const description = a.disc?.description ?? '';
+
+        let imageBlock = '';
+        if (image) {
+          const altText = `${artist} - ${discName}`;
+          imageBlock = `\n\n<!-- wp:image {"width":"250px","aspectRatio":"1","scale":"cover","sizeSlug":"large","linkDestination":"none","align":"right","className":"is-style-zoooom"} -->
+<figure class="wp-block-image alignright size-large is-resized is-style-zoooom"><img src="${image}" alt="${altText}" style="aspect-ratio:1;object-fit:cover;width:250px"/></figure>
+<!-- /wp:image -->`;
+        }
+
+        const trackId = spotifyTrackIds[i] ?? FALLBACK_TRACK_ID;
+        const spotifyEmbed = `\n\n<!-- wp:html -->
+<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/track/${trackId}?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+<!-- /wp:html -->`;
+
+        const author = authors[i];
+        const recommendedBy = author
+          ? `<a href="${author.link}" target="_blank" rel="noreferrer noopener">${author.name}</a>`
+          : (a.user?.username ?? '');
+
+        return `${imageBlock}
+
+<!-- wp:paragraph {"className":"text-justify"} -->
+<p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong> ${description}</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph {"className":"text-justify"} -->
+<p class="text-justify"><strong>Género: </strong>${genre}</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph {"className":"text-justify"} -->
+<p class="text-justify"><strong>Bandas similares:</strong> xx, xx, xx</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph {"className":"text-justify"} -->
+<p class="text-justify"><strong>Recomendado por</strong> ${recommendedBy}</p>
+<!-- /wp:paragraph -->${spotifyEmbed}
+
+<!-- wp:spacer {"height":"20px"} -->
+<div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->`;
+      })
+      .join('\n\n');
+  }
+
+  private static readonly FOOTER_MARKER_CLASS = 'rv-generated-footer';
+
+  private buildSocialFooter(): string {
+    return `<!-- wp:separator {"className":"is-style-wide ${ListsService.FOOTER_MARKER_CLASS}","opacity":"css"} -->
+<hr class="wp-block-separator has-css-opacity is-style-wide ${ListsService.FOOTER_MARKER_CLASS}"/>
 <!-- /wp:separator -->
 
 <!-- wp:spacer {"height":"20px"} -->
@@ -770,8 +1186,6 @@ export class ListsService {
 <!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify"><strong>Riff Valley App: </strong><a href="http://app.riffvalley.es/login" target="_blank" rel="noreferrer noopener">app.riffvalley.es/login</a><br><strong>Comunidad de Telegram:</strong>&nbsp;<a href="https://t.me/RiffValleyES" target="_blank" rel="noreferrer noopener">t.me/RiffValleyES</a><br><strong>Facebook:</strong>&nbsp;<a href="https://www.facebook.com/RiffValleyEs/" target="_blank" rel="noreferrer noopener">facebook.com/RiffValleyEs</a><br><strong>Instagram:</strong>&nbsp;<a href="https://www.instagram.com/riffvalleyes/" target="_blank" rel="noreferrer noopener">instagram.com/riffvalleyes</a><br><strong>Threads</strong>: <a href="https://www.threads.net/@riffvalleyes" target="_blank" rel="noreferrer noopener">https://www.threads.net/@riffvalleyes</a><br><strong>Twitter &#8211; X:&nbsp;</strong><a href="https://twitter.com/Riffvalleyes" target="_blank" rel="noreferrer noopener">twitter.com/Riffvalleyes</a><br><strong>Bluesky</strong>: <a href="https://bsky.app/profile/riffvalleyes.bsky.social" target="_blank" rel="noreferrer noopener">bsky.app/profile/riffvalleyes.bsky.social</a></p>
 <!-- /wp:paragraph -->`;
-
-    return `${intro}\n\n${discSections}\n\n${footer}`;
   }
 
   private handleDbExceptions(error: any) {
