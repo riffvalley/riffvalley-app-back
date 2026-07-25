@@ -20,6 +20,7 @@ import {
   ListType,
   ListStatus,
   PublishedDiscRecord,
+  PublishedWeeklyPostRecord,
 } from './entities/list.entity';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
@@ -593,7 +594,9 @@ export class ListsService {
 
     const sortedPositions = Array.from(byPosition.keys()).sort((a, b) => a - b);
 
-    const rawReleaseDate = list.releaseDate ? new Date(list.releaseDate) : new Date();
+    const rawReleaseDate = list.releaseDate
+      ? new Date(list.releaseDate)
+      : new Date();
     // Music releases happen on Fridays — always use the Friday of the release week
     const releaseDate = new Date(rawReleaseDate);
     const daysSinceFriday = (rawReleaseDate.getDay() + 2) % 7; // Fri=0, Sat=1, Sun=2, Mon=3...
@@ -604,12 +607,33 @@ export class ListsService {
     const dateStr = `${day}/${month}/${year}`;
 
     const monthNames = [
-      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+      'enero',
+      'febrero',
+      'marzo',
+      'abril',
+      'mayo',
+      'junio',
+      'julio',
+      'agosto',
+      'septiembre',
+      'octubre',
+      'noviembre',
+      'diciembre',
     ];
     const monthName = monthNames[releaseDate.getMonth()];
 
-    const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+    const romanNumerals = [
+      'I',
+      'II',
+      'III',
+      'IV',
+      'V',
+      'VI',
+      'VII',
+      'VIII',
+      'IX',
+      'X',
+    ];
 
     const CATEGORIES = [2049, 184]; // Novedades, Radar de Novedades
     const FIXED_TAGS = [189, 2088, 188]; // novedades, nuevos discos semanales, radar
@@ -629,12 +653,6 @@ export class ListsService {
       const title = `Nuevos discos - ${dateStr} (${roman})`;
       const seoTitle = `Nuevos discos ${day} de ${monthName} de ${year} (${roman}) • Riff Valley`;
       const seoDescription = `Nuevos discos de ${monthName} de ${year}: os recopilamos los lanzamientos de la semana del ${dateStr} que no te puedes perder.`;
-
-      const spotifyTrackIds = await Promise.all(
-        discs.map((a) => this.resolveSpotifyTrackId(a)),
-      );
-
-      const content = this.buildPostContent(discs, position, list, title, spotifyTrackIds);
       const slug = `nuevos-discos${day}${month}${String(year).slice(-2)}${roman.toLowerCase()}`;
 
       const meta = {
@@ -643,25 +661,173 @@ export class ListsService {
         rank_math_focus_keyword: `nuevos discos,${monthName},${year},${roman.toLowerCase()}`,
       };
 
-      const existing = await this.wordpressService.findPostBySlug(slug);
-      if (existing) {
-        this.logger.log(`WP post already exists for slug ${slug} (#${existing.id}), skipping`);
-        createdPosts.push({ position, wpPostId: existing.id, link: existing.link, title, skipped: true });
+      const entry = (list.wpWeeklyPosts ?? []).find(
+        (e) => e.position === position,
+      );
+
+      if (entry) {
+        const existingPost = await this.wordpressService.getPost(
+          entry.wpPostId,
+        );
+
+        // El post enlazado ya no existe o está en la papelera: soltamos el
+        // tracking y caemos al flujo de "no hay entry" de abajo, que busca
+        // por slug o crea uno nuevo (mismo patrón que generateBestDiscsWordPressPost).
+        if (!existingPost || existingPost.status === 'trash') {
+          this.logger.warn(
+            `Linked WP post #${entry.wpPostId} for list ${listId} position ${position} is missing or trashed, creating a new one`,
+          );
+          list.wpWeeklyPosts = (list.wpWeeklyPosts ?? []).filter(
+            (e) => e.position !== position,
+          );
+        } else {
+          const result = await this.syncDiscsIntoPost(
+            entry.wpPostId,
+            existingPost.content,
+            discs,
+            entry.publishedDiscs ?? [],
+            (d, trackIds) => this.buildWeeklyDiscSections(d, trackIds, title),
+            false,
+          );
+
+          list.wpWeeklyPosts = [
+            ...(list.wpWeeklyPosts ?? []).filter(
+              (e) => e.position !== position,
+            ),
+            { ...entry, publishedDiscs: result.publishedDiscs },
+          ];
+
+          const postResult: any = {
+            position,
+            wpPostId: entry.wpPostId,
+            link: entry.wpPostUrl,
+            title,
+            added: result.newCount,
+            updated: result.existingCount - result.notFoundForUpdate,
+          };
+
+          if (result.removedDiscs.length) {
+            const names = result.removedDiscs
+              .map((d) => `${d.artist} – ${d.name}`)
+              .join(', ');
+            postResult.removed = result.removedDiscs.length;
+            postResult.warning = `${result.removedDiscs.length} disco(s) eliminado(s) de la lista seguían publicados en WordPress y no se han quitado del post automáticamente: ${names}. Revisa y edita el post manualmente si corresponde.`;
+          }
+
+          if (result.notFoundForUpdate > 0) {
+            const extra = `${result.notFoundForUpdate} disco(s) editado(s) no se encontraron en el post (¿se borró su marcador manualmente en el editor de WordPress?) y no se pudieron actualizar automáticamente.`;
+            postResult.warning = postResult.warning
+              ? `${postResult.warning} ${extra}`
+              : extra;
+          }
+
+          createdPosts.push(postResult);
+          continue;
+        }
+      }
+
+      // No hay tracking para esta posición: puede que el post ya existiera
+      // de antes de este sistema (lo buscamos por slug y lo "adoptamos") o
+      // que no exista todavía (lo creamos desde cero).
+      const existingBySlug = await this.wordpressService.findPostBySlug(slug);
+      if (existingBySlug) {
+        this.logger.log(
+          `WP post already exists for slug ${slug} (#${existingBySlug.id}), adopting it for position ${position}`,
+        );
+
+        const existingContent = await this.wordpressService.getPost(
+          existingBySlug.id,
+        );
+        const result = await this.syncDiscsIntoPost(
+          existingBySlug.id,
+          existingContent?.content ?? '',
+          discs,
+          [],
+          (d, trackIds) => this.buildWeeklyDiscSections(d, trackIds, title),
+          false,
+        );
+
+        const newEntry: PublishedWeeklyPostRecord = {
+          position,
+          wpPostId: existingBySlug.id,
+          wpPostUrl: existingBySlug.link,
+          publishedDiscs: result.publishedDiscs,
+        };
+        list.wpWeeklyPosts = [
+          ...(list.wpWeeklyPosts ?? []).filter((e) => e.position !== position),
+          newEntry,
+        ];
+
+        createdPosts.push({
+          position,
+          wpPostId: existingBySlug.id,
+          link: existingBySlug.link,
+          title,
+          adopted: true,
+          added: result.newCount,
+        });
         continue;
       }
 
-      const post = await this.wordpressService.createPost(title, content, 'draft', meta, CATEGORIES, tags, slug);
-      createdPosts.push({ position, wpPostId: post.id, link: post.link, title });
+      const spotifyTrackIds = await Promise.all(
+        discs.map((a) => this.resolveSpotifyTrackId(a)),
+      );
+
+      const content = this.buildPostContent(
+        discs,
+        position,
+        list,
+        title,
+        spotifyTrackIds,
+      );
+
+      const post = await this.wordpressService.createPost(
+        title,
+        content,
+        'draft',
+        meta,
+        CATEGORIES,
+        tags,
+        slug,
+      );
+
+      const newEntry: PublishedWeeklyPostRecord = {
+        position,
+        wpPostId: post.id,
+        wpPostUrl: post.link,
+        publishedDiscs: discs.map((a) => this.toPublishedDiscRecord(a)),
+      };
+      list.wpWeeklyPosts = [
+        ...(list.wpWeeklyPosts ?? []).filter((e) => e.position !== position),
+        newEntry,
+      ];
+
+      createdPosts.push({
+        position,
+        wpPostId: post.id,
+        link: post.link,
+        title,
+      });
     }
+
+    await this.listRepository.save(list);
 
     return { created: createdPosts.length, posts: createdPosts };
   }
 
-  private buildPostContent(discs: any[], position: number, list: any, title = '', spotifyTrackIds: (string | null)[] = []): string {
+  private buildPostContent(
+    discs: any[],
+    position: number,
+    list: any,
+    title = '',
+    spotifyTrackIds: (string | null)[] = [],
+  ): string {
     const ordinals = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta'];
     const ordinal = ordinals[position - 1] ?? `${position}ª`;
 
-    const rawReleaseDate = list.releaseDate ? new Date(list.releaseDate) : new Date();
+    const rawReleaseDate = list.releaseDate
+      ? new Date(list.releaseDate)
+      : new Date();
     // Music releases happen on Fridays — always use the Friday of the release week
     const releaseDate = new Date(rawReleaseDate);
     const daysSinceFriday = (rawReleaseDate.getDay() + 2) % 7; // Fri=0, Sat=1, Sun=2, Mon=3...
@@ -672,7 +838,9 @@ export class ListsService {
     const dateStr = `${day}/${month}/${year}`;
 
     const artistNames = discs.map((a) => a.disc?.artist?.name ?? '');
-    const artistNamesBold = artistNames.map((name) => `<strong>${name}</strong>`);
+    const artistNamesBold = artistNames.map(
+      (name) => `<strong>${name}</strong>`,
+    );
     const artistNamesHtml =
       artistNamesBold.length > 1
         ? `${artistNamesBold.slice(0, -1).join(', ')} y ${artistNamesBold[artistNamesBold.length - 1]}`
@@ -706,9 +874,28 @@ export class ListsService {
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
 <!-- /wp:spacer -->`;
 
+    const discSections = this.buildWeeklyDiscSections(
+      discs,
+      spotifyTrackIds,
+      title,
+    );
+
+    return `${intro}\n\n${discSections}\n\n${this.buildSocialFooter()}`;
+  }
+
+  // Igual que buildDiscSections, pero para el post semanal de "nuevos
+  // discos": conserva el estilo visual propio de ese post (imagen 300px vía
+  // wp:html, sin línea "Recomendado por") y solo añade el mismo envoltorio
+  // rv-disc-<discId> para poder localizar y sustituir el bloque de un disco
+  // suelto (ver replaceDiscSection / syncDiscToWordPress).
+  private buildWeeklyDiscSections(
+    discs: any[],
+    spotifyTrackIds: (string | null)[],
+    title: string,
+  ): string {
     const FALLBACK_TRACK_ID = '75EVwxItVYmK59hhfSsBoD';
 
-    const discSections = discs
+    return discs
       .map((a, i) => {
         const artist = a.disc?.artist?.name ?? '';
         const discName = a.disc?.name ?? '';
@@ -743,7 +930,8 @@ export class ListsService {
           richParagraphs.slice(1),
         );
 
-        return `${imageBlock}
+        return `<!-- wp:group {"className":"rv-disc-${a.disc.id}"} -->
+<div class="wp-block-group rv-disc-${a.disc.id}">${imageBlock}
 
 <!-- wp:paragraph {"className":"text-justify"} -->
 <p class="text-justify"><strong>${artist} &#8211; <em>${discName}</em>${debut}:</strong> ${firstParagraph}</p>
@@ -759,11 +947,11 @@ export class ListsService {
 
 <!-- wp:spacer {"height":"20px"} -->
 <div style="height:20px" aria-hidden="true" class="wp-block-spacer"></div>
-<!-- /wp:spacer -->`;
+<!-- /wp:spacer -->
+</div>
+<!-- /wp:group -->`;
       })
       .join('\n\n');
-
-    return `${intro}\n\n${discSections}\n\n${this.buildSocialFooter()}`;
   }
 
   // Empuja el disco de una sola asignación al post real de WordPress al
@@ -774,16 +962,28 @@ export class ListsService {
   async syncDiscToWordPress(listId: string, asignationId: string) {
     const list = await this.findOne(listId);
 
-    if (list.type !== ListType.MONTH || !list.wpPostId) {
-      // Todavía no hay post que actualizar: se recogerá con el próximo
-      // "generar/actualizar" manual.
-      return { synced: false };
-    }
-
     const asignation = list.asignations.find(
       (a) => a.id === asignationId && a.disc,
     );
     if (!asignation) {
+      return { synced: false };
+    }
+
+    if (list.type === ListType.MONTH) {
+      return this.syncDiscToMonthlyPost(list, asignation);
+    }
+
+    if (list.type === ListType.WEEK) {
+      return this.syncDiscToWeeklyPost(list, asignation);
+    }
+
+    return { synced: false };
+  }
+
+  private async syncDiscToMonthlyPost(list: List, asignation: any) {
+    if (!list.wpPostId) {
+      // Todavía no hay post que actualizar: se recogerá con el próximo
+      // "generar/actualizar" manual.
       return { synced: false };
     }
 
@@ -831,6 +1031,106 @@ export class ListsService {
     }
 
     return { synced: true };
+  }
+
+  // Igual que syncDiscToMonthlyPost pero para el post semanal de "nuevos
+  // discos" correspondiente a la posición del disco. Cada posición tiene su
+  // propio post (ver wpWeeklyPosts / generateWordPressPosts), así que
+  // primero hay que localizar la entrada trackeada de esa posición.
+  private async syncDiscToWeeklyPost(list: List, asignation: any) {
+    const position = asignation.position;
+    if (position === null || position === undefined) {
+      return { synced: false };
+    }
+
+    const entry = (list.wpWeeklyPosts ?? []).find(
+      (e) => e.position === position,
+    );
+    if (!entry) {
+      // Todavía no se ha generado el post de esa posición: se recogerá con
+      // el próximo "generar/actualizar" manual.
+      return { synced: false };
+    }
+
+    const existingPost = await this.wordpressService.getPost(entry.wpPostId);
+    if (!existingPost || existingPost.status === 'trash') {
+      return { synced: false };
+    }
+
+    const spotifyTrackId = await this.resolveSpotifyTrackId(asignation);
+    const title = this.buildWeeklyPostTitle(list, position);
+    const block = this.buildWeeklyDiscSections(
+      [asignation],
+      [spotifyTrackId],
+      title,
+    );
+
+    const publishedDiscs = entry.publishedDiscs ?? [];
+    const alreadyPublished = publishedDiscs.some(
+      (d) => d.discId === asignation.disc.id,
+    );
+
+    const replaced = alreadyPublished
+      ? this.replaceDiscSection(existingPost.content, asignation.disc.id, block)
+      : null;
+    const updatedContent =
+      replaced ?? this.insertBeforeFooter(existingPost.content, block);
+
+    await this.wordpressService.updatePostContent(
+      entry.wpPostId,
+      updatedContent,
+    );
+
+    if (!alreadyPublished) {
+      list.wpWeeklyPosts = [
+        ...(list.wpWeeklyPosts ?? []).filter((e) => e.position !== position),
+        {
+          ...entry,
+          publishedDiscs: [
+            ...publishedDiscs,
+            this.toPublishedDiscRecord(asignation),
+          ],
+        },
+      ];
+      await this.listRepository.save(list);
+    }
+
+    return { synced: true };
+  }
+
+  private static readonly ROMAN_NUMERALS = [
+    'I',
+    'II',
+    'III',
+    'IV',
+    'V',
+    'VI',
+    'VII',
+    'VIII',
+    'IX',
+    'X',
+  ];
+
+  // Los lanzamientos musicales son los viernes: usamos siempre el viernes
+  // de la semana de lanzamiento para nombrar el post, igual que
+  // generateWordPressPosts.
+  private getWeeklyReleaseFriday(list: List): Date {
+    const rawReleaseDate = list.releaseDate
+      ? new Date(list.releaseDate)
+      : new Date();
+    const releaseDate = new Date(rawReleaseDate);
+    const daysSinceFriday = (rawReleaseDate.getDay() + 2) % 7; // Fri=0, Sat=1, Sun=2, Mon=3...
+    releaseDate.setDate(releaseDate.getDate() - daysSinceFriday);
+    return releaseDate;
+  }
+
+  private buildWeeklyPostTitle(list: List, position: number): string {
+    const releaseDate = this.getWeeklyReleaseFriday(list);
+    const day = releaseDate.getDate().toString().padStart(2, '0');
+    const month = (releaseDate.getMonth() + 1).toString().padStart(2, '0');
+    const year = releaseDate.getFullYear();
+    const roman = ListsService.ROMAN_NUMERALS[position - 1] ?? `${position}`;
+    return `Nuevos discos - ${day}/${month}/${year} (${roman})`;
   }
 
   async generateBestDiscsWordPressPost(listId: string) {
@@ -1007,6 +1307,88 @@ export class ListsService {
     currentContent: string,
   ) {
     const publishedDiscs = list.wpPublishedDiscs ?? [];
+
+    const syncResult = await this.syncDiscsIntoPost(
+      list.wpPostId,
+      currentContent,
+      allDiscs,
+      publishedDiscs,
+      (discs, spotifyTrackIds, authors) =>
+        this.buildDiscSections(discs, spotifyTrackIds, authors),
+      true,
+    );
+
+    if (syncResult.newCount || syncResult.removedDiscs.length) {
+      list.wpPublishedDiscs = syncResult.publishedDiscs;
+      await this.listRepository.save(list);
+    }
+
+    const result: {
+      wpPostId: number;
+      link: string;
+      title: string;
+      added: number;
+      updated: number;
+      message?: string;
+      removed?: number;
+      warning?: string;
+    } = {
+      wpPostId: list.wpPostId,
+      link: list.wpPostUrl,
+      title,
+      added: syncResult.newCount,
+      updated: syncResult.existingCount - syncResult.notFoundForUpdate,
+    };
+
+    if (
+      !syncResult.newCount &&
+      !syncResult.existingCount &&
+      !syncResult.removedDiscs.length
+    ) {
+      result.message = 'No new discs to add';
+    }
+
+    if (syncResult.removedDiscs.length) {
+      const names = syncResult.removedDiscs
+        .map((d) => `${d.artist} – ${d.name}`)
+        .join(', ');
+      result.removed = syncResult.removedDiscs.length;
+      result.warning = `${syncResult.removedDiscs.length} disco(s) eliminado(s) de la lista seguían publicados en WordPress y no se han quitado del post automáticamente: ${names}. Revisa y edita el post manualmente si corresponde.`;
+    }
+
+    if (syncResult.notFoundForUpdate > 0) {
+      const extra = `${syncResult.notFoundForUpdate} disco(s) editado(s) no se encontraron en el post (¿se borró su marcador manualmente en el editor de WordPress?) y no se pudieron actualizar automáticamente.`;
+      result.warning = result.warning ? `${result.warning} ${extra}` : extra;
+    }
+
+    return result;
+  }
+
+  // Núcleo compartido de "añadir discos nuevos + refrescar los ya
+  // publicados" que usan tanto el post único de "Mejores discos" (mensual)
+  // como cada post por posición de "Nuevos discos" (semanal). Recibe el
+  // constructor de bloques como parámetro porque cada flujo tiene su propio
+  // estilo visual (buildDiscSections vs buildWeeklyDiscSections).
+  private async syncDiscsIntoPost(
+    wpPostId: number,
+    currentContent: string,
+    allDiscs: any[],
+    publishedDiscs: PublishedDiscRecord[],
+    buildSections: (
+      discs: any[],
+      spotifyTrackIds: (string | null)[],
+      authors: ({ name: string; link: string } | null)[],
+    ) => string,
+    useAuthors: boolean,
+  ): Promise<{
+    publishedDiscs: PublishedDiscRecord[];
+    updatedContent: string;
+    contentChanged: boolean;
+    newCount: number;
+    existingCount: number;
+    removedDiscs: PublishedDiscRecord[];
+    notFoundForUpdate: number;
+  }> {
     const publishedIds = new Set(publishedDiscs.map((d) => d.discId));
     const currentIds = new Set(allDiscs.map((a) => a.disc.id));
 
@@ -1027,11 +1409,13 @@ export class ListsService {
         Promise.all(
           discsNeedingRender.map((a) => this.resolveSpotifyTrackId(a)),
         ),
-        this.resolveAuthors(discsNeedingRender),
+        useAuthors
+          ? this.resolveAuthors(discsNeedingRender)
+          : Promise.resolve(discsNeedingRender.map(() => null)),
       ]);
 
       if (newDiscs.length) {
-        const newSections = this.buildDiscSections(
+        const newSections = buildSections(
           newDiscs,
           spotifyTrackIds.slice(0, newDiscs.length),
           authors.slice(0, newDiscs.length),
@@ -1041,7 +1425,7 @@ export class ListsService {
 
       existingDiscs.forEach((a, i) => {
         const offset = newDiscs.length + i;
-        const block = this.buildDiscSections(
+        const block = buildSections(
           [a],
           [spotifyTrackIds[offset]],
           [authors[offset]],
@@ -1059,57 +1443,28 @@ export class ListsService {
       });
 
       if (updatedContent !== currentContent) {
-        await this.wordpressService.updatePostContent(
-          list.wpPostId,
-          updatedContent,
-        );
+        await this.wordpressService.updatePostContent(wpPostId, updatedContent);
       }
     }
 
+    let newPublishedDiscs = publishedDiscs;
     if (newDiscs.length || removedDiscs.length) {
       const stillTracked = publishedDiscs.filter((d) =>
         currentIds.has(d.discId),
       );
       const newlyPublished = newDiscs.map((a) => this.toPublishedDiscRecord(a));
-      list.wpPublishedDiscs = [...stillTracked, ...newlyPublished];
-      await this.listRepository.save(list);
+      newPublishedDiscs = [...stillTracked, ...newlyPublished];
     }
 
-    const result: {
-      wpPostId: number;
-      link: string;
-      title: string;
-      added: number;
-      updated: number;
-      message?: string;
-      removed?: number;
-      warning?: string;
-    } = {
-      wpPostId: list.wpPostId,
-      link: list.wpPostUrl,
-      title,
-      added: newDiscs.length,
-      updated: existingDiscs.length - notFoundForUpdate,
+    return {
+      publishedDiscs: newPublishedDiscs,
+      updatedContent,
+      contentChanged: updatedContent !== currentContent,
+      newCount: newDiscs.length,
+      existingCount: existingDiscs.length,
+      removedDiscs,
+      notFoundForUpdate,
     };
-
-    if (!newDiscs.length && !existingDiscs.length && !removedDiscs.length) {
-      result.message = 'No new discs to add';
-    }
-
-    if (removedDiscs.length) {
-      const names = removedDiscs
-        .map((d) => `${d.artist} – ${d.name}`)
-        .join(', ');
-      result.removed = removedDiscs.length;
-      result.warning = `${removedDiscs.length} disco(s) eliminado(s) de la lista seguían publicados en WordPress y no se han quitado del post automáticamente: ${names}. Revisa y edita el post manualmente si corresponde.`;
-    }
-
-    if (notFoundForUpdate > 0) {
-      const extra = `${notFoundForUpdate} disco(s) editado(s) no se encontraron en el post (¿se borró su marcador manualmente en el editor de WordPress?) y no se pudieron actualizar automáticamente.`;
-      result.warning = result.warning ? `${result.warning} ${extra}` : extra;
-    }
-
-    return result;
   }
 
   private insertBeforeFooter(content: string, addition: string): string {

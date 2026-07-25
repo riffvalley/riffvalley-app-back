@@ -34,6 +34,13 @@ export interface PublishedDiscRecord {
   name: string;
 }
 
+export interface PublishedWeeklyPostRecord {
+  position: number;
+  wpPostId: number;
+  wpPostUrl: string;
+  publishedDiscs: PublishedDiscRecord[];
+}
+
 @Entity()
 export class List {
   @PrimaryGeneratedColumn('uuid')
@@ -82,6 +89,9 @@ export class List {
 
   @Column({ type: 'jsonb', nullable: true })
   wpPublishedDiscs?: PublishedDiscRecord[];
+
+  @Column({ type: 'jsonb', nullable: true })
+  wpWeeklyPosts?: PublishedWeeklyPostRecord[];
 
   @OneToMany(() => Asignation, (asignation) => asignation.list, {
     cascade: true,
