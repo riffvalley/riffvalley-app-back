@@ -70,6 +70,52 @@ export class NationalReleasesService {
     return qb.orderBy('r.releaseDay', 'ASC').getMany();
   }
 
+  // Igual que findAll pero recortado a los campos esenciales, sin metadata
+  // interna (needsReview, verified, pinned, timestamps...), para consumo
+  // público sin autenticar.
+  async findAllPublic(month?: number, year?: number) {
+    const qb = this.repo.createQueryBuilder('r')
+      .leftJoinAndSelect('r.disc', 'disc')
+      .leftJoinAndSelect('disc.artist', 'discArtist')
+      .leftJoinAndSelect('disc.genre', 'discGenre')
+      .where('r.approved = true');
+
+    if (year) qb.andWhere('EXTRACT(YEAR FROM r.releaseDay) = :year', { year });
+    if (month) qb.andWhere('EXTRACT(MONTH FROM r.releaseDay) = :month', { month });
+
+    const releases = await qb.orderBy('r.releaseDay', 'ASC').getMany();
+
+    return releases.map((r) => ({
+      id: r.id,
+      artistName: r.artistName,
+      discName: r.discName,
+      discType: r.discType,
+      genre: r.genre,
+      releaseDay: r.releaseDay,
+      link: r.link,
+      discId: r.discId,
+      disc: r.disc
+        ? {
+            id: r.disc.id,
+            name: r.disc.name,
+            image: r.disc.image,
+            releaseDate: r.disc.releaseDate,
+            link: r.disc.link,
+            genre: r.disc.genre
+              ? { id: r.disc.genre.id, name: r.disc.genre.name, color: r.disc.genre.color }
+              : null,
+            artist: r.disc.artist
+              ? {
+                  id: r.disc.artist.id,
+                  name: r.disc.artist.name,
+                  image: r.disc.artist.image,
+                }
+              : null,
+          }
+        : null,
+    }));
+  }
+
   async findAllAdmin(month?: number, year?: number, approved?: boolean): Promise<{ data: any[]; pendingMonths: number[] }> {
     const currentYear = year ?? new Date().getFullYear();
 

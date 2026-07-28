@@ -17,6 +17,7 @@ import { OptionsQueryDto } from './dto/options-query.dto';
 import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
+import { Country } from 'src/countries/entities/country.entity';
 import { Pending } from 'src/pendings/entities/pending.entity';
 import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
 @Injectable()
@@ -28,6 +29,10 @@ export class DiscsService {
     private readonly discRepository: Repository<Disc>,
     @InjectRepository(Artist)
     private readonly artistRepository: Repository<Artist>,
+    @InjectRepository(Genre)
+    private readonly genreRepository: Repository<Genre>,
+    @InjectRepository(Country)
+    private readonly countryRepository: Repository<Country>,
     private readonly spotifyApiService: SpotifyApiService,
   ) { }
 
@@ -579,6 +584,122 @@ export class DiscsService {
       limit,
       data: groupedArray,
     };
+  }
+
+  // Igual que findAllByDate pero sin datos por-usuario (rate, favoritos,
+  // pendientes), pensado para el calendario público sin autenticar.
+  async findAllByDatePublic(paginationDto: PaginationDto) {
+    const { limit = 10, offset = 0, dateRange, genre, country, countryId } = paginationDto;
+    const countryFilter = country || countryId;
+
+    const queryBuilder = this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoinAndSelect('disc.artist', 'artist')
+      .leftJoinAndSelect('artist.country', 'country')
+      .leftJoinAndSelect('disc.genre', 'genre');
+
+    if (genre) {
+      queryBuilder.andWhere('disc.genreId = :genre', { genre });
+    }
+
+    if (countryFilter) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      if (isUUID) {
+        queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
+      } else {
+        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
+      }
+    }
+
+    if (dateRange && dateRange.length === 2) {
+      const [startDate, endDate] = dateRange;
+      queryBuilder.andWhere(
+        'disc.releaseDate BETWEEN :startDate AND :endDate',
+        {
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+        },
+      );
+    }
+
+    queryBuilder
+      .take(limit)
+      .skip(offset)
+      .orderBy('disc.releaseDate', 'ASC')
+      .addOrderBy('artist.name', 'ASC');
+
+    const [discs, totalItems] = await queryBuilder.getManyAndCount();
+
+    const totalPages = Math.ceil(totalItems / limit);
+    const currentPage = Math.floor(offset / limit) + 1;
+
+    const groupedDiscs = discs.reduce((acc, disc) => {
+      const dateKey = new Date(disc.releaseDate).toISOString().split('T')[0];
+
+      if (!acc[dateKey]) {
+        acc[dateKey] = [];
+      }
+
+      acc[dateKey].push({
+        id: disc.id,
+        name: disc.name,
+        image: disc.image,
+        releaseDate: disc.releaseDate,
+        ep: disc.ep,
+        debut: disc.debut,
+        link: disc.link,
+        genre: disc.genre,
+        artist: {
+          id: disc.artist?.id,
+          name: disc.artist?.name,
+          image: disc.artist?.image,
+          country: disc.artist?.country
+            ? {
+                id: disc.artist.country.id,
+                name: disc.artist.country.name,
+              }
+            : null,
+        },
+      });
+      return acc;
+    }, {});
+
+    const groupedArray = Object.keys(groupedDiscs).map((releaseDate) => ({
+      releaseDate,
+      discs: groupedDiscs[releaseDate],
+    }));
+
+    return {
+      totalItems,
+      totalPages,
+      currentPage,
+      limit,
+      data: groupedArray,
+    };
+  }
+
+  // Listas completas de género/país usadas por al menos un disco, para que
+  // un consumidor externo del calendario público sepa qué ids mandar como
+  // filtro sin tener que paginar /genres o /countries.
+  async getPublicFilters() {
+    const genres = await this.genreRepository
+      .createQueryBuilder('genre')
+      .innerJoin('genre.disc', 'disc')
+      .select(['genre.id', 'genre.name', 'genre.color'])
+      .distinct(true)
+      .orderBy('genre.name', 'ASC')
+      .getMany();
+
+    const countries = await this.countryRepository
+      .createQueryBuilder('country')
+      .innerJoin('country.artist', 'artist')
+      .innerJoin('artist.disc', 'disc')
+      .select(['country.id', 'country.name', 'country.isoCode'])
+      .distinct(true)
+      .orderBy('country.name', 'ASC')
+      .getMany();
+
+    return { genres, countries };
   }
 
   async findOne(id: string): Promise<Disc> {
