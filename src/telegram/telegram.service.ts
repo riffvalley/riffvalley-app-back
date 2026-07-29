@@ -5,6 +5,10 @@ export interface ChannelPost {
   id: string;
   text: string;
   image: string | null;
+  // Todas las fotos si el mensaje es un álbum agrupado; con una sola foto
+  // coincide con `image`. `image` se mantiene para no romper a quien ya
+  // lo consume esperando un único string.
+  images: string[];
   date: string | null;
   link: string;
 }
@@ -51,6 +55,50 @@ export class TelegramService {
     }
   }
 
+  // Paginación por cursor para scroll infinito: t.me/s/{canal} solo admite
+  // "before=<id de mensaje>" para pedir la tanda anterior, no un offset.
+  async getChannelPostsPage(
+    channel: string,
+    limit: number,
+    before?: string,
+  ): Promise<{ data: ChannelPost[]; nextBefore: string | null; hasMore: boolean }> {
+    const cacheKey = `${channel}:${before ?? 'latest'}`;
+    const cached = this.cache.get(cacheKey);
+
+    let posts: ChannelPost[];
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      posts = cached.data;
+    } else {
+      try {
+        const url = `https://t.me/s/${channel}${before ? `?before=${before}` : ''}`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          this.logger.error(
+            `Failed to fetch Telegram channel page: ${response.status}`,
+          );
+          return { data: [], nextBefore: null, hasMore: false };
+        }
+
+        const html = await response.text();
+        posts = this.parseChannelHtml(html, channel);
+        this.cache.set(cacheKey, { data: posts, timestamp: Date.now() });
+      } catch (error) {
+        this.logger.error(`Error fetching Telegram channel page: ${error.message}`);
+        return { data: [], nextBefore: null, hasMore: false };
+      }
+    }
+
+    const data = posts.slice(0, limit);
+    const nextBefore = data.length > 0 ? data[data.length - 1].id : null;
+
+    // t.me no confirma cuántos posts quedan: el tamaño del lote lo decide
+    // Telegram, no `limit`. La única señal fiable de "no hay más" es que
+    // una página devuelva 0 posts, así que no podemos cortar solo porque
+    // esta tanda traiga menos de `limit`.
+    return { data, nextBefore, hasMore: data.length > 0 };
+  }
+
   private parseChannelHtml(html: string, channel: string): ChannelPost[] {
     const $ = cheerio.load(html);
     const posts: ChannelPost[] = [];
@@ -73,23 +121,21 @@ export class TelegramService {
           .trim()
           .substring(0, 200) || '';
 
-      let image: string | null = null;
-      const photoStyle = $el
-        .find('.tgme_widget_message_photo_wrap')
-        .attr('style');
-      if (photoStyle) {
-        const match = photoStyle.match(/background-image:url\('([^']+)'\)/);
+      const images: string[] = [];
+      $el.find('.tgme_widget_message_photo_wrap').each((__, photoEl) => {
+        const style = $(photoEl).attr('style');
+        const match = style?.match(/background-image:url\('([^']+)'\)/);
         if (match) {
-          image = match[1];
+          images.push(match[1]);
         }
-      }
+      });
 
       const date =
         $el.find('.tgme_widget_message_date time').attr('datetime') || null;
 
       const link = `https://t.me/${channel}/${id}`;
 
-      posts.push({ id, text, image, date, link });
+      posts.push({ id, text, image: images[0] ?? null, images, date, link });
     });
 
     return posts.sort((a, b) => {

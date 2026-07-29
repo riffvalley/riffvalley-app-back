@@ -39,6 +39,14 @@ export class NationalReleasesController {
     );
   }
 
+  @Get('public')
+  findAllPublic(@Query('month') month?: string, @Query('year') year?: string) {
+    return this.service.findAllPublic(
+      month ? parseInt(month, 10) : undefined,
+      year ? parseInt(year, 10) : undefined,
+    );
+  }
+
   @Get('all')
   @Auth(ValidRoles.riffValley, ValidRoles.admin)
   findAllAdmin(

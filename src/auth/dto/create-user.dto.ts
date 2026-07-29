@@ -55,6 +55,12 @@ export class CreateUserDto {
   dashboardConfig?: DashboardModuleConfigDto[];
 
   @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DashboardModuleConfigDto)
+  mobileDashboardConfig?: DashboardModuleConfigDto[];
+
+  @IsOptional()
   @IsString()
   notes?: string;
 

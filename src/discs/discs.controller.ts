@@ -61,6 +61,16 @@ export class DiscsController {
     return this.discsServices.findAllByDate(paginationDto, user);
   }
 
+  @Get('date/public')
+  findAllByDatePublic(@Query() paginationDto: PaginationDto) {
+    return this.discsServices.findAllByDatePublic(paginationDto);
+  }
+
+  @Get('date/public/filters')
+  getPublicFilters() {
+    return this.discsServices.getPublicFilters();
+  }
+
   @Auth()
   @Get('homeDiscs')
   findTopRatedOrFeatured(
