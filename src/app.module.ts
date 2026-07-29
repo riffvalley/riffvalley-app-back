@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { CommonModule } from './common/common.module';
 import { I18nConfigModule } from './i18n/i18n.module';
 
@@ -36,10 +37,12 @@ import { NationalReleasesModule } from './national-releases/national-releases.mo
 import { LastfmModule } from './lastfm/lastfm.module';
 import { SuggestionsModule } from './suggestions/suggestions.module';
 import { AccessRequestsModule } from './access-requests/access-requests.module';
+import { InstagramModule } from './instagram/instagram.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       ssl: process.env.STAGE === 'prod',
       extra: {
@@ -91,6 +94,7 @@ import { AccessRequestsModule } from './access-requests/access-requests.module';
     LastfmModule,
     SuggestionsModule,
     AccessRequestsModule,
+    InstagramModule,
   ],
 })
 export class AppModule {}
