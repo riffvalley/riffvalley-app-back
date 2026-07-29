@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { TelegramService } from './telegram.service';
 import { ChannelPostsQueryDto } from './dto/channel-posts-query.dto';
+import { TelegramPostsQueryDto } from './dto/telegram-posts-query.dto';
 import { Auth } from '../auth/decorators/auth.decorator';
 import { ValidRoles } from '../auth/interfaces/valid-roles';
 
@@ -12,5 +13,14 @@ export class TelegramController {
   @Auth(ValidRoles.user, ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   getChannelPosts(@Query() query: ChannelPostsQueryDto) {
     return this.telegramService.getChannelPosts(query.channel, query.limit);
+  }
+
+  @Get('posts')
+  getPosts(@Query() query: TelegramPostsQueryDto) {
+    return this.telegramService.getChannelPostsPage(
+      query.channel,
+      query.limit,
+      query.before,
+    );
   }
 }
