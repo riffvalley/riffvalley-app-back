@@ -131,14 +131,49 @@ export class InstagramService {
       }
 
       this.accessToken = body.access_token;
-      this.persistAccessToken(body.access_token);
+      await this.persistAccessToken(body.access_token);
       this.logger.log('Instagram access token refreshed');
     } catch (error) {
       this.logger.error(`Instagram token refresh failed: ${error}`);
     }
   }
 
-  private persistAccessToken(token: string) {
+  // En Heroku el filesystem es efímero: un .env escrito a mano no sobrevive
+  // a un restart/redeploy del dyno. Si hay credenciales de la Heroku
+  // Platform API, persistimos ahí para que el token sobreviva; si no
+  // (entorno local), caemos al .env de siempre.
+  private async persistAccessToken(token: string) {
+    const herokuApiKey = process.env.IG_HEROKU_API_TOKEN;
+    const herokuAppName = process.env.IG_HEROKU_APP_NAME;
+
+    if (herokuApiKey && herokuAppName) {
+      try {
+        const res = await fetch(
+          `https://api.heroku.com/apps/${herokuAppName}/config-vars`,
+          {
+            method: 'PATCH',
+            headers: {
+              Accept: 'application/vnd.heroku+json; version=3',
+              Authorization: `Bearer ${herokuApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ IG_ACCESS_TOKEN: token }),
+          },
+        );
+
+        if (!res.ok) {
+          this.logger.error(
+            `Could not persist refreshed Instagram token to Heroku config vars: ${res.status} ${await res.text()}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Could not persist refreshed Instagram token to Heroku config vars: ${error}`,
+        );
+      }
+      return;
+    }
+
     const envPath = path.join(process.cwd(), '.env');
 
     try {
