@@ -31,6 +31,11 @@ export class SpotifyController {
     return this.spotifyService.findAll({ ...query, type: ['genero', 'especial', 'otras'] });
   }
 
+  @Get('genres/random')
+  findRandomGenrePlaylist() {
+    return this.spotifyService.findRandomGenrePlaylist();
+  }
+
   @Post()
   create(@Body() createSpotifyDto: CreateSpotifyDto) {
     return this.spotifyService.create(createSpotifyDto);

@@ -108,6 +108,29 @@ export class SpotifyService {
     });
   }
 
+  // Elige al azar una de las playlists de género ya curadas y publicadas
+  // (mismo criterio que findGenres), para el widget de "playlist aleatoria".
+  async findRandomGenrePlaylist(): Promise<Spotify> {
+    const entity = await this.repo
+      .createQueryBuilder('spotify')
+      .where('spotify.type IN (:...types)', {
+        types: ['genero', 'especial', 'otras'],
+      })
+      .andWhere('spotify.status = :status', {
+        status: SpotifyStatusEnum.PUBLISHED,
+      })
+      .andWhere("spotify.link != ''")
+      .orderBy('RANDOM()')
+      .limit(1)
+      .getOne();
+
+    if (!entity) {
+      throw new NotFoundException('No hay playlists de género publicadas');
+    }
+
+    return entity;
+  }
+
   async findOne(id: string): Promise<Spotify> {
     const entity = await this.repo.findOne({
       where: { id },
