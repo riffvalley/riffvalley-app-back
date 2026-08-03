@@ -48,6 +48,14 @@ export class Disc {
   @Column('boolean', { nullable: true, default: false })
   pinned: boolean = false;
 
+  // Como mucho un disco puede tener esto a true a la vez (ver el índice
+  // único parcial en la migración); albumOfTheWeekAt guarda desde cuándo.
+  @Column('boolean', { default: false })
+  albumOfTheWeek: boolean = false;
+
+  @Column({ type: 'timestamp', nullable: true })
+  albumOfTheWeekAt: Date | null = null;
+
   @ManyToOne(() => Artist, (artist) => artist.disc, { eager: true, onDelete: 'CASCADE' })
   artist: Artist;
 

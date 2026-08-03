@@ -747,6 +747,112 @@ export class DiscsService {
     return { message: `Disc with id ${id} has been removed` };
   }
 
+  // Marca este disco como disco de la semana y desmarca cualquier otro,
+  // en una transacción para que el índice único parcial (a lo sumo un
+  // disco con albumOfTheWeek = true) nunca se rompa a medio camino.
+  async setAlbumOfTheWeek(id: string): Promise<Disc> {
+    const disc = await this.discRepository.findOneBy({ id });
+    if (!disc) {
+      throw new NotFoundException(`Disc with id ${id} not found`);
+    }
+
+    await this.discRepository.manager.transaction(async (manager) => {
+      await manager.update(
+        Disc,
+        { albumOfTheWeek: true },
+        { albumOfTheWeek: false, albumOfTheWeekAt: null },
+      );
+      await manager.update(Disc, { id }, {
+        albumOfTheWeek: true,
+        albumOfTheWeekAt: new Date(),
+      });
+    });
+
+    return this.discRepository.findOneByOrFail({ id });
+  }
+
+  async clearAlbumOfTheWeek(): Promise<{ message: string }> {
+    await this.discRepository.update(
+      { albumOfTheWeek: true },
+      { albumOfTheWeek: false, albumOfTheWeekAt: null },
+    );
+    return { message: 'Album of the week cleared' };
+  }
+
+  // Endpoint público: toda la info que necesita el frontend para pintar
+  // el disco de la semana sin llamadas adicionales (nota media, enlace a
+  // Spotify, imagen, artista, género...).
+  async findAlbumOfTheWeek() {
+    const queryBuilder = this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoinAndSelect('disc.artist', 'artist')
+      .leftJoinAndSelect('artist.country', 'country')
+      .leftJoinAndSelect('disc.genre', 'genre')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('AVG(rate.rate)', 'averageRate')
+          .from('rate', 'rate')
+          .where('rate.discId = disc.id');
+      }, 'averagerate')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('AVG(rate.cover)', 'averageCover')
+          .from('rate', 'rate')
+          .where('rate.discId = disc.id');
+      }, 'averagecover')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('COUNT(rate.id)', 'rateCount')
+          .from('rate', 'rate')
+          .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
+      }, 'ratecount')
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('COUNT(comment.id)', 'commentCount')
+          .from('comment', 'comment')
+          .where('comment.discId = disc.id');
+      }, 'commentcount')
+      .where('disc.albumOfTheWeek = true');
+
+    const { entities, raw } = await queryBuilder.getRawAndEntities();
+    const disc = entities[0];
+
+    if (!disc) {
+      throw new NotFoundException('No album of the week is currently set');
+    }
+
+    const row = raw[0];
+
+    return {
+      id: disc.id,
+      name: disc.name,
+      description: disc.description,
+      image: disc.image,
+      link: disc.link,
+      ep: disc.ep,
+      debut: disc.debut,
+      releaseDate: disc.releaseDate,
+      albumOfTheWeekAt: disc.albumOfTheWeekAt,
+      artist: disc.artist
+        ? {
+            id: disc.artist.id,
+            name: disc.artist.name,
+            image: disc.artist.image,
+            country: disc.artist.country
+              ? { id: disc.artist.country.id, name: disc.artist.country.name }
+              : null,
+          }
+        : null,
+      genre: disc.genre
+        ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color }
+        : null,
+      averageRate: parseFloat(row.averagerate) || null,
+      averageCover: parseFloat(row.averagecover) || null,
+      voteCount: parseInt(row.ratecount, 10) || 0,
+      commentCount: parseInt(row.commentcount, 10) || 0,
+    };
+  }
+
   async findTopRatedOrFeaturedAndStats(
     paginationDto: PaginationDto,
     user: User,

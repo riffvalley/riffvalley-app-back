@@ -18,6 +18,7 @@ import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { TopStatsQueryDto } from 'src/common/dtos/top-stats-query.dto';
 import { WeeklyQueryDto } from './dto/weekly-query.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
@@ -71,6 +72,17 @@ export class DiscsController {
     return this.discsServices.getPublicFilters();
   }
 
+  @Get('album-of-the-week')
+  findAlbumOfTheWeek() {
+    return this.discsServices.findAlbumOfTheWeek();
+  }
+
+  @Delete('album-of-the-week')
+  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  clearAlbumOfTheWeek() {
+    return this.discsServices.clearAlbumOfTheWeek();
+  }
+
   @Auth()
   @Get('homeDiscs')
   findTopRatedOrFeatured(
@@ -98,6 +110,12 @@ export class DiscsController {
   @Get(':id/spotify-tracks')
   getSpotifyTracks(@Param('id', ParseUUIDPipe) id: string) {
     return this.discsServices.getSpotifyTracks(id);
+  }
+
+  @Patch(':id/album-of-the-week')
+  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  setAlbumOfTheWeek(@Param('id', ParseUUIDPipe) id: string) {
+    return this.discsServices.setAlbumOfTheWeek(id);
   }
 
   @Patch(':id')
