@@ -25,6 +25,7 @@ async function bootstrap() {
       'https://app.riffvalley.es',
       'https://www.riffvalley.es',
       'https://riffvalley.es',
+      'https://riffastro.netlify.app',
     ], // Especifica los dominios permitidos
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Métodos permitidos
     credentials: true, // Si necesitas enviar cookies
