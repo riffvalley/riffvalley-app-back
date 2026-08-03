@@ -12,8 +12,10 @@ export class AddAlbumOfTheWeekToDisc1785262000000
     await queryRunner.query(
       `ALTER TABLE "disc" ADD "albumOfTheWeekAt" TIMESTAMP`,
     );
+    // A lo sumo un disco por semana (albumOfTheWeekAt = viernes de esa
+    // semana), no un único disco en todo el histórico.
     await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_disc_album_of_the_week_unique" ON "disc" ("albumOfTheWeek") WHERE "albumOfTheWeek" = true`,
+      `CREATE UNIQUE INDEX "IDX_disc_album_of_the_week_unique" ON "disc" ("albumOfTheWeekAt") WHERE "albumOfTheWeek" = true`,
     );
   }
 

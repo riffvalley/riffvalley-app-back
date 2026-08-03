@@ -48,8 +48,10 @@ export class Disc {
   @Column('boolean', { nullable: true, default: false })
   pinned: boolean = false;
 
-  // Como mucho un disco puede tener esto a true a la vez (ver el índice
-  // único parcial en la migración); albumOfTheWeekAt guarda desde cuándo.
+  // Histórico: cada semana (viernes a viernes) puede tener como mucho un
+  // disco con este flag a true, garantizado por el índice único parcial
+  // sobre albumOfTheWeekAt en la migración. albumOfTheWeekAt guarda el
+  // viernes que abre esa semana, no el instante exacto en que se marcó.
   @Column('boolean', { default: false })
   albumOfTheWeek: boolean = false;
 

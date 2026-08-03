@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -747,42 +748,73 @@ export class DiscsService {
     return { message: `Disc with id ${id} has been removed` };
   }
 
-  // Marca este disco como disco de la semana y desmarca cualquier otro,
-  // en una transacción para que el índice único parcial (a lo sumo un
-  // disco con albumOfTheWeek = true) nunca se rompa a medio camino.
+  // Los lanzamientos (y por tanto "la semana") van de viernes a viernes,
+  // igual que ListsService.getWeeklyReleaseFriday: la semana de un martes
+  // es la del viernes anterior.
+  private getCurrentReleaseWeekStart(date: Date = new Date()): Date {
+    const weekStart = new Date(date);
+    const daysSinceFriday = (date.getDay() + 2) % 7; // Fri=0, Sat=1, Sun=2, Mon=3...
+    weekStart.setDate(weekStart.getDate() - daysSinceFriday);
+    weekStart.setHours(0, 0, 0, 0);
+    return weekStart;
+  }
+
+  // Marca este disco como disco de la semana actual (viernes a viernes).
+  // Si ya hay otro disco marcado para esa misma semana, rechaza en vez de
+  // pisarlo silenciosamente: cada semana solo puede tener un disco, pero
+  // las semanas pasadas se quedan como histórico.
   async setAlbumOfTheWeek(id: string): Promise<Disc> {
     const disc = await this.discRepository.findOneBy({ id });
     if (!disc) {
       throw new NotFoundException(`Disc with id ${id} not found`);
     }
 
-    await this.discRepository.manager.transaction(async (manager) => {
-      await manager.update(
-        Disc,
-        { albumOfTheWeek: true },
-        { albumOfTheWeek: false, albumOfTheWeekAt: null },
-      );
-      await manager.update(Disc, { id }, {
-        albumOfTheWeek: true,
-        albumOfTheWeekAt: new Date(),
-      });
+    const weekStart = this.getCurrentReleaseWeekStart();
+
+    const existing = await this.discRepository.findOneBy({
+      albumOfTheWeek: true,
+      albumOfTheWeekAt: weekStart,
     });
+
+    if (existing && existing.id !== id) {
+      throw new ConflictException(
+        `"${existing.name}" ya es el disco de la semana del ${weekStart.toISOString().split('T')[0]}`,
+      );
+    }
+
+    await this.discRepository.update(
+      { id },
+      { albumOfTheWeek: true, albumOfTheWeekAt: weekStart },
+    );
 
     return this.discRepository.findOneByOrFail({ id });
   }
 
+  // Desmarca el disco de la semana actual (si hay uno). No toca el
+  // histórico de semanas anteriores.
   async clearAlbumOfTheWeek(): Promise<{ message: string }> {
-    await this.discRepository.update(
-      { albumOfTheWeek: true },
+    const weekStart = this.getCurrentReleaseWeekStart();
+
+    const result = await this.discRepository.update(
+      { albumOfTheWeek: true, albumOfTheWeekAt: weekStart },
       { albumOfTheWeek: false, albumOfTheWeekAt: null },
     );
-    return { message: 'Album of the week cleared' };
+
+    if (!result.affected) {
+      throw new NotFoundException(
+        'No album of the week is set for the current week',
+      );
+    }
+
+    return { message: 'Album of the week cleared for the current week' };
   }
 
   // Endpoint público: toda la info que necesita el frontend para pintar
-  // el disco de la semana sin llamadas adicionales (nota media, enlace a
-  // Spotify, imagen, artista, género...).
+  // el disco de la semana actual sin llamadas adicionales (nota media,
+  // enlace a Spotify, imagen, artista, género...).
   async findAlbumOfTheWeek() {
+    const weekStart = this.getCurrentReleaseWeekStart();
+
     const queryBuilder = this.discRepository
       .createQueryBuilder('disc')
       .leftJoinAndSelect('disc.artist', 'artist')
@@ -812,7 +844,8 @@ export class DiscsService {
           .from('comment', 'comment')
           .where('comment.discId = disc.id');
       }, 'commentcount')
-      .where('disc.albumOfTheWeek = true');
+      .where('disc.albumOfTheWeek = true')
+      .andWhere('disc.albumOfTheWeekAt = :weekStart', { weekStart });
 
     const { entities, raw } = await queryBuilder.getRawAndEntities();
     const disc = entities[0];
