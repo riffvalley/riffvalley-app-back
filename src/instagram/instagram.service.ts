@@ -88,7 +88,7 @@ export class InstagramService {
               caption: node.caption ?? null,
               mediaType: node.media_type,
               mediaProductType: node.media_product_type ?? null,
-              mediaUrl: node.media_url ?? '',
+              mediaUrl: node.media_url ?? null,
               thumbnailUrl: node.thumbnail_url ?? null,
               children,
               permalink: node.permalink,

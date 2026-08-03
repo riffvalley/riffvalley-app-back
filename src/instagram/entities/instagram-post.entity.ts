@@ -39,8 +39,11 @@ export class InstagramPost {
   @Column('text', { nullable: true })
   mediaProductType: string | null;
 
-  @Column('text')
-  mediaUrl: string;
+  // Null cuando la Graph API de Meta no devuelve media_url para este post.
+  // Ocurre de forma intermitente con algunos Reels, sin relación aparente
+  // con su antigüedad; es una limitación de la API de Meta, no del sync.
+  @Column('text', { nullable: true })
+  mediaUrl: string | null;
 
   @Column('text', { nullable: true })
   thumbnailUrl: string | null;
