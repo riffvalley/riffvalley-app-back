@@ -12,6 +12,7 @@ import {
 import { ListsService } from './list.service';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
+import { GenerateWpPostsQueryDto } from './dto/generate-wp-posts-query.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
@@ -110,8 +111,11 @@ export class ListsController {
   }
 
   @Post(':id/wp-posts')
-  generateWpPosts(@Param('id', ParseUUIDPipe) id: string) {
-    return this.listsServices.generateWordPressPosts(id);
+  generateWpPosts(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: GenerateWpPostsQueryDto,
+  ) {
+    return this.listsServices.generateWordPressPosts(id, query.position);
   }
 
   @Post(':id/wp-best-post')
