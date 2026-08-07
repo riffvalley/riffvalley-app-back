@@ -63,6 +63,7 @@ export class AsignationsService {
       listId,
       description,
       similarBands,
+      genre,
       spotifyTrackId,
       ...rest
     } = createAsignationDto;
@@ -92,6 +93,10 @@ export class AsignationsService {
         similarBands:
           similarBands !== undefined
             ? sanitizeHtml(similarBands, PLAIN_TEXT_SANITIZE_OPTIONS)
+            : undefined,
+        genre:
+          genre !== undefined
+            ? sanitizeHtml(genre, PLAIN_TEXT_SANITIZE_OPTIONS)
             : undefined,
         spotifyTrackId: spotifyTrackId || null,
         user: user || null,
@@ -141,8 +146,14 @@ export class AsignationsService {
 
   async update(id: string, updateAsignationDto: UpdateAsignationDto) {
     // Sacamos genreId aparte
-    const { userId, description, similarBands, spotifyTrackId, ...restDto } =
-      updateAsignationDto;
+    const {
+      userId,
+      description,
+      similarBands,
+      genre,
+      spotifyTrackId,
+      ...restDto
+    } = updateAsignationDto;
 
     // Cargamos un parcial de disc con preload
     const asignation = await this.asignationRepository.preload({
@@ -163,6 +174,9 @@ export class AsignationsService {
               PLAIN_TEXT_SANITIZE_OPTIONS,
             ),
           }
+        : {}),
+      ...(genre !== undefined
+        ? { genre: sanitizeHtml(genre, PLAIN_TEXT_SANITIZE_OPTIONS) }
         : {}),
       ...(spotifyTrackId !== undefined
         ? { spotifyTrackId: spotifyTrackId || null }
@@ -194,6 +208,7 @@ export class AsignationsService {
       if (
         description !== undefined ||
         similarBands !== undefined ||
+        genre !== undefined ||
         spotifyTrackId !== undefined
       ) {
         const withList = await this.asignationRepository.findOne({

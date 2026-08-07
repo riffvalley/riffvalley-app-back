@@ -30,6 +30,12 @@ export class CreateAsignationDto {
   @IsOptional()
   similarBands?: string;
 
+  // Texto libre para "Género:" en el post de WordPress. Ver comentario en
+  // la entidad: no toca el genre estructurado del disco.
+  @IsString()
+  @IsOptional()
+  genre?: string;
+
   // Id de pista de Spotify (formato base62 típico de Spotify), elegido en
   // el <select> del front a partir de GET /discs/:id/spotify-tracks.
   // Cadena vacía = "volver a la selección automática" (el <select> manda

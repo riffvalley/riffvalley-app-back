@@ -909,7 +909,9 @@ export class ListsService {
       .map((a, i) => {
         const artist = a.disc?.artist?.name ?? '';
         const discName = a.disc?.name ?? '';
-        const genre = a.disc?.genre?.name ?? 'xx';
+        // Texto libre (Asignation.genre), no el genre estructurado del
+        // disco: se rellena a mano por asignación, igual que similarBands.
+        const genre = a.genre || 'xx';
         const image = a.disc?.image ?? '';
         const debut = a.disc?.debut ? ' <em>(Debut)</em>' : '';
         const description = a.disc?.description ?? '';
@@ -1669,7 +1671,9 @@ export class ListsService {
       .map((a, i) => {
         const artist = a.disc?.artist?.name ?? '';
         const discName = a.disc?.name ?? '';
-        const genre = a.disc?.genre?.name ?? 'xx';
+        // Texto libre (Asignation.genre), no el genre estructurado del
+        // disco: se rellena a mano por asignación, igual que similarBands.
+        const genre = a.genre || 'xx';
         const image = a.disc?.image ?? '';
         const debut = a.disc?.debut ? ' <em>(Debut)</em>' : '';
         const description = a.disc?.description ?? '';

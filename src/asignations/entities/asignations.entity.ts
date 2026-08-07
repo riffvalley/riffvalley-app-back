@@ -37,6 +37,12 @@ export class Asignation {
   @Column('text', { nullable: true })
   similarBands: string;
 
+  // Texto libre para la línea "Género:" del post de WordPress. No está
+  // ligado al genre estructurado del disco (Disc.genre): es una anotación
+  // manual por asignación, igual que similarBands.
+  @Column('text', { nullable: true })
+  genre: string;
+
   // Id exacto de la pista de Spotify a embeber en el post, elegida a mano
   // (ver GET /discs/:id/spotify-tracks). Si no hay ninguno, se usa la
   // selección automática de siempre (single del artista / 3er track).
