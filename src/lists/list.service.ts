@@ -577,7 +577,7 @@ export class ListsService {
     }
   }
 
-  async generateWordPressPosts(listId: string) {
+  async generateWordPressPosts(listId: string, position?: number) {
     const list = await this.findOne(listId);
 
     // Group asignations by position (skip null)
@@ -592,7 +592,17 @@ export class ListsService {
       byPosition.get(asignation.position).push(asignation);
     }
 
-    const sortedPositions = Array.from(byPosition.keys()).sort((a, b) => a - b);
+    // Si se pide una posición concreta, solo se genera/actualiza esa página
+    // en vez de todas las de la lista.
+    if (position !== undefined && !byPosition.has(position)) {
+      throw new BadRequestException(
+        `La lista ${listId} no tiene discos asignados a la posición ${position}`,
+      );
+    }
+
+    const sortedPositions = (
+      position !== undefined ? [position] : Array.from(byPosition.keys())
+    ).sort((a, b) => a - b);
 
     const rawReleaseDate = list.releaseDate
       ? new Date(list.releaseDate)
