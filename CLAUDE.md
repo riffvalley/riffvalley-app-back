@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SpamMusic Backend - A NestJS REST API for a music review/catalog platform (Riff Valley). Uses PostgreSQL with TypeORM for data persistence, JWT authentication with Passport, and i18n for internationalization.
+Riff Valley App Backend - A NestJS REST API for the Riff Valley music review/catalog platform. Uses PostgreSQL with TypeORM for data persistence, JWT authentication with Passport, and i18n for internationalization.
 
 ## Common Commands
 

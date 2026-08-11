@@ -1,7 +1,7 @@
 {
-  "name": "spam-music",
+  "name": "riff-valley-app",
   "version": "0.0.1",
-  "description": "",
+  "description": "Backend de Riff Valley App",
   "author": "",
   "private": true,
   "license": "UNLICENSED",

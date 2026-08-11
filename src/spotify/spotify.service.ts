@@ -134,7 +134,12 @@ export class SpotifyService {
   async findOne(id: string): Promise<Spotify> {
     const entity = await this.repo.findOne({
       where: { id },
-      relations: ['user', 'content'],
+      relations: [
+        'user',
+        'content',
+        'playlistArtists',
+        'playlistArtists.artist',
+      ],
     });
     if (!entity) throw new NotFoundException('Spotify item not found');
     return entity;
