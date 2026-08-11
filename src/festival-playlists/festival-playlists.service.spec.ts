@@ -663,4 +663,141 @@ describe('FestivalPlaylistsService', () => {
     expect(spotifyRequest).not.toHaveBeenCalled();
     expect(playlistArtistRepository.remove).toHaveBeenCalledWith(association);
   });
+
+  it('guarda exactamente dos canciones elegidas para un artista de género', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+      protectedTrackUris: [],
+    } as any;
+    artistRepository.findOneBy.mockResolvedValue({
+      id: 'artist-id',
+      name: 'Igorrr',
+    });
+    playlistArtistRepository.findOne.mockResolvedValue(null);
+    playlistArtistRepository.find.mockResolvedValue([]);
+    jest.spyOn(service, 'getGenrePlaylist').mockResolvedValue(playlist);
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    jest
+      .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
+      .mockResolvedValue([]);
+    const selectedTracks = ['track-one', 'track-two'].map((id, index) => ({
+      id,
+      name: `Song ${index + 1}`,
+      uri: `spotify:track:${id}`,
+      external_urls: { spotify: `https://open.spotify.com/track/${id}` },
+      artists: [{ id: 'spotify-artist', name: 'Igorrr' }],
+      album: {
+        name: 'Album',
+        images: [{ url: 'https://image', height: 300, width: 300 }],
+      },
+      duration_ms: 180000,
+    }));
+    const spotifyRequest = jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockImplementation(async (path: string) =>
+        path.startsWith('/tracks?') ? { tracks: selectedTracks } : {},
+      );
+
+    await service.addGenreArtist(playlist.id, 'artist-id', [
+      'track-one',
+      'track-two',
+    ]);
+
+    expect(spotifyRequest).toHaveBeenCalledWith(
+      '/playlists/playlist-remote/items',
+      'access-token',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          uris: ['spotify:track:track-one', 'spotify:track:track-two'],
+        }),
+      },
+    );
+    expect(playlistArtistRepository.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectionMode: 'manual',
+        spotifyArtistId: 'spotify-artist',
+        status: 'synced',
+        tracks: [
+          expect.objectContaining({ spotifyTrackId: 'track-one' }),
+          expect.objectContaining({ spotifyTrackId: 'track-two' }),
+        ],
+      }),
+    );
+  });
+
+  it('al cambiar canciones manuales conserva una pista compartida', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+      protectedTrackUris: [],
+    } as any;
+    const association = {
+      id: 'association-one',
+      spotifyId: playlist.id,
+      artistId: 'artist-id',
+      spotifyArtistId: null,
+      tracks: [
+        { uri: 'spotify:track:old-only' },
+        { uri: 'spotify:track:shared' },
+      ],
+    } as any;
+    artistRepository.findOneBy.mockResolvedValue({
+      id: 'artist-id',
+      name: 'Igorrr',
+    });
+    playlistArtistRepository.findOne.mockResolvedValue(association);
+    playlistArtistRepository.find.mockResolvedValue([
+      association,
+      {
+        id: 'association-two',
+        tracks: [{ uri: 'spotify:track:shared' }],
+      },
+    ]);
+    jest.spyOn(service, 'getGenrePlaylist').mockResolvedValue(playlist);
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    jest
+      .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
+      .mockResolvedValue(['spotify:track:old-only', 'spotify:track:shared']);
+    const selectedTracks = ['new-one', 'new-two'].map((id) => ({
+      id,
+      name: id,
+      uri: `spotify:track:${id}`,
+      external_urls: { spotify: `https://open.spotify.com/track/${id}` },
+      artists: [{ id: 'spotify-artist', name: 'Igorrr' }],
+    }));
+    const spotifyRequest = jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockImplementation(async (path: string) =>
+        path.startsWith('/tracks?') ? { tracks: selectedTracks } : {},
+      );
+
+    await service.replaceGenreArtistTracks(playlist.id, 'artist-id', [
+      'new-one',
+      'new-two',
+    ]);
+
+    expect(spotifyRequest).toHaveBeenCalledWith(
+      '/playlists/playlist-remote/items',
+      'access-token',
+      {
+        method: 'DELETE',
+        body: JSON.stringify({
+          items: [{ uri: 'spotify:track:old-only' }],
+        }),
+      },
+    );
+    expect(spotifyRequest).not.toHaveBeenCalledWith(
+      '/playlists/playlist-remote/items',
+      'access-token',
+      expect.objectContaining({
+        body: expect.stringContaining('spotify:track:shared'),
+      }),
+    );
+  });
 });

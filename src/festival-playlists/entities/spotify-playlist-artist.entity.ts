@@ -17,12 +17,21 @@ export enum PlaylistArtistSyncStatus {
   FAILED = 'failed',
 }
 
+export enum PlaylistArtistSelectionMode {
+  SETLIST = 'setlist',
+  MANUAL = 'manual',
+}
+
 export interface PlaylistTrackRecord {
   spotifyTrackId: string;
   uri: string;
   name: string;
   url: string;
   plays: number;
+  artists?: Array<{ id: string; name: string }>;
+  album?: string;
+  imageUrl?: string | null;
+  durationMs?: number;
 }
 
 @Entity('spotify_playlist_artists')
@@ -49,6 +58,22 @@ export class SpotifyPlaylistArtist {
 
   @Column({ type: 'varchar', length: 20 })
   status: PlaylistArtistSyncStatus;
+
+  @Column({
+    name: 'selection_mode',
+    type: 'varchar',
+    length: 20,
+    default: PlaylistArtistSelectionMode.SETLIST,
+  })
+  selectionMode: PlaylistArtistSelectionMode;
+
+  @Column({
+    name: 'spotify_artist_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  spotifyArtistId: string | null;
 
   @Column({ name: 'setlists_analyzed', type: 'int', default: 0 })
   setlistsAnalyzed: number;

@@ -135,6 +135,31 @@ forma explícita.
 `DELETE /api/festival-playlists/spotify/connection` elimina los tokens locales,
 pero no borra las playlists creadas en Spotify.
 
+## Playlists de género con selección manual
+
+Las playlists `genero`, `especial` y `otras` reutilizan la misma conexión OAuth,
+pero cada artista guarda exactamente dos canciones elegidas por el usuario. La
+búsqueda se consulta en Spotify al vuelo y la selección final se persiste en
+`spotify_playlist_artists.tracks` con `selection_mode = manual`.
+
+- `POST /api/genre-playlists` crea la playlist real y el registro local.
+- `POST /api/genre-playlists/link` vincula una playlist pegando su URL.
+- `POST /api/genre-playlists/:spotifyId/link` vincula un registro local antiguo.
+- `GET /api/genre-playlists/:spotifyId/artists/:artistId/tracks?q=...` busca
+  canciones del artista en Spotify.
+- `POST /api/genre-playlists/:spotifyId/artists` recibe `artistId` y dos
+  `spotifyTrackIds` distintos.
+- `PUT /api/genre-playlists/:spotifyId/artists/:artistId/tracks` sustituye las
+  dos canciones guardadas.
+- `DELETE /api/genre-playlists/:spotifyId/artists/:artistId` elimina el artista
+  sin borrar canciones protegidas o compartidas.
+- `DELETE /api/genre-playlists/:spotifyId/tracks` vacía completamente la
+  playlist real y sus asociaciones locales.
+
+Los metadatos y la imagen se gestionan con
+`PATCH /api/genre-playlists/:spotifyId` y
+`PUT /api/genre-playlists/:spotifyId/image`.
+
 ## Criterio musical
 
 Se analizan por defecto los últimos diez conciertos con canciones y se obtienen
