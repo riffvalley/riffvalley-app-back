@@ -16,7 +16,8 @@ base de datos.
    caracteres.
 5. Ejecutar las migraciones `1786400000000-CreateSpotifyConnections`,
    `1786401000000-CreateSpotifyPlaylistArtists` y
-   `1786402000000-AddSpotifyPlaylistImage`.
+   `1786402000000-AddSpotifyPlaylistImage` y
+   `1786403000000-AddSpotifyProtectedTracks`.
 
 ## Flujo
 
@@ -51,6 +52,13 @@ a completar el OAuth antes de cambiar portadas.
 La operación crea inmediatamente la playlist vacía en Spotify y el registro
 local en `spotify`, incluyendo `spotifyPlaylistId`, URL y fecha. No asigna la
 playlist al usuario que pulsa el botón.
+
+Los registros antiguos que ya tengan un enlace de Spotify pero no tengan
+`spotifyPlaylistId` se vinculan con
+`POST /api/festival-playlists/:spotifyId/link`. El backend comprueba que la
+playlist pertenezca a la cuenta conectada, sincroniza sus metadatos y conserva
+como protegidas todas las pistas que ya existían para que al quitar después un
+artista no se borren accidentalmente.
 
 ### 3. Editar nombre, descripción, visibilidad o portada
 
@@ -87,6 +95,9 @@ las pistas exactas, los conciertos analizados y el estado de sincronización. Si
 la sincronización falla, el registro permanece con estado `failed` y puede
 reintentarse enviando de nuevo el mismo `POST`.
 
+Antes de añadir pistas se consulta el contenido real de Spotify, de forma que
+no se duplican canciones que ya estuvieran en una playlist vinculada.
+
 ### 5. Consultar o quitar artistas
 
 `GET /api/festival-playlists/:spotifyId` devuelve la playlist con sus artistas,
@@ -94,6 +105,13 @@ pistas y estados.
 
 `DELETE /api/festival-playlists/:spotifyId/artists/:artistId` elimina sus pistas
 de Spotify y su relación local. Una pista compartida con otro artista se conserva.
+
+`DELETE /api/festival-playlists/:spotifyId/tracks` vacía por completo la
+playlist real de Spotify, incluidas las pistas anteriores a la vinculación. Las
+eliminaciones se envían en lotes de cien y, cuando Spotify termina, se borran
+también todas las asociaciones locales de artistas y la lista de pistas
+protegidas. Es una operación destructiva que el frontend debe confirmar de
+forma explícita.
 
 `DELETE /api/festival-playlists/spotify/connection` elimina los tokens locales,
 pero no borra las playlists creadas en Spotify.

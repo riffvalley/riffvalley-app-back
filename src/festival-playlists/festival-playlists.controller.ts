@@ -92,6 +92,16 @@ export class FestivalPlaylistsController {
     return this.festivalPlaylistsService.createFestivalPlaylist(dto);
   }
 
+  @Post(':spotifyId/link')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  linkExistingFestivalPlaylist(
+    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+  ) {
+    return this.festivalPlaylistsService.linkExistingFestivalPlaylist(
+      spotifyId,
+    );
+  }
+
   @Patch(':spotifyId')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   updateFestivalPlaylist(
@@ -141,6 +151,12 @@ export class FestivalPlaylistsController {
     @Body() dto: SyncPlaylistArtistDto,
   ) {
     return this.festivalPlaylistsService.addArtist(spotifyId, dto);
+  }
+
+  @Delete(':spotifyId/tracks')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  clearFestivalPlaylist(@Param('spotifyId', ParseUUIDPipe) spotifyId: string) {
+    return this.festivalPlaylistsService.clearFestivalPlaylist(spotifyId);
   }
 
   @Delete(':spotifyId/artists/:artistId')

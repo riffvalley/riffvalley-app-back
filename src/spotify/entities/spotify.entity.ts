@@ -59,6 +59,13 @@ export class Spotify {
   @Column({ name: 'image_url', type: 'varchar', length: 500, nullable: true })
   imageUrl: string | null;
 
+  @Column({
+    name: 'protected_track_uris',
+    type: 'jsonb',
+    default: () => "'[]'::jsonb",
+  })
+  protectedTrackUris: string[];
+
   @Column({ type: 'enum', enum: SpotifyType })
   type: SpotifyType;
 
