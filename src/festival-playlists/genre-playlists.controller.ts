@@ -137,4 +137,9 @@ export class GenrePlaylistsController {
   clear(@Param('spotifyId', ParseUUIDPipe) spotifyId: string) {
     return this.festivalPlaylistsService.clearGenrePlaylist(spotifyId);
   }
+
+  @Post(':spotifyId/shuffle')
+  shuffle(@Param('spotifyId', ParseUUIDPipe) spotifyId: string) {
+    return this.festivalPlaylistsService.shuffleGenrePlaylist(spotifyId);
+  }
 }

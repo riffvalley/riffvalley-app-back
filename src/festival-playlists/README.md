@@ -155,6 +155,8 @@ búsqueda se consulta en Spotify al vuelo y la selección final se persiste en
   sin borrar canciones protegidas o compartidas.
 - `DELETE /api/genre-playlists/:spotifyId/tracks` vacía completamente la
   playlist real y sus asociaciones locales.
+- `POST /api/genre-playlists/:spotifyId/shuffle` mezcla el orden de todas las
+  canciones reales, incluidas las anteriores a la vinculación.
 
 Los metadatos y la imagen se gestionan con
 `PATCH /api/genre-playlists/:spotifyId` y

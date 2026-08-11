@@ -12,7 +12,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 import { Repository } from 'typeorm';
 import { CreateSyncedPlaylistDto } from './dto/create-synced-playlist.dto';
 import { LinkSpotifyPlaylistDto } from './dto/link-spotify-playlist.dto';
@@ -909,6 +909,47 @@ export class FestivalPlaylistsService {
     return this.clearFestivalPlaylist(spotifyId);
   }
 
+  async shuffleGenrePlaylist(spotifyId: string) {
+    const spotify = await this.getGenrePlaylist(spotifyId);
+    const accessToken = await this.getValidAccessToken();
+    const originalUris = await this.getSpotifyPlaylistTrackUrisInOrder(
+      accessToken,
+      spotify.spotifyPlaylistId,
+    );
+    if (originalUris.length < 2) {
+      throw new BadRequestException(
+        'La playlist necesita al menos dos canciones para mezclar el orden',
+      );
+    }
+
+    const shuffledUris = this.shuffleTrackUris(originalUris);
+    try {
+      await this.replaceSpotifyPlaylistTrackUris(
+        accessToken,
+        spotify.spotifyPlaylistId,
+        shuffledUris,
+      );
+    } catch (error) {
+      try {
+        await this.replaceSpotifyPlaylistTrackUris(
+          accessToken,
+          spotify.spotifyPlaylistId,
+          originalUris,
+        );
+      } catch (rollbackError) {
+        this.logger.error(
+          `No se pudo restaurar el orden de la playlist ${spotify.spotifyPlaylistId}: ${this.errorMessage(rollbackError)}`,
+        );
+      }
+      throw error;
+    }
+
+    await this.spotifyRepository.update(spotify.id, {
+      updateDate: new Date(),
+    });
+    return this.getGenrePlaylist(spotifyId);
+  }
+
   private async saveGenreArtistTracks(
     spotifyId: string,
     artistId: string,
@@ -1242,6 +1283,72 @@ export class FestivalPlaylistsService {
     }
 
     return [...uris];
+  }
+
+  private async getSpotifyPlaylistTrackUrisInOrder(
+    accessToken: string,
+    spotifyPlaylistId: string,
+  ): Promise<string[]> {
+    const uris: string[] = [];
+    let offset = 0;
+
+    while (true) {
+      const page = await this.spotifyRequest<SpotifyPlaylistItemsPage>(
+        `/playlists/${spotifyPlaylistId}/items?limit=50&offset=${offset}`,
+        accessToken,
+      );
+      const items = page.items ?? [];
+      for (const entry of items) {
+        const uri = entry.item?.uri ?? entry.track?.uri;
+        if (uri) uris.push(uri);
+      }
+      if (!page.next || !items.length) break;
+      offset += items.length;
+    }
+
+    return uris;
+  }
+
+  private shuffleTrackUris(originalUris: string[]): string[] {
+    const shuffledUris = [...originalUris];
+    for (let index = shuffledUris.length - 1; index > 0; index -= 1) {
+      const randomIndex = randomInt(index + 1);
+      [shuffledUris[index], shuffledUris[randomIndex]] = [
+        shuffledUris[randomIndex],
+        shuffledUris[index],
+      ];
+    }
+
+    if (shuffledUris.every((uri, index) => uri === originalUris[index])) {
+      shuffledUris.push(shuffledUris.shift()!);
+    }
+    return shuffledUris;
+  }
+
+  private async replaceSpotifyPlaylistTrackUris(
+    accessToken: string,
+    spotifyPlaylistId: string,
+    uris: string[],
+  ): Promise<void> {
+    await this.spotifyRequest(
+      `/playlists/${spotifyPlaylistId}/items`,
+      accessToken,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ uris: uris.slice(0, 100) }),
+      },
+    );
+
+    for (let index = 100; index < uris.length; index += 100) {
+      await this.spotifyRequest(
+        `/playlists/${spotifyPlaylistId}/items`,
+        accessToken,
+        {
+          method: 'POST',
+          body: JSON.stringify({ uris: uris.slice(index, index + 100) }),
+        },
+      );
+    }
   }
 
   private async getValidAccessToken(

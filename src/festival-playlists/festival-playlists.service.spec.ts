@@ -800,4 +800,65 @@ describe('FestivalPlaylistsService', () => {
       }),
     );
   });
+
+  it('mezcla todas las canciones de una playlist de género y conserva sus duplicados', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+    } as any;
+    const originalUris = [
+      'spotify:track:one',
+      'spotify:track:two',
+      'spotify:track:two',
+      'spotify:track:three',
+    ];
+    jest.spyOn(service, 'getGenrePlaylist').mockResolvedValue(playlist);
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    jest
+      .spyOn(service as any, 'getSpotifyPlaylistTrackUrisInOrder')
+      .mockResolvedValue(originalUris);
+    const replaceTracks = jest
+      .spyOn(service as any, 'replaceSpotifyPlaylistTrackUris')
+      .mockResolvedValue(undefined);
+
+    await service.shuffleGenrePlaylist(playlist.id);
+
+    const shuffledUris = replaceTracks.mock.calls[0][2] as string[];
+    expect(shuffledUris).not.toEqual(originalUris);
+    expect([...shuffledUris].sort()).toEqual([...originalUris].sort());
+    expect(replaceTracks).toHaveBeenCalledTimes(1);
+    expect(spotifyRepository.update).toHaveBeenCalledWith(
+      playlist.id,
+      expect.objectContaining({ updateDate: expect.any(Date) }),
+    );
+  });
+
+  it('restaura el orden original si Spotify falla durante la mezcla', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+    } as any;
+    const originalUris = ['spotify:track:one', 'spotify:track:two'];
+    jest.spyOn(service, 'getGenrePlaylist').mockResolvedValue(playlist);
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    jest
+      .spyOn(service as any, 'getSpotifyPlaylistTrackUrisInOrder')
+      .mockResolvedValue(originalUris);
+    const replaceTracks = jest
+      .spyOn(service as any, 'replaceSpotifyPlaylistTrackUris')
+      .mockRejectedValueOnce(new Error('Spotify error'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(service.shuffleGenrePlaylist(playlist.id)).rejects.toThrow(
+      'Spotify error',
+    );
+
+    expect(replaceTracks).toHaveBeenCalledTimes(2);
+    expect(replaceTracks.mock.calls[1][2]).toEqual(originalUris);
+    expect(spotifyRepository.update).not.toHaveBeenCalled();
+  });
 });
