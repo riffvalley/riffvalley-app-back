@@ -56,6 +56,9 @@ export class Spotify {
   @Column({ name: 'is_public', type: 'boolean', default: false })
   isPublic: boolean;
 
+  @Column({ name: 'image_url', type: 'varchar', length: 500, nullable: true })
+  imageUrl: string | null;
+
   @Column({ type: 'enum', enum: SpotifyType })
   type: SpotifyType;
 

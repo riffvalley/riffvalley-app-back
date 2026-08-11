@@ -14,8 +14,9 @@ base de datos.
 4. Configurar las variables de `.env.template`. La clave
    `SPOTIFY_TOKEN_ENCRYPTION_KEY` debe ser estable y tener al menos 32
    caracteres.
-5. Ejecutar las migraciones `1786400000000-CreateSpotifyConnections` y
-   `1786401000000-CreateSpotifyPlaylistArtists`.
+5. Ejecutar las migraciones `1786400000000-CreateSpotifyConnections`,
+   `1786401000000-CreateSpotifyPlaylistArtists` y
+   `1786402000000-AddSpotifyPlaylistImage`.
 
 ## Flujo
 
@@ -31,7 +32,9 @@ cuenta oficial y sus playlists.
 frontend redirige allí al usuario y Spotify vuelve al callback del backend.
 
 El estado puede consultarse con
-`GET /api/festival-playlists/spotify/connection`.
+`GET /api/festival-playlists/spotify/connection`. La respuesta incluye
+`canUploadImages` y `missingScopes`; si falta `ugc-image-upload`, hay que volver
+a completar el OAuth antes de cambiar portadas.
 
 ### 2. Crear la playlist
 
@@ -49,7 +52,24 @@ La operación crea inmediatamente la playlist vacía en Spotify y el registro
 local en `spotify`, incluyendo `spotifyPlaylistId`, URL y fecha. No asigna la
 playlist al usuario que pulsa el botón.
 
-### 3. Añadir un artista
+### 3. Editar nombre, descripción, visibilidad o portada
+
+`PATCH /api/festival-playlists/:spotifyId` acepta uno o varios campos:
+
+```json
+{
+  "name": "Resurrection Fest 2027 actualizado",
+  "description": "Nueva descripción",
+  "public": true
+}
+```
+
+`PUT /api/festival-playlists/:spotifyId/image` recibe `multipart/form-data` con
+la imagen en el campo `image`. Spotify sólo admite JPEG y limita a 256 KB la
+imagen codificada en Base64, por lo que conviene comprimir la portada antes de
+subirla. La URL resultante queda guardada en `imageUrl`.
+
+### 4. Añadir un artista
 
 `POST /api/festival-playlists/:spotifyId/artists`
 
@@ -67,7 +87,7 @@ las pistas exactas, los conciertos analizados y el estado de sincronización. Si
 la sincronización falla, el registro permanece con estado `failed` y puede
 reintentarse enviando de nuevo el mismo `POST`.
 
-### 4. Consultar o quitar artistas
+### 5. Consultar o quitar artistas
 
 `GET /api/festival-playlists/:spotifyId` devuelve la playlist con sus artistas,
 pistas y estados.

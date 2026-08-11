@@ -13,6 +13,7 @@ import { randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
 import { CreateSyncedPlaylistDto } from './dto/create-synced-playlist.dto';
 import { SyncPlaylistArtistDto } from './dto/sync-playlist-artist.dto';
+import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
 import { SpotifyConnection } from './entities/spotify-connection.entity';
 import { TokenCryptoService } from './token-crypto.service';
 import {
@@ -33,6 +34,7 @@ const SETLIST_API_URL = 'https://api.setlist.fm/rest/1.0';
 const SPOTIFY_SCOPES = [
   'playlist-modify-private',
   'playlist-modify-public',
+  'ugc-image-upload',
   'user-read-private',
 ];
 const RIFF_VALLEY_CONNECTION_KEY = 'riff-valley';
@@ -56,6 +58,12 @@ interface SpotifyTrack {
   uri: string;
   artists: { name: string }[];
   external_urls: { spotify: string };
+}
+
+interface SpotifyImage {
+  url: string;
+  height: number | null;
+  width: number | null;
 }
 
 interface SetlistSong {
@@ -174,10 +182,18 @@ export class FestivalPlaylistsService {
     const connection = await this.connectionRepository.findOne({
       where: { connectionKey: RIFF_VALLEY_CONNECTION_KEY },
     });
+    const grantedScopes = new Set(
+      (connection?.scope ?? '').split(/\s+/).filter(Boolean),
+    );
+    const missingScopes = SPOTIFY_SCOPES.filter(
+      (scope) => !grantedScopes.has(scope),
+    );
     return {
       connected: Boolean(connection?.spotifyUserId && connection?.expiresAt),
       spotifyUserId: connection?.spotifyUserId ?? null,
       displayName: connection?.displayName ?? null,
+      canUploadImages: !missingScopes.includes('ugc-image-upload'),
+      missingScopes,
     };
   }
 
@@ -288,6 +304,87 @@ export class FestivalPlaylistsService {
     await this.spotifyRepository.save(spotify);
 
     return this.getFestivalPlaylist(spotify.id);
+  }
+
+  async updateFestivalPlaylist(
+    spotifyId: string,
+    dto: UpdateSyncedPlaylistDto,
+  ) {
+    if (
+      dto.name === undefined &&
+      dto.description === undefined &&
+      dto.public === undefined
+    ) {
+      throw new BadRequestException(
+        'Indica al menos un campo para actualizar la playlist',
+      );
+    }
+
+    const spotify = await this.getFestivalPlaylist(spotifyId);
+    const accessToken = await this.getValidAccessToken();
+    await this.spotifyRequest(
+      `/playlists/${spotify.spotifyPlaylistId}`,
+      accessToken,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.description !== undefined
+            ? { description: dto.description }
+            : {}),
+          ...(dto.public !== undefined ? { public: dto.public } : {}),
+        }),
+      },
+    );
+
+    await this.spotifyRepository.update(spotify.id, {
+      ...(dto.name !== undefined ? { name: dto.name } : {}),
+      ...(dto.description !== undefined
+        ? { description: dto.description }
+        : {}),
+      ...(dto.public !== undefined ? { isPublic: dto.public } : {}),
+      updateDate: new Date(),
+    });
+    return this.getFestivalPlaylist(spotifyId);
+  }
+
+  async updateFestivalPlaylistImage(spotifyId: string, image: Buffer) {
+    if (
+      image.length < 3 ||
+      image[0] !== 0xff ||
+      image[1] !== 0xd8 ||
+      image[2] !== 0xff
+    ) {
+      throw new BadRequestException('La portada no contiene un JPEG válido');
+    }
+
+    const encodedImage = image.toString('base64');
+    if (Buffer.byteLength(encodedImage, 'utf8') > 256 * 1024) {
+      throw new BadRequestException(
+        'La portada codificada no puede superar los 256 KB',
+      );
+    }
+
+    const spotify = await this.getFestivalPlaylist(spotifyId);
+    const accessToken = await this.getValidAccessToken(['ugc-image-upload']);
+    await this.spotifyRequest(
+      `/playlists/${spotify.spotifyPlaylistId}/images`,
+      accessToken,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/jpeg' },
+        body: encodedImage,
+      },
+    );
+    const images = await this.spotifyRequest<SpotifyImage[]>(
+      `/playlists/${spotify.spotifyPlaylistId}/images`,
+      accessToken,
+    );
+    await this.spotifyRepository.update(spotify.id, {
+      imageUrl: images[0]?.url ?? spotify.imageUrl,
+      updateDate: new Date(),
+    });
+    return this.getFestivalPlaylist(spotifyId);
   }
 
   async getFestivalPlaylist(spotifyId: string) {
@@ -475,7 +572,9 @@ export class FestivalPlaylistsService {
     );
   }
 
-  private async getValidAccessToken(): Promise<string> {
+  private async getValidAccessToken(
+    requiredScopes: string[] = [],
+  ): Promise<string> {
     const connection = await this.connectionRepository
       .createQueryBuilder('connection')
       .addSelect(['connection.accessToken', 'connection.refreshToken'])
@@ -491,6 +590,18 @@ export class FestivalPlaylistsService {
     ) {
       throw new UnauthorizedException(
         'El usuario no ha conectado su cuenta de Spotify',
+      );
+    }
+
+    const grantedScopes = new Set(
+      (connection.scope ?? '').split(/\s+/).filter(Boolean),
+    );
+    const missingScopes = requiredScopes.filter(
+      (scope) => !grantedScopes.has(scope),
+    );
+    if (missingScopes.length) {
+      throw new UnauthorizedException(
+        `Faltan permisos de Spotify (${missingScopes.join(', ')}). Reconecta la cuenta`,
       );
     }
 
@@ -578,8 +689,9 @@ export class FestivalPlaylistsService {
         `Spotify respondió con ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`,
       );
     }
-    if (response.status === 204) return undefined as T;
-    return response.json() as Promise<T>;
+    const responseBody = await response.text();
+    if (!responseBody) return undefined as T;
+    return JSON.parse(responseBody) as T;
   }
 
   private songsFromSetlist(setlist: Setlist): SetlistSong[] {
