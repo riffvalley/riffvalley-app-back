@@ -3,12 +3,13 @@ import { FestivalPlaylistsService } from './festival-playlists.service';
 
 describe('FestivalPlaylistsService', () => {
   let service: FestivalPlaylistsService;
+  let connectionRepository: any;
   let spotifyRepository: any;
   let artistRepository: any;
   let playlistArtistRepository: any;
 
   beforeEach(() => {
-    const repository = {} as any;
+    connectionRepository = { findOne: jest.fn() };
     spotifyRepository = {
       create: jest.fn((value) => ({ id: 'playlist-local', ...value })),
       save: jest.fn(),
@@ -28,7 +29,7 @@ describe('FestivalPlaylistsService', () => {
       ),
     } as unknown as ConfigService;
     service = new FestivalPlaylistsService(
-      repository,
+      connectionRepository,
       spotifyRepository,
       artistRepository,
       playlistArtistRepository,
@@ -117,6 +118,104 @@ describe('FestivalPlaylistsService', () => {
       expect.objectContaining({
         spotifyPlaylistId: 'playlist-remote',
         link: 'https://open.spotify.com/playlist/remote',
+      }),
+    );
+  });
+
+  it('actualiza los detalles tanto en Spotify como en el registro local', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+    } as any;
+    jest.spyOn(service, 'getFestivalPlaylist').mockResolvedValue(playlist);
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    const spotifyRequest = jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockResolvedValue(undefined);
+
+    await service.updateFestivalPlaylist(playlist.id, {
+      name: 'Festival actualizado',
+      description: '',
+      public: true,
+    });
+
+    expect(spotifyRequest).toHaveBeenCalledWith(
+      '/playlists/playlist-remote',
+      'access-token',
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: 'Festival actualizado',
+          description: '',
+          public: true,
+        }),
+      },
+    );
+    expect(spotifyRepository.update).toHaveBeenCalledWith(
+      playlist.id,
+      expect.objectContaining({
+        name: 'Festival actualizado',
+        description: '',
+        isPublic: true,
+        updateDate: expect.any(Date),
+      }),
+    );
+  });
+
+  it('sube una portada JPEG y guarda la URL devuelta por Spotify', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+      imageUrl: null,
+    } as any;
+    const image = Buffer.from([0xff, 0xd8, 0xff, 0x00]);
+    jest.spyOn(service, 'getFestivalPlaylist').mockResolvedValue(playlist);
+    const getToken = jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    const spotifyRequest = jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce([
+        { url: 'https://image-cdn.test/cover.jpg', width: 640, height: 640 },
+      ]);
+
+    await service.updateFestivalPlaylistImage(playlist.id, image);
+
+    expect(getToken).toHaveBeenCalledWith(['ugc-image-upload']);
+    expect(spotifyRequest).toHaveBeenNthCalledWith(
+      1,
+      '/playlists/playlist-remote/images',
+      'access-token',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/jpeg' },
+        body: image.toString('base64'),
+      },
+    );
+    expect(spotifyRepository.update).toHaveBeenCalledWith(
+      playlist.id,
+      expect.objectContaining({
+        imageUrl: 'https://image-cdn.test/cover.jpg',
+        updateDate: expect.any(Date),
+      }),
+    );
+  });
+
+  it('informa cuando la conexión necesita autorizar la subida de imágenes', async () => {
+    connectionRepository.findOne.mockResolvedValue({
+      spotifyUserId: 'spotify-user',
+      expiresAt: new Date(),
+      scope: 'playlist-modify-private playlist-modify-public user-read-private',
+    });
+
+    await expect(service.getSpotifyConnection()).resolves.toEqual(
+      expect.objectContaining({
+        connected: true,
+        canUploadImages: false,
+        missingScopes: ['ugc-image-upload'],
       }),
     );
   });

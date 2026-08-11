@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -6,17 +7,23 @@ import {
   HttpException,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
+  Put,
   Query,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { CreateSyncedPlaylistDto } from './dto/create-synced-playlist.dto';
 import { SyncPlaylistArtistDto } from './dto/sync-playlist-artist.dto';
 import { TopSongsQueryDto } from './dto/top-songs-query.dto';
+import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
 import { FestivalPlaylistsService } from './festival-playlists.service';
 
 @Controller('festival-playlists')
@@ -83,6 +90,42 @@ export class FestivalPlaylistsController {
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   createFestivalPlaylist(@Body() dto: CreateSyncedPlaylistDto) {
     return this.festivalPlaylistsService.createFestivalPlaylist(dto);
+  }
+
+  @Patch(':spotifyId')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  updateFestivalPlaylist(
+    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Body() dto: UpdateSyncedPlaylistDto,
+  ) {
+    return this.festivalPlaylistsService.updateFestivalPlaylist(spotifyId, dto);
+  }
+
+  @Put(':spotifyId/image')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 256 * 1024 },
+      fileFilter: (_request, file, callback) => {
+        if (file.mimetype !== 'image/jpeg') {
+          return callback(
+            new BadRequestException('La portada debe ser una imagen JPEG'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  updateFestivalPlaylistImage(
+    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @UploadedFile() image: Express.Multer.File,
+  ) {
+    if (!image) throw new BadRequestException('Falta la imagen de portada');
+    return this.festivalPlaylistsService.updateFestivalPlaylistImage(
+      spotifyId,
+      image.buffer,
+    );
   }
 
   @Get(':spotifyId')
