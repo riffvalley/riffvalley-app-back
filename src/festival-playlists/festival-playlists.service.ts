@@ -839,6 +839,30 @@ export class FestivalPlaylistsService {
     query?: string,
   ) {
     await this.getGenrePlaylist(spotifyId);
+    return this.searchArtistTracks(artistId, query);
+  }
+
+  async searchFestivalArtistTracks(
+    spotifyId: string,
+    artistId: string,
+    query?: string,
+  ) {
+    await this.getFestivalPlaylist(spotifyId);
+    const association = await this.playlistArtistRepository.findOne({
+      where: { spotifyId, artistId },
+    });
+    if (!association) {
+      throw new NotFoundException('Artist is not in this playlist');
+    }
+    if (association.status !== PlaylistArtistSyncStatus.FAILED) {
+      throw new BadRequestException(
+        'Solo se pueden elegir canciones manualmente para artistas con error',
+      );
+    }
+    return this.searchArtistTracks(artistId, query);
+  }
+
+  private async searchArtistTracks(artistId: string, query?: string) {
     const artist = await this.artistRepository.findOneBy({ id: artistId });
     if (!artist) throw new NotFoundException('Artist not found');
 
@@ -877,7 +901,12 @@ export class FestivalPlaylistsService {
         'El artista ya está asociado; utiliza la edición para cambiar sus canciones',
       );
     }
-    return this.saveGenreArtistTracks(spotifyId, artistId, spotifyTrackIds);
+    return this.saveManualArtistTracks(
+      spotifyId,
+      artistId,
+      spotifyTrackIds,
+      'genre',
+    );
   }
 
   async replaceGenreArtistTracks(
@@ -891,10 +920,36 @@ export class FestivalPlaylistsService {
     if (!existing) {
       throw new NotFoundException('Artist is not in this playlist');
     }
-    return this.saveGenreArtistTracks(
+    return this.saveManualArtistTracks(
       spotifyId,
       artistId,
       spotifyTrackIds,
+      'genre',
+      existing,
+    );
+  }
+
+  async replaceFailedFestivalArtistTracks(
+    spotifyId: string,
+    artistId: string,
+    spotifyTrackIds: string[],
+  ) {
+    const existing = await this.playlistArtistRepository.findOne({
+      where: { spotifyId, artistId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Artist is not in this playlist');
+    }
+    if (existing.status !== PlaylistArtistSyncStatus.FAILED) {
+      throw new BadRequestException(
+        'Solo se pueden elegir canciones manualmente para artistas con error',
+      );
+    }
+    return this.saveManualArtistTracks(
+      spotifyId,
+      artistId,
+      spotifyTrackIds,
+      'festival',
       existing,
     );
   }
@@ -950,20 +1005,37 @@ export class FestivalPlaylistsService {
     return this.getGenrePlaylist(spotifyId);
   }
 
-  private async saveGenreArtistTracks(
+  private async saveManualArtistTracks(
     spotifyId: string,
     artistId: string,
     spotifyTrackIds: string[],
+    playlistType: 'festival' | 'genre',
     current?: SpotifyPlaylistArtist,
   ) {
     const [spotify, artist] = await Promise.all([
-      this.getGenrePlaylist(spotifyId),
+      playlistType === 'genre'
+        ? this.getGenrePlaylist(spotifyId)
+        : this.getFestivalPlaylist(spotifyId),
       this.artistRepository.findOneBy({ id: artistId }),
     ]);
     if (!artist) throw new NotFoundException('Artist not found');
-    if (spotifyTrackIds.length !== 2 || new Set(spotifyTrackIds).size !== 2) {
+    const uniqueTrackCount = new Set(spotifyTrackIds).size;
+    const invalidGenreSelection =
+      playlistType === 'genre' &&
+      (spotifyTrackIds.length !== 2 || uniqueTrackCount !== 2);
+    const invalidFestivalSelection =
+      playlistType === 'festival' &&
+      (spotifyTrackIds.length < 1 ||
+        spotifyTrackIds.length > 10 ||
+        uniqueTrackCount !== spotifyTrackIds.length);
+    if (invalidGenreSelection) {
       throw new BadRequestException(
         'Debes seleccionar exactamente dos canciones distintas',
+      );
+    }
+    if (invalidFestivalSelection) {
+      throw new BadRequestException(
+        'Debes seleccionar entre una y diez canciones distintas',
       );
     }
 
@@ -1073,7 +1145,9 @@ export class FestivalPlaylistsService {
       await this.spotifyRepository.update(spotify.id, {
         updateDate: new Date(),
       });
-      return this.getGenrePlaylist(spotifyId);
+      return playlistType === 'genre'
+        ? this.getGenrePlaylist(spotifyId)
+        : this.getFestivalPlaylist(spotifyId);
     } catch (error) {
       association.status = PlaylistArtistSyncStatus.FAILED;
       association.lastError = this.errorMessage(error);

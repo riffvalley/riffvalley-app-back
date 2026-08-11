@@ -30,3 +30,13 @@ export class ReplacePlaylistArtistTracksDto {
   @Matches(/^[A-Za-z0-9]+$/, { each: true })
   spotifyTrackIds: string[];
 }
+
+export class ReplaceFailedFestivalArtistTracksDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @Matches(/^[A-Za-z0-9]+$/, { each: true })
+  spotifyTrackIds: string[];
+}

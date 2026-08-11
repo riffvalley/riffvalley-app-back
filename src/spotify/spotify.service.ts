@@ -53,14 +53,11 @@ export class SpotifyService {
     });
     const savedEntity = await this.repo.save(entity);
 
-    // Shortcut: if created with EDITING or READY, auto-create Content
-    if (
-      savedEntity.status === SpotifyStatusEnum.EDITING ||
-      savedEntity.status === SpotifyStatusEnum.READY
-    ) {
+    // A calendar event only exists once the playlist is finished.
+    if (savedEntity.status === SpotifyStatusEnum.READY) {
       if (!savedEntity.user) {
         throw new BadRequestException(
-          'Para crear un Spotify en estado EDITING, debe tener un usuario asignado.',
+          'Para crear un Spotify en estado READY, debe tener un usuario asignado.',
         );
       }
       await this.contentsService.create({
@@ -68,6 +65,7 @@ export class SpotifyService {
         type: ContentType.SPOTIFY,
         authorId: createSpotifyDto.userId,
         spotifyId: savedEntity.id,
+        backlog: true,
       } as any);
     }
 
@@ -167,6 +165,7 @@ export class SpotifyService {
       // Scheduled sync
       shouldSyncContent = true;
       contentSyncPayload.publicationDate = entity.updateDate;
+      contentSyncPayload.backlog = false;
     }
 
     // Handle User Assignment
@@ -176,16 +175,17 @@ export class SpotifyService {
 
     // Logic for State Transitions
     if (updateSpotifyDto.status && updateSpotifyDto.status !== entity.status) {
-      if (updateSpotifyDto.status === SpotifyStatusEnum.IN_PROGRESS) {
-        // Transitioning to IN_PROGRESS: delete associated Content
+      if (
+        updateSpotifyDto.status === SpotifyStatusEnum.NOT_STARTED ||
+        updateSpotifyDto.status === SpotifyStatusEnum.IN_PROGRESS ||
+        updateSpotifyDto.status === SpotifyStatusEnum.EDITING
+      ) {
+        // A playlist before READY must not have a calendar event.
         const content = await this.contentsService.findOneBySpotifyId(id);
         if (content) {
           await this.contentsService.remove(content.id);
         }
-      } else if (
-        updateSpotifyDto.status === SpotifyStatusEnum.EDITING ||
-        updateSpotifyDto.status === SpotifyStatusEnum.READY
-      ) {
+      } else if (updateSpotifyDto.status === SpotifyStatusEnum.READY) {
         const assignedUser = entity.user;
         if (!assignedUser) {
           throw new BadRequestException(
@@ -201,6 +201,7 @@ export class SpotifyService {
               type: ContentType.SPOTIFY,
               authorId: assignedUser.id,
               spotifyId: id,
+              backlog: true,
             } as any);
             entity.content = newContent;
           } catch (error) {
@@ -213,6 +214,7 @@ export class SpotifyService {
           shouldSyncContent = true;
           contentId = content.id;
           contentSyncPayload.publicationDate = null;
+          contentSyncPayload.backlog = true;
         }
       } else if (updateSpotifyDto.status === SpotifyStatusEnum.PUBLISHED) {
         if (!updateSpotifyDto.updateDate) {
@@ -223,6 +225,7 @@ export class SpotifyService {
         entity.updateDate = new Date(updateSpotifyDto.updateDate);
         shouldSyncContent = true;
         contentSyncPayload.publicationDate = entity.updateDate;
+        contentSyncPayload.backlog = false;
       }
     }
 

@@ -729,6 +729,95 @@ describe('FestivalPlaylistsService', () => {
     );
   });
 
+  it('permite recuperar un artista fallido de festival con una sola canción', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+      protectedTrackUris: [],
+    } as any;
+    const association = {
+      id: 'association-one',
+      spotifyId: playlist.id,
+      artistId: 'artist-id',
+      spotifyArtistId: null,
+      status: 'failed',
+      tracks: [],
+    } as any;
+    artistRepository.findOneBy.mockResolvedValue({
+      id: 'artist-id',
+      name: 'Igorrr',
+    });
+    playlistArtistRepository.findOne.mockResolvedValue(association);
+    playlistArtistRepository.find.mockResolvedValue([association]);
+    jest.spyOn(service, 'getFestivalPlaylist').mockResolvedValue(playlist);
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    jest
+      .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
+      .mockResolvedValue([]);
+    const spotifyTrack = {
+      id: 'track-one',
+      name: 'Song one',
+      uri: 'spotify:track:track-one',
+      external_urls: { spotify: 'https://open.spotify.com/track/track-one' },
+      artists: [{ id: 'spotify-artist', name: 'Igorrr' }],
+      album: { name: 'Album', images: [] },
+      duration_ms: 180000,
+    };
+    const spotifyRequest = jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockImplementation(async (path: string) =>
+        path.startsWith('/tracks?') ? { tracks: [spotifyTrack] } : {},
+      );
+
+    await service.replaceFailedFestivalArtistTracks(playlist.id, 'artist-id', [
+      'track-one',
+    ]);
+
+    expect(spotifyRequest).toHaveBeenCalledWith(
+      '/playlists/playlist-remote/items',
+      'access-token',
+      {
+        method: 'POST',
+        body: JSON.stringify({ uris: ['spotify:track:track-one'] }),
+      },
+    );
+    expect(playlistArtistRepository.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectionMode: 'manual',
+        status: 'synced',
+        lastError: null,
+        tracks: [expect.objectContaining({ spotifyTrackId: 'track-one' })],
+      }),
+    );
+  });
+
+  it('rechaza más de diez canciones manuales para un artista de festival', async () => {
+    const association = {
+      id: 'association-one',
+      status: 'failed',
+      tracks: [],
+    } as any;
+    playlistArtistRepository.findOne.mockResolvedValue(association);
+    artistRepository.findOneBy.mockResolvedValue({
+      id: 'artist-id',
+      name: 'Igorrr',
+    });
+    jest.spyOn(service, 'getFestivalPlaylist').mockResolvedValue({
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+    } as any);
+
+    await expect(
+      service.replaceFailedFestivalArtistTracks(
+        'playlist-local',
+        'artist-id',
+        Array.from({ length: 11 }, (_, index) => `track-${index}`),
+      ),
+    ).rejects.toThrow('entre una y diez canciones');
+  });
+
   it('al cambiar canciones manuales conserva una pista compartida', async () => {
     const playlist = {
       id: 'playlist-local',

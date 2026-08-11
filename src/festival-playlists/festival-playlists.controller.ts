@@ -22,6 +22,8 @@ import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { CreateSyncedPlaylistDto } from './dto/create-synced-playlist.dto';
 import { LinkSpotifyPlaylistDto } from './dto/link-spotify-playlist.dto';
+import { SearchSpotifyTracksQueryDto } from './dto/search-spotify-tracks-query.dto';
+import { ReplaceFailedFestivalArtistTracksDto } from './dto/select-playlist-artist-tracks.dto';
 import { SyncPlaylistArtistDto } from './dto/sync-playlist-artist.dto';
 import { TopSongsQueryDto } from './dto/top-songs-query.dto';
 import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
@@ -158,6 +160,34 @@ export class FestivalPlaylistsController {
     @Body() dto: SyncPlaylistArtistDto,
   ) {
     return this.festivalPlaylistsService.addArtist(spotifyId, dto);
+  }
+
+  @Get(':spotifyId/artists/:artistId/tracks')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  searchArtistTracks(
+    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('artistId', ParseUUIDPipe) artistId: string,
+    @Query() query: SearchSpotifyTracksQueryDto,
+  ) {
+    return this.festivalPlaylistsService.searchFestivalArtistTracks(
+      spotifyId,
+      artistId,
+      query.q,
+    );
+  }
+
+  @Put(':spotifyId/artists/:artistId/tracks')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  replaceFailedArtistTracks(
+    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('artistId', ParseUUIDPipe) artistId: string,
+    @Body() dto: ReplaceFailedFestivalArtistTracksDto,
+  ) {
+    return this.festivalPlaylistsService.replaceFailedFestivalArtistTracks(
+      spotifyId,
+      artistId,
+      dto.spotifyTrackIds,
+    );
   }
 
   @Delete(':spotifyId/tracks')
