@@ -29,7 +29,7 @@ import {
   VideoType,
 } from 'src/videos/entities/video.entity';
 import { ListsService } from 'src/lists/list.service';
-import { List, ListStatus } from 'src/lists/entities/list.entity';
+import { List } from 'src/lists/entities/list.entity';
 
 @Injectable()
 export class ContentsService {
@@ -295,17 +295,9 @@ export class ContentsService {
   }
 
   async findAll(ready?: boolean, backlog?: boolean): Promise<Content[]> {
-    const baseWhere = ready !== undefined ? { ready } : {};
-    const where: any =
-      backlog === true
-        ? [
-            { ...baseWhere, backlog: true },
-            { ...baseWhere, list: { status: ListStatus.COMPLETED } },
-          ]
-        : {
-            ...baseWhere,
-            ...(backlog !== undefined ? { backlog } : {}),
-          };
+    const where: any = {};
+    if (ready !== undefined) where.ready = ready;
+    if (backlog !== undefined) where.backlog = backlog;
     return this.contentRepo.find({
       where,
       relations: [

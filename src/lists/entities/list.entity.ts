@@ -21,12 +21,11 @@ export enum SpecialListType {
 export enum ListStatus {
   NEW = 'new',
   ASSIGNED = 'assigned',
-  COMPLETED = 'completed',
-  REVISED = 'revised',
-  WITH_IMAGE = 'withimage',
-  SCHEDULED = 'scheduled',
-  WEB_PUBLISHED = 'webpublished',
-  SOCIAL_MEDIA_PUBLISHED = 'smpublished',
+  NOT_STARTED = 'not_started',
+  IN_PROGRESS = 'in_progress',
+  EDITING = 'editing',
+  READY = 'ready',
+  PUBLISHED = 'published',
 }
 
 export interface PublishedDiscRecord {
