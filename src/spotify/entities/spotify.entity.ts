@@ -6,9 +6,11 @@ import {
   UpdateDateColumn,
   OneToOne,
   ManyToOne,
+  OneToMany,
 } from 'typeorm';
 import { Content } from 'src/contents/entities/content.entity';
 import { User } from 'src/auth/entities/user.entity';
+import { SpotifyPlaylistArtist } from 'src/festival-playlists/entities/spotify-playlist-artist.entity';
 
 export enum SpotifyStatus {
   NOT_STARTED = 'not_started',
@@ -39,10 +41,28 @@ export class Spotify {
   @Column({ type: 'varchar', length: 500 })
   link: string;
 
+  @Column({
+    name: 'spotify_playlist_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    unique: true,
+  })
+  spotifyPlaylistId: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
+  @Column({ name: 'is_public', type: 'boolean', default: false })
+  isPublic: boolean;
+
   @Column({ type: 'enum', enum: SpotifyType })
   type: SpotifyType;
 
-  @Column({ type: 'timestamp with time zone', name: 'fecha_actualizacion' })
+  @Column({
+    type: 'timestamp with time zone',
+    name: 'fecha_actualizacion',
+  })
   updateDate: Date;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
@@ -54,6 +74,14 @@ export class Spotify {
   @OneToOne(() => Content, (content) => content.spotify)
   content: Content;
 
-  @ManyToOne(() => User, (user) => user.spotify, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => User, (user) => user.spotify, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   user: User;
+
+  @OneToMany(() => SpotifyPlaylistArtist, (item) => item.spotify, {
+    cascade: true,
+  })
+  playlistArtists: SpotifyPlaylistArtist[];
 }

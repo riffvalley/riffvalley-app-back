@@ -8,7 +8,7 @@ export const winstonConfig = {
             format: winston.format.combine(
                 winston.format.timestamp(),
                 winston.format.ms(),
-                nestWinstonUtilities.format.nestLike('SpamMusic', {
+                nestWinstonUtilities.format.nestLike('Riff Valley App', {
                     prettyPrint: true,
                     colors: true,
                 }),

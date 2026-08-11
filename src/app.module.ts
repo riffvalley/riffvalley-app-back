@@ -38,6 +38,7 @@ import { LastfmModule } from './lastfm/lastfm.module';
 import { SuggestionsModule } from './suggestions/suggestions.module';
 import { AccessRequestsModule } from './access-requests/access-requests.module';
 import { InstagramModule } from './instagram/instagram.module';
+import { FestivalPlaylistsModule } from './festival-playlists/festival-playlists.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { InstagramModule } from './instagram/instagram.module';
     SuggestionsModule,
     AccessRequestsModule,
     InstagramModule,
+    FestivalPlaylistsModule,
   ],
 })
 export class AppModule {}
