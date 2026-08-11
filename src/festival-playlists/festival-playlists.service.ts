@@ -27,6 +27,7 @@ import {
 } from 'src/spotify/entities/spotify.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
 import {
+  PlaylistArtistSelectionMode,
   PlaylistArtistSyncStatus,
   PlaylistTrackRecord,
   SpotifyPlaylistArtist,
@@ -65,8 +66,13 @@ interface SpotifyTrack {
   id: string;
   name: string;
   uri: string;
-  artists: { name: string }[];
+  artists: { id: string; name: string }[];
   external_urls: { spotify: string };
+  duration_ms?: number;
+  album?: {
+    name: string;
+    images?: SpotifyImage[];
+  };
 }
 
 interface SpotifyImage {
@@ -388,6 +394,40 @@ export class FestivalPlaylistsService {
     return this.getFestivalPlaylist(spotify.id);
   }
 
+  async createGenrePlaylist(dto: CreateSyncedPlaylistDto) {
+    const accessToken = await this.getValidAccessToken();
+    const description =
+      dto.description ??
+      'Playlist de género seleccionada manualmente por Riff Valley';
+    const playlist = await this.spotifyRequest<{
+      id: string;
+      name: string;
+      external_urls: { spotify: string };
+    }>('/me/playlists', accessToken, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: dto.name,
+        description,
+        public: dto.public,
+      }),
+    });
+
+    const spotify = this.spotifyRepository.create({
+      name: playlist.name,
+      link: playlist.external_urls.spotify,
+      spotifyPlaylistId: playlist.id,
+      description,
+      isPublic: dto.public,
+      protectedTrackUris: [],
+      status: SpotifyStatus.IN_PROGRESS,
+      type: SpotifyType.GENERO,
+      updateDate: new Date(),
+    });
+    await this.spotifyRepository.save(spotify);
+
+    return this.getGenrePlaylist(spotify.id);
+  }
+
   async linkExistingFestivalPlaylist(spotifyId: string) {
     const spotify = await this.spotifyRepository.findOne({
       where: { id: spotifyId },
@@ -483,6 +523,101 @@ export class FestivalPlaylistsService {
     return this.getFestivalPlaylist(spotify.id);
   }
 
+  async linkExistingGenrePlaylist(spotifyId: string) {
+    const spotify = await this.spotifyRepository.findOne({
+      where: { id: spotifyId },
+      relations: ['user', 'playlistArtists', 'playlistArtists.artist'],
+    });
+    if (!spotify) throw new NotFoundException('Playlist not found');
+    this.assertGenrePlaylistType(spotify);
+
+    const remotePlaylistId = this.spotifyPlaylistIdFromLink(spotify.link);
+    if (spotify.spotifyPlaylistId) {
+      if (spotify.spotifyPlaylistId === remotePlaylistId) return spotify;
+      throw new ConflictException(
+        'La playlist local ya está vinculada con otra playlist de Spotify',
+      );
+    }
+
+    const duplicate = await this.spotifyRepository.findOne({
+      where: { spotifyPlaylistId: remotePlaylistId },
+    });
+    if (duplicate && duplicate.id !== spotify.id) {
+      throw new ConflictException(
+        'Esa playlist de Spotify ya está vinculada con otro registro local',
+      );
+    }
+
+    const { remotePlaylist, protectedTrackUris } =
+      await this.getOwnedSpotifyPlaylist(remotePlaylistId);
+    await this.spotifyRepository.update(spotify.id, {
+      name: remotePlaylist.name,
+      link: remotePlaylist.external_urls.spotify,
+      spotifyPlaylistId: remotePlaylist.id,
+      description: remotePlaylist.description ?? null,
+      isPublic: Boolean(remotePlaylist.public),
+      imageUrl: remotePlaylist.images?.[0]?.url ?? null,
+      protectedTrackUris,
+      updateDate: new Date(),
+    });
+    return this.getGenrePlaylist(spotify.id);
+  }
+
+  async createLinkedGenrePlaylist(dto: LinkSpotifyPlaylistDto) {
+    const remotePlaylistId = this.spotifyPlaylistIdFromLink(dto.spotifyUrl);
+    const duplicate = await this.spotifyRepository.findOne({
+      where: { spotifyPlaylistId: remotePlaylistId },
+    });
+    if (duplicate) {
+      throw new ConflictException(
+        'Esa playlist de Spotify ya está vinculada con un registro local',
+      );
+    }
+
+    const genrePlaylists = await this.spotifyRepository.find({
+      where: [
+        { type: SpotifyType.GENERO },
+        { type: SpotifyType.ESPECIAL },
+        { type: SpotifyType.OTRAS },
+      ],
+    });
+    const legacyMatches = genrePlaylists.filter((playlist) => {
+      if (playlist.spotifyPlaylistId || !playlist.link) return false;
+      try {
+        return (
+          this.spotifyPlaylistIdFromLink(playlist.link) === remotePlaylistId
+        );
+      } catch {
+        return false;
+      }
+    });
+    if (legacyMatches.length > 1) {
+      throw new ConflictException(
+        'Hay varios registros locales con ese enlace; elige cuál quieres vincular',
+      );
+    }
+    if (legacyMatches.length === 1) {
+      return this.linkExistingGenrePlaylist(legacyMatches[0].id);
+    }
+
+    const { remotePlaylist, protectedTrackUris } =
+      await this.getOwnedSpotifyPlaylist(remotePlaylistId);
+    const spotify = this.spotifyRepository.create({
+      name: remotePlaylist.name,
+      link: remotePlaylist.external_urls.spotify,
+      spotifyPlaylistId: remotePlaylist.id,
+      description: remotePlaylist.description ?? null,
+      isPublic: Boolean(remotePlaylist.public),
+      imageUrl: remotePlaylist.images?.[0]?.url ?? null,
+      protectedTrackUris,
+      status: SpotifyStatus.IN_PROGRESS,
+      type: SpotifyType.GENERO,
+      updateDate: new Date(),
+    });
+    await this.spotifyRepository.save(spotify);
+    return this.getGenrePlaylist(spotify.id);
+  }
+
   async updateFestivalPlaylist(
     spotifyId: string,
     dto: UpdateSyncedPlaylistDto,
@@ -525,6 +660,11 @@ export class FestivalPlaylistsService {
     return this.getFestivalPlaylist(spotifyId);
   }
 
+  async updateGenrePlaylist(spotifyId: string, dto: UpdateSyncedPlaylistDto) {
+    await this.getGenrePlaylist(spotifyId);
+    return this.updateFestivalPlaylist(spotifyId, dto);
+  }
+
   async updateFestivalPlaylistImage(spotifyId: string, image: Buffer) {
     if (
       image.length < 3 ||
@@ -564,6 +704,11 @@ export class FestivalPlaylistsService {
     return this.getFestivalPlaylist(spotifyId);
   }
 
+  async updateGenrePlaylistImage(spotifyId: string, image: Buffer) {
+    await this.getGenrePlaylist(spotifyId);
+    return this.updateFestivalPlaylistImage(spotifyId, image);
+  }
+
   async getFestivalPlaylist(spotifyId: string) {
     const spotify = await this.spotifyRepository.findOne({
       where: { id: spotifyId },
@@ -575,6 +720,12 @@ export class FestivalPlaylistsService {
         'La playlist no está vinculada con Spotify',
       );
     }
+    return spotify;
+  }
+
+  async getGenrePlaylist(spotifyId: string) {
+    const spotify = await this.getFestivalPlaylist(spotifyId);
+    this.assertGenrePlaylistType(spotify);
     return spotify;
   }
 
@@ -599,6 +750,8 @@ export class FestivalPlaylistsService {
         artistId: artist.id,
         artist,
         status: PlaylistArtistSyncStatus.SYNCING,
+        selectionMode: PlaylistArtistSelectionMode.SETLIST,
+        spotifyArtistId: null,
         tracks: [],
         setlistsAnalyzed: 0,
         lastError: null,
@@ -672,6 +825,214 @@ export class FestivalPlaylistsService {
         updateDate: new Date(),
       });
       return this.getFestivalPlaylist(spotifyId);
+    } catch (error) {
+      association.status = PlaylistArtistSyncStatus.FAILED;
+      association.lastError = this.errorMessage(error);
+      await this.playlistArtistRepository.save(association);
+      throw error;
+    }
+  }
+
+  async searchGenreArtistTracks(
+    spotifyId: string,
+    artistId: string,
+    query?: string,
+  ) {
+    await this.getGenrePlaylist(spotifyId);
+    const artist = await this.artistRepository.findOneBy({ id: artistId });
+    if (!artist) throw new NotFoundException('Artist not found');
+
+    const accessToken = await this.getValidAccessToken();
+    const search = query?.trim()
+      ? `track:${query.trim()} artist:${artist.name}`
+      : `artist:${artist.name}`;
+    const params = new URLSearchParams({
+      q: search,
+      type: 'track',
+      limit: '20',
+    });
+    const data = await this.spotifyRequest<{
+      tracks?: { items?: SpotifyTrack[] };
+    }>(`/search?${params}`, accessToken);
+
+    return {
+      artist: { id: artist.id, name: artist.name },
+      query: query?.trim() ?? '',
+      tracks: (data.tracks?.items ?? []).map((track) =>
+        this.toPlaylistTrackRecord(track),
+      ),
+    };
+  }
+
+  async addGenreArtist(
+    spotifyId: string,
+    artistId: string,
+    spotifyTrackIds: string[],
+  ) {
+    const existing = await this.playlistArtistRepository.findOne({
+      where: { spotifyId, artistId },
+    });
+    if (existing) {
+      throw new ConflictException(
+        'El artista ya está asociado; utiliza la edición para cambiar sus canciones',
+      );
+    }
+    return this.saveGenreArtistTracks(spotifyId, artistId, spotifyTrackIds);
+  }
+
+  async replaceGenreArtistTracks(
+    spotifyId: string,
+    artistId: string,
+    spotifyTrackIds: string[],
+  ) {
+    const existing = await this.playlistArtistRepository.findOne({
+      where: { spotifyId, artistId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Artist is not in this playlist');
+    }
+    return this.saveGenreArtistTracks(
+      spotifyId,
+      artistId,
+      spotifyTrackIds,
+      existing,
+    );
+  }
+
+  async removeGenreArtist(spotifyId: string, artistId: string) {
+    await this.getGenrePlaylist(spotifyId);
+    return this.removeArtist(spotifyId, artistId);
+  }
+
+  async clearGenrePlaylist(spotifyId: string) {
+    await this.getGenrePlaylist(spotifyId);
+    return this.clearFestivalPlaylist(spotifyId);
+  }
+
+  private async saveGenreArtistTracks(
+    spotifyId: string,
+    artistId: string,
+    spotifyTrackIds: string[],
+    current?: SpotifyPlaylistArtist,
+  ) {
+    const [spotify, artist] = await Promise.all([
+      this.getGenrePlaylist(spotifyId),
+      this.artistRepository.findOneBy({ id: artistId }),
+    ]);
+    if (!artist) throw new NotFoundException('Artist not found');
+    if (spotifyTrackIds.length !== 2 || new Set(spotifyTrackIds).size !== 2) {
+      throw new BadRequestException(
+        'Debes seleccionar exactamente dos canciones distintas',
+      );
+    }
+
+    let association = current;
+    if (!association) {
+      association = this.playlistArtistRepository.create({
+        spotifyId,
+        artistId,
+        artist,
+        status: PlaylistArtistSyncStatus.SYNCING,
+        selectionMode: PlaylistArtistSelectionMode.MANUAL,
+        spotifyArtistId: null,
+        tracks: [],
+        setlistsAnalyzed: 0,
+        lastError: null,
+      });
+    } else {
+      association.status = PlaylistArtistSyncStatus.SYNCING;
+      association.lastError = null;
+    }
+    await this.playlistArtistRepository.save(association);
+
+    try {
+      const accessToken = await this.getValidAccessToken();
+      const params = new URLSearchParams({ ids: spotifyTrackIds.join(',') });
+      const response = await this.spotifyRequest<{
+        tracks?: Array<SpotifyTrack | null>;
+      }>(`/tracks?${params}`, accessToken);
+      const fetchedTracks = (response.tracks ?? []).filter(
+        (track): track is SpotifyTrack => Boolean(track),
+      );
+      const tracksById = new Map(
+        fetchedTracks.map((track) => [track.id, track]),
+      );
+      const selectedTracks = spotifyTrackIds.map((id) => tracksById.get(id));
+      if (selectedTracks.some((track) => !track)) {
+        throw new NotFoundException(
+          'Una de las canciones seleccionadas ya no está disponible en Spotify',
+        );
+      }
+      const tracks = (selectedTracks as SpotifyTrack[]).map((track) =>
+        this.toPlaylistTrackRecord(track),
+      );
+
+      const allAssociations = await this.playlistArtistRepository.find({
+        where: { spotifyId },
+      });
+      const otherAssociations = allAssociations.filter(
+        (item) => item.id !== association.id,
+      );
+      const sharedUris = new Set(
+        otherAssociations
+          .flatMap((item) => item.tracks ?? [])
+          .map((track) => track.uri),
+      );
+      const remoteUris = await this.getSpotifyPlaylistTrackUris(
+        accessToken,
+        spotify.spotifyPlaylistId,
+      );
+      const remoteUriSet = new Set(remoteUris);
+      const newUris = new Set(tracks.map((track) => track.uri));
+      const urisToAdd = [...newUris].filter((uri) => !remoteUriSet.has(uri));
+      const urisToRemove = [
+        ...new Set((association.tracks ?? []).map((track) => track.uri)),
+      ].filter(
+        (uri) =>
+          !newUris.has(uri) &&
+          !sharedUris.has(uri) &&
+          !(spotify.protectedTrackUris ?? []).includes(uri),
+      );
+
+      if (urisToAdd.length) {
+        await this.spotifyRequest(
+          `/playlists/${spotify.spotifyPlaylistId}/items`,
+          accessToken,
+          {
+            method: 'POST',
+            body: JSON.stringify({ uris: urisToAdd }),
+          },
+        );
+      }
+      if (urisToRemove.length) {
+        await this.spotifyRequest(
+          `/playlists/${spotify.spotifyPlaylistId}/items`,
+          accessToken,
+          {
+            method: 'DELETE',
+            body: JSON.stringify({
+              items: urisToRemove.map((uri) => ({ uri })),
+            }),
+          },
+        );
+      }
+
+      const normalizedArtist = this.normalize(artist.name);
+      const spotifyArtist = (selectedTracks as SpotifyTrack[])
+        .flatMap((track) => track.artists)
+        .find((item) => this.normalize(item.name) === normalizedArtist);
+      association.tracks = tracks;
+      association.selectionMode = PlaylistArtistSelectionMode.MANUAL;
+      association.spotifyArtistId =
+        spotifyArtist?.id ?? association.spotifyArtistId ?? null;
+      association.setlistsAnalyzed = 0;
+      association.status = PlaylistArtistSyncStatus.SYNCED;
+      association.lastError = null;
+      await this.playlistArtistRepository.save(association);
+      await this.spotifyRepository.update(spotify.id, {
+        updateDate: new Date(),
+      });
+      return this.getGenrePlaylist(spotifyId);
     } catch (error) {
       association.status = PlaylistArtistSyncStatus.FAILED;
       association.lastError = this.errorMessage(error);
@@ -786,6 +1147,35 @@ export class FestivalPlaylistsService {
       items[0] ??
       null
     );
+  }
+
+  private toPlaylistTrackRecord(track: SpotifyTrack): PlaylistTrackRecord {
+    return {
+      spotifyTrackId: track.id,
+      uri: track.uri,
+      name: track.name,
+      url: track.external_urls.spotify,
+      plays: 0,
+      artists: track.artists.map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+      })),
+      album: track.album?.name,
+      imageUrl: track.album?.images?.[0]?.url ?? null,
+      durationMs: track.duration_ms,
+    };
+  }
+
+  private assertGenrePlaylistType(spotify: Spotify): void {
+    if (
+      ![SpotifyType.GENERO, SpotifyType.ESPECIAL, SpotifyType.OTRAS].includes(
+        spotify.type,
+      )
+    ) {
+      throw new BadRequestException(
+        'La playlist no pertenece a la sección de géneros',
+      );
+    }
   }
 
   private spotifyPlaylistIdFromLink(link: string): string {

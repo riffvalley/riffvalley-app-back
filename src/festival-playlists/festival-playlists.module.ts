@@ -10,6 +10,7 @@ import { SpotifyPlaylistArtist } from './entities/spotify-playlist-artist.entity
 import { Spotify } from 'src/spotify/entities/spotify.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
 import { MailModule } from 'src/mail/mail.module';
+import { GenrePlaylistsController } from './genre-playlists.controller';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { MailModule } from 'src/mail/mail.module';
     AuthModule,
     MailModule,
   ],
-  controllers: [FestivalPlaylistsController],
+  controllers: [FestivalPlaylistsController, GenrePlaylistsController],
   providers: [FestivalPlaylistsService, TokenCryptoService],
 })
 export class FestivalPlaylistsModule {}
