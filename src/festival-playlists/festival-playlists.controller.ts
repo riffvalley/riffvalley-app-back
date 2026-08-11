@@ -92,6 +92,16 @@ export class FestivalPlaylistsController {
     return this.festivalPlaylistsService.createFestivalPlaylist(dto);
   }
 
+  @Post(':spotifyId/link')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  linkExistingFestivalPlaylist(
+    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+  ) {
+    return this.festivalPlaylistsService.linkExistingFestivalPlaylist(
+      spotifyId,
+    );
+  }
+
   @Patch(':spotifyId')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   updateFestivalPlaylist(

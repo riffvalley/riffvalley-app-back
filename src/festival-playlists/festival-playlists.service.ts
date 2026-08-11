@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -64,6 +65,24 @@ interface SpotifyImage {
   url: string;
   height: number | null;
   width: number | null;
+}
+
+interface SpotifyPlaylistDetails {
+  id: string;
+  name: string;
+  description: string | null;
+  public: boolean | null;
+  owner: { id: string; display_name: string | null };
+  external_urls: { spotify: string };
+  images?: SpotifyImage[];
+}
+
+interface SpotifyPlaylistItemsPage {
+  items?: Array<{
+    item?: { uri?: string } | null;
+    track?: { uri?: string } | null;
+  }>;
+  next?: string | null;
 }
 
 interface SetlistSong {
@@ -297,12 +316,73 @@ export class FestivalPlaylistsService {
       spotifyPlaylistId: playlist.id,
       description,
       isPublic: dto.public,
+      protectedTrackUris: [],
       status: SpotifyStatus.IN_PROGRESS,
       type: SpotifyType.FESTIVAL,
       updateDate: new Date(),
     });
     await this.spotifyRepository.save(spotify);
 
+    return this.getFestivalPlaylist(spotify.id);
+  }
+
+  async linkExistingFestivalPlaylist(spotifyId: string) {
+    const spotify = await this.spotifyRepository.findOne({
+      where: { id: spotifyId },
+      relations: ['user', 'playlistArtists', 'playlistArtists.artist'],
+    });
+    if (!spotify) throw new NotFoundException('Playlist not found');
+    if (spotify.type !== SpotifyType.FESTIVAL) {
+      throw new BadRequestException(
+        'Sólo se pueden vincular playlists de tipo festival',
+      );
+    }
+
+    const remotePlaylistId = this.spotifyPlaylistIdFromLink(spotify.link);
+    if (spotify.spotifyPlaylistId) {
+      if (spotify.spotifyPlaylistId === remotePlaylistId) return spotify;
+      throw new ConflictException(
+        'La playlist local ya está vinculada con otra playlist de Spotify',
+      );
+    }
+
+    const duplicate = await this.spotifyRepository.findOne({
+      where: { spotifyPlaylistId: remotePlaylistId },
+    });
+    if (duplicate && duplicate.id !== spotify.id) {
+      throw new ConflictException(
+        'Esa playlist de Spotify ya está vinculada con otro registro local',
+      );
+    }
+
+    const accessToken = await this.getValidAccessToken();
+    const [remotePlaylist, profile] = await Promise.all([
+      this.spotifyRequest<SpotifyPlaylistDetails>(
+        `/playlists/${remotePlaylistId}`,
+        accessToken,
+      ),
+      this.spotifyRequest<SpotifyProfile>('/me', accessToken),
+    ]);
+    if (remotePlaylist.owner.id !== profile.id) {
+      throw new ForbiddenException(
+        `La playlist pertenece a ${remotePlaylist.owner.display_name ?? remotePlaylist.owner.id}; debe pertenecer a la cuenta conectada`,
+      );
+    }
+
+    const protectedTrackUris = await this.getSpotifyPlaylistTrackUris(
+      accessToken,
+      remotePlaylist.id,
+    );
+    await this.spotifyRepository.update(spotify.id, {
+      name: remotePlaylist.name,
+      link: remotePlaylist.external_urls.spotify,
+      spotifyPlaylistId: remotePlaylist.id,
+      description: remotePlaylist.description ?? null,
+      isPublic: Boolean(remotePlaylist.public),
+      imageUrl: remotePlaylist.images?.[0]?.url ?? null,
+      protectedTrackUris,
+      updateDate: new Date(),
+    });
     return this.getFestivalPlaylist(spotify.id);
   }
 
@@ -465,11 +545,16 @@ export class FestivalPlaylistsService {
       const allAssociations = await this.playlistArtistRepository.find({
         where: { spotifyId },
       });
-      const existingUris = new Set(
-        allAssociations
+      const remoteUris = await this.getSpotifyPlaylistTrackUris(
+        accessToken,
+        spotify.spotifyPlaylistId,
+      );
+      const existingUris = new Set([
+        ...remoteUris,
+        ...allAssociations
           .flatMap((item) => item.tracks ?? [])
           .map((track) => track.uri),
-      );
+      ]);
       const urisToAdd = [...new Set(tracks.map((track) => track.uri))].filter(
         (uri) => !existingUris.has(uri),
       );
@@ -518,7 +603,11 @@ export class FestivalPlaylistsService {
       );
       const urisToRemove = [
         ...new Set((association.tracks ?? []).map((track) => track.uri)),
-      ].filter((uri) => !sharedUris.has(uri));
+      ].filter(
+        (uri) =>
+          !sharedUris.has(uri) &&
+          !(spotify.protectedTrackUris ?? []).includes(uri),
+      );
       if (urisToRemove.length) {
         const accessToken = await this.getValidAccessToken();
         await this.spotifyRequest(
@@ -570,6 +659,48 @@ export class FestivalPlaylistsService {
       items[0] ??
       null
     );
+  }
+
+  private spotifyPlaylistIdFromLink(link: string): string {
+    const uriMatch = link?.match(/^spotify:playlist:([A-Za-z0-9]+)$/);
+    if (uriMatch) return uriMatch[1];
+
+    try {
+      const url = new URL(link);
+      const parts = url.pathname.split('/').filter(Boolean);
+      const playlistIndex = parts.indexOf('playlist');
+      const id = playlistIndex >= 0 ? parts[playlistIndex + 1] : undefined;
+      if (id && /^[A-Za-z0-9]+$/.test(id)) return id;
+    } catch {
+      // El mensaje común de validación se lanza debajo.
+    }
+    throw new BadRequestException(
+      'El enlace guardado no contiene una playlist válida de Spotify',
+    );
+  }
+
+  private async getSpotifyPlaylistTrackUris(
+    accessToken: string,
+    spotifyPlaylistId: string,
+  ): Promise<string[]> {
+    const uris = new Set<string>();
+    let offset = 0;
+
+    while (true) {
+      const page = await this.spotifyRequest<SpotifyPlaylistItemsPage>(
+        `/playlists/${spotifyPlaylistId}/items?limit=50&offset=${offset}`,
+        accessToken,
+      );
+      const items = page.items ?? [];
+      for (const entry of items) {
+        const uri = entry.item?.uri ?? entry.track?.uri;
+        if (uri) uris.add(uri);
+      }
+      if (!page.next || !items.length) break;
+      offset += items.length;
+    }
+
+    return [...uris];
   }
 
   private async getValidAccessToken(

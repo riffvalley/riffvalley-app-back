@@ -12,6 +12,7 @@ describe('FestivalPlaylistsService', () => {
     connectionRepository = { findOne: jest.fn() };
     spotifyRepository = {
       create: jest.fn((value) => ({ id: 'playlist-local', ...value })),
+      findOne: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
     };
@@ -164,6 +165,60 @@ describe('FestivalPlaylistsService', () => {
     );
   });
 
+  it('vincula un registro antiguo y protege sus pistas preexistentes', async () => {
+    const legacyPlaylist = {
+      id: 'playlist-local',
+      name: 'Nombre antiguo',
+      type: 'festival',
+      link: 'https://open.spotify.com/playlist/playlistremote?si=test',
+      spotifyPlaylistId: null,
+    } as any;
+    spotifyRepository.findOne
+      .mockResolvedValueOnce(legacyPlaylist)
+      .mockResolvedValueOnce(null);
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    jest
+      .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
+      .mockResolvedValue(['spotify:track:existing']);
+    jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockImplementation((path: string) => {
+        if (path === '/me') {
+          return Promise.resolve({ id: 'riff-valley', display_name: 'RV' });
+        }
+        return Promise.resolve({
+          id: 'playlistremote',
+          name: 'Festival existente',
+          description: 'Descripción remota',
+          public: true,
+          owner: { id: 'riff-valley', display_name: 'Riff Valley' },
+          external_urls: {
+            spotify: 'https://open.spotify.com/playlist/playlistremote',
+          },
+          images: [{ url: 'https://image.test/cover.jpg' }],
+        });
+      });
+    jest
+      .spyOn(service, 'getFestivalPlaylist')
+      .mockResolvedValue({ id: legacyPlaylist.id } as any);
+
+    await service.linkExistingFestivalPlaylist(legacyPlaylist.id);
+
+    expect(spotifyRepository.update).toHaveBeenCalledWith(
+      legacyPlaylist.id,
+      expect.objectContaining({
+        name: 'Festival existente',
+        spotifyPlaylistId: 'playlistremote',
+        description: 'Descripción remota',
+        isPublic: true,
+        imageUrl: 'https://image.test/cover.jpg',
+        protectedTrackUris: ['spotify:track:existing'],
+      }),
+    );
+  });
+
   it('sube una portada JPEG y guarda la URL devuelta por Spotify', async () => {
     const playlist = {
       id: 'playlist-local',
@@ -280,6 +335,60 @@ describe('FestivalPlaylistsService', () => {
     expect(spotifyRepository.save).not.toHaveBeenCalled();
   });
 
+  it('no duplica una pista que ya existe en la playlist real', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+    } as any;
+    artistRepository.findOneBy.mockResolvedValue({
+      id: 'artist-id',
+      name: 'Ghost',
+    });
+    playlistArtistRepository.findOne.mockResolvedValue(null);
+    playlistArtistRepository.find.mockResolvedValue([]);
+    jest.spyOn(service, 'getFestivalPlaylist').mockResolvedValue(playlist);
+    jest.spyOn(service, 'getTopSongs').mockResolvedValue({
+      artist: 'Ghost',
+      setlistsAnalyzed: 10,
+      songs: [{ name: 'Square Hammer', plays: 8 }],
+      sources: [],
+    });
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    jest.spyOn(service as any, 'findSpotifyTrack').mockResolvedValue({
+      id: 'track-id',
+      name: 'Square Hammer',
+      uri: 'spotify:track:track-id',
+      external_urls: { spotify: 'https://open.spotify.com/track/track-id' },
+      artists: [{ name: 'Ghost' }],
+    });
+    jest
+      .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
+      .mockResolvedValue(['spotify:track:track-id']);
+    const spotifyRequest = jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockResolvedValue({});
+
+    await service.addArtist(playlist.id, {
+      artistId: 'artist-id',
+      tracksPerArtist: 10,
+      recentSetlists: 10,
+    });
+
+    expect(spotifyRequest).not.toHaveBeenCalledWith(
+      '/playlists/playlist-remote/items',
+      'access-token',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(playlistArtistRepository.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: 'synced',
+        tracks: [expect.objectContaining({ spotifyTrackId: 'track-id' })],
+      }),
+    );
+  });
+
   it('al quitar un artista conserva las pistas compartidas por otro', async () => {
     const playlist = {
       id: 'playlist-local',
@@ -324,5 +433,28 @@ describe('FestivalPlaylistsService', () => {
       expect.objectContaining({ updateDate: expect.any(Date) }),
     );
     expect(spotifyRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('al quitar un artista conserva las pistas anteriores a la vinculación', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+      protectedTrackUris: ['spotify:track:preexisting'],
+    } as any;
+    const association = {
+      id: 'association-one',
+      tracks: [{ uri: 'spotify:track:preexisting' }],
+    } as any;
+    playlistArtistRepository.findOne.mockResolvedValue(association);
+    playlistArtistRepository.find.mockResolvedValue([association]);
+    jest.spyOn(service, 'getFestivalPlaylist').mockResolvedValue(playlist);
+    const spotifyRequest = jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockResolvedValue({});
+
+    await service.removeArtist(playlist.id, 'artist-id');
+
+    expect(spotifyRequest).not.toHaveBeenCalled();
+    expect(playlistArtistRepository.remove).toHaveBeenCalledWith(association);
   });
 });
