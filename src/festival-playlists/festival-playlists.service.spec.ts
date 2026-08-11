@@ -12,6 +12,7 @@ describe('FestivalPlaylistsService', () => {
     connectionRepository = { findOne: jest.fn() };
     spotifyRepository = {
       create: jest.fn((value) => ({ id: 'playlist-local', ...value })),
+      find: jest.fn(),
       findOne: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
@@ -216,6 +217,44 @@ describe('FestivalPlaylistsService', () => {
         isPublic: true,
         imageUrl: 'https://image.test/cover.jpg',
         protectedTrackUris: ['spotify:track:existing'],
+      }),
+    );
+  });
+
+  it('crea un registro local pegando la URL de una playlist existente', async () => {
+    spotifyRepository.findOne.mockResolvedValue(null);
+    spotifyRepository.find.mockResolvedValue([]);
+    jest.spyOn(service as any, 'getOwnedSpotifyPlaylist').mockResolvedValue({
+      remotePlaylist: {
+        id: 'playlistremote',
+        name: 'Festival importado',
+        description: 'Descripción remota',
+        public: false,
+        owner: { id: 'riff-valley', display_name: 'Riff Valley' },
+        external_urls: {
+          spotify: 'https://open.spotify.com/playlist/playlistremote',
+        },
+        images: [{ url: 'https://image.test/imported.jpg' }],
+      },
+      protectedTrackUris: ['spotify:track:existing'],
+    });
+    jest
+      .spyOn(service, 'getFestivalPlaylist')
+      .mockResolvedValue({ id: 'playlist-local' } as any);
+
+    await service.createLinkedFestivalPlaylist({
+      spotifyUrl: 'https://open.spotify.com/playlist/playlistremote?si=example',
+    });
+
+    expect(spotifyRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Festival importado',
+        spotifyPlaylistId: 'playlistremote',
+        link: 'https://open.spotify.com/playlist/playlistremote',
+        imageUrl: 'https://image.test/imported.jpg',
+        protectedTrackUris: ['spotify:track:existing'],
+        status: 'in_progress',
+        type: 'festival',
       }),
     );
   });

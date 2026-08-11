@@ -21,6 +21,7 @@ import { Response } from 'express';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { CreateSyncedPlaylistDto } from './dto/create-synced-playlist.dto';
+import { LinkSpotifyPlaylistDto } from './dto/link-spotify-playlist.dto';
 import { SyncPlaylistArtistDto } from './dto/sync-playlist-artist.dto';
 import { TopSongsQueryDto } from './dto/top-songs-query.dto';
 import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
@@ -90,6 +91,12 @@ export class FestivalPlaylistsController {
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   createFestivalPlaylist(@Body() dto: CreateSyncedPlaylistDto) {
     return this.festivalPlaylistsService.createFestivalPlaylist(dto);
+  }
+
+  @Post('link')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  createLinkedFestivalPlaylist(@Body() dto: LinkSpotifyPlaylistDto) {
+    return this.festivalPlaylistsService.createLinkedFestivalPlaylist(dto);
   }
 
   @Post(':spotifyId/link')

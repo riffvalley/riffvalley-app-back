@@ -53,6 +53,13 @@ La operación crea inmediatamente la playlist vacía en Spotify y el registro
 local en `spotify`, incluyendo `spotifyPlaylistId`, URL y fecha. No asigna la
 playlist al usuario que pulsa el botón.
 
+También se puede crear el registro local a partir de una playlist que ya existe
+en Spotify con `POST /api/festival-playlists/link` y el cuerpo
+`{ "spotifyUrl": "https://open.spotify.com/playlist/..." }`. Si existe un único
+registro antiguo con ese enlace, se reutiliza en lugar de crear un duplicado.
+Si no existe, se crea ya vinculado con los metadatos y pistas protegidas de
+Spotify.
+
 Los registros antiguos que ya tengan un enlace de Spotify pero no tengan
 `spotifyPlaylistId` se vinculan con
 `POST /api/festival-playlists/:spotifyId/link`. El backend comprueba que la

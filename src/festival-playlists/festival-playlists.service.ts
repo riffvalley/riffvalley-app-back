@@ -13,6 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
 import { CreateSyncedPlaylistDto } from './dto/create-synced-playlist.dto';
+import { LinkSpotifyPlaylistDto } from './dto/link-spotify-playlist.dto';
 import { SyncPlaylistArtistDto } from './dto/sync-playlist-artist.dto';
 import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
 import { SpotifyConnection } from './entities/spotify-connection.entity';
@@ -355,24 +356,8 @@ export class FestivalPlaylistsService {
       );
     }
 
-    const accessToken = await this.getValidAccessToken();
-    const [remotePlaylist, profile] = await Promise.all([
-      this.spotifyRequest<SpotifyPlaylistDetails>(
-        `/playlists/${remotePlaylistId}`,
-        accessToken,
-      ),
-      this.spotifyRequest<SpotifyProfile>('/me', accessToken),
-    ]);
-    if (remotePlaylist.owner.id !== profile.id) {
-      throw new ForbiddenException(
-        `La playlist pertenece a ${remotePlaylist.owner.display_name ?? remotePlaylist.owner.id}; debe pertenecer a la cuenta conectada`,
-      );
-    }
-
-    const protectedTrackUris = await this.getSpotifyPlaylistTrackUris(
-      accessToken,
-      remotePlaylist.id,
-    );
+    const { remotePlaylist, protectedTrackUris } =
+      await this.getOwnedSpotifyPlaylist(remotePlaylistId);
     await this.spotifyRepository.update(spotify.id, {
       name: remotePlaylist.name,
       link: remotePlaylist.external_urls.spotify,
@@ -383,6 +368,57 @@ export class FestivalPlaylistsService {
       protectedTrackUris,
       updateDate: new Date(),
     });
+    return this.getFestivalPlaylist(spotify.id);
+  }
+
+  async createLinkedFestivalPlaylist(dto: LinkSpotifyPlaylistDto) {
+    const remotePlaylistId = this.spotifyPlaylistIdFromLink(dto.spotifyUrl);
+    const duplicate = await this.spotifyRepository.findOne({
+      where: { spotifyPlaylistId: remotePlaylistId },
+    });
+    if (duplicate) {
+      throw new ConflictException(
+        'Esa playlist de Spotify ya está vinculada con un registro local',
+      );
+    }
+
+    const festivalPlaylists = await this.spotifyRepository.find({
+      where: { type: SpotifyType.FESTIVAL },
+    });
+    const legacyMatches = festivalPlaylists.filter((playlist) => {
+      if (playlist.spotifyPlaylistId || !playlist.link) return false;
+      try {
+        return (
+          this.spotifyPlaylistIdFromLink(playlist.link) === remotePlaylistId
+        );
+      } catch {
+        return false;
+      }
+    });
+    if (legacyMatches.length > 1) {
+      throw new ConflictException(
+        'Hay varios registros locales con ese enlace; elige cuál quieres vincular',
+      );
+    }
+    if (legacyMatches.length === 1) {
+      return this.linkExistingFestivalPlaylist(legacyMatches[0].id);
+    }
+
+    const { remotePlaylist, protectedTrackUris } =
+      await this.getOwnedSpotifyPlaylist(remotePlaylistId);
+    const spotify = this.spotifyRepository.create({
+      name: remotePlaylist.name,
+      link: remotePlaylist.external_urls.spotify,
+      spotifyPlaylistId: remotePlaylist.id,
+      description: remotePlaylist.description ?? null,
+      isPublic: Boolean(remotePlaylist.public),
+      imageUrl: remotePlaylist.images?.[0]?.url ?? null,
+      protectedTrackUris,
+      status: SpotifyStatus.IN_PROGRESS,
+      type: SpotifyType.FESTIVAL,
+      updateDate: new Date(),
+    });
+    await this.spotifyRepository.save(spotify);
     return this.getFestivalPlaylist(spotify.id);
   }
 
@@ -707,6 +743,30 @@ export class FestivalPlaylistsService {
     throw new BadRequestException(
       'El enlace guardado no contiene una playlist válida de Spotify',
     );
+  }
+
+  private async getOwnedSpotifyPlaylist(spotifyPlaylistId: string): Promise<{
+    remotePlaylist: SpotifyPlaylistDetails;
+    protectedTrackUris: string[];
+  }> {
+    const accessToken = await this.getValidAccessToken();
+    const [remotePlaylist, profile] = await Promise.all([
+      this.spotifyRequest<SpotifyPlaylistDetails>(
+        `/playlists/${spotifyPlaylistId}`,
+        accessToken,
+      ),
+      this.spotifyRequest<SpotifyProfile>('/me', accessToken),
+    ]);
+    if (remotePlaylist.owner.id !== profile.id) {
+      throw new ForbiddenException(
+        `La playlist pertenece a ${remotePlaylist.owner.display_name ?? remotePlaylist.owner.id}; debe pertenecer a la cuenta conectada`,
+      );
+    }
+    const protectedTrackUris = await this.getSpotifyPlaylistTrackUris(
+      accessToken,
+      remotePlaylist.id,
+    );
+    return { remotePlaylist, protectedTrackUris };
   }
 
   private async getSpotifyPlaylistTrackUris(
