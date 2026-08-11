@@ -47,6 +47,34 @@ export class SpotifyConnection {
   expiresAt: Date | null;
 
   @Column({
+    name: 'authorized_at',
+    type: 'timestamp with time zone',
+    nullable: true,
+  })
+  authorizedAt: Date | null;
+
+  @Column({
+    name: 'refresh_token_expires_at',
+    type: 'timestamp with time zone',
+    nullable: true,
+  })
+  refreshTokenExpiresAt: Date | null;
+
+  @Column({
+    name: 'authorization_invalidated_at',
+    type: 'timestamp with time zone',
+    nullable: true,
+  })
+  authorizationInvalidatedAt: Date | null;
+
+  @Column({
+    name: 'reauthorization_reminder_sent_at',
+    type: 'timestamp with time zone',
+    nullable: true,
+  })
+  reauthorizationReminderSentAt: Date | null;
+
+  @Column({
     name: 'oauth_state_hash',
     type: 'text',
     nullable: true,

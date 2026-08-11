@@ -1,12 +1,17 @@
 import { ConfigService } from '@nestjs/config';
 import { FestivalPlaylistsService } from './festival-playlists.service';
 
+const SPOTIFY_SCOPES_FOR_TEST =
+  'playlist-modify-private playlist-modify-public ugc-image-upload user-read-private';
+
 describe('FestivalPlaylistsService', () => {
   let service: FestivalPlaylistsService;
   let connectionRepository: any;
   let spotifyRepository: any;
   let artistRepository: any;
   let playlistArtistRepository: any;
+  let mailService: any;
+  let tokenCrypto: any;
 
   beforeEach(() => {
     connectionRepository = { findOne: jest.fn() };
@@ -26,10 +31,20 @@ describe('FestivalPlaylistsService', () => {
       delete: jest.fn(),
       remove: jest.fn(),
     };
+    mailService = { sendSpotifyReauthorizationReminder: jest.fn() };
+    tokenCrypto = {
+      decrypt: jest.fn((value) => value),
+      encrypt: jest.fn((value) => value),
+    };
     const config = {
-      get: jest.fn((name: string) =>
-        name === 'SETLISTFM_API_KEY' ? 'setlist-key' : undefined,
-      ),
+      get: jest.fn((name: string) => {
+        const values: Record<string, string> = {
+          SETLISTFM_API_KEY: 'setlist-key',
+          SPOTIFY_CLIENT_ID: 'client-id',
+          SPOTIFY_CLIENT_SECRET: 'client-secret',
+        };
+        return values[name];
+      }),
     } as unknown as ConfigService;
     service = new FestivalPlaylistsService(
       connectionRepository,
@@ -37,11 +52,115 @@ describe('FestivalPlaylistsService', () => {
       artistRepository,
       playlistArtistRepository,
       config,
-      {} as any,
+      tokenCrypto,
+      mailService,
     );
   });
 
   afterEach(() => jest.restoreAllMocks());
+
+  it('avisa cuando la autorización de Spotify caduca pronto', async () => {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    connectionRepository.findOne.mockResolvedValue({
+      spotifyUserId: 'spotify-user',
+      displayName: 'Riff Valley',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      refreshTokenExpiresAt: expiresAt,
+      authorizationInvalidatedAt: null,
+      scope: SPOTIFY_SCOPES_FOR_TEST,
+    });
+
+    await expect(service.getSpotifyConnection()).resolves.toEqual(
+      expect.objectContaining({
+        connected: true,
+        authorizationStatus: 'expiring_soon',
+        reauthorizationRequired: false,
+        daysUntilReauthorization: 7,
+      }),
+    );
+  });
+
+  it('exige reautorizar cuando el refresh token ha caducado', async () => {
+    connectionRepository.findOne.mockResolvedValue({
+      spotifyUserId: 'spotify-user',
+      displayName: 'Riff Valley',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      refreshTokenExpiresAt: new Date(Date.now() - 60 * 1000),
+      authorizationInvalidatedAt: null,
+      scope: SPOTIFY_SCOPES_FOR_TEST,
+    });
+
+    await expect(service.getSpotifyConnection()).resolves.toEqual(
+      expect.objectContaining({
+        connected: false,
+        authorizationStatus: 'reauthorization_required',
+        reauthorizationRequired: true,
+        reauthorizationReason: 'refresh_token_expired',
+        daysUntilReauthorization: 0,
+      }),
+    );
+  });
+
+  it('envía una sola vez el recordatorio diario de reautorización', async () => {
+    const connection = {
+      spotifyUserId: 'spotify-user',
+      displayName: 'Riff Valley',
+      refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      reauthorizationReminderSentAt: null,
+    };
+    connectionRepository.findOne.mockResolvedValue(connection);
+    connectionRepository.save = jest.fn();
+    mailService.sendSpotifyReauthorizationReminder.mockResolvedValue(true);
+
+    await service.checkSpotifyAuthorizationLifetime();
+
+    expect(mailService.sendSpotifyReauthorizationReminder).toHaveBeenCalledWith(
+      'Riff Valley',
+      connection.refreshTokenExpiresAt,
+      7,
+    );
+    expect(connection.reauthorizationReminderSentAt).toBeInstanceOf(Date);
+    expect(connectionRepository.save).toHaveBeenCalledWith(connection);
+  });
+
+  it('marca la conexión para reautorizar cuando Spotify devuelve invalid_grant', async () => {
+    const connection = {
+      accessToken: 'old-access-token',
+      refreshToken: 'refresh-token',
+      spotifyUserId: 'spotify-user',
+      expiresAt: new Date(Date.now() - 60 * 1000),
+      refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      authorizationInvalidatedAt: null,
+      scope: SPOTIFY_SCOPES_FOR_TEST,
+    };
+    const queryBuilder = {
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(connection),
+    };
+    connectionRepository.createQueryBuilder = jest
+      .fn()
+      .mockReturnValue(queryBuilder);
+    connectionRepository.save = jest.fn();
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: 'invalid_grant' }),
+    } as Response);
+
+    await expect((service as any).getValidAccessToken()).rejects.toThrow(
+      'Spotify ha invalidado la autorización',
+    );
+    expect(connection).toEqual(
+      expect.objectContaining({
+        accessToken: null,
+        refreshToken: null,
+        expiresAt: null,
+        authorizationInvalidatedAt: expect.any(Date),
+      }),
+    );
+    expect(connectionRepository.save).toHaveBeenCalledWith(connection);
+  });
 
   it('cuenta cada canción una vez por concierto y excluye las pistas de cinta', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue({
@@ -453,7 +572,7 @@ describe('FestivalPlaylistsService', () => {
     await service.clearFestivalPlaylist(playlist.id);
 
     const deleteCalls = spotifyRequest.mock.calls.filter(
-      ([path, _token, init]) =>
+      ([path, , init]) =>
         path === '/playlists/playlist-remote/items' &&
         (init as RequestInit).method === 'DELETE',
     );

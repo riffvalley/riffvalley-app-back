@@ -22,7 +22,10 @@ export class MailService {
     });
   }
 
-  async sendAccessRequestNotification(email: string, alias: string): Promise<void> {
+  async sendAccessRequestNotification(
+    email: string,
+    alias: string,
+  ): Promise<void> {
     const subject = 'Solicitud de acceso de nuevo usuario';
 
     const html = `
@@ -46,7 +49,9 @@ export class MailService {
     }
   }
 
-  async sendNationalReleaseNotification(dto: CreateNationalReleaseDto): Promise<void> {
+  async sendNationalReleaseNotification(
+    dto: CreateNationalReleaseDto,
+  ): Promise<void> {
     const subject = `Nueva novedad nacional: ${dto.artistName} - ${dto.discName}`;
 
     const html = `
@@ -71,5 +76,42 @@ export class MailService {
     } catch (error) {
       this.logger.error('Error sending national release email', error);
     }
+  }
+
+  async sendSpotifyReauthorizationReminder(
+    displayName: string | null,
+    expiresAt: Date,
+    daysRemaining: number,
+  ): Promise<boolean> {
+    const recipient =
+      process.env.SPOTIFY_REAUTH_NOTIFICATION_EMAIL || process.env.MAIL_TO;
+    if (!recipient) {
+      this.logger.warn(
+        'No se envió el aviso OAuth de Spotify: falta SPOTIFY_REAUTH_NOTIFICATION_EMAIL o MAIL_TO',
+      );
+      return false;
+    }
+
+    const expired = daysRemaining <= 0;
+    const subject = expired
+      ? 'La autorización de Spotify necesita renovarse'
+      : `La autorización de Spotify caduca en ${daysRemaining} días`;
+    const html = `
+      <h2>${subject}</h2>
+      <p>Cuenta: <strong>${displayName || 'Cuenta oficial de Riff Valley'}</strong></p>
+      <p>Fecha de caducidad: <strong>${expiresAt.toLocaleDateString('es-ES', {
+        timeZone: 'Europe/Madrid',
+      })}</strong></p>
+      <p>Abre la gestión de playlists de festivales y pulsa <strong>Volver a autorizar Spotify</strong>.</p>
+      <p>No es necesario guardar ni compartir la contraseña de Spotify.</p>
+    `;
+
+    await this.transporter.sendMail({
+      from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+      to: recipient,
+      subject,
+      html,
+    });
+    return true;
   }
 }
