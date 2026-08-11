@@ -15,6 +15,7 @@ import { NationalRelease } from '../national-releases/entities/national-release.
 import { Country } from 'src/countries/entities/country.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { normalizeForSearch } from '../common/utils/normalize';
+import { SpotifyPlaylistArtist } from '../festival-playlists/entities/spotify-playlist-artist.entity';
 
 @Injectable()
 export class ArtistsService {
@@ -27,6 +28,8 @@ export class ArtistsService {
     private readonly discRepository: Repository<Disc>,
     @InjectRepository(NationalRelease)
     private readonly nationalReleaseRepository: Repository<NationalRelease>,
+    @InjectRepository(SpotifyPlaylistArtist)
+    private readonly playlistArtistRepository: Repository<SpotifyPlaylistArtist>,
   ) {}
 
   async create(dto: CreateArtistDto) {
@@ -62,7 +65,13 @@ export class ArtistsService {
     };
   }
 
-  async findAllForManagement(query?: string, limit = 15, offset = 0, genreId?: string, needsReview?: boolean) {
+  async findAllForManagement(
+    query?: string,
+    limit = 15,
+    offset = 0,
+    genreId?: string,
+    needsReview?: boolean,
+  ) {
     const qb = this.artistRepository
       .createQueryBuilder('artist')
       .leftJoinAndSelect('artist.country', 'country')
@@ -71,12 +80,15 @@ export class ArtistsService {
       .skip(offset);
 
     if (query) {
-      qb.where('artist.name_normalized LIKE :q', { q: `%${normalizeForSearch(query)}%` });
+      qb.where('artist.name_normalized LIKE :q', {
+        q: `%${normalizeForSearch(query)}%`,
+      });
     }
 
     if (genreId) {
-      qb.andWhere((sub) =>
-        `EXISTS (${sub.subQuery().select('1').from('disc', 'd').where('d.artistId = artist.id').andWhere('d.genreId = :genreId').getQuery()})`,
+      qb.andWhere(
+        (sub) =>
+          `EXISTS (${sub.subQuery().select('1').from('disc', 'd').where('d.artistId = artist.id').andWhere('d.genreId = :genreId').getQuery()})`,
         { genreId },
       );
     }
@@ -87,11 +99,14 @@ export class ArtistsService {
 
     const countQb = this.artistRepository.createQueryBuilder('artist');
     if (query) {
-      countQb.where('artist.name_normalized LIKE :q', { q: `%${normalizeForSearch(query)}%` });
+      countQb.where('artist.name_normalized LIKE :q', {
+        q: `%${normalizeForSearch(query)}%`,
+      });
     }
     if (genreId) {
-      countQb.andWhere((sub) =>
-        `EXISTS (${sub.subQuery().select('1').from('disc', 'd').where('d.artistId = artist.id').andWhere('d.genreId = :genreId').getQuery()})`,
+      countQb.andWhere(
+        (sub) =>
+          `EXISTS (${sub.subQuery().select('1').from('disc', 'd').where('d.artistId = artist.id').andWhere('d.genreId = :genreId').getQuery()})`,
         { genreId },
       );
     }
@@ -103,12 +118,21 @@ export class ArtistsService {
       .createQueryBuilder('artist')
       .leftJoin('artist.disc', 'disc')
       .where('disc.id IS NULL')
-      .andWhere(`NOT EXISTS (SELECT 1 FROM national_release nr WHERE LOWER(nr."artistName") = LOWER(artist.name))`);
+      .andWhere(
+        `NOT EXISTS (SELECT 1 FROM national_release nr WHERE LOWER(nr."artistName") = LOWER(artist.name))`,
+      )
+      .andWhere(
+        'NOT EXISTS (SELECT 1 FROM spotify_playlist_artists spa WHERE spa.artist_id = artist.id)',
+      );
     if (query) {
-      orphanCountQb.andWhere('artist.name_normalized LIKE :q', { q: `%${normalizeForSearch(query)}%` });
+      orphanCountQb.andWhere('artist.name_normalized LIKE :q', {
+        q: `%${normalizeForSearch(query)}%`,
+      });
     }
     if (needsReview !== undefined) {
-      orphanCountQb.andWhere('artist.needsReview = :needsReview', { needsReview });
+      orphanCountQb.andWhere('artist.needsReview = :needsReview', {
+        needsReview,
+      });
     }
 
     const [artists, totalItems, orphanCount] = await Promise.all([
@@ -118,41 +142,60 @@ export class ArtistsService {
     ]);
 
     if (artists.length === 0) {
-      return { totalItems: 0, totalPages: 0, currentPage: 1, limit, orphanCount: 0, data: [] };
+      return {
+        totalItems: 0,
+        totalPages: 0,
+        currentPage: 1,
+        limit,
+        orphanCount: 0,
+        data: [],
+      };
     }
 
     const artistIds = artists.map((a) => a.id);
     const artistNames = artists.map((a) => a.name);
 
-    const [discsRaw, nationalReleases] = await Promise.all([
-      this.discRepository
-        .createQueryBuilder('disc')
-        .leftJoinAndSelect('disc.genre', 'genre')
-        .leftJoinAndSelect('disc.artist', 'discArtist')
-        .addSelect((sub) =>
-          sub.select('COUNT(rate.id)', 'rateCount')
-            .from('rate', 'rate')
-            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
-          'rateCount',
-        )
-        .addSelect((sub) =>
-          sub.select('AVG(rate.rate)', 'averageRate')
-            .from('rate', 'rate')
-            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
-          'averageRate',
-        )
-        .where('discArtist.id IN (:...artistIds)', { artistIds })
-        .orderBy('disc.releaseDate', 'DESC')
-        .getRawAndEntities(),
+    const [discsRaw, nationalReleases, playlistAssociations] =
+      await Promise.all([
+        this.discRepository
+          .createQueryBuilder('disc')
+          .leftJoinAndSelect('disc.genre', 'genre')
+          .leftJoinAndSelect('disc.artist', 'discArtist')
+          .addSelect(
+            (sub) =>
+              sub
+                .select('COUNT(rate.id)', 'rateCount')
+                .from('rate', 'rate')
+                .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+            'rateCount',
+          )
+          .addSelect(
+            (sub) =>
+              sub
+                .select('AVG(rate.rate)', 'averageRate')
+                .from('rate', 'rate')
+                .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+            'averageRate',
+          )
+          .where('discArtist.id IN (:...artistIds)', { artistIds })
+          .orderBy('disc.releaseDate', 'DESC')
+          .getRawAndEntities(),
 
-      this.nationalReleaseRepository
-        .createQueryBuilder('nr')
-        .where('LOWER(nr.artistName) IN (:...names)', {
-          names: artistNames.map((n) => n.toLowerCase()),
-        })
-        .orderBy('nr.releaseDay', 'DESC')
-        .getMany(),
-    ]);
+        this.nationalReleaseRepository
+          .createQueryBuilder('nr')
+          .where('LOWER(nr.artistName) IN (:...names)', {
+            names: artistNames.map((n) => n.toLowerCase()),
+          })
+          .orderBy('nr.releaseDay', 'DESC')
+          .getMany(),
+
+        this.playlistArtistRepository
+          .createQueryBuilder('association')
+          .innerJoinAndSelect('association.spotify', 'playlist')
+          .where('association.artistId IN (:...artistIds)', { artistIds })
+          .orderBy('playlist.name', 'ASC')
+          .getMany(),
+      ]);
 
     const discsByArtist = new Map<string, any[]>();
     discsRaw.entities.forEach((disc, i) => {
@@ -167,9 +210,18 @@ export class ArtistsService {
         debut: disc.debut,
         image: disc.image,
         link: disc.link,
-        genre: disc.genre ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color } : null,
+        genre: disc.genre
+          ? {
+              id: disc.genre.id,
+              name: disc.genre.name,
+              color: disc.genre.color,
+            }
+          : null,
         rateCount: parseInt(discsRaw.raw[i].rateCount, 10) || 0,
-        averageRate: discsRaw.raw[i].averageRate != null ? parseFloat(discsRaw.raw[i].averageRate) : null,
+        averageRate:
+          discsRaw.raw[i].averageRate != null
+            ? parseFloat(discsRaw.raw[i].averageRate)
+            : null,
       });
     });
 
@@ -189,6 +241,20 @@ export class ArtistsService {
       });
     });
 
+    const playlistsByArtist = new Map<string, any[]>();
+    playlistAssociations.forEach((association) => {
+      if (!playlistsByArtist.has(association.artistId)) {
+        playlistsByArtist.set(association.artistId, []);
+      }
+      playlistsByArtist.get(association.artistId).push({
+        id: association.spotify.id,
+        name: association.spotify.name,
+        link: association.spotify.link,
+        type: association.spotify.type,
+        imageUrl: association.spotify.imageUrl,
+      });
+    });
+
     return {
       totalItems,
       totalPages: Math.ceil(totalItems / limit),
@@ -203,6 +269,7 @@ export class ArtistsService {
         country: artist.country ?? null,
         discs: discsByArtist.get(artist.id) ?? [],
         nationalReleases: nrByArtistName.get(artist.name.toLowerCase()) ?? [],
+        spotifyPlaylists: playlistsByArtist.get(artist.id) ?? [],
       })),
     };
   }
@@ -241,16 +308,20 @@ export class ArtistsService {
         .createQueryBuilder('disc')
         .leftJoinAndSelect('disc.genre', 'genre')
         .leftJoinAndSelect('disc.artist', 'discArtist')
-        .addSelect((sub) =>
-          sub.select('COUNT(rate.id)', 'rateCount')
-            .from('rate', 'rate')
-            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+        .addSelect(
+          (sub) =>
+            sub
+              .select('COUNT(rate.id)', 'rateCount')
+              .from('rate', 'rate')
+              .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
           'rateCount',
         )
-        .addSelect((sub) =>
-          sub.select('AVG(rate.rate)', 'averageRate')
-            .from('rate', 'rate')
-            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+        .addSelect(
+          (sub) =>
+            sub
+              .select('AVG(rate.rate)', 'averageRate')
+              .from('rate', 'rate')
+              .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
           'averageRate',
         )
         .where('discArtist.id IN (:...artistIds)', { artistIds })
@@ -270,9 +341,18 @@ export class ArtistsService {
           debut: disc.debut,
           image: disc.image,
           link: disc.link,
-          genre: disc.genre ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color } : null,
+          genre: disc.genre
+            ? {
+                id: disc.genre.id,
+                name: disc.genre.name,
+                color: disc.genre.color,
+              }
+            : null,
           rateCount: parseInt(discsRaw.raw[i].rateCount, 10) || 0,
-          averageRate: discsRaw.raw[i].averageRate != null ? parseFloat(discsRaw.raw[i].averageRate) : null,
+          averageRate:
+            discsRaw.raw[i].averageRate != null
+              ? parseFloat(discsRaw.raw[i].averageRate)
+              : null,
         });
       });
 
@@ -296,7 +376,9 @@ export class ArtistsService {
       id,
       ...rest,
       ...(name !== undefined ? { name } : {}),
-      ...(name !== undefined ? { nameNormalized: normalizeForSearch(name) } : {}),
+      ...(name !== undefined
+        ? { nameNormalized: normalizeForSearch(name) }
+        : {}),
       country: countryId ? { id: countryId } : undefined,
       needsReview: false,
     });
@@ -326,6 +408,9 @@ export class ArtistsService {
       .andWhere(
         `NOT EXISTS (SELECT 1 FROM national_release nr WHERE LOWER(nr."artistName") = LOWER(artist.name))`,
       )
+      .andWhere(
+        'NOT EXISTS (SELECT 1 FROM spotify_playlist_artists spa WHERE spa.artist_id = artist.id)',
+      )
       .getMany();
 
     if (!orphans.length) return { deleted: 0, artists: [] };
@@ -346,16 +431,20 @@ export class ArtistsService {
       this.discRepository
         .createQueryBuilder('disc')
         .leftJoinAndSelect('disc.genre', 'genre')
-        .addSelect((sub) =>
-          sub.select('COUNT(rate.id)', 'rateCount')
-            .from('rate', 'rate')
-            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+        .addSelect(
+          (sub) =>
+            sub
+              .select('COUNT(rate.id)', 'rateCount')
+              .from('rate', 'rate')
+              .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
           'rateCount',
         )
-        .addSelect((sub) =>
-          sub.select('AVG(rate.rate)', 'averageRate')
-            .from('rate', 'rate')
-            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+        .addSelect(
+          (sub) =>
+            sub
+              .select('AVG(rate.rate)', 'averageRate')
+              .from('rate', 'rate')
+              .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
           'averageRate',
         )
         .where('disc.artistId = :id', { id })
@@ -377,9 +466,14 @@ export class ArtistsService {
       debut: disc.debut,
       image: disc.image,
       link: disc.link,
-      genre: disc.genre ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color } : null,
+      genre: disc.genre
+        ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color }
+        : null,
       rateCount: parseInt(discs.raw[i].rateCount, 10) || 0,
-      averageRate: discs.raw[i].averageRate != null ? parseFloat(discs.raw[i].averageRate) : null,
+      averageRate:
+        discs.raw[i].averageRate != null
+          ? parseFloat(discs.raw[i].averageRate)
+          : null,
     }));
 
     return {
