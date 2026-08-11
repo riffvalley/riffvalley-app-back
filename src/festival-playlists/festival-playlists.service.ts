@@ -583,6 +583,36 @@ export class FestivalPlaylistsService {
     }
   }
 
+  async clearFestivalPlaylist(spotifyId: string) {
+    const spotify = await this.getFestivalPlaylist(spotifyId);
+    const accessToken = await this.getValidAccessToken();
+    const remoteUris = await this.getSpotifyPlaylistTrackUris(
+      accessToken,
+      spotify.spotifyPlaylistId,
+    );
+
+    for (let index = 0; index < remoteUris.length; index += 100) {
+      const batch = remoteUris.slice(index, index + 100);
+      await this.spotifyRequest(
+        `/playlists/${spotify.spotifyPlaylistId}/items`,
+        accessToken,
+        {
+          method: 'DELETE',
+          body: JSON.stringify({
+            items: batch.map((uri) => ({ uri })),
+          }),
+        },
+      );
+    }
+
+    await this.playlistArtistRepository.delete({ spotifyId });
+    await this.spotifyRepository.update(spotify.id, {
+      protectedTrackUris: [],
+      updateDate: new Date(),
+    });
+    return this.getFestivalPlaylist(spotifyId);
+  }
+
   async removeArtist(spotifyId: string, artistId: string) {
     const spotify = await this.getFestivalPlaylist(spotifyId);
     const association = await this.playlistArtistRepository.findOne({

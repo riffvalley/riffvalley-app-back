@@ -106,6 +106,13 @@ pistas y estados.
 `DELETE /api/festival-playlists/:spotifyId/artists/:artistId` elimina sus pistas
 de Spotify y su relación local. Una pista compartida con otro artista se conserva.
 
+`DELETE /api/festival-playlists/:spotifyId/tracks` vacía por completo la
+playlist real de Spotify, incluidas las pistas anteriores a la vinculación. Las
+eliminaciones se envían en lotes de cien y, cuando Spotify termina, se borran
+también todas las asociaciones locales de artistas y la lista de pistas
+protegidas. Es una operación destructiva que el frontend debe confirmar de
+forma explícita.
+
 `DELETE /api/festival-playlists/spotify/connection` elimina los tokens locales,
 pero no borra las playlists creadas en Spotify.
 

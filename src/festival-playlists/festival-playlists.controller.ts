@@ -153,6 +153,12 @@ export class FestivalPlaylistsController {
     return this.festivalPlaylistsService.addArtist(spotifyId, dto);
   }
 
+  @Delete(':spotifyId/tracks')
+  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  clearFestivalPlaylist(@Param('spotifyId', ParseUUIDPipe) spotifyId: string) {
+    return this.festivalPlaylistsService.clearFestivalPlaylist(spotifyId);
+  }
+
   @Delete(':spotifyId/artists/:artistId')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   removeArtist(

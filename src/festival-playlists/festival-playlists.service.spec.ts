@@ -22,6 +22,7 @@ describe('FestivalPlaylistsService', () => {
       find: jest.fn(),
       create: jest.fn((value) => ({ id: 'association-id', ...value })),
       save: jest.fn(async (value) => value),
+      delete: jest.fn(),
       remove: jest.fn(),
     };
     const config = {
@@ -385,6 +386,53 @@ describe('FestivalPlaylistsService', () => {
       expect.objectContaining({
         status: 'synced',
         tracks: [expect.objectContaining({ spotifyTrackId: 'track-id' })],
+      }),
+    );
+  });
+
+  it('vacía Spotify por lotes y elimina todo el estado musical local', async () => {
+    const playlist = {
+      id: 'playlist-local',
+      spotifyPlaylistId: 'playlist-remote',
+      protectedTrackUris: ['spotify:track:protected'],
+    } as any;
+    const remoteUris = Array.from(
+      { length: 205 },
+      (_, index) => `spotify:track:${index}`,
+    );
+    jest.spyOn(service, 'getFestivalPlaylist').mockResolvedValue(playlist);
+    jest
+      .spyOn(service as any, 'getValidAccessToken')
+      .mockResolvedValue('access-token');
+    jest
+      .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
+      .mockResolvedValue(remoteUris);
+    const spotifyRequest = jest
+      .spyOn(service as any, 'spotifyRequest')
+      .mockResolvedValue({});
+
+    await service.clearFestivalPlaylist(playlist.id);
+
+    const deleteCalls = spotifyRequest.mock.calls.filter(
+      ([path, _token, init]) =>
+        path === '/playlists/playlist-remote/items' &&
+        (init as RequestInit).method === 'DELETE',
+    );
+    expect(deleteCalls).toHaveLength(3);
+    expect(
+      JSON.parse((deleteCalls[0][2] as RequestInit).body as string).items,
+    ).toHaveLength(100);
+    expect(
+      JSON.parse((deleteCalls[2][2] as RequestInit).body as string).items,
+    ).toHaveLength(5);
+    expect(playlistArtistRepository.delete).toHaveBeenCalledWith({
+      spotifyId: playlist.id,
+    });
+    expect(spotifyRepository.update).toHaveBeenCalledWith(
+      playlist.id,
+      expect.objectContaining({
+        protectedTrackUris: [],
+        updateDate: expect.any(Date),
       }),
     );
   });
