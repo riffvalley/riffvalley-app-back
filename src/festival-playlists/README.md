@@ -17,7 +17,11 @@ base de datos.
 5. Ejecutar las migraciones `1786400000000-CreateSpotifyConnections`,
    `1786401000000-CreateSpotifyPlaylistArtists` y
    `1786402000000-AddSpotifyPlaylistImage` y
-   `1786403000000-AddSpotifyProtectedTracks`.
+   `1786403000000-AddSpotifyProtectedTracks` y
+   `1786404000000-AddSpotifyAuthorizationLifetime`.
+6. Opcionalmente, configurar `SPOTIFY_REAUTH_NOTIFICATION_EMAIL`. Si no está
+   definida se utiliza `MAIL_TO`. El backend envía un único aviso cuando quedan
+   14 días o menos para volver a autorizar Spotify.
 
 ## Flujo
 
@@ -35,7 +39,15 @@ frontend redirige allí al usuario y Spotify vuelve al callback del backend.
 El estado puede consultarse con
 `GET /api/festival-playlists/spotify/connection`. La respuesta incluye
 `canUploadImages` y `missingScopes`; si falta `ugc-image-upload`, hay que volver
-a completar el OAuth antes de cambiar portadas.
+a completar el OAuth antes de cambiar portadas. También incluye
+`authorizationStatus`, `reauthorizationRequired`, `reauthorizationReason`,
+`authorizedAt`, `refreshTokenExpiresAt` y `daysUntilReauthorization`.
+
+Los access tokens se renuevan automáticamente al utilizarlos. Spotify limita el
+refresh token a seis meses: su renovación no amplía esa fecha. Un cron diario a
+las 09:00 (Europe/Madrid) comprueba la caducidad y envía el recordatorio; si el
+token caduca o Spotify responde `invalid_grant`, el frontend debe iniciar de
+nuevo el OAuth. Nunca se guardan el usuario ni la contraseña de Spotify.
 
 ### 2. Crear la playlist
 

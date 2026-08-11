@@ -4,13 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  ILike,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Repository,
-  In,
-} from 'typeorm';
+import { Repository } from 'typeorm';
 import {
   Spotify,
   SpotifyStatus as SpotifyStatusEnum,
@@ -82,30 +76,40 @@ export class SpotifyService {
 
   async findAll(params: FindSpotifyParams = {}): Promise<Spotify[]> {
     const { limit = 50, offset = 0, q, status, type, desde, hasta } = params;
+    const query = this.repo
+      .createQueryBuilder('spotify')
+      .leftJoinAndSelect('spotify.user', 'user')
+      .loadRelationCountAndMap(
+        'spotify.playlistArtistsCount',
+        'spotify.playlistArtists',
+      )
+      .orderBy('spotify.updatedAt', 'DESC')
+      .take(Math.min(Math.max(0, limit), 200))
+      .skip(Math.max(0, offset));
 
-    // where base (AND)
-    const baseWhere: any = {
-      ...(status ? { status } : {}),
-      ...(type ? (Array.isArray(type) ? { type: In(type) } : { type }) : {}),
-      ...(desde ? { updateDate: MoreThanOrEqual(new Date(desde)) } : {}),
-      ...(hasta ? { updateDate: LessThanOrEqual(new Date(hasta)) } : {}),
-    };
+    if (status) query.andWhere('spotify.status = :status', { status });
+    if (Array.isArray(type)) {
+      query.andWhere('spotify.type IN (:...types)', { types: type });
+    } else if (type) {
+      query.andWhere('spotify.type = :type', { type });
+    }
+    if (desde) {
+      query.andWhere('spotify.updateDate >= :desde', {
+        desde: new Date(desde),
+      });
+    }
+    if (hasta) {
+      query.andWhere('spotify.updateDate <= :hasta', {
+        hasta: new Date(hasta),
+      });
+    }
+    if (q) {
+      query.andWhere('(spotify.name ILIKE :q OR spotify.link ILIKE :q)', {
+        q: `%${q}%`,
+      });
+    }
 
-    // Si hay q, hacemos OR sobre nombre/enlace con ILIKE
-    const where = q
-      ? [
-          { ...baseWhere, name: ILike(`%${q}%`) },
-          { ...baseWhere, link: ILike(`%${q}%`) },
-        ]
-      : baseWhere;
-
-    return this.repo.find({
-      where,
-      order: { updatedAt: 'DESC' },
-      take: Math.min(Math.max(0, limit), 200), // cap de seguridad
-      skip: Math.max(0, offset),
-      relations: ['user'],
-    });
+    return query.getMany();
   }
 
   // Elige al azar una de las playlists de género ya curadas y publicadas

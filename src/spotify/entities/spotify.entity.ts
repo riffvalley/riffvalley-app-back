@@ -94,4 +94,7 @@ export class Spotify {
     cascade: true,
   })
   playlistArtists: SpotifyPlaylistArtist[];
+
+  /** Se rellena explícitamente en los listados sin cargar toda la relación. */
+  playlistArtistsCount?: number;
 }

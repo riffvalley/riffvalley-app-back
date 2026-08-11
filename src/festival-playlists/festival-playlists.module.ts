@@ -9,6 +9,7 @@ import { TokenCryptoService } from './token-crypto.service';
 import { SpotifyPlaylistArtist } from './entities/spotify-playlist-artist.entity';
 import { Spotify } from 'src/spotify/entities/spotify.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
+import { MailModule } from 'src/mail/mail.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { Artist } from 'src/artists/entities/artist.entity';
       Artist,
     ]),
     AuthModule,
+    MailModule,
   ],
   controllers: [FestivalPlaylistsController],
   providers: [FestivalPlaylistsService, TokenCryptoService],
