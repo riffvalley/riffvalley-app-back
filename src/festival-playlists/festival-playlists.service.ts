@@ -389,8 +389,9 @@ export class FestivalPlaylistsService {
       association.status = PlaylistArtistSyncStatus.SYNCED;
       association.lastError = null;
       await this.playlistArtistRepository.save(association);
-      spotify.updateDate = new Date();
-      await this.spotifyRepository.save(spotify);
+      await this.spotifyRepository.update(spotify.id, {
+        updateDate: new Date(),
+      });
       return this.getFestivalPlaylist(spotifyId);
     } catch (error) {
       association.status = PlaylistArtistSyncStatus.FAILED;
@@ -435,8 +436,9 @@ export class FestivalPlaylistsService {
         );
       }
       await this.playlistArtistRepository.remove(association);
-      spotify.updateDate = new Date();
-      await this.spotifyRepository.save(spotify);
+      await this.spotifyRepository.update(spotify.id, {
+        updateDate: new Date(),
+      });
       return this.getFestivalPlaylist(spotifyId);
     } catch (error) {
       association.status = PlaylistArtistSyncStatus.FAILED;

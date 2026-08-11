@@ -12,6 +12,7 @@ describe('FestivalPlaylistsService', () => {
     spotifyRepository = {
       create: jest.fn((value) => ({ id: 'playlist-local', ...value })),
       save: jest.fn(),
+      update: jest.fn(),
     };
     artistRepository = { findOneBy: jest.fn() };
     playlistArtistRepository = {
@@ -173,6 +174,11 @@ describe('FestivalPlaylistsService', () => {
         tracks: [expect.objectContaining({ spotifyTrackId: 'track-id' })],
       }),
     );
+    expect(spotifyRepository.update).toHaveBeenCalledWith(
+      playlist.id,
+      expect.objectContaining({ updateDate: expect.any(Date) }),
+    );
+    expect(spotifyRepository.save).not.toHaveBeenCalled();
   });
 
   it('al quitar un artista conserva las pistas compartidas por otro', async () => {
@@ -214,5 +220,10 @@ describe('FestivalPlaylistsService', () => {
       },
     );
     expect(playlistArtistRepository.remove).toHaveBeenCalledWith(association);
+    expect(spotifyRepository.update).toHaveBeenCalledWith(
+      playlist.id,
+      expect.objectContaining({ updateDate: expect.any(Date) }),
+    );
+    expect(spotifyRepository.save).not.toHaveBeenCalled();
   });
 });
