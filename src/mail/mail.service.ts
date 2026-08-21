@@ -114,4 +114,41 @@ export class MailService {
     });
     return true;
   }
+
+  async sendTiktokReauthorizationReminder(
+    displayName: string | null,
+    expiresAt: Date,
+    daysRemaining: number,
+  ): Promise<boolean> {
+    const recipient =
+      process.env.TIKTOK_REAUTH_NOTIFICATION_EMAIL || process.env.MAIL_TO;
+    if (!recipient) {
+      this.logger.warn(
+        'No se envió el aviso OAuth de TikTok: falta TIKTOK_REAUTH_NOTIFICATION_EMAIL o MAIL_TO',
+      );
+      return false;
+    }
+
+    const expired = daysRemaining <= 0;
+    const subject = expired
+      ? 'La autorización de TikTok necesita renovarse'
+      : `La autorización de TikTok caduca en ${daysRemaining} días`;
+    const html = `
+      <h2>${subject}</h2>
+      <p>Cuenta: <strong>${displayName || 'Cuenta oficial de Riff Valley'}</strong></p>
+      <p>Fecha de caducidad: <strong>${expiresAt.toLocaleDateString('es-ES', {
+        timeZone: 'Europe/Madrid',
+      })}</strong></p>
+      <p>Abre la gestión de integraciones y pulsa <strong>Volver a autorizar TikTok</strong>.</p>
+      <p>No es necesario guardar ni compartir la contraseña de TikTok.</p>
+    `;
+
+    await this.transporter.sendMail({
+      from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+      to: recipient,
+      subject,
+      html,
+    });
+    return true;
+  }
 }
