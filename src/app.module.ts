@@ -39,6 +39,7 @@ import { SuggestionsModule } from './suggestions/suggestions.module';
 import { AccessRequestsModule } from './access-requests/access-requests.module';
 import { InstagramModule } from './instagram/instagram.module';
 import { FestivalPlaylistsModule } from './festival-playlists/festival-playlists.module';
+import { TiktokModule } from './tiktok/tiktok.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { FestivalPlaylistsModule } from './festival-playlists/festival-playlists
     AccessRequestsModule,
     InstagramModule,
     FestivalPlaylistsModule,
+    TiktokModule,
   ],
 })
 export class AppModule {}
