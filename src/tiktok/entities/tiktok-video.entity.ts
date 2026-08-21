@@ -25,6 +25,11 @@ export class TiktokVideo {
   @Column('text', { nullable: true })
   coverImageUrl: string | null;
 
+  // Enlace a la página del vídeo en tiktok.com (share_url de la API). No
+  // confundir con embedLink, que es la URL del reproductor en iframe.
+  @Column('text', { nullable: true })
+  permalink: string | null;
+
   @Column('text', { nullable: true })
   embedLink: string | null;
 

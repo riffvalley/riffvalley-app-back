@@ -4,6 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -28,6 +29,7 @@ const TIKTOK_VIDEO_FIELDS = [
   'video_description',
   'duration',
   'cover_image_url',
+  'share_url',
   'embed_link',
   'embed_html',
   'like_count',
@@ -60,6 +62,7 @@ interface TiktokVideoNode {
   video_description?: string;
   duration?: number;
   cover_image_url?: string;
+  share_url?: string;
   embed_link?: string;
   embed_html?: string;
   like_count?: number;
@@ -67,6 +70,55 @@ interface TiktokVideoNode {
   share_count?: number;
   view_count?: number;
   create_time?: number;
+}
+
+// Contrato público de /tiktok/videos: sin embedHtml (pesa mucho, ~1-2KB por
+// vídeo con el blockquote+script del widget oficial) ni columnas internas
+// (id de BD, timestamps de sincronización). Usa el id de TikTok como `id`
+// público en vez del uuid interno.
+export interface TiktokVideoSummary {
+  id: string;
+  title: string | null;
+  coverImageUrl: string | null;
+  permalink: string | null;
+  embedLink: string | null;
+  duration: number | null;
+  viewCount: number | null;
+  likeCount: number | null;
+  commentCount: number | null;
+  shareCount: number | null;
+  createTime: Date;
+}
+
+// Detalle de un único vídeo: incluye embedHtml, pensado para una vista de
+// "un vídeo" (modal, página propia), no para listados.
+export interface TiktokVideoDetail extends TiktokVideoSummary {
+  videoDescription: string | null;
+  embedHtml: string | null;
+}
+
+function toVideoSummary(video: TiktokVideo): TiktokVideoSummary {
+  return {
+    id: video.tiktokVideoId,
+    title: video.title,
+    coverImageUrl: video.coverImageUrl,
+    permalink: video.permalink,
+    embedLink: video.embedLink,
+    duration: video.duration,
+    viewCount: video.viewCount,
+    likeCount: video.likeCount,
+    commentCount: video.commentCount,
+    shareCount: video.shareCount,
+    createTime: video.tiktokCreateTime,
+  };
+}
+
+function toVideoDetail(video: TiktokVideo): TiktokVideoDetail {
+  return {
+    ...toVideoSummary(video),
+    videoDescription: video.videoDescription,
+    embedHtml: video.embedHtml,
+  };
 }
 
 interface TiktokVideoListResponse {
@@ -302,6 +354,7 @@ export class TiktokService {
               title: node.title ?? null,
               videoDescription: node.video_description ?? null,
               coverImageUrl: node.cover_image_url ?? null,
+              permalink: node.share_url ?? null,
               embedLink: node.embed_link ?? null,
               embedHtml: node.embed_html ?? null,
               duration: node.duration ?? null,
@@ -329,17 +382,25 @@ export class TiktokService {
   async findVideos(dto: TiktokVideosQueryDto) {
     const { limit = 12, offset = 0 } = dto;
 
-    const [data, totalItems] = await this.videoRepository.findAndCount({
+    const [rows, totalItems] = await this.videoRepository.findAndCount({
       order: { tiktokCreateTime: 'DESC' },
       take: limit,
       skip: offset,
     });
 
     return {
-      data,
+      data: rows.map(toVideoSummary),
       totalItems,
-      hasMore: offset + data.length < totalItems,
+      hasMore: offset + rows.length < totalItems,
     };
+  }
+
+  async findVideoDetail(tiktokVideoId: string): Promise<TiktokVideoDetail> {
+    const video = await this.videoRepository.findOne({
+      where: { tiktokVideoId },
+    });
+    if (!video) throw new NotFoundException('Vídeo de TikTok no encontrado');
+    return toVideoDetail(video);
   }
 
   private async getValidAccessToken(
