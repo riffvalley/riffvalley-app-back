@@ -3,6 +3,7 @@ import {
   Delete,
   Get,
   HttpException,
+  Param,
   Post,
   Query,
   Res,
@@ -63,6 +64,11 @@ export class TiktokController {
   @Get('videos')
   findVideos(@Query() dto: TiktokVideosQueryDto) {
     return this.tiktokService.findVideos(dto);
+  }
+
+  @Get('videos/:tiktokVideoId')
+  findVideoDetail(@Param('tiktokVideoId') tiktokVideoId: string) {
+    return this.tiktokService.findVideoDetail(tiktokVideoId);
   }
 
   private frontendRedirectUrl(status: 'connected' | 'error'): string | null {
