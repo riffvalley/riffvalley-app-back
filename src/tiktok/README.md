@@ -43,18 +43,41 @@ Authorization: Bearer <jwt>
 ```
 
 ```json
-// 201
-{ "authorizationUrl": "https://www.tiktok.com/v2/auth/authorize/?client_key=...&state=..." }
+// 201 Created
+{
+  "authorizationUrl": "https://www.tiktok.com/v2/auth/authorize/?client_key=sbawaeewdaj4cc8ohv&response_type=code&redirect_uri=https%3A%2F%2Fspammusic-back-99963122d70c.herokuapp.com%2Fapi%2Ftiktok%2Fcallback&scope=user.info.basic%2Cvideo.list&state=WJERo1AXEJQwWNBwOS1YGZQhuVhQCj_Oop-Dk2NUTos"
+}
 ```
+
+Errores: `401` sin JWT o rol insuficiente (shape estándar de Nest, ver
+abajo); `500` si faltan `TIKTOK_CLIENT_KEY`/`TIKTOK_REDIRECT_URI` en el
+backend.
 
 ### `GET /callback`
 
 Público (TikTok redirige aquí el navegador, sin JWT). No lo llama el
-frontend directamente. Si `TIKTOK_FRONTEND_REDIRECT_URL` está configurada,
-responde con un 302 a `${TIKTOK_FRONTEND_REDIRECT_URL}?tiktok=connected` (o
-`...=error`); si no, devuelve el JSON de `completeConnection` o lanza el
-error. El frontend debe leer el query param `tiktok` en esa página de
-destino para mostrar el resultado.
+frontend directamente, es la propia URL que TikTok invoca tras el consentimiento:
+
+```
+GET /api/tiktok/callback?code=...&scopes=user.info.basic,video.list&state=...
+```
+
+Si `TIKTOK_FRONTEND_REDIRECT_URL` está configurada (lo está en prod:
+`https://app.riffvalley.es/spotify/festivales`), responde con un **302** a:
+
+```
+https://app.riffvalley.es/spotify/festivales?tiktok=connected
+```
+
+o, si algo falla (state inválido/caducado, error de TikTok, `invalid_grant`...):
+
+```
+https://app.riffvalley.es/spotify/festivales?tiktok=error
+```
+
+El frontend debe leer el query param `tiktok` en esa página de destino para
+mostrar el resultado (y opcionalmente volver a pedir `GET /connection` para
+refrescar el estado mostrado).
 
 ### `GET /connection`
 
@@ -84,6 +107,46 @@ interface TiktokConnectionStatus {
 }
 ```
 
+Ejemplo real (cuenta conectada, capturado en producción):
+
+```json
+// 200 OK
+{
+  "connected": true,
+  "openId": "-000q-hiJccQwYtqbsCArR1ZDswxG3knKug6",
+  "displayName": null,
+  "missingScopes": [],
+  "authorizationStatus": "connected",
+  "reauthorizationRequired": false,
+  "reauthorizationReason": null,
+  "authorizedAt": "2026-08-21T18:45:07.868Z",
+  "refreshTokenExpiresAt": "2027-08-21T18:45:07.868Z",
+  "daysUntilReauthorization": 365
+}
+```
+
+Sin conectar:
+
+```json
+// 200 OK
+{
+  "connected": false,
+  "openId": null,
+  "displayName": null,
+  "missingScopes": ["user.info.basic", "video.list"],
+  "authorizationStatus": "disconnected",
+  "reauthorizationRequired": false,
+  "reauthorizationReason": null,
+  "authorizedAt": null,
+  "refreshTokenExpiresAt": null,
+  "daysUntilReauthorization": null
+}
+```
+
+`displayName` puede salir `null` aunque `connected` sea `true` — TikTok no
+siempre devuelve el nombre en `user/info`; no depender de él para saber si
+hay conexión, usar `connected`/`authorizationStatus`.
+
 Cuando `authorizationStatus` es `expiring_soon` o `reauthorization_required`,
 el frontend debe ofrecer volver a pulsar "Conectar TikTok" (repite el flujo
 de `POST /connect`).
@@ -94,7 +157,7 @@ Desconecta la cuenta (borra la fila). **Requiere JWT** (mismos roles).
 Operación destructiva: el frontend debe confirmarla.
 
 ```json
-// 200
+// 200 OK
 { "connected": false }
 ```
 
@@ -135,6 +198,35 @@ interface TiktokVideosResponse {
 }
 ```
 
+Ejemplo real (basado en datos de producción, recortado a 1 vídeo):
+
+```json
+// 200 OK — GET /api/tiktok/videos?limit=1&offset=0
+{
+  "data": [
+    {
+      "id": "7675082523445153027",
+      "title": "OS TRAEMOS TRES DISCOS DE JULIO QUE NO DEBES PERDERTE. #metal #recomendaciones #mejoresdelmes #music",
+      "coverImageUrl": "https://p16-common-sign.tiktokcdn-eu.com/tos-no1a-p-0037-no/oQuwERiaAnS5TMRDCABAIeQyIY1wXBCCAaijvc~tplv-tiktokx-cropcenter-q:300:400:q70.jpeg?dr=9232&x-expires=1787425200&x-signature=bJrYzRKuH%2FkW59UCwIDeZ7fhgek%3D&...",
+      "permalink": "https://www.tiktok.com/@riffvalley/video/7675082523445153027",
+      "embedLink": "https://www.tiktok.com/player/v1/7675082523445153027?music_info=1&description=1&autoplay=1&loop=1&utm_campaign=tt4d_open_api&utm_source=sbawaeewdaj4cc8ohv",
+      "duration": 69,
+      "viewCount": 795,
+      "likeCount": 8,
+      "commentCount": 2,
+      "shareCount": 0,
+      "createTime": "2026-08-17T19:20:11.000Z"
+    }
+  ],
+  "totalItems": 86,
+  "hasMore": true
+}
+```
+
+`coverImageUrl` es una URL firmada por TikTok con expiración
+(`x-expires`); se refresca sola en cada sincronización, así que no hace
+falta cachearla del lado del frontend más allá de una sesión de navegación.
+
 ### `GET /videos/:id`
 
 **Público, sin JWT.** `:id` es el id de TikTok (el mismo `id` que devuelve
@@ -149,8 +241,54 @@ interface TiktokVideoDetail extends TiktokVideoSummary {
 }
 ```
 
-404 con el shape estándar de NestJS (`{ statusCode, message, error }`) si el
-id no existe en la caché local.
+```json
+// 200 OK — GET /api/tiktok/videos/7675082523445153027
+{
+  "id": "7675082523445153027",
+  "title": "OS TRAEMOS TRES DISCOS DE JULIO QUE NO DEBES PERDERTE. #metal #recomendaciones #mejoresdelmes #music",
+  "coverImageUrl": "https://p16-common-sign.tiktokcdn-eu.com/tos-no1a-p-0037-no/oQuwERiaAnS5TMRDCABAIeQyIY1wXBCCAaijvc~tplv-tiktokx-cropcenter-q:300:400:q70.jpeg?...",
+  "permalink": "https://www.tiktok.com/@riffvalley/video/7675082523445153027",
+  "embedLink": "https://www.tiktok.com/player/v1/7675082523445153027?music_info=1&description=1&autoplay=1&loop=1&utm_campaign=tt4d_open_api&utm_source=sbawaeewdaj4cc8ohv",
+  "duration": 69,
+  "viewCount": 795,
+  "likeCount": 8,
+  "commentCount": 2,
+  "shareCount": 0,
+  "createTime": "2026-08-17T19:20:11.000Z",
+  "videoDescription": "OS TRAEMOS TRES DISCOS DE JULIO QUE NO DEBES PERDERTE. #metal #recomendaciones #mejoresdelmes #music",
+  "embedHtml": "<blockquote class=\"tiktok-embed\" cite=\"https://www.tiktok.com/@riffvalley/video/7675082523445153027?utm_campaign=tt4d_open_api&utm_source=sbawaeewdaj4cc8ohv\" data-video-id=\"7675082523445153027\" style=\"max-width: 605px;min-width: 325px;\"> <section> <a target=\"_blank\" title=\"@riffvalley\" href=\"https://www.tiktok.com/@riffvalley\">@riffvalley</a> <p>OS TRAEMOS TRES DISCOS DE JULIO QUE NO DEBES PERDERTE. <a title=\"metal\" href=\"https://www.tiktok.com/tag/metal\">#metal</a> ...</p> </section> </blockquote> <script async src=\"https://www.tiktok.com/embed.js\"></script>"
+}
+```
+
+Si `:id` no existe en la caché local:
+
+```json
+// 404 Not Found
+{
+  "statusCode": 404,
+  "message": "Vídeo de TikTok no encontrado",
+  "error": "Not Found"
+}
+```
+
+## Errores comunes (rutas con JWT)
+
+Mismo shape estándar de NestJS en todas las rutas protegidas
+(`connect`, `connection`, `DELETE connection`):
+
+```json
+// 401 Unauthorized — sin token o token inválido/caducado
+{ "statusCode": 401, "message": "Unauthorized" }
+```
+
+```json
+// 403 Forbidden — token válido pero rol sin permiso
+{
+  "statusCode": 403,
+  "message": "User <username> is not authorized",
+  "error": "Forbidden"
+}
+```
 
 ## Notas de implementación
 
