@@ -74,6 +74,17 @@ interface TiktokVideoListResponse {
   error?: { code: string; message: string; log_id: string };
 }
 
+// La Display API de TikTok siempre incluye un objeto `error` en la respuesta,
+// incluso cuando la llamada ha ido bien (con code: "ok"). Solo es un fallo
+// real si el code es distinto de "ok".
+function isTiktokError(error?: {
+  code: string;
+  message: string;
+  log_id: string;
+}): boolean {
+  return !!error && error.code !== 'ok';
+}
+
 @Injectable()
 export class TiktokService {
   private readonly logger = new Logger(TiktokService.name);
@@ -277,7 +288,7 @@ export class TiktokService {
         );
         const body = (await response.json()) as TiktokVideoListResponse;
 
-        if (!response.ok || body.error) {
+        if (!response.ok || isTiktokError(body.error)) {
           this.logger.error(
             `TikTok API error: ${JSON.stringify(body.error ?? body)}`,
           );
@@ -482,7 +493,7 @@ export class TiktokService {
     const body = (await response
       .json()
       .catch(() => ({}))) as TiktokUserInfoResponse;
-    if (!response.ok || body.error || !body.data?.user) {
+    if (!response.ok || isTiktokError(body.error) || !body.data?.user) {
       this.logger.error(
         `No se pudo obtener el perfil de TikTok: ${JSON.stringify(body.error ?? body)}`,
       );
