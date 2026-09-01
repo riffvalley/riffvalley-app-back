@@ -22,6 +22,13 @@ export class ArticlesController {
         return this.articlesService.findOne(id);
     }
 
+    // Manual "create content" button: creates a backlog Content linked to
+    // this Article. Article and Content stay independent from then on.
+    @Post(':id/content')
+    createContent(@Param('id', ParseUUIDPipe) id: string) {
+        return this.articlesService.createContentForArticle(id);
+    }
+
     @Patch(':id')
     update(@Param('id', ParseUUIDPipe) id: string, @Body() updateArticleDto: UpdateArticleDto) {
         return this.articlesService.update(id, updateArticleDto);

@@ -48,25 +48,6 @@ export class ArticlesService {
     });
     const savedArticle = await this.repo.save(entity);
 
-    // Shortcut: if created with EDITING or READY, auto-create Content
-    if (
-      savedArticle.status === ArticleStatus.EDITING ||
-      savedArticle.status === ArticleStatus.READY
-    ) {
-      if (!createArticleDto.userId) {
-        throw new BadRequestException(
-          'Para crear un Article en estado EDITING, debe tener un usuario asignado.',
-        );
-      }
-      await this.contentsService.create({
-        name: savedArticle.name,
-        type: ContentType.ARTICLE,
-        authorId: createArticleDto.userId,
-        articleId: savedArticle.id,
-        backlog: true,
-      } as any);
-    }
-
     return this.findOne(savedArticle.id);
   }
 
@@ -109,9 +90,6 @@ export class ArticlesService {
     updateArticleDto: UpdateArticleDto,
   ): Promise<Article> {
     const entity = await this.findOne(id);
-    let shouldSyncContent = false;
-    const contentSyncPayload: any = {};
-    let contentId: string | undefined;
 
     // Update simple fields
     if (updateArticleDto.name) entity.name = updateArticleDto.name;
@@ -119,8 +97,6 @@ export class ArticlesService {
     if (updateArticleDto.type) entity.type = updateArticleDto.type;
     if (updateArticleDto.updateDate) {
       entity.updateDate = new Date(updateArticleDto.updateDate);
-      shouldSyncContent = true;
-      contentSyncPayload.publicationDate = entity.updateDate;
     }
 
     // Handle User Assignment
@@ -137,46 +113,18 @@ export class ArticlesService {
     }
 
     // Logic for State Transitions
+    // NOTE: this no longer touches Content — Article and Content are fully
+    // independent. Creating/linking a Content is a manual, explicit action
+    // (see createContentForArticle() / POST /articles/:id/content).
     if (updateArticleDto.status && updateArticleDto.status !== entity.status) {
-      if (updateArticleDto.status === ArticleStatus.IN_PROGRESS) {
-        // Transitioning to IN_PROGRESS: delete associated Content
-        const content = await this.contentsService.findOneByArticleId(id);
-        if (content) {
-          await this.contentsService.remove(content.id);
-        }
-      } else if (
+      if (
         updateArticleDto.status === ArticleStatus.EDITING ||
         updateArticleDto.status === ArticleStatus.READY
       ) {
-        const assignedUser = entity.user;
-        if (!assignedUser) {
+        if (!entity.user) {
           throw new BadRequestException(
             `Para cambiar el estado a "${updateArticleDto.status}", el artículo debe tener un usuario asignado.`,
           );
-        }
-
-        const content = await this.contentsService.findOneByArticleId(id);
-        if (!content) {
-          try {
-            const newContent = await this.contentsService.create({
-              name: entity.name,
-              type: ContentType.ARTICLE,
-              authorId: assignedUser.id,
-              articleId: id,
-              backlog: true,
-            } as any);
-            entity.content = newContent;
-          } catch (error) {
-            console.error('Error creating content for Article:', error);
-            throw new BadRequestException(
-              'Error al crear el contenido asociado: ' + error.message,
-            );
-          }
-        } else {
-          shouldSyncContent = true;
-          contentId = content.id;
-          contentSyncPayload.publicationDate = null;
-          contentSyncPayload.backlog = true;
         }
       } else if (updateArticleDto.status === ArticleStatus.PUBLISHED) {
         if (!updateArticleDto.updateDate) {
@@ -185,26 +133,12 @@ export class ArticlesService {
           );
         }
         entity.updateDate = new Date(updateArticleDto.updateDate);
-        shouldSyncContent = true;
-        contentSyncPayload.publicationDate = entity.updateDate;
-        contentSyncPayload.backlog = false;
       }
     }
 
     if (updateArticleDto.status) entity.status = updateArticleDto.status;
 
     await this.repo.save(entity);
-
-    if (shouldSyncContent) {
-      if (!contentId) {
-        const content = await this.contentsService.findOneByArticleId(id);
-        if (content) contentId = content.id;
-      }
-
-      if (contentId) {
-        await this.contentsService.update(contentId, contentSyncPayload);
-      }
-    }
 
     return this.findOne(id);
   }
@@ -215,10 +149,40 @@ export class ArticlesService {
     const content = await this.contentsService.findOneByArticleId(id);
     if (content) {
       throw new BadRequestException(
-        'No se puede eliminar un Article que tiene un Content asociado. Primero pásalo a IN_PROGRESS.',
+        'No se puede eliminar un Article que tiene un Content asociado. Elimina primero ese Content (DELETE /contents/:id).',
       );
     }
 
     await this.repo.remove(entity);
+  }
+
+  /**
+   * Manual "create content" button: creates a backlog Content (no
+   * publicationDate) linked to this Article and stops there — Article and
+   * Content stay fully independent afterwards, no further sync happens.
+   */
+  async createContentForArticle(id: string): Promise<Article> {
+    const article = await this.findOne(id);
+
+    if (article.content) {
+      throw new BadRequestException(
+        'Este Article ya tiene un Content asociado.',
+      );
+    }
+    if (!article.user) {
+      throw new BadRequestException(
+        'Para crear el Content asociado, el artículo debe tener un usuario asignado.',
+      );
+    }
+
+    await this.contentsService.create({
+      name: article.name,
+      type: ContentType.ARTICLE,
+      authorId: article.user.id,
+      articleId: article.id,
+      backlog: true,
+    } as any);
+
+    return this.findOne(id);
   }
 }

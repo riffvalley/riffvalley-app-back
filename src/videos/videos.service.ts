@@ -64,25 +64,6 @@ export class VideosService {
     });
     const savedEntity = await this.repo.save(entity);
 
-    // Shortcut: if created with EDITING or READY, auto-create Content
-    if (
-      savedEntity.status === VideoStatusEnum.EDITING ||
-      savedEntity.status === VideoStatusEnum.READY
-    ) {
-      if (!createVideoDto.userId) {
-        throw new BadRequestException(
-          'Para crear un Video en estado EDITING, debe tener un usuario asignado.',
-        );
-      }
-      await this.contentsService.create({
-        name: savedEntity.name,
-        type: ContentType.VIDEO,
-        authorId: createVideoDto.userId,
-        videoId: savedEntity.id,
-        backlog: true,
-      } as any);
-    }
-
     return this.findOne(savedEntity.id);
   }
 
@@ -106,7 +87,7 @@ export class VideosService {
       order: { updatedAt: 'DESC' },
       take: Math.min(Math.max(0, limit), 200),
       skip: Math.max(0, offset),
-      relations: ['user', 'list', 'editor'],
+      relations: ['user', 'list', 'editor', 'content'],
     });
   }
 
@@ -121,17 +102,12 @@ export class VideosService {
 
   async update(id: string, updateVideoDto: UpdateVideoDto): Promise<Video> {
     const entity = await this.findOne(id);
-    let shouldSyncContent = false;
-    const contentSyncPayload: any = {};
-    let contentId: string | undefined;
 
     // Update simple fields
     if (updateVideoDto.name) entity.name = updateVideoDto.name;
     if (updateVideoDto.type) entity.type = updateVideoDto.type;
     if (updateVideoDto.updateDate) {
       entity.updateDate = new Date(updateVideoDto.updateDate);
-      shouldSyncContent = true;
-      contentSyncPayload.publicationDate = entity.updateDate;
     }
 
     // Handle User Assignment
@@ -152,46 +128,18 @@ export class VideosService {
     }
 
     // Logic for State Transitions
+    // NOTE: this no longer touches Content — Video and Content are fully
+    // independent. Creating/linking a Content is a manual, explicit action
+    // (see createContentForVideo() / POST /videos/:id/content).
     if (updateVideoDto.status && updateVideoDto.status !== entity.status) {
-      if (updateVideoDto.status === VideoStatusEnum.IN_PROGRESS) {
-        // Transitioning to IN_PROGRESS: delete associated Content
-        const content = await this.contentsService.findOneByVideoId(id);
-        if (content) {
-          await this.contentsService.remove(content.id);
-        }
-      } else if (
+      if (
         updateVideoDto.status === VideoStatusEnum.EDITING ||
         updateVideoDto.status === VideoStatusEnum.READY
       ) {
-        const assignedUser = entity.user;
-        if (!assignedUser) {
+        if (!entity.user) {
           throw new BadRequestException(
             `Para cambiar el estado a "${updateVideoDto.status}", el video debe tener un usuario asignado.`,
           );
-        }
-
-        const content = await this.contentsService.findOneByVideoId(id);
-        if (!content) {
-          try {
-            const newContent = await this.contentsService.create({
-              name: entity.name,
-              type: ContentType.VIDEO,
-              authorId: assignedUser.id,
-              videoId: id,
-              backlog: true,
-            } as any);
-            entity.content = newContent;
-          } catch (error) {
-            console.error('Error creating content for Video:', error);
-            throw new BadRequestException(
-              'Error al crear el contenido asociado: ' + error.message,
-            );
-          }
-        } else {
-          shouldSyncContent = true;
-          contentId = content.id;
-          contentSyncPayload.publicationDate = null;
-          contentSyncPayload.backlog = true;
         }
       } else if (updateVideoDto.status === VideoStatusEnum.PUBLISHED) {
         if (!updateVideoDto.updateDate) {
@@ -200,29 +148,13 @@ export class VideosService {
           );
         }
         entity.updateDate = new Date(updateVideoDto.updateDate);
-        shouldSyncContent = true;
-        contentSyncPayload.publicationDate = entity.updateDate;
-        contentSyncPayload.backlog = false;
       }
     }
 
     // Apply state change
     if (updateVideoDto.status) entity.status = updateVideoDto.status;
 
-    // Save Video Entity FIRST
     await this.repo.save(entity);
-
-    // Sync Content if needed
-    if (shouldSyncContent) {
-      if (!contentId) {
-        const content = await this.contentsService.findOneByVideoId(id);
-        if (content) contentId = content.id;
-      }
-
-      if (contentId) {
-        await this.contentsService.update(contentId, contentSyncPayload);
-      }
-    }
 
     return this.findOne(id);
   }
@@ -233,7 +165,7 @@ export class VideosService {
     const content = await this.contentsService.findOneByVideoId(id);
     if (content) {
       throw new BadRequestException(
-        'No se puede eliminar un Video que tiene un Content asociado. Primero pásalo a IN_PROGRESS.',
+        'No se puede eliminar un Video que tiene un Content asociado. Elimina primero ese Content (DELETE /contents/:id).',
       );
     }
 
@@ -257,6 +189,34 @@ export class VideosService {
 
     video.list = list;
     await this.repo.save(video);
+
+    return this.findOne(videoId);
+  }
+
+  /**
+   * Manual "create content" button: creates a backlog Content (no
+   * publicationDate) linked to this Video and stops there — Video and
+   * Content stay fully independent afterwards, no further sync happens.
+   */
+  async createContentForVideo(videoId: string): Promise<Video> {
+    const video = await this.findOne(videoId);
+
+    if (video.content) {
+      throw new BadRequestException('Este Video ya tiene un Content asociado.');
+    }
+    if (!video.user) {
+      throw new BadRequestException(
+        'Para crear el Content asociado, el video debe tener un usuario asignado.',
+      );
+    }
+
+    await this.contentsService.create({
+      name: video.name,
+      type: ContentType.VIDEO,
+      authorId: video.user.id,
+      videoId: video.id,
+      backlog: true,
+    } as any);
 
     return this.findOne(videoId);
   }

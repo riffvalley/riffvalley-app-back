@@ -53,6 +53,13 @@ export class SpotifyController {
     return this.spotifyService.findOne(id);
   }
 
+  // Manual "create content" button: creates a backlog Content linked to
+  // this Spotify item. Spotify and Content stay independent from then on.
+  @Post(':id/content')
+  createContent(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    return this.spotifyService.createContentForSpotify(id);
+  }
+
   @Patch(':id')
   update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
