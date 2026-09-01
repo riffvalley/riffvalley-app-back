@@ -36,6 +36,13 @@ export class VideosController {
     return this.videosService.createListForVideo(id);
   }
 
+  // Manual "create content" button: creates a backlog Content linked to
+  // this Video. Video and Content stay independent from then on.
+  @Post(':id/content')
+  createContent(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    return this.videosService.createContentForVideo(id);
+  }
+
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.videosService.findOne(id);

@@ -13,21 +13,9 @@ import { Content, ContentType } from './entities/content.entity';
 import { User } from 'src/auth/entities/user.entity';
 import { Reunion } from 'src/reunions/entities/reunion.entity';
 import { Point } from 'src/points/entities/point.entity';
-import {
-  Spotify,
-  SpotifyStatus,
-  SpotifyType,
-} from 'src/spotify/entities/spotify.entity';
-import {
-  Article,
-  ArticleStatus,
-  ArticleType,
-} from 'src/articles/entities/article.entity';
-import {
-  Video,
-  VideoStatus,
-  VideoType,
-} from 'src/videos/entities/video.entity';
+import { Spotify, SpotifyStatus } from 'src/spotify/entities/spotify.entity';
+import { Article, ArticleStatus } from 'src/articles/entities/article.entity';
+import { Video, VideoStatus } from 'src/videos/entities/video.entity';
 import { ListsService } from 'src/lists/list.service';
 import { List } from 'src/lists/entities/list.entity';
 
@@ -170,73 +158,11 @@ export class ContentsService {
       ready: createContentDto.publicationDate ? false : rest.ready,
     });
 
-    // Auto-create Spotify entity if type is SPOTIFY and no spotifyId provided
-    if (
-      createContentDto.type === ContentType.SPOTIFY &&
-      !(rest as any).spotifyId
-    ) {
-      if (!author) {
-        throw new BadRequestException(
-          'Cannot auto-create Spotify entity without an assigned author.',
-        );
-      }
-
-      const spotifyEntity = this.spotifyRepo.create({
-        name: rest.name,
-        status: SpotifyStatus.EDITING,
-        type: SpotifyType.GENERO, // Default type, user can change later
-        link: '', // Default empty link
-        updateDate: new Date(),
-        user: author,
-      });
-      const savedSpotify = await this.spotifyRepo.save(spotifyEntity);
-
-      content.spotify = savedSpotify;
-      // content.spotifyId = savedSpotify.id; // If field existed directly
-    }
-
-    // Auto-create Article entity if type is ARTICLE and no articleId provided
-    if (
-      createContentDto.type === ContentType.ARTICLE &&
-      !(rest as any).articleId
-    ) {
-      if (!author) {
-        throw new BadRequestException(
-          'Cannot auto-create Article entity without an assigned author.',
-        );
-      }
-
-      const articleEntity = this.articleRepo.create({
-        name: rest.name,
-        status: ArticleStatus.EDITING,
-        type: ArticleType.ARTICULO, // Default type
-        updateDate: new Date(),
-        user: author,
-      });
-      const savedArticle = await this.articleRepo.save(articleEntity);
-
-      content.article = savedArticle;
-    }
-
-    // Auto-create Video entity if type is VIDEO and no videoId provided
-    if (createContentDto.type === ContentType.VIDEO && !(rest as any).videoId) {
-      if (!author) {
-        throw new BadRequestException(
-          'Cannot auto-create Video entity without an assigned author.',
-        );
-      }
-
-      const videoEntity = this.videoRepo.create({
-        name: rest.name,
-        status: VideoStatus.EDITING,
-        type: VideoType.CUSTOM,
-        updateDate: new Date(),
-        user: author,
-      });
-      const savedVideo = await this.videoRepo.save(videoEntity);
-
-      content.video = savedVideo;
-    }
+    // NOTE: Spotify/Article/Video entities are no longer auto-created here.
+    // Content and Video/Article/Spotify are fully independent: linking them is
+    // done explicitly from the media side (POST /videos/:id/content,
+    // /articles/:id/content, /spotify/:id/content), which creates a backlog
+    // Content pointing at that entity.
 
     // Auto-create Reunion if type is REUNION
     if (createContentDto.type === ContentType.REUNION) {
@@ -519,148 +445,10 @@ export class ContentsService {
       }
     }
 
-    // Sync with Spotify
-    if (savedContent.type === ContentType.SPOTIFY) {
-      // Ensure we have the relation
-      const contentWithSpotify = savedContent.spotify
-        ? savedContent
-        : await this.contentRepo.findOne({
-            where: { id: savedContent.id },
-            relations: ['spotify'],
-          });
-
-      if (contentWithSpotify && contentWithSpotify.spotify) {
-        const spotifyEntity = await this.spotifyRepo.findOne({
-          where: { id: contentWithSpotify.spotify.id },
-        });
-
-        if (spotifyEntity) {
-          let spotifyChanged = false;
-
-          if (savedContent.publicationDate) {
-            // Content Published -> Spotify PUBLISHED + Date Sync
-            const contentDate = new Date(savedContent.publicationDate);
-            const spotifyDate = spotifyEntity.updateDate
-              ? new Date(spotifyEntity.updateDate)
-              : null;
-
-            // Sync Date (ignoring time component discrepancies if we want to be strict, but updating to latest content date usually implies intention)
-            // If the dates are completely different days, definitely update.
-            // If spotifyDate is timestamp, contentDate is YYYY-MM-DD 00:00:00.
-            if (
-              !spotifyDate ||
-              spotifyDate.getTime() !== contentDate.getTime()
-            ) {
-              spotifyEntity.updateDate = contentDate;
-              spotifyChanged = true;
-            }
-
-            if (spotifyEntity.status !== SpotifyStatus.PUBLISHED) {
-              spotifyEntity.status = SpotifyStatus.PUBLISHED;
-              spotifyChanged = true;
-            }
-          } else {
-            // Content Backlog (null date) -> Spotify READY
-            if (spotifyEntity.status !== SpotifyStatus.READY) {
-              // If it was PUBLISHED, and we remove date, it goes to READY.
-              // Assuming it has user assigned (which strictly it should if it was PUBLISHED or READY before).
-              spotifyEntity.status = SpotifyStatus.READY;
-              spotifyChanged = true;
-            }
-          }
-
-          if (spotifyChanged) {
-            await this.spotifyRepo.save(spotifyEntity);
-          }
-        }
-      }
-    }
-
-    // Sync with Article
-    if (savedContent.type === ContentType.ARTICLE) {
-      const contentWithArticle = savedContent.article
-        ? savedContent
-        : await this.contentRepo.findOne({
-            where: { id: savedContent.id },
-            relations: ['article'],
-          });
-
-      if (contentWithArticle && contentWithArticle.article) {
-        const articleEntity = await this.articleRepo.findOne({
-          where: { id: contentWithArticle.article.id },
-        });
-
-        if (articleEntity) {
-          let articleChanged = false;
-
-          if (savedContent.publicationDate) {
-            // Content Published -> Article PUBLISHED + Date Sync
-            const contentDate = new Date(savedContent.publicationDate);
-            const articleDate = articleEntity.updateDate
-              ? new Date(articleEntity.updateDate)
-              : null;
-
-            if (
-              !articleDate ||
-              articleDate.getTime() !== contentDate.getTime()
-            ) {
-              articleEntity.updateDate = contentDate;
-              articleChanged = true;
-            }
-
-            if (articleEntity.status !== ArticleStatus.PUBLISHED) {
-              articleEntity.status = ArticleStatus.PUBLISHED;
-              articleChanged = true;
-            }
-          }
-
-          if (articleChanged) {
-            await this.articleRepo.save(articleEntity);
-          }
-        }
-      }
-    }
-
-    // Sync with Video
-    if (savedContent.type === ContentType.VIDEO) {
-      const contentWithVideo = savedContent.video
-        ? savedContent
-        : await this.contentRepo.findOne({
-            where: { id: savedContent.id },
-            relations: ['video'],
-          });
-
-      if (contentWithVideo && contentWithVideo.video) {
-        const videoEntity = await this.videoRepo.findOne({
-          where: { id: contentWithVideo.video.id },
-        });
-
-        if (videoEntity) {
-          let videoChanged = false;
-
-          if (savedContent.publicationDate) {
-            const contentDate = new Date(savedContent.publicationDate);
-            const videoDate = videoEntity.updateDate
-              ? new Date(videoEntity.updateDate)
-              : null;
-
-            if (!videoDate || videoDate.getTime() !== contentDate.getTime()) {
-              videoEntity.updateDate = contentDate;
-              videoChanged = true;
-            }
-
-            if (videoEntity.status !== VideoStatus.PUBLISHED) {
-              videoEntity.status = VideoStatus.PUBLISHED;
-              videoChanged = true;
-            }
-          }
-
-          if (videoChanged) {
-            await this.videoRepo.save(videoEntity);
-          }
-        }
-      }
-    }
+    // NOTE: Spotify/Article/Video status is no longer auto-synced here when the
+    // Content changes (e.g. publicationDate edits used to silently flip the
+    // linked entity to PUBLISHED). Content and Video/Article/Spotify are fully
+    // independent — see the note in create() above.
 
     // Sync with Reunion (Content.publicationDate -> Reunion.date)
     if (savedContent.type === ContentType.REUNION || savedContent.reunionId) {
@@ -733,10 +521,7 @@ export class ContentsService {
       throw new NotFoundException(`Content with id ${id} not found`);
     }
 
-    // Save references before removing content
-    const spotifyId = content.spotify?.id;
-    const articleId = content.article?.id;
-    const videoId = content.video?.id;
+    // Save reference before removing content
     const listId = content.list?.id;
 
     await this.contentRepo.remove(content);
@@ -750,22 +535,9 @@ export class ContentsService {
       await this.listsService.removeList(listId);
     }
 
-    // Unlinked entities go back to IN_PROGRESS
-    if (spotifyId) {
-      await this.spotifyRepo.update(spotifyId, {
-        status: SpotifyStatus.IN_PROGRESS,
-      });
-    }
-    if (articleId) {
-      await this.articleRepo.update(articleId, {
-        status: ArticleStatus.IN_PROGRESS,
-      });
-    }
-    if (videoId) {
-      await this.videoRepo.update(videoId, {
-        status: VideoStatus.IN_PROGRESS,
-      });
-    }
+    // NOTE: The linked Spotify/Article/Video entity is left untouched — its
+    // status is no longer auto-reset on Content removal. Video/Article/Spotify
+    // and Content are fully independent now.
   }
 
   async findByMonth(year: number, month: number): Promise<Content[]> {

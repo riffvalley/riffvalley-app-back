@@ -53,22 +53,6 @@ export class SpotifyService {
     });
     const savedEntity = await this.repo.save(entity);
 
-    // A calendar event only exists once the playlist is finished.
-    if (savedEntity.status === SpotifyStatusEnum.READY) {
-      if (!savedEntity.user) {
-        throw new BadRequestException(
-          'Para crear un Spotify en estado READY, debe tener un usuario asignado.',
-        );
-      }
-      await this.contentsService.create({
-        name: savedEntity.name,
-        type: ContentType.SPOTIFY,
-        authorId: createSpotifyDto.userId,
-        spotifyId: savedEntity.id,
-        backlog: true,
-      } as any);
-    }
-
     return this.findOne(savedEntity.id);
   }
 
@@ -77,6 +61,7 @@ export class SpotifyService {
     const query = this.repo
       .createQueryBuilder('spotify')
       .leftJoinAndSelect('spotify.user', 'user')
+      .leftJoinAndSelect('spotify.content', 'content')
       .loadRelationCountAndMap(
         'spotify.playlistArtistsCount',
         'spotify.playlistArtists',
@@ -152,9 +137,6 @@ export class SpotifyService {
     updateSpotifyDto: UpdateSpotifyDto,
   ): Promise<Spotify> {
     const entity = await this.findOne(id);
-    let shouldSyncContent = false;
-    const contentSyncPayload: any = {};
-    let contentId: string | undefined;
 
     // Update simple fields
     if (updateSpotifyDto.name) entity.name = updateSpotifyDto.name;
@@ -162,10 +144,6 @@ export class SpotifyService {
     if (updateSpotifyDto.type) entity.type = updateSpotifyDto.type;
     if (updateSpotifyDto.updateDate) {
       entity.updateDate = new Date(updateSpotifyDto.updateDate);
-      // Scheduled sync
-      shouldSyncContent = true;
-      contentSyncPayload.publicationDate = entity.updateDate;
-      contentSyncPayload.backlog = false;
     }
 
     // Handle User Assignment
@@ -174,47 +152,15 @@ export class SpotifyService {
     }
 
     // Logic for State Transitions
+    // NOTE: this no longer touches Content — Spotify and Content are fully
+    // independent. Creating/linking a Content is a manual, explicit action
+    // (see createContentForSpotify() / POST /spotify/:id/content).
     if (updateSpotifyDto.status && updateSpotifyDto.status !== entity.status) {
-      if (
-        updateSpotifyDto.status === SpotifyStatusEnum.NOT_STARTED ||
-        updateSpotifyDto.status === SpotifyStatusEnum.IN_PROGRESS ||
-        updateSpotifyDto.status === SpotifyStatusEnum.EDITING
-      ) {
-        // A playlist before READY must not have a calendar event.
-        const content = await this.contentsService.findOneBySpotifyId(id);
-        if (content) {
-          await this.contentsService.remove(content.id);
-        }
-      } else if (updateSpotifyDto.status === SpotifyStatusEnum.READY) {
-        const assignedUser = entity.user;
-        if (!assignedUser) {
+      if (updateSpotifyDto.status === SpotifyStatusEnum.READY) {
+        if (!entity.user) {
           throw new BadRequestException(
             `Para cambiar el estado a "${updateSpotifyDto.status}", el Spotify debe tener un usuario asignado.`,
           );
-        }
-
-        const content = await this.contentsService.findOneBySpotifyId(id);
-        if (!content) {
-          try {
-            const newContent = await this.contentsService.create({
-              name: entity.name,
-              type: ContentType.SPOTIFY,
-              authorId: assignedUser.id,
-              spotifyId: id,
-              backlog: true,
-            } as any);
-            entity.content = newContent;
-          } catch (error) {
-            console.error('Error creating content for Spotify:', error);
-            throw new BadRequestException(
-              'Error al crear el contenido asociado: ' + error.message,
-            );
-          }
-        } else {
-          shouldSyncContent = true;
-          contentId = content.id;
-          contentSyncPayload.publicationDate = null;
-          contentSyncPayload.backlog = true;
         }
       } else if (updateSpotifyDto.status === SpotifyStatusEnum.PUBLISHED) {
         if (!updateSpotifyDto.updateDate) {
@@ -223,29 +169,13 @@ export class SpotifyService {
           );
         }
         entity.updateDate = new Date(updateSpotifyDto.updateDate);
-        shouldSyncContent = true;
-        contentSyncPayload.publicationDate = entity.updateDate;
-        contentSyncPayload.backlog = false;
       }
     }
 
     // Apply state change
     if (updateSpotifyDto.status) entity.status = updateSpotifyDto.status;
 
-    // Save Spotify Entity FIRST
     await this.repo.save(entity);
-
-    // Sync Content if needed
-    if (shouldSyncContent) {
-      if (!contentId) {
-        const content = await this.contentsService.findOneBySpotifyId(id);
-        if (content) contentId = content.id;
-      }
-
-      if (contentId) {
-        await this.contentsService.update(contentId, contentSyncPayload);
-      }
-    }
 
     // Return the full entity
     return this.findOne(id);
@@ -257,11 +187,41 @@ export class SpotifyService {
     const content = await this.contentsService.findOneBySpotifyId(id);
     if (content) {
       throw new BadRequestException(
-        'No se puede eliminar un Spotify que tiene un Content asociado. Primero pásalo a IN_PROGRESS.',
+        'No se puede eliminar un Spotify que tiene un Content asociado. Elimina primero ese Content (DELETE /contents/:id).',
       );
     }
 
     await this.repo.remove(entity);
     return { ok: true };
+  }
+
+  /**
+   * Manual "create content" button: creates a backlog Content (no
+   * publicationDate) linked to this Spotify item and stops there — Spotify
+   * and Content stay fully independent afterwards, no further sync happens.
+   */
+  async createContentForSpotify(id: string): Promise<Spotify> {
+    const spotify = await this.findOne(id);
+
+    if (spotify.content) {
+      throw new BadRequestException(
+        'Este Spotify ya tiene un Content asociado.',
+      );
+    }
+    if (!spotify.user) {
+      throw new BadRequestException(
+        'Para crear el Content asociado, el Spotify debe tener un usuario asignado.',
+      );
+    }
+
+    await this.contentsService.create({
+      name: spotify.name,
+      type: ContentType.SPOTIFY,
+      authorId: spotify.user.id,
+      spotifyId: spotify.id,
+      backlog: true,
+    } as any);
+
+    return this.findOne(id);
   }
 }
