@@ -13,9 +13,21 @@ import { Content, ContentType } from './entities/content.entity';
 import { User } from 'src/auth/entities/user.entity';
 import { Reunion } from 'src/reunions/entities/reunion.entity';
 import { Point } from 'src/points/entities/point.entity';
-import { Spotify, SpotifyStatus } from 'src/spotify/entities/spotify.entity';
-import { Article, ArticleStatus } from 'src/articles/entities/article.entity';
-import { Video, VideoStatus } from 'src/videos/entities/video.entity';
+import {
+  Spotify,
+  SpotifyStatus,
+  SpotifyType,
+} from 'src/spotify/entities/spotify.entity';
+import {
+  Article,
+  ArticleStatus,
+  ArticleType,
+} from 'src/articles/entities/article.entity';
+import {
+  Video,
+  VideoStatus,
+  VideoType,
+} from 'src/videos/entities/video.entity';
 import { ListsService } from 'src/lists/list.service';
 import { List } from 'src/lists/entities/list.entity';
 
@@ -158,11 +170,72 @@ export class ContentsService {
       ready: createContentDto.publicationDate ? false : rest.ready,
     });
 
-    // NOTE: Spotify/Article/Video entities are no longer auto-created here.
-    // Content and Video/Article/Spotify are fully independent: linking them is
-    // done explicitly from the media side (POST /videos/:id/content,
-    // /articles/:id/content, /spotify/:id/content), which creates a backlog
-    // Content pointing at that entity.
+    // Auto-create Spotify entity if type is SPOTIFY and no spotifyId provided
+    if (
+      createContentDto.type === ContentType.SPOTIFY &&
+      !(rest as any).spotifyId
+    ) {
+      if (!author) {
+        throw new BadRequestException(
+          'Cannot auto-create Spotify entity without an assigned author.',
+        );
+      }
+
+      const spotifyEntity = this.spotifyRepo.create({
+        name: rest.name,
+        status: SpotifyStatus.EDITING,
+        type: SpotifyType.GENERO, // Default type, user can change later
+        link: '', // Default empty link
+        updateDate: new Date(),
+        user: author,
+      });
+      const savedSpotify = await this.spotifyRepo.save(spotifyEntity);
+
+      content.spotify = savedSpotify;
+    }
+
+    // Auto-create Article entity if type is ARTICLE and no articleId provided
+    if (
+      createContentDto.type === ContentType.ARTICLE &&
+      !(rest as any).articleId
+    ) {
+      if (!author) {
+        throw new BadRequestException(
+          'Cannot auto-create Article entity without an assigned author.',
+        );
+      }
+
+      const articleEntity = this.articleRepo.create({
+        name: rest.name,
+        status: ArticleStatus.EDITING,
+        type: ArticleType.ARTICULO, // Default type
+        updateDate: new Date(),
+        user: author,
+      });
+      const savedArticle = await this.articleRepo.save(articleEntity);
+
+      content.article = savedArticle;
+    }
+
+    // Auto-create Video entity if type is VIDEO and no videoId provided
+    if (createContentDto.type === ContentType.VIDEO && !(rest as any).videoId) {
+      if (!author) {
+        throw new BadRequestException(
+          'Cannot auto-create Video entity without an assigned author.',
+        );
+      }
+
+      const videoEntity = this.videoRepo.create({
+        name: rest.name,
+        status: VideoStatus.EDITING,
+        type: VideoType.CUSTOM,
+        updateDate: new Date(),
+        user: author,
+      });
+      const savedVideo = await this.videoRepo.save(videoEntity);
+
+      content.video = savedVideo;
+    }
 
     // Auto-create Reunion if type is REUNION
     if (createContentDto.type === ContentType.REUNION) {
