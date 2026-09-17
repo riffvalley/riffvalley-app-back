@@ -119,7 +119,7 @@ export class ScrapingService {
           nameNormalized: this.normalize(artistName),
           description: '',
           image: '',
-          country: defaultCountry ?? undefined,
+          country: country ?? defaultCountry ?? undefined,
         } as Partial<Artist>);
         // ---------------------------------------------------------------
         artist = await this.artistRepository.save(artist);
@@ -142,7 +142,6 @@ export class ScrapingService {
           link: '',
           artist,
           ...(genre && { genre }),
-          ...(country && { country }),
           ep,
           debut,
           releaseDate: releaseDate ?? null,
