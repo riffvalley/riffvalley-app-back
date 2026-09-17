@@ -17,29 +17,35 @@ export class RatesStatsService {
 
     async getUserStats(user: User, year?: string) {
         const userId = user.id;
-        const filterYear = year || new Date().getFullYear().toString();
+        // Sin año concreto => discos de todos los años (coherente con el leaderboard del dashboard).
+        // Con año => discos publicados ese año, igual que el leaderboard (por fecha de lanzamiento
+        // del disco, no por la fecha en la que se emitió el voto).
+        const filterYear = year || undefined;
 
-        // 1. Total de votos (rates) - filtered by year
-        const totalVotesResult = await this.rateRepository
+        // 1. Total de votos (rates) sobre discos del año filtrado (o de todos si no hay año)
+        const totalVotesQb = this.rateRepository
             .createQueryBuilder('rate')
+            .innerJoin('rate.disc', 'disc')
             .where('rate.userId = :userId', { userId })
-            .andWhere('rate.rate IS NOT NULL')
-            .andWhere("TO_CHAR(rate.createdAt, 'YYYY') = :filterYear", { filterYear })
-            .getCount();
-        const totalVotes = totalVotesResult;
+            .andWhere('rate.rate IS NOT NULL');
+        if (filterYear) {
+            totalVotesQb.andWhere("TO_CHAR(disc.releaseDate, 'YYYY') = :filterYear", { filterYear });
+        }
+        const totalVotes = await totalVotesQb.getCount();
 
-        // 2. Votos por género - filtered by year
-        const votesByGenre = await this.rateRepository
+        // 2. Votos por género - discos del año filtrado (o de todos si no hay año)
+        const votesByGenreQb = this.rateRepository
             .createQueryBuilder('rate')
             .innerJoin('rate.disc', 'disc')
             .innerJoin('disc.genre', 'genre')
             .select('genre.name', 'genre')
             .addSelect('COUNT(rate.id)', 'count')
             .where('rate.userId = :userId', { userId })
-            .andWhere('rate.rate IS NOT NULL')
-            .andWhere("TO_CHAR(rate.createdAt, 'YYYY') = :filterYear", { filterYear })
-            .groupBy('genre.name')
-            .getRawMany();
+            .andWhere('rate.rate IS NOT NULL');
+        if (filterYear) {
+            votesByGenreQb.andWhere("TO_CHAR(disc.releaseDate, 'YYYY') = :filterYear", { filterYear });
+        }
+        const votesByGenre = await votesByGenreQb.groupBy('genre.name').getRawMany();
 
         // Mapear resultados para asegurar formato numérico en count
         const formattedVotesByGenre = votesByGenre.map((item) => ({
@@ -47,16 +53,20 @@ export class RatesStatsService {
             count: parseInt(item.count, 10),
         }));
 
-        // 3. Votos por mes y semana en el año especificado
-        const votesByMonthRaw = await this.rateRepository
+        // 3. Votos por mes y semana (en la fecha en la que se emitió el voto), sobre discos del año filtrado
+        const votesByMonthQb = this.rateRepository
             .createQueryBuilder('rate')
+            .innerJoin('rate.disc', 'disc')
             .select("TO_CHAR(rate.createdAt, 'Month')", 'month')
             .addSelect("EXTRACT(MONTH FROM rate.createdAt)", 'month_num')
             .addSelect("TO_CHAR(rate.createdAt, 'W')", 'week')
             .addSelect('COUNT(rate.id)', 'count')
             .where('rate.userId = :userId', { userId })
-            .andWhere('rate.rate IS NOT NULL')
-            .andWhere("TO_CHAR(rate.createdAt, 'YYYY') = :filterYear", { filterYear })
+            .andWhere('rate.rate IS NOT NULL');
+        if (filterYear) {
+            votesByMonthQb.andWhere("TO_CHAR(disc.releaseDate, 'YYYY') = :filterYear", { filterYear });
+        }
+        const votesByMonthRaw = await votesByMonthQb
             .groupBy('month')
             .addGroupBy('month_num')
             .addGroupBy('week')
@@ -90,27 +100,34 @@ export class RatesStatsService {
 
         const formattedVotesByMonth = Array.from(votesByMonthMap.values());
 
-        // 4. Media y Mediana - filtered by year
-        const stats = await this.rateRepository
+        // 4. Media y Mediana - sobre discos del año filtrado (o de todos si no hay año)
+        const statsQb = this.rateRepository
             .createQueryBuilder('rate')
+            .innerJoin('rate.disc', 'disc')
             .select('AVG(rate.rate)', 'mean')
             .addSelect('PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY rate.rate)', 'median')
             .where('rate.userId = :userId', { userId })
-            .andWhere('rate.rate IS NOT NULL')
-            .andWhere("TO_CHAR(rate.createdAt, 'YYYY') = :filterYear", { filterYear })
-            .getRawOne();
+            .andWhere('rate.rate IS NOT NULL');
+        if (filterYear) {
+            statsQb.andWhere("TO_CHAR(disc.releaseDate, 'YYYY') = :filterYear", { filterYear });
+        }
+        const stats = await statsQb.getRawOne();
 
         const mean = stats && stats.mean ? parseFloat(stats.mean).toFixed(2) : 0;
         const median = stats && stats.median ? parseFloat(stats.median) : 0;
 
-        // 5. Desglose de votos (0-10) - filtered by year
-        const votesByScoreRaw = await this.rateRepository
+        // 5. Desglose de votos (0-10) - sobre discos del año filtrado (o de todos si no hay año)
+        const votesByScoreQb = this.rateRepository
             .createQueryBuilder('rate')
+            .innerJoin('rate.disc', 'disc')
             .select('rate.rate', 'score')
             .addSelect('COUNT(rate.id)', 'count')
             .where('rate.userId = :userId', { userId })
-            .andWhere('rate.rate IS NOT NULL')
-            .andWhere("TO_CHAR(rate.createdAt, 'YYYY') = :filterYear", { filterYear })
+            .andWhere('rate.rate IS NOT NULL');
+        if (filterYear) {
+            votesByScoreQb.andWhere("TO_CHAR(disc.releaseDate, 'YYYY') = :filterYear", { filterYear });
+        }
+        const votesByScoreRaw = await votesByScoreQb
             .groupBy('rate.rate')
             .orderBy('rate.rate', 'ASC')
             .getRawMany();
@@ -133,11 +150,17 @@ export class RatesStatsService {
         // 6. Total Usuarios y Ranking
         const totalUsers = await this.userRepository.count();
 
-        // Ranking: Contar cuántos usuarios tienen más votos que el usuario actual
-        const usersWithMoreVotesRaw = await this.rateRepository
+        // Ranking: Contar cuántos usuarios tienen más votos que el usuario actual sobre el mismo
+        // conjunto de discos (año filtrado, o todos si no hay año) - misma lógica que el leaderboard
+        const usersWithMoreVotesQb = this.rateRepository
             .createQueryBuilder('rate')
+            .innerJoin('rate.disc', 'disc')
             .select('rate.user.id')
-            .where('rate.rate IS NOT NULL')
+            .where('rate.rate IS NOT NULL');
+        if (filterYear) {
+            usersWithMoreVotesQb.andWhere("TO_CHAR(disc.releaseDate, 'YYYY') = :filterYear", { filterYear });
+        }
+        const usersWithMoreVotesRaw = await usersWithMoreVotesQb
             .groupBy('rate.user.id')
             .having('COUNT(rate.id) > :totalVotes', { totalVotes })
             .getRawMany();
