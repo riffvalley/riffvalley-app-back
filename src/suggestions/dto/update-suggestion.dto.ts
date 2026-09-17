@@ -31,5 +31,6 @@ export class RejectSuggestionDto {
 
 export class DoneSuggestionDto {
   @IsUUID()
-  versionItemId: string;
+  @IsOptional()
+  versionItemId?: string;
 }
