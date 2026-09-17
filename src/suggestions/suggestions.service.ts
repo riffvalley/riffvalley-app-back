@@ -97,6 +97,13 @@ export class SuggestionsService {
   async markDone(id: string, dto: DoneSuggestionDto): Promise<Suggestion> {
     const suggestion = await this.findOne(id);
 
+    if (!dto.versionItemId) {
+      suggestion.status = SuggestionStatus.DONE;
+      suggestion.versionItem = null;
+      suggestion.rejectionReason = null;
+      return this.repo.save(suggestion);
+    }
+
     const versionItem = await this.versionItemRepo.findOneBy({ id: dto.versionItemId });
     if (!versionItem) {
       throw new NotFoundException(`VersionItem ${dto.versionItemId} not found`);
