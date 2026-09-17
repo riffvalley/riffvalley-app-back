@@ -9,6 +9,12 @@ import { Disc } from 'src/discs/entities/disc.entity';
 import { Country } from 'src/countries/entities/country.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 
+export interface ProcessedDiscEntry {
+  discId: string;
+  artistId: string;
+  message: string;
+}
+
 @Injectable()
 export class ScrapingService {
   private logStream: fs.WriteStream;
@@ -51,7 +57,7 @@ export class ScrapingService {
 
   async processManualData(
     dto: ProcessManualDataDto,
-  ): Promise<{ savedDiscs: string[]; existingDiscs: string[] }> {
+  ): Promise<{ savedDiscs: ProcessedDiscEntry[]; existingDiscs: ProcessedDiscEntry[] }> {
     const { date, albums } = dto;
     this.log(`Processing manual data for date: ${date}`);
 
@@ -67,8 +73,8 @@ export class ScrapingService {
 
     // Arrays para acumular el reporte
     const report = {
-      savedDiscs: [] as string[],
-      existingDiscs: [] as string[],
+      savedDiscs: [] as ProcessedDiscEntry[],
+      existingDiscs: [] as ProcessedDiscEntry[],
     };
 
     for (const album of albums) {
@@ -150,16 +156,20 @@ export class ScrapingService {
         this.log(
           `Processed: Artist "${artistName}" => Disc "${discName}" => Date: ${releaseDate}`,
         );
-        report.savedDiscs.push(
-          `Artist "${artistName}" => Disc "${discName}" => Date: ${releaseDate}`,
-        );
+        report.savedDiscs.push({
+          discId: disc.id,
+          artistId: artist.id,
+          message: `Artist "${artistName}" => Disc "${discName}" => Date: ${releaseDate}`,
+        });
       } else {
         this.log(
           `Already exists: Artist "${artistName}" => Disc "${discName}"`,
         );
-        report.existingDiscs.push(
-          `Artist "${artistName}" => Disc "${discName}"`,
-        );
+        report.existingDiscs.push({
+          discId: disc.id,
+          artistId: artist.id,
+          message: `Artist "${artistName}" => Disc "${discName}"`,
+        });
       }
     }
 
