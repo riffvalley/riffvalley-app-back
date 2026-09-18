@@ -40,6 +40,7 @@ import { AccessRequestsModule } from './access-requests/access-requests.module';
 import { InstagramModule } from './instagram/instagram.module';
 import { FestivalPlaylistsModule } from './festival-playlists/festival-playlists.module';
 import { TiktokModule } from './tiktok/tiktok.module';
+import { AchievementsModule } from './achievements/achievements.module';
 
 @Module({
   imports: [
@@ -99,6 +100,7 @@ import { TiktokModule } from './tiktok/tiktok.module';
     InstagramModule,
     FestivalPlaylistsModule,
     TiktokModule,
+    AchievementsModule,
   ],
 })
 export class AppModule {}

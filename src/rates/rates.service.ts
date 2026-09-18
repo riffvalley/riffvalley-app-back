@@ -19,6 +19,8 @@ import {
   applyOrder,
   parseOrdersRaw,
 } from 'src/common/helpers/apply-order.helper';
+import { AchievementsEvaluatorService } from 'src/achievements/achievements-evaluator.service';
+import { AchievementTrigger } from 'src/achievements/enums/achievement-trigger.enum';
 
 type HistoryOpts = {
   type?: 'rate' | 'cover' | 'both';
@@ -36,7 +38,8 @@ export class RatesService {
     @InjectRepository(Rate)
     private readonly rateRepository: Repository<Rate>,
     // private readonly discRespository: Repository<Disc>,
-  ) { }
+    private readonly achievementsEvaluatorService: AchievementsEvaluatorService,
+  ) {}
 
   async create(createRateDto: CreateRateDto, user: User) {
     try {
@@ -53,33 +56,56 @@ export class RatesService {
       const existingRate = await this.rateRepository.findOne({
         where: {
           user: { id: user.id },
-          disc: { id: discId }
-        }
+          disc: { id: discId },
+        },
       });
+
+      let savedRate: Rate;
 
       if (existingRate) {
         // Update existing rate
         const updatedRate = await this.rateRepository.preload({
           id: existingRate.id,
           ...rateData,
-          editedAt: new Date()
+          editedAt: new Date(),
         });
 
         await this.rateRepository.save(updatedRate);
-        return updatedRate;
+        savedRate = updatedRate;
+      } else {
+        // Create new rate if it doesn't exist
+        const newRate = this.rateRepository.create({
+          ...rateData,
+          user,
+          disc,
+        });
+
+        await this.rateRepository.save(newRate);
+        savedRate = newRate;
       }
 
-      // Create new rate if it doesn't exist
-      const newRate = this.rateRepository.create({
-        ...rateData,
-        user,
+      const unlockedAchievements = await this.evaluateAchievements(
+        user.id,
         disc,
-      });
+      );
 
-      await this.rateRepository.save(newRate);
-      return newRate;
+      return { ...savedRate, unlockedAchievements };
     } catch (error) {
       this.handleDbExceptions(error);
+    }
+  }
+
+  // No debe romper el flujo de votar: un fallo aquí solo se loguea.
+  private async evaluateAchievements(userId: string, disc: Disc) {
+    try {
+      return await this.achievementsEvaluatorService.evaluate(
+        userId,
+        AchievementTrigger.RATE_CREATED_OR_UPDATED,
+        { discId: disc.id, genreId: disc.genre?.id },
+      );
+    } catch (error) {
+      this.logger.error('Error evaluando logros tras votar', error);
+      return [];
     }
   }
 
@@ -203,7 +229,10 @@ export class RatesService {
     }
 
     if (country) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(country);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          country,
+        );
       if (isUUID) {
         queryBuilder.andWhere('country.id = :country', { country });
         totalItemsQueryBuilder.andWhere('country.id = :country', { country });
@@ -259,8 +288,14 @@ export class RatesService {
         },
         voteCount: parseInt(raw[index].rateCount, 10) || null,
         commentCount: parseInt(raw[index].commentCount, 10) || 0,
-        averageRate: raw[index].averageRate != null ? parseFloat(raw[index].averageRate) : null,
-        averageCover: raw[index].averageCover != null ? parseFloat(raw[index].averageCover) : null,
+        averageRate:
+          raw[index].averageRate != null
+            ? parseFloat(raw[index].averageRate)
+            : null,
+        averageCover:
+          raw[index].averageCover != null
+            ? parseFloat(raw[index].averageCover)
+            : null,
         favoriteId: raw[index].favoriteId || null, // Agregar el ID del favorito si existe
         pendingId: raw[index].pendingId || null,
       },

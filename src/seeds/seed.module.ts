@@ -4,9 +4,10 @@ import { SeedService } from './seed.service';
 import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Country } from 'src/countries/entities/country.entity';
+import { Achievement } from 'src/achievements/entities/achievement.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Genre, Country])],
+  imports: [TypeOrmModule.forFeature([User, Genre, Country, Achievement])],
   providers: [SeedService],
 })
 export class SeedModule {}

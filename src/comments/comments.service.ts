@@ -14,6 +14,8 @@ import { PaginationDto } from '../common/dtos/pagination.dto';
 import { User } from 'src/auth/entities/user.entity';
 import { Disc } from 'src/discs/entities/disc.entity';
 import { CommentResponseDto } from './dto/comment-response.dto';
+import { AchievementsEvaluatorService } from 'src/achievements/achievements-evaluator.service';
+import { AchievementTrigger } from 'src/achievements/enums/achievement-trigger.enum';
 
 @Injectable()
 export class CommentsService {
@@ -24,6 +26,7 @@ export class CommentsService {
     private readonly commentRepository: Repository<Comment>,
     // Si es necesario, se puede inyectar también el repositorio de Disc
     // private readonly discRepository: Repository<Disc>,
+    private readonly achievementsEvaluatorService: AchievementsEvaluatorService,
   ) {}
 
   async create(createCommentDto: CreateCommentDto, user: User) {
@@ -60,9 +63,25 @@ export class CommentsService {
       });
 
       await this.commentRepository.save(comment);
-      return comment;
+
+      const unlockedAchievements = await this.evaluateAchievements(user.id);
+
+      return { ...comment, unlockedAchievements };
     } catch (error) {
       this.handleDbExceptions(error);
+    }
+  }
+
+  // No debe romper el flujo de comentar: un fallo aquí solo se loguea.
+  private async evaluateAchievements(userId: string) {
+    try {
+      return await this.achievementsEvaluatorService.evaluate(
+        userId,
+        AchievementTrigger.COMMENT_CREATED,
+      );
+    } catch (error) {
+      this.logger.error('Error evaluando logros tras comentar', error);
+      return [];
     }
   }
 
@@ -136,7 +155,9 @@ export class CommentsService {
 
     if (country) {
       queryBuilder.andWhere('artist.countryId = :country', { country });
-      totalItemsQueryBuilder.andWhere('artist.countryId = :country', { country });
+      totalItemsQueryBuilder.andWhere('artist.countryId = :country', {
+        country,
+      });
     }
 
     queryBuilder

@@ -18,6 +18,8 @@ import {
   applyOrder,
   parseOrdersRaw,
 } from 'src/common/helpers/apply-order.helper';
+import { AchievementsEvaluatorService } from 'src/achievements/achievements-evaluator.service';
+import { AchievementTrigger } from 'src/achievements/enums/achievement-trigger.enum';
 
 @Injectable()
 export class FavoritesService {
@@ -26,7 +28,8 @@ export class FavoritesService {
   constructor(
     @InjectRepository(Favorite)
     private readonly favoriteRepository: Repository<Favorite>,
-  ) { }
+    private readonly achievementsEvaluatorService: AchievementsEvaluatorService,
+  ) {}
 
   async create(createFavoriteDto: CreateFavoriteDto, user: User) {
     try {
@@ -46,14 +49,37 @@ export class FavoritesService {
       });
 
       await this.favoriteRepository.save(favorite);
-      return favorite;
+
+      const unlockedAchievements = await this.evaluateAchievements(user.id);
+
+      return { ...favorite, unlockedAchievements };
     } catch (error) {
       this.handleDbExceptions(error);
     }
   }
 
+  // No debe romper el flujo de marcar favorito: un fallo aquí solo se loguea.
+  private async evaluateAchievements(userId: string) {
+    try {
+      return await this.achievementsEvaluatorService.evaluate(
+        userId,
+        AchievementTrigger.FAVORITE_CREATED,
+      );
+    } catch (error) {
+      this.logger.error('Error evaluando logros tras marcar favorito', error);
+      return [];
+    }
+  }
+
   async findAllByUser(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange, genre, country } = paginationDto;
+    const {
+      limit = 10,
+      offset = 0,
+      query,
+      dateRange,
+      genre,
+      country,
+    } = paginationDto;
     const userId = user.id;
 
     // Manejo del rango de fechas
@@ -141,7 +167,10 @@ export class FavoritesService {
     }
 
     if (country) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(country);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          country,
+        );
       if (isUUID) {
         queryBuilder.andWhere('country.id = :country', { country });
       } else {
@@ -194,14 +223,20 @@ export class FavoritesService {
         commentCount: parseInt(raw[index].commentCount, 10) || 0,
         userRate: raw[index].rateId
           ? {
-            id: raw[index].rateId,
-            rate: raw[index].userRate,
-            cover: raw[index].userCover,
-          }
+              id: raw[index].rateId,
+              rate: raw[index].userRate,
+              cover: raw[index].userCover,
+            }
           : null,
         userPending: raw[index].pendingId ? { id: raw[index].pendingId } : null,
-        averageRate: raw[index].averageRate != null ? parseFloat(raw[index].averageRate) : null,
-        averageCover: raw[index].averageCover != null ? parseFloat(raw[index].averageCover) : null,
+        averageRate:
+          raw[index].averageRate != null
+            ? parseFloat(raw[index].averageRate)
+            : null,
+        averageCover:
+          raw[index].averageCover != null
+            ? parseFloat(raw[index].averageCover)
+            : null,
       },
     }));
 
@@ -248,7 +283,10 @@ export class FavoritesService {
     }
 
     if (country) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(country);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          country,
+        );
       if (isUUID) {
         totalItemsQueryBuilder.andWhere('country.id = :country', { country });
       } else {

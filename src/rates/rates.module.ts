@@ -6,10 +6,15 @@ import { Rate } from './entities/rate.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { Disc } from 'src/discs/entities/disc.entity';
 import { RatesStatsService } from './rates-stats.service';
+import { AchievementsModule } from 'src/achievements/achievements.module';
 
 @Module({
   controllers: [RatesController], // Controladores que gestionan las rutas
   providers: [RatesService, RatesStatsService],
-  imports: [TypeOrmModule.forFeature([Rate, Disc]), AuthModule], // Registro de la entidad Rate en TypeORM
+  imports: [
+    TypeOrmModule.forFeature([Rate, Disc]),
+    AuthModule,
+    AchievementsModule,
+  ], // Registro de la entidad Rate en TypeORM
 })
-export class RatesModule { }
+export class RatesModule {}

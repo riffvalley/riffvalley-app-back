@@ -5,6 +5,8 @@ import * as bcrypt from 'bcrypt';
 import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Country } from 'src/countries/entities/country.entity';
+import { Achievement } from 'src/achievements/entities/achievement.entity';
+import { AchievementMetricType } from 'src/achievements/enums/achievement-metric-type.enum';
 
 @Injectable()
 export class SeedService {
@@ -15,12 +17,15 @@ export class SeedService {
     private readonly genreRepository: Repository<Genre>,
     @InjectRepository(Country)
     private readonly countryRepository: Repository<Country>,
+    @InjectRepository(Achievement)
+    private readonly achievementRepository: Repository<Achievement>,
   ) {}
 
   async createSeed(): Promise<void> {
     await this.seedUsers();
     await this.seedGenres();
     await this.seedCountries();
+    await this.seedAchievements();
   }
 
   private async seedUsers(): Promise<void> {
@@ -124,6 +129,105 @@ export class SeedService {
       if (!countryExists) {
         const newCountry = this.countryRepository.create(country);
         await this.countryRepository.save(newCountry);
+      }
+    }
+  }
+
+  private async seedAchievements(): Promise<void> {
+    // Búsqueda case-insensitive (el nombre real en BD puede diferir en
+    // mayúsculas del literal sembrado en seedGenres, visto en un dev DB real:
+    // "Black metal") y, si hay varias filas duplicadas por esa razón, nos
+    // quedamos con la que realmente tiene discos asociados.
+    const blackMetal = await this.genreRepository
+      .createQueryBuilder('genre')
+      .leftJoin('genre.disc', 'disc')
+      .where('genre.name ILIKE :name', { name: 'Black Metal' })
+      .groupBy('genre.id')
+      .orderBy('COUNT(disc.id)', 'DESC')
+      .getOne();
+
+    const achievements = [
+      {
+        code: 'STREAK_7_DAYS',
+        name: 'Racha de una semana',
+        description:
+          'Vota al menos un disco nuevo durante 7 días consecutivos.',
+        metricType: AchievementMetricType.VOTE_STREAK,
+        criteria: { minDays: 7, mode: 'current' as const },
+        genre: null,
+        points: 50,
+      },
+      {
+        code: 'STREAK_30_DAYS_EVER',
+        name: 'Racha de un mes',
+        description:
+          'Alcanza alguna vez una racha de 30 días consecutivos votando.',
+        metricType: AchievementMetricType.VOTE_STREAK,
+        criteria: { minDays: 30, mode: 'ever' as const },
+        genre: null,
+        points: 200,
+      },
+      {
+        code: 'COUNTRIES_10',
+        name: 'Turista sonoro',
+        description: 'Vota discos de 10 países distintos.',
+        metricType: AchievementMetricType.DISTINCT_COUNTRIES,
+        criteria: { minCount: 10 },
+        genre: null,
+        points: 40,
+      },
+      {
+        code: 'TOTAL_VOTES_100',
+        name: 'Votante constante',
+        description: 'Alcanza 100 votos.',
+        metricType: AchievementMetricType.TOTAL_VOTES,
+        criteria: { minCount: 100 },
+        genre: null,
+        points: 60,
+      },
+      {
+        code: 'CONTROVERSIAL_VOTER',
+        name: '???',
+        description:
+          'Vota un disco muy por encima o por debajo de la media de la comunidad.',
+        metricType: AchievementMetricType.CONTROVERSIAL_DISC_VOTE,
+        criteria: { minAbsDeviation: 1.5, minCommunityVotes: 5 },
+        genre: null,
+        points: 25,
+        secret: true,
+      },
+      ...(blackMetal
+        ? [
+            {
+              code: 'BLACK_METAL_5',
+              name: 'Iniciado del Black Metal',
+              description: 'Vota discos de 5 bandas distintas de Black Metal.',
+              metricType: AchievementMetricType.DISTINCT_ARTISTS_IN_GENRE,
+              criteria: { minCount: 5 },
+              genre: blackMetal,
+              points: 30,
+            },
+            {
+              code: 'BLACK_METAL_25',
+              name: 'Adepto del Black Metal',
+              description: 'Vota discos de 25 bandas distintas de Black Metal.',
+              metricType: AchievementMetricType.DISTINCT_ARTISTS_IN_GENRE,
+              criteria: { minCount: 25 },
+              genre: blackMetal,
+              points: 100,
+            },
+          ]
+        : []),
+    ];
+
+    for (const achievementData of achievements) {
+      const achievementExists = await this.achievementRepository.findOneBy({
+        code: achievementData.code,
+      });
+      if (!achievementExists) {
+        const newAchievement =
+          this.achievementRepository.create(achievementData);
+        await this.achievementRepository.save(newAchievement);
       }
     }
   }
