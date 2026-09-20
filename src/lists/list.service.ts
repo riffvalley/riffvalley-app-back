@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Between,
   In,
+  IsNull,
   LessThan,
   MoreThan,
   MoreThanOrEqual,
@@ -28,6 +29,18 @@ import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Content } from 'src/contents/entities/content.entity';
 import { WordpressService } from 'src/wordpress/wordpress.service';
 import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
+
+// Un radar semanal sigue abierto hasta WEEKLY_CLOSE_GRACE_DAYS después de su
+// closeDate (domingo por defecto, es decir, hasta el martes inclusive).
+export const WEEKLY_CLOSE_GRACE_DAYS = 2;
+
+// Fecha límite: un radar está abierto si (closeDate ?? releaseDate) >= cutoff.
+export function getWeeklyOpenCutoff(now: Date = new Date()): Date {
+  const cutoff = new Date(now);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - WEEKLY_CLOSE_GRACE_DAYS);
+  return cutoff;
+}
 
 @Injectable()
 export class ListsService {
@@ -292,16 +305,22 @@ export class ListsService {
     return lists;
   }
 
-  // Obtener listas semanales actuales y futuras
+  // Obtener listas semanales actuales y futuras (abiertas hasta closeDate + 2 días)
   async findCurrentWeeklyLists() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const cutoff = getWeeklyOpenCutoff();
 
     const lists = await this.listRepository.find({
-      where: {
-        type: ListType.WEEK,
-        releaseDate: MoreThanOrEqual(today),
-      },
+      where: [
+        {
+          type: ListType.WEEK,
+          closeDate: MoreThanOrEqual(cutoff),
+        },
+        {
+          type: ListType.WEEK,
+          closeDate: IsNull(),
+          releaseDate: MoreThanOrEqual(cutoff),
+        },
+      ],
       order: {
         listDate: 'ASC',
       },
@@ -309,21 +328,28 @@ export class ListsService {
     return lists;
   }
 
-  // Obtener listas semanales pasadas por año y mes
+  // Obtener listas semanales pasadas por año y mes (ya cerradas)
   async findPastWeeklyListsByMonth(year: number, month: number) {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
     endDate.setHours(23, 59, 59, 999);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const cutoff = getWeeklyOpenCutoff();
 
     const lists = await this.listRepository.find({
-      where: {
-        type: ListType.WEEK,
-        listDate: Between(startDate, endDate),
-        releaseDate: LessThan(today),
-      },
+      where: [
+        {
+          type: ListType.WEEK,
+          listDate: Between(startDate, endDate),
+          closeDate: LessThan(cutoff),
+        },
+        {
+          type: ListType.WEEK,
+          listDate: Between(startDate, endDate),
+          closeDate: IsNull(),
+          releaseDate: LessThan(cutoff),
+        },
+      ],
       order: {
         listDate: 'DESC',
       },
