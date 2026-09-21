@@ -42,6 +42,19 @@ export function getWeeklyOpenCutoff(now: Date = new Date()): Date {
   return cutoff;
 }
 
+// La lista mensual de un mes sigue siendo "actual" hasta el día MONTHLY_CLOSE_DAY
+// del mes siguiente (la del mes nuevo se crea después, hacia el día 14).
+export const MONTHLY_CLOSE_DAY = 12;
+
+// Primer día del mes de referencia: hasta el día 12 sigue siendo el mes anterior.
+export function getMonthlyReferenceStart(now: Date = new Date()): Date {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (now.getDate() <= MONTHLY_CLOSE_DAY) {
+    start.setMonth(start.getMonth() - 1);
+  }
+  return start;
+}
+
 @Injectable()
 export class ListsService {
   private readonly logger = new Logger('ListsService');
@@ -269,16 +282,14 @@ export class ListsService {
     return lists;
   }
 
-  // Obtener listas mensuales actuales y futuras
+  // Obtener listas mensuales actuales y futuras (el mes de referencia en adelante)
   async findCurrentMonthLists() {
-    const today = new Date();
-    today.setDate(1); // Set to first day of current month
-    today.setHours(0, 0, 0, 0);
+    const referenceStart = getMonthlyReferenceStart();
 
     const lists = await this.listRepository.find({
       where: {
         type: ListType.MONTH,
-        listDate: MoreThanOrEqual(today),
+        listDate: MoreThanOrEqual(referenceStart),
       },
       order: {
         listDate: 'ASC',
@@ -287,11 +298,17 @@ export class ListsService {
     return lists;
   }
 
-  // Obtener listas mensuales pasadas por año
+  // Obtener listas mensuales pasadas por año (anteriores al mes de referencia,
+  // para que una lista no aparezca a la vez en actuales y pasadas)
   async findPastMonthListsByYear(year: number) {
     const startDate = new Date(year, 0, 1);
-    const endDate = new Date(year, 11, 31);
+    let endDate = new Date(year, 11, 31);
     endDate.setHours(23, 59, 59, 999);
+
+    const referenceStart = getMonthlyReferenceStart();
+    if (referenceStart <= endDate) {
+      endDate = new Date(referenceStart.getTime() - 1);
+    }
 
     const lists = await this.listRepository.find({
       where: {
