@@ -1,11 +1,16 @@
 import { FindOperator } from 'typeorm';
-import { ListsService, getWeeklyOpenCutoff } from './list.service';
+import {
+  ListsService,
+  getMonthlyReferenceStart,
+  getWeeklyOpenCutoff,
+} from './list.service';
 
 type Row = { closeDate: Date | null; releaseDate: Date | null; listDate: Date };
 
 // Evalúa en memoria las condiciones `where` (array = OR) que genera el servicio.
 function matches(where: any, row: Row): boolean {
-  return where.some((cond: any) =>
+  const conditions = Array.isArray(where) ? where : [where];
+  return conditions.some((cond: any) =>
     Object.entries(cond).every(([field, expected]) => {
       if (field === 'type') return true;
       const value = (row as any)[field] as Date | null;
@@ -96,6 +101,93 @@ describe('ListsService weekly radars', () => {
   it('getWeeklyOpenCutoff resta 2 días al inicio del día', () => {
     expect(getWeeklyOpenCutoff(new Date(2026, 8, 22, 15))).toEqual(
       new Date(2026, 8, 20),
+    );
+  });
+});
+
+describe('ListsService monthly lists', () => {
+  // La lista mensual usa el día 15 del mes como listDate.
+  const september: Row = {
+    listDate: new Date(2026, 8, 15),
+    releaseDate: null,
+    closeDate: null,
+  };
+  const october: Row = { ...september, listDate: new Date(2026, 9, 15) };
+
+  let rows: Row[];
+  let service: ListsService;
+
+  beforeEach(() => {
+    rows = [];
+    const repo = {
+      find: jest.fn(async ({ where }) => rows.filter((r) => matches(where, r))),
+    };
+    service = new ListsService(repo as any, {} as any, {} as any, {} as any);
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  const at = (month: number, day: number) =>
+    jest.setSystemTime(new Date(2026, month, day, 10));
+
+  it('septiembre está solo en actuales durante septiembre', async () => {
+    rows = [september];
+    at(8, 21);
+    expect(await service.findCurrentMonthLists()).toHaveLength(1);
+    expect(await service.findPastMonthListsByYear(2026)).toHaveLength(0);
+  });
+
+  it('septiembre sigue en actuales hasta el 12 de octubre', async () => {
+    rows = [september];
+    at(9, 1);
+    expect(await service.findCurrentMonthLists()).toHaveLength(1);
+    at(9, 12);
+    expect(await service.findCurrentMonthLists()).toHaveLength(1);
+    expect(await service.findPastMonthListsByYear(2026)).toHaveLength(0);
+  });
+
+  it('septiembre pasa a anteriores el 13 de octubre', async () => {
+    rows = [september];
+    at(9, 13);
+    expect(await service.findCurrentMonthLists()).toHaveLength(0);
+    expect(await service.findPastMonthListsByYear(2026)).toHaveLength(1);
+  });
+
+  it('con octubre creada, solo octubre es actual', async () => {
+    rows = [september, october];
+    at(9, 14);
+    const current = await service.findCurrentMonthLists();
+    expect(current).toEqual([october]);
+    expect(await service.findPastMonthListsByYear(2026)).toEqual([september]);
+  });
+
+  it('el 5 de enero la lista de diciembre sigue siendo actual', async () => {
+    const december: Row = { ...september, listDate: new Date(2026, 11, 15) };
+    rows = [december];
+    jest.setSystemTime(new Date(2027, 0, 5, 10));
+    expect(await service.findCurrentMonthLists()).toHaveLength(1);
+    expect(await service.findPastMonthListsByYear(2026)).toHaveLength(0);
+  });
+
+  it('nunca devuelve una lista en actuales y pasadas a la vez', async () => {
+    rows = [september, october];
+    for (let day = 1; day <= 28; day++) {
+      for (const month of [8, 9]) {
+        at(month, day);
+        const current = await service.findCurrentMonthLists();
+        const past = await service.findPastMonthListsByYear(2026);
+        expect(current.length + past.length).toBe(rows.length);
+      }
+    }
+  });
+
+  it('getMonthlyReferenceStart usa el mes anterior hasta el día 12', () => {
+    expect(getMonthlyReferenceStart(new Date(2026, 9, 12))).toEqual(
+      new Date(2026, 8, 1),
+    );
+    expect(getMonthlyReferenceStart(new Date(2026, 9, 13))).toEqual(
+      new Date(2026, 9, 1),
     );
   });
 });
