@@ -61,6 +61,10 @@ export class CreateUserDto {
   mobileDashboardConfig?: DashboardModuleConfigDto[];
 
   @IsOptional()
+  @IsBoolean()
+  dashboardButtonsEnabled?: boolean;
+
+  @IsOptional()
   @IsString()
   notes?: string;
 
