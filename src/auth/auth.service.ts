@@ -68,6 +68,7 @@ export class AuthService {
         image: true,
         dashboardConfig: true,
         mobileDashboardConfig: true,
+        dashboardButtonsEnabled: true,
       },
     });
 
