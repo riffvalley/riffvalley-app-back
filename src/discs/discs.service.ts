@@ -47,6 +47,19 @@ export class DiscsService {
     );
   }
 
+  async resolveSpotifyAlbum(albumName: string, artistName: string) {
+    const album = await this.spotifyApiService.resolveAlbum(
+      artistName,
+      albumName,
+    );
+    if (!album) throw new NotFoundException('Álbum no encontrado en Spotify');
+    return album;
+  }
+
+  getSpotifyAlbumDetails(spotifyAlbumId: string) {
+    return this.spotifyApiService.getAlbumDetails(spotifyAlbumId);
+  }
+
   async create(createDiscDto: CreateDiscDto) {
     try {
       const disc = this.discRepository.create(createDiscDto);
