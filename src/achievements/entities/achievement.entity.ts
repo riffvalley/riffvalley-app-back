@@ -10,6 +10,7 @@ import {
 import { Genre } from '../../genres/entities/genre.entity';
 import { AchievementMetricType } from '../enums/achievement-metric-type.enum';
 import { UserAchievement } from './user-achievement.entity';
+import { AchievementCategory } from './achievement-category.entity';
 
 @Entity()
 export class Achievement {
@@ -35,6 +36,18 @@ export class Achievement {
   // en la relación `genre` de abajo, nunca duplicado aquí.
   @Column('jsonb')
   criteria: Record<string, unknown>;
+
+  // Organización semántica/presentación y filtrado del catálogo (ej.
+  // VOTING, STREAKS, GENRES...). Puramente cosmética: NUNCA participa en el
+  // cálculo del evaluator, que depende solo de metricType + genre + criteria.
+  // Nullable a nivel de BD por seguridad de migración, pero requerida en
+  // CreateAchievementDto — todo logro nuevo debe llevar categoría.
+  @ManyToOne(() => AchievementCategory, {
+    nullable: true,
+    eager: true,
+    onDelete: 'RESTRICT',
+  })
+  category: AchievementCategory | null;
 
   // Clasificación semántica opcional. RESTRICT: un género con logros
   // asociados no puede borrarse (evita dejar un DISTINCT_ARTISTS_IN_GENRE

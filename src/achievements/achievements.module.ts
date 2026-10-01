@@ -5,6 +5,7 @@ import { AchievementsEvaluatorService } from './achievements-evaluator.service';
 import { AchievementsController } from './achievements.controller';
 import { Achievement } from './entities/achievement.entity';
 import { UserAchievement } from './entities/user-achievement.entity';
+import { AchievementCategory } from './entities/achievement-category.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Rate } from 'src/rates/entities/rate.entity';
 import { Comment } from 'src/comments/entities/comment.entity';
@@ -18,6 +19,7 @@ import { AuthModule } from 'src/auth/auth.module';
     TypeOrmModule.forFeature([
       Achievement,
       UserAchievement,
+      AchievementCategory,
       Genre,
       Rate,
       Comment,

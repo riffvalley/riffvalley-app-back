@@ -53,6 +53,7 @@ function makeAchievement(overrides: Partial<Achievement> = {}): Achievement {
     metricType: AchievementMetricType.TOTAL_VOTES,
     criteria: { minCount: 5 },
     genre: null,
+    category: null,
     points: 10,
     secret: false,
     active: true,

@@ -9,11 +9,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Achievement } from './entities/achievement.entity';
 import { UserAchievement } from './entities/user-achievement.entity';
+import { AchievementCategory } from './entities/achievement-category.entity';
 import { Genre } from '../genres/entities/genre.entity';
 import { CreateAchievementDto } from './dto/create-achievement.dto';
 import { UpdateAchievementDto } from './dto/update-achievement.dto';
 import { AchievementMetricType } from './enums/achievement-metric-type.enum';
 import { LevelSummary, resolveLevel } from './constants/level-thresholds';
+
+interface CatalogFilters {
+  categoryId?: string;
+  categoryCode?: string;
+}
 
 @Injectable()
 export class AchievementsService {
@@ -24,15 +30,34 @@ export class AchievementsService {
     private readonly achievementRepository: Repository<Achievement>,
     @InjectRepository(UserAchievement)
     private readonly userAchievementRepository: Repository<UserAchievement>,
+    @InjectRepository(AchievementCategory)
+    private readonly categoryRepository: Repository<AchievementCategory>,
     @InjectRepository(Genre)
     private readonly genreRepository: Repository<Genre>,
   ) {}
 
-  async listCatalogForUser(userId: string) {
-    const achievements = await this.achievementRepository.find({
-      where: { active: true },
-      order: { sortOrder: 'ASC', createdAt: 'ASC' },
-    });
+  async listCatalogForUser(userId: string, filters: CatalogFilters = {}) {
+    const qb = this.achievementRepository
+      .createQueryBuilder('achievement')
+      .leftJoinAndSelect('achievement.genre', 'genre')
+      .leftJoinAndSelect('achievement.category', 'category')
+      .where('achievement.active = true')
+      .orderBy('achievement.sortOrder', 'ASC')
+      .addOrderBy('achievement.createdAt', 'ASC');
+
+    // Filtros de catálogo (el front los usa para construir secciones por
+    // categoría). Punto de extensión para futuros filtros/paginación.
+    if (filters.categoryId) {
+      qb.andWhere('category.id = :categoryId', {
+        categoryId: filters.categoryId,
+      });
+    } else if (filters.categoryCode) {
+      qb.andWhere('category.code = :categoryCode', {
+        categoryCode: filters.categoryCode,
+      });
+    }
+
+    const achievements = await qb.getMany();
 
     const userAchievements = await this.userAchievementRepository.find({
       where: { user: { id: userId } },
@@ -44,6 +69,7 @@ export class AchievementsService {
     return achievements.map((achievement) => {
       const progress = progressByAchievementId.get(achievement.id);
       const unlocked = !!progress?.unlockedAt;
+      const category = this.toCategorySummary(achievement.category);
 
       if (achievement.secret && !unlocked) {
         return {
@@ -52,6 +78,9 @@ export class AchievementsService {
           locked: true,
           unlocked: false,
           progressValue: 0,
+          // La categoría se revela igualmente: es la que permite al front
+          // ubicar el logro secreto en su sección aunque siga bloqueado.
+          category,
         };
       }
 
@@ -70,6 +99,7 @@ export class AchievementsService {
               color: achievement.genre.color,
             }
           : null,
+        category,
         points: achievement.points,
         secret: achievement.secret,
         sortOrder: achievement.sortOrder,
@@ -78,6 +108,14 @@ export class AchievementsService {
         unlockedAt: progress?.unlockedAt ?? null,
         progressValue: progress?.progressValue ?? 0,
       };
+    });
+  }
+
+  /** Catálogo de categorías activas, para que el front construya las secciones. */
+  async listCategories(): Promise<AchievementCategory[]> {
+    return this.categoryRepository.find({
+      where: { active: true },
+      order: { sortOrder: 'ASC', name: 'ASC' },
     });
   }
 
@@ -100,8 +138,20 @@ export class AchievementsService {
         genre: ua.achievement.genre
           ? { id: ua.achievement.genre.id, name: ua.achievement.genre.name }
           : null,
+        category: this.toCategorySummary(ua.achievement.category),
         unlockedAt: ua.unlockedAt,
       }));
+  }
+
+  private toCategorySummary(category: AchievementCategory | null) {
+    return category
+      ? {
+          id: category.id,
+          code: category.code,
+          name: category.name,
+          icon: category.icon,
+        }
+      : null;
   }
 
   async getSummary(userId: string): Promise<LevelSummary> {
@@ -140,10 +190,15 @@ export class AchievementsService {
   }
 
   async create(dto: CreateAchievementDto): Promise<Achievement> {
-    const { genreId, ...rest } = dto;
+    const { genreId, categoryId, ...rest } = dto;
     const genre = await this.resolveGenre(dto.metricType, genreId);
+    const category = await this.resolveCategory(categoryId, { required: true });
 
-    const achievement = this.achievementRepository.create({ ...rest, genre });
+    const achievement = this.achievementRepository.create({
+      ...rest,
+      genre,
+      category,
+    });
     try {
       return await this.achievementRepository.save(achievement);
     } catch (error) {
@@ -157,17 +212,23 @@ export class AchievementsService {
 
   async update(id: string, dto: UpdateAchievementDto): Promise<Achievement> {
     const existing = await this.findOneOrFail(id);
-    const { genreId, ...rest } = dto;
+    const { genreId, categoryId, ...rest } = dto;
 
     const metricType = rest.metricType ?? existing.metricType;
     const resolvedGenreId =
       genreId !== undefined ? genreId : existing.genre?.id;
     const genre = await this.resolveGenre(metricType, resolvedGenreId);
 
+    const category =
+      categoryId !== undefined
+        ? await this.resolveCategory(categoryId, { required: true })
+        : existing.category;
+
     const updated = await this.achievementRepository.preload({
       id,
       ...rest,
       genre,
+      category,
     });
     if (!updated) {
       throw new NotFoundException(`Achievement with id ${id} not found`);
@@ -213,6 +274,28 @@ export class AchievementsService {
       );
     }
     return null;
+  }
+
+  private async resolveCategory(
+    categoryId: string | undefined,
+    { required }: { required: boolean },
+  ): Promise<AchievementCategory | null> {
+    if (!categoryId) {
+      if (required) {
+        throw new BadRequestException('categoryId es obligatorio');
+      }
+      return null;
+    }
+
+    const category = await this.categoryRepository.findOneBy({
+      id: categoryId,
+    });
+    if (!category) {
+      throw new BadRequestException(
+        `AchievementCategory with id ${categoryId} not found`,
+      );
+    }
+    return category;
   }
 
   private async findOneOrFail(id: string): Promise<Achievement> {

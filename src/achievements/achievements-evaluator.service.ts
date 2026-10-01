@@ -604,9 +604,14 @@ export class AchievementsEvaluatorService {
 
     if (!newlyUnlockedIds.length) return [];
 
+    // Estos son los Achievement completos que se devuelven al caller (ej.
+    // unlockedAchievements en POST /rates), así que sí necesitan category
+    // cargada — a diferencia de fetchCandidates, category es puro dato de
+    // presentación aquí, no interviene en ningún cálculo.
     return this.achievementRepository
       .createQueryBuilder('achievement')
       .leftJoinAndSelect('achievement.genre', 'genre')
+      .leftJoinAndSelect('achievement.category', 'category')
       .where('achievement.id IN (:...ids)', { ids: newlyUnlockedIds })
       .getMany();
   }

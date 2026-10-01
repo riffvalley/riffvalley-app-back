@@ -56,6 +56,9 @@ export class User {
   @Column('jsonb', { nullable: true })
   mobileDashboardConfig: DashboardModuleConfig[] | null;
 
+  @Column('bool', { default: false })
+  dashboardButtonsEnabled: boolean;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 

@@ -31,8 +31,21 @@ export class AchievementsController {
 
   @Get()
   @Auth()
-  getCatalog(@GetUser() user: User) {
-    return this.achievementsService.listCatalogForUser(user.id);
+  getCatalog(
+    @GetUser() user: User,
+    @Query('categoryId') categoryId?: string,
+    @Query('categoryCode') categoryCode?: string,
+  ) {
+    return this.achievementsService.listCatalogForUser(user.id, {
+      categoryId,
+      categoryCode,
+    });
+  }
+
+  @Get('categories')
+  @Auth()
+  getCategories() {
+    return this.achievementsService.listCategories();
   }
 
   @Get('mine')

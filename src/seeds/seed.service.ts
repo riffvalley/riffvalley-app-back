@@ -6,6 +6,7 @@ import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Country } from 'src/countries/entities/country.entity';
 import { Achievement } from 'src/achievements/entities/achievement.entity';
+import { AchievementCategory } from 'src/achievements/entities/achievement-category.entity';
 import { AchievementMetricType } from 'src/achievements/enums/achievement-metric-type.enum';
 
 @Injectable()
@@ -19,12 +20,15 @@ export class SeedService {
     private readonly countryRepository: Repository<Country>,
     @InjectRepository(Achievement)
     private readonly achievementRepository: Repository<Achievement>,
+    @InjectRepository(AchievementCategory)
+    private readonly achievementCategoryRepository: Repository<AchievementCategory>,
   ) {}
 
   async createSeed(): Promise<void> {
     await this.seedUsers();
     await this.seedGenres();
     await this.seedCountries();
+    await this.seedAchievementCategories();
     await this.seedAchievements();
   }
 
@@ -133,6 +137,54 @@ export class SeedService {
     }
   }
 
+  private async seedAchievementCategories(): Promise<void> {
+    const categories = [
+      {
+        code: 'VOTING',
+        name: 'Votación',
+        description: 'Logros por la actividad general de voto.',
+        sortOrder: 0,
+      },
+      {
+        code: 'EXPLORATION',
+        name: 'Exploración',
+        description: 'Logros por explorar países y la diversidad del catálogo.',
+        sortOrder: 1,
+      },
+      {
+        code: 'GENRES',
+        name: 'Géneros',
+        description: 'Logros específicos de un género musical.',
+        sortOrder: 2,
+      },
+      {
+        code: 'STREAKS',
+        name: 'Rachas',
+        description: 'Logros por constancia votando en el tiempo.',
+        sortOrder: 3,
+      },
+      {
+        code: 'SOCIAL',
+        name: 'Social',
+        description: 'Logros por comentar y marcar favoritos.',
+        sortOrder: 4,
+      },
+    ];
+
+    for (const categoryData of categories) {
+      const categoryExists = await this.achievementCategoryRepository.findOneBy(
+        {
+          code: categoryData.code,
+        },
+      );
+      if (!categoryExists) {
+        const newCategory =
+          this.achievementCategoryRepository.create(categoryData);
+        await this.achievementCategoryRepository.save(newCategory);
+      }
+    }
+  }
+
   private async seedAchievements(): Promise<void> {
     // Búsqueda case-insensitive (el nombre real en BD puede diferir en
     // mayúsculas del literal sembrado en seedGenres, visto en un dev DB real:
@@ -146,6 +198,15 @@ export class SeedService {
       .orderBy('COUNT(disc.id)', 'DESC')
       .getOne();
 
+    // La categoría SOCIAL no se usa todavía (queda lista para cuando se
+    // siembren logros TOTAL_COMMENTS/TOTAL_FAVORITES).
+    const [voting, exploration, genres, streaks] = await Promise.all([
+      this.achievementCategoryRepository.findOneBy({ code: 'VOTING' }),
+      this.achievementCategoryRepository.findOneBy({ code: 'EXPLORATION' }),
+      this.achievementCategoryRepository.findOneBy({ code: 'GENRES' }),
+      this.achievementCategoryRepository.findOneBy({ code: 'STREAKS' }),
+    ]);
+
     const achievements = [
       {
         code: 'STREAK_7_DAYS',
@@ -155,6 +216,7 @@ export class SeedService {
         metricType: AchievementMetricType.VOTE_STREAK,
         criteria: { minDays: 7, mode: 'current' as const },
         genre: null,
+        category: streaks,
         points: 50,
       },
       {
@@ -165,6 +227,7 @@ export class SeedService {
         metricType: AchievementMetricType.VOTE_STREAK,
         criteria: { minDays: 30, mode: 'ever' as const },
         genre: null,
+        category: streaks,
         points: 200,
       },
       {
@@ -174,6 +237,7 @@ export class SeedService {
         metricType: AchievementMetricType.DISTINCT_COUNTRIES,
         criteria: { minCount: 10 },
         genre: null,
+        category: exploration,
         points: 40,
       },
       {
@@ -183,6 +247,7 @@ export class SeedService {
         metricType: AchievementMetricType.TOTAL_VOTES,
         criteria: { minCount: 100 },
         genre: null,
+        category: voting,
         points: 60,
       },
       {
@@ -193,6 +258,7 @@ export class SeedService {
         metricType: AchievementMetricType.CONTROVERSIAL_DISC_VOTE,
         criteria: { minAbsDeviation: 1.5, minCommunityVotes: 5 },
         genre: null,
+        category: voting,
         points: 25,
         secret: true,
       },
@@ -205,6 +271,7 @@ export class SeedService {
               metricType: AchievementMetricType.DISTINCT_ARTISTS_IN_GENRE,
               criteria: { minCount: 5 },
               genre: blackMetal,
+              category: genres,
               points: 30,
             },
             {
@@ -214,6 +281,7 @@ export class SeedService {
               metricType: AchievementMetricType.DISTINCT_ARTISTS_IN_GENRE,
               criteria: { minCount: 25 },
               genre: blackMetal,
+              category: genres,
               points: 100,
             },
           ]
@@ -228,6 +296,12 @@ export class SeedService {
         const newAchievement =
           this.achievementRepository.create(achievementData);
         await this.achievementRepository.save(newAchievement);
+      } else if (!achievementExists.category && achievementData.category) {
+        // Backfill idempotente: logros ya creados antes de que existiera
+        // el modelo de categorías (o antes de añadir esta categoría en
+        // concreto) se enriquecen sin tocar su progreso ya desbloqueado.
+        achievementExists.category = achievementData.category;
+        await this.achievementRepository.save(achievementExists);
       }
     }
   }
