@@ -22,6 +22,7 @@ import { TopStatsQueryDto } from 'src/common/dtos/top-stats-query.dto';
 import { WeeklyQueryDto } from './dto/weekly-query.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
 import { OptionsQueryDto } from './dto/options-query.dto';
+import { ResolveSpotifyAlbumQueryDto } from './dto/resolve-spotify-album-query.dto';
 
 @Controller('discs')
 export class DiscsController {
@@ -88,6 +89,19 @@ export class DiscsController {
   @Auth()
   findAll(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
     return this.discsServices.findAll(paginationDto, user);
+  }
+
+  @Get('spotify/album')
+  resolveSpotifyAlbum(@Query() query: ResolveSpotifyAlbumQueryDto) {
+    return this.discsServices.resolveSpotifyAlbum(
+      query.albumName,
+      query.artistName,
+    );
+  }
+
+  @Get('spotify/album/:spotifyAlbumId')
+  getSpotifyAlbumDetails(@Param('spotifyAlbumId') spotifyAlbumId: string) {
+    return this.discsServices.getSpotifyAlbumDetails(spotifyAlbumId);
   }
 
   @Get(':id')
