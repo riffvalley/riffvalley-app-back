@@ -212,35 +212,9 @@ export class ContentSchedulerService {
             this.logger.error(`Error creating weekly reunion content: ${error.message}`, error.stack);
         }
 
-        // --- 2. Crear Content RADAR (This Week) ---
-        // Se asume que el cron corre el lunes, así que 'now' es lunes de la semana corriente.
-        // Título: Radar [Mes] Semana [NumSemana]
-
-        const monthNames = [
-            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-        ];
-
-        const currentMonthName = monthNames[now.getMonth()];
-
-        // Calcular número de semana dentro del mes (aproximado)
-        const weekOfMonth = Math.ceil(now.getDate() / 7);
-
-        const titleRadar = `Radar ${currentMonthName} Semana ${weekOfMonth}`;
-
-        this.logger.log(`Creating weekly radar content: ${titleRadar}`);
-
-        try {
-            await this.contentsService.create({
-                name: titleRadar,
-                type: ContentType.RADAR,
-                authorId: author.id,
-                publicationDate: now.toISOString(),
-            });
-            this.logger.log(`Weekly radar content created successfully`);
-        } catch (error) {
-            this.logger.error(`Error creating weekly radar content: ${error.message}`, error.stack);
-        }
+        // El radar semanal ya no se crea aquí: se crea a mano desde el calendario
+        // de contenido (viernes/sábado/domingo). Crearlo también en este cron
+        // generaba cada lunes una lista "Discos ..." vacía duplicada.
 
         this.logger.log('Weekly content creation job finished.');
     }
