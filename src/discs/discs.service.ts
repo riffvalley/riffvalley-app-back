@@ -9,7 +9,7 @@ import { CreateDiscDto } from './dto/create-discs.dto';
 import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { Repository, ILike, SelectQueryBuilder } from 'typeorm';
 import { Disc } from './entities/disc.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
@@ -155,71 +155,11 @@ export class DiscsService {
       .leftJoin('disc.artist', 'artist')
       .where('disc.releaseDate <= :today', { today })
       .leftJoin('artist.country', 'country')
-      .leftJoin('disc.genre', 'genre')
       .leftJoin('disc.rates', 'rate', 'rate.userId = :userId', { userId });
 
-    if (genre) {
-      queryBuilder.andWhere('disc.genreId = :genre', { genre });
-      totalItemsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
-      if (isUUID) {
-        queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
-        totalItemsQueryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
-      } else {
-        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
-        totalItemsQueryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
-      }
-    }
-
-    if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-        { search },
-      );
-      totalItemsQueryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-        { search },
-      );
-    }
-
-    if (startDate && endDate) {
-      queryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        {
-          startDate,
-          endDate,
-        },
-      );
-      totalItemsQueryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        {
-          startDate,
-          endDate,
-        },
-      );
-    }
-
-    if (voted === 'false' || (voted as any) === false) {
-      if (votedType === 'cover') {
-        queryBuilder.andWhere('rate.cover IS NULL');
-        totalItemsQueryBuilder.andWhere('rate.cover IS NULL');
-      } else {
-        queryBuilder.andWhere('rate.rate IS NULL');
-        totalItemsQueryBuilder.andWhere('rate.rate IS NULL');
-      }
-    } else if (voted === 'true' || (voted as any) === true) {
-      if (votedType === 'cover') {
-        queryBuilder.andWhere('rate.cover IS NOT NULL');
-        totalItemsQueryBuilder.andWhere('rate.cover IS NOT NULL');
-      } else {
-        queryBuilder.andWhere('rate.rate IS NOT NULL');
-        totalItemsQueryBuilder.andWhere('rate.rate IS NOT NULL');
-      }
-    }
+    const filterOptions = { genre, countryFilter, query, startDate, endDate, voted, votedType };
+    this.applyFindAllFilters(queryBuilder, filterOptions);
+    this.applyFindAllFilters(totalItemsQueryBuilder, filterOptions);
 
 
     if (paginationDto.orderBy) {
@@ -289,6 +229,58 @@ export class DiscsService {
       limit,
       data: processedDiscs,
     };
+  }
+
+  private applyFindAllFilters(
+    queryBuilder: SelectQueryBuilder<Disc>,
+    filters: {
+      genre?: string;
+      countryFilter?: string;
+      query?: string;
+      startDate?: Date;
+      endDate?: Date;
+      voted?: string | boolean;
+      votedType?: string;
+    },
+  ): void {
+    const { genre, countryFilter, query, startDate, endDate, voted, votedType } = filters;
+
+    if (genre) {
+      queryBuilder.andWhere('disc.genreId = :genre', { genre });
+    }
+
+    if (countryFilter) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      queryBuilder.andWhere(
+        isUUID ? 'country.id = :countryFilter' : 'country.name = :countryFilter',
+        { countryFilter },
+      );
+    }
+
+    if (query) {
+      const search = `%${query}%`;
+      queryBuilder.andWhere(
+        '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
+        { search },
+      );
+    }
+
+    if (startDate && endDate) {
+      queryBuilder.andWhere(
+        'disc.releaseDate BETWEEN :startDate AND :endDate',
+        { startDate, endDate },
+      );
+    }
+
+    if (voted === 'false' || (voted as any) === false) {
+      queryBuilder.andWhere(
+        votedType === 'cover' ? 'rate.cover IS NULL' : 'rate.rate IS NULL',
+      );
+    } else if (voted === 'true' || (voted as any) === true) {
+      queryBuilder.andWhere(
+        votedType === 'cover' ? 'rate.cover IS NOT NULL' : 'rate.rate IS NOT NULL',
+      );
+    }
   }
 
   async findRandom(dto: RandomQueryDto, user: User) {
