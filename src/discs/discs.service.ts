@@ -9,7 +9,7 @@ import { CreateDiscDto } from './dto/create-discs.dto';
 import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike, SelectQueryBuilder } from 'typeorm';
+import { Repository, ILike } from 'typeorm';
 import { Disc } from './entities/disc.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
@@ -17,9 +17,13 @@ import { OptionsQueryDto } from './dto/options-query.dto';
 import { User } from 'src/auth/entities/user.entity';
 import { Genre } from 'src/genres/entities/genre.entity';
 import { Artist } from 'src/artists/entities/artist.entity';
-import { Country } from 'src/countries/entities/country.entity';
 import { Pending } from 'src/pendings/entities/pending.entity';
 import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
+import { DiscCatalogService } from './catalog/disc-catalog.service';
+import { DiscCalendarService } from './calendar/disc-calendar.service';
+import { getFridayWeekRanges } from './calendar/helpers/get-friday-week-ranges';
+import type { WeeklyCalendarGroup } from './calendar/helpers/map-weekly-discs-to-groups';
+
 @Injectable()
 export class DiscsService {
   private readonly logger = new Logger('DiscsService');
@@ -29,11 +33,9 @@ export class DiscsService {
     private readonly discRepository: Repository<Disc>,
     @InjectRepository(Artist)
     private readonly artistRepository: Repository<Artist>,
-    @InjectRepository(Genre)
-    private readonly genreRepository: Repository<Genre>,
-    @InjectRepository(Country)
-    private readonly countryRepository: Repository<Country>,
     private readonly spotifyApiService: SpotifyApiService,
+    private readonly discCatalogService: DiscCatalogService,
+    private readonly discCalendarService: DiscCalendarService,
   ) { }
 
   // Tracklist de Spotify de un disco, para que el front deje elegir la
@@ -88,623 +90,28 @@ export class DiscsService {
     return this.discRepository.save(disc);
   }
 
-  async findAll(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange, genre, country, countryId, voted, votedType } = paginationDto;
-    const countryFilter = country || countryId;
-    const userId = user.id;
-
-    const today = new Date();
-
-    // Calcula el rango de fechas si se especifica el mes
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    if (dateRange && dateRange.length === 2) {
-      [startDate, endDate] = dateRange; // Extrae las fechas directamente del array
-    }
-
-    const queryBuilder = this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoinAndSelect('disc.artist', 'artist')
-      .leftJoinAndSelect('artist.country', 'country')
-      .leftJoinAndSelect('disc.genre', 'genre')
-      .leftJoinAndSelect('disc.rates', 'rate', 'rate.userId = :userId', {
-        userId,
-      })
-      .leftJoinAndSelect(
-        'disc.favorites',
-        'favorite',
-        'favorite.userId = :userId',
-        { userId },
-      )
-      .leftJoinAndSelect(
-        'disc.pendings',
-        'pending',
-        'pending.userId = :userId',
-        { userId },
-      )
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('AVG(rate.rate)', 'averageRate')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id');
-      }, 'averagerate')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('AVG(rate.cover)', 'averageCover')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id');
-      }, 'averageCover')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('COUNT(rate.id)', 'rateCount')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
-      }, 'rateCount')
-      .where('disc.releaseDate <= :today', { today })
-      // Agrega el conteo de comentarios para cada disco
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('COUNT(comment.id)', 'commentCount')
-          .from('comment', 'comment')
-          .where('comment.discId = disc.id');
-      }, 'commentCount')
-      .where('disc.releaseDate <= :today', { today });
-
-    const totalItemsQueryBuilder = this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoin('disc.artist', 'artist')
-      .where('disc.releaseDate <= :today', { today })
-      .leftJoin('artist.country', 'country')
-      .leftJoin('disc.rates', 'rate', 'rate.userId = :userId', { userId });
-
-    const filterOptions = { genre, countryFilter, query, startDate, endDate, voted, votedType };
-    this.applyFindAllFilters(queryBuilder, filterOptions);
-    this.applyFindAllFilters(totalItemsQueryBuilder, filterOptions);
-
-
-    if (paginationDto.orderBy) {
-      const sortParts = paginationDto.orderBy.split(',');
-      sortParts.forEach((part) => {
-        const [field, direction] = part.split(':');
-        if (field && direction) {
-          // Mapping known fields to safe query builder aliases
-          const validFields = {
-            'disc.releaseDate': 'disc.releaseDate',
-            'artist.name': 'artist.name',
-            'disc.createdAt': 'disc.createdAt',
-            'disc.name': 'disc.name',
-            'disc.averageRate': 'averagerate',
-          };
-
-          const dbField = validFields[field];
-          if (dbField) {
-            if (field === 'disc.averageRate') {
-              queryBuilder.andWhere(
-                '(SELECT AVG(r.rate) FROM rate r WHERE r."discId" = disc.id) IS NOT NULL',
-              );
-            }
-            queryBuilder.addOrderBy(dbField, direction.toUpperCase() as 'ASC' | 'DESC');
-          }
-        }
-      });
-    } else {
-      queryBuilder
-        .orderBy('disc.releaseDate', 'DESC')
-        .addOrderBy('artist.name', 'ASC');
-    }
-
-    queryBuilder
-      .take(limit)
-      .skip(offset);
-    const { entities: discs, raw } = await queryBuilder.getRawAndEntities();
-
-    // Mapea los valores crudos de averageRate, averageCover y commentCount a las entidades
-    const processedDiscs = discs.map((disc, index) => ({
-      ...disc,
-      artist: {
-        ...disc.artist,
-        country: {
-          ...disc.artist.country,
-          name: disc.artist?.country?.name || null
-        },
-      },
-      userRate: disc.rates.length > 0 ? disc.rates[0] : null,
-      averageRate: parseFloat(raw[index].averagerate) || null,
-      averageCover: parseFloat(raw[index].averageCover) || null,
-      commentCount: parseInt(raw[index].commentCount, 10) || 0,
-      voteCount: parseInt(raw[index].rateCount, 10) || 0, // <-- Add rateCount here
-      favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null, // Enviar el ID del favorito si existe
-      pendingId:
-        disc.pendings && disc.pendings.length > 0 ? disc.pendings[0].id : null,
-    }));
-
-    const totalItems = await totalItemsQueryBuilder.getCount();
-    const totalPages = Math.ceil(totalItems / limit);
-    const currentPage = Math.floor(offset / limit) + 1;
-
-    return {
-      totalItems,
-      totalPages,
-      currentPage,
-      limit,
-      data: processedDiscs,
-    };
+  findAll(paginationDto: PaginationDto, user: User) {
+    return this.discCatalogService.findAll(paginationDto, user);
   }
 
-  private applyFindAllFilters(
-    queryBuilder: SelectQueryBuilder<Disc>,
-    filters: {
-      genre?: string;
-      countryFilter?: string;
-      query?: string;
-      startDate?: Date;
-      endDate?: Date;
-      voted?: string | boolean;
-      votedType?: string;
-    },
-  ): void {
-    const { genre, countryFilter, query, startDate, endDate, voted, votedType } = filters;
-
-    if (genre) {
-      queryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
-      queryBuilder.andWhere(
-        isUUID ? 'country.id = :countryFilter' : 'country.name = :countryFilter',
-        { countryFilter },
-      );
-    }
-
-    if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-        { search },
-      );
-    }
-
-    if (startDate && endDate) {
-      queryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-    }
-
-    if (voted === 'false' || (voted as any) === false) {
-      queryBuilder.andWhere(
-        votedType === 'cover' ? 'rate.cover IS NULL' : 'rate.rate IS NULL',
-      );
-    } else if (voted === 'true' || (voted as any) === true) {
-      queryBuilder.andWhere(
-        votedType === 'cover' ? 'rate.cover IS NOT NULL' : 'rate.rate IS NOT NULL',
-      );
-    }
+  findRandom(dto: RandomQueryDto, user: User) {
+    return this.discCatalogService.findRandom(dto, user);
   }
 
-  async findRandom(dto: RandomQueryDto, user: User) {
-    const { genre, year, ep, debut, limit = 5 } = dto;
-    const countryFilter = dto.country || dto.countryId;
-    const userId = user.id;
-    const today = new Date();
-
-    // Pick random disc ids first (no joins), then hydrate them below.
-    // Combining ORDER BY RANDOM() with the joined/paginated query below
-    // triggers TypeORM's automatic SELECT DISTINCT, which Postgres rejects
-    // because RANDOM() isn't in the select list.
-    const idsQueryBuilder = this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoin('disc.artist', 'artist')
-      .leftJoin('artist.country', 'country')
-      .select('disc.id', 'id')
-      .where('disc.releaseDate <= :today', { today });
-
-    if (genre) {
-      idsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
-      if (isUUID) {
-        idsQueryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
-      } else {
-        idsQueryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
-      }
-    }
-
-    if (year) {
-      idsQueryBuilder.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', { year });
-    }
-
-    if (ep !== undefined) {
-      idsQueryBuilder.andWhere('disc.ep = :ep', { ep });
-    }
-
-    if (debut !== undefined) {
-      idsQueryBuilder.andWhere('disc.debut = :debut', { debut });
-    }
-
-    const randomIds = (
-      await idsQueryBuilder.orderBy('RANDOM()').limit(limit).getRawMany()
-    ).map((row) => row.id);
-
-    if (randomIds.length === 0) return [];
-
-    const queryBuilder = this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoinAndSelect('disc.artist', 'artist')
-      .leftJoinAndSelect('artist.country', 'country')
-      .leftJoinAndSelect('disc.genre', 'genre')
-      .leftJoinAndSelect('disc.rates', 'rate', 'rate.userId = :userId', {
-        userId,
-      })
-      .leftJoinAndSelect(
-        'disc.favorites',
-        'favorite',
-        'favorite.userId = :userId',
-        { userId },
-      )
-      .leftJoinAndSelect(
-        'disc.pendings',
-        'pending',
-        'pending.userId = :userId',
-        { userId },
-      )
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('AVG(rate.rate)', 'averageRate')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id');
-      }, 'averagerate')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('AVG(rate.cover)', 'averageCover')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id');
-      }, 'averageCover')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('COUNT(rate.id)', 'rateCount')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
-      }, 'rateCount')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('COUNT(comment.id)', 'commentCount')
-          .from('comment', 'comment')
-          .where('comment.discId = disc.id');
-      }, 'commentCount')
-      .where('disc.id IN (:...randomIds)', { randomIds });
-
-    const { entities: discs, raw } = await queryBuilder.getRawAndEntities();
-
-    // Preserve the random order decided by the ids query above.
-    const order = new Map(randomIds.map((id, index) => [id, index]));
-    const rawById = new Map(discs.map((disc, index) => [disc.id, raw[index]]));
-    discs.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
-
-    return discs.map((disc) => {
-      const raw = rawById.get(disc.id);
-      return {
-        ...disc,
-        artist: {
-          ...disc.artist,
-          country: {
-            ...disc.artist.country,
-            name: disc.artist?.country?.name || null,
-          },
-        },
-        userRate: disc.rates.length > 0 ? disc.rates[0] : null,
-        averageRate: parseFloat(raw.averagerate) || null,
-        averageCover: parseFloat(raw.averageCover) || null,
-        commentCount: parseInt(raw.commentCount, 10) || 0,
-        voteCount: parseInt(raw.rateCount, 10) || 0,
-        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null,
-        pendingId:
-          disc.pendings && disc.pendings.length > 0 ? disc.pendings[0].id : null,
-      };
-    });
-  }
-
-  async findOptions(dto: OptionsQueryDto) {
-    const { field, country, genre, year, ep, debut, limit = 3 } = dto;
-    const today = new Date();
-
-    const qb = this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoin('disc.artist', 'artist')
-      .leftJoin('artist.country', 'country')
-      .leftJoin('disc.genre', 'genre')
-      .where('disc.releaseDate <= :today', { today });
-
-    // Filtros de lo YA elegido (nunca se filtra por el campo que se está pidiendo)
-    if (field !== 'country' && country) qb.andWhere('country.id = :country', { country });
-    if (field !== 'genre' && genre) qb.andWhere('genre.id = :genre', { genre });
-    if (field !== 'year' && year) qb.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', { year });
-    if (field !== 'ep' && ep !== undefined) qb.andWhere('disc.ep = :ep', { ep });
-    if (field !== 'debut' && debut !== undefined) qb.andWhere('disc.debut = :debut', { debut });
-
-    if (field === 'country') {
-      qb.select('country.id', 'id').addSelect('country.name', 'name').addSelect('country.isoCode', 'isoCode')
-        .andWhere('country.id IS NOT NULL')
-        .groupBy('country.id').addGroupBy('country.name').addGroupBy('country.isoCode');
-    } else if (field === 'genre') {
-      qb.select('genre.id', 'id').addSelect('genre.name', 'name').addSelect('genre.color', 'color')
-        .andWhere('genre.id IS NOT NULL')
-        .groupBy('genre.id').addGroupBy('genre.name').addGroupBy('genre.color');
-    } else if (field === 'ep') {
-      qb.select('disc.ep', 'ep')
-        .andWhere('disc.ep IS NOT NULL')
-        .groupBy('disc.ep');
-    } else if (field === 'debut') {
-      qb.select('disc.debut', 'debut')
-        .andWhere('disc.debut IS NOT NULL')
-        .groupBy('disc.debut');
-    } else {
-      qb.select('EXTRACT(YEAR FROM disc.releaseDate)', 'year')
-        .groupBy('EXTRACT(YEAR FROM disc.releaseDate)');
-    }
-
-    // ORDER BY RANDOM() sobre valores YA agrupados (no sobre discos), así que
-    // aquí sí es seguro combinarlo con el groupBy sin el conflicto de DISTINCT.
-    const rows = await qb.orderBy('RANDOM()').limit(limit).getRawMany();
-
-    if (field === 'year') return rows.map((r) => Number(r.year));
-    if (field === 'ep') return rows.map((r) => Boolean(r.ep));
-    if (field === 'debut') return rows.map((r) => Boolean(r.debut));
-    return rows;
+  findOptions(dto: OptionsQueryDto) {
+    return this.discCatalogService.findOptions(dto);
   }
 
   async findAllByDate(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange, genre, country, countryId } = paginationDto;
-    const countryFilter = country || countryId;
-
-    const userId = user.id;
-
-    const queryBuilder = this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoinAndSelect('disc.artist', 'artist')
-      .leftJoinAndSelect('artist.country', 'country')
-      .leftJoinAndSelect('disc.genre', 'genre')
-      .leftJoinAndSelect('disc.rates', 'rate', 'rate.userId = :userId', {
-        userId,
-      })
-      .leftJoinAndSelect('disc.asignations', 'asignation')
-      .leftJoinAndSelect('asignation.user', 'asignationUser')
-      .leftJoinAndSelect('asignation.list', 'asignationList')
-      .leftJoinAndSelect(
-        'disc.favorites',
-        'favorite',
-        'favorite.userId = :userId',
-        { userId },
-      )
-      .leftJoinAndSelect(
-        'disc.pendings',
-        'pending',
-        'pending.userId = :userId',
-        {
-          userId,
-        },
-      );
-
-    if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-        { search },
-      );
-    }
-
-    if (genre) {
-      queryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
-      if (isUUID) {
-        queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
-      } else {
-        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
-      }
-    }
-
-    if (dateRange && dateRange.length === 2) {
-      const [startDate, endDate] = dateRange;
-      queryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        {
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-        },
-      );
-    }
-
-    queryBuilder
-      .take(limit)
-      .skip(offset)
-      .orderBy('disc.releaseDate', 'ASC')
-      .addOrderBy('artist.name', 'ASC');
-
-    const [discs, totalItems] = await queryBuilder.getManyAndCount();
-
-    const totalPages = Math.ceil(totalItems / limit);
-    const currentPage = Math.floor(offset / limit) + 1;
-
-    // Obtener national releases vinculadas a estos discos
-    const discIds = discs.map((d) => d.id);
-    let nationalReleaseMap = new Map<string, string>();
-    if (discIds.length > 0) {
-      const nrRows: { discId: string; id: string }[] = await this.discRepository.manager.query(
-        `SELECT "discId", id FROM national_release WHERE "discId" = ANY($1)`,
-        [discIds],
-      );
-      nationalReleaseMap = new Map(nrRows.map((r) => [r.discId, r.id]));
-    }
-
-    // Agrupar discos por fechas de lanzamiento
-    const groupedDiscs = discs.reduce((acc, disc) => {
-      const dateKey = new Date(disc.releaseDate).toISOString().split('T')[0];
-
-      if (!acc[dateKey]) {
-        acc[dateKey] = [];
-      }
-
-      acc[dateKey].push({
-        ...disc,
-        artist: {
-          ...disc.artist,
-          country: {
-            ...disc.artist.country,
-            name: disc.artist?.country?.name || null
-          },
-        },
-        userRate: disc.rates.length > 0 ? disc.rates[0] : null,
-        favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null,
-        pendingId:
-          disc.pendings && disc.pendings.length > 0
-            ? disc.pendings[0].id
-            : null,
-        nationalReleaseId: nationalReleaseMap.get(disc.id) ?? null,
-        asignations: disc.asignations.map((asignation) => ({
-          id: asignation.id,
-          done: asignation.done,
-          user: asignation.user,
-          list: asignation.list,
-        })),
-      });
-      return acc;
-    }, {});
-
-    // Convertir el objeto agrupado en un array de objetos para mejor legibilidad
-    const groupedArray = Object.keys(groupedDiscs).map((releaseDate) => ({
-      releaseDate,
-      discs: groupedDiscs[releaseDate],
-    }));
-
-    return {
-      totalItems,
-      totalPages,
-      currentPage,
-      limit,
-      data: groupedArray,
-    };
+    return this.discCalendarService.findAllByDate(paginationDto, user);
   }
 
-  // Igual que findAllByDate pero sin datos por-usuario (rate, favoritos,
-  // pendientes), pensado para el calendario público sin autenticar.
   async findAllByDatePublic(paginationDto: PaginationDto) {
-    const { limit = 10, offset = 0, dateRange, genre, country, countryId } = paginationDto;
-    const countryFilter = country || countryId;
-
-    const queryBuilder = this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoinAndSelect('disc.artist', 'artist')
-      .leftJoinAndSelect('artist.country', 'country')
-      .leftJoinAndSelect('disc.genre', 'genre');
-
-    if (genre) {
-      queryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
-      if (isUUID) {
-        queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
-      } else {
-        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
-      }
-    }
-
-    if (dateRange && dateRange.length === 2) {
-      const [startDate, endDate] = dateRange;
-      queryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        {
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-        },
-      );
-    }
-
-    queryBuilder
-      .take(limit)
-      .skip(offset)
-      .orderBy('disc.releaseDate', 'ASC')
-      .addOrderBy('artist.name', 'ASC');
-
-    const [discs, totalItems] = await queryBuilder.getManyAndCount();
-
-    const totalPages = Math.ceil(totalItems / limit);
-    const currentPage = Math.floor(offset / limit) + 1;
-
-    const groupedDiscs = discs.reduce((acc, disc) => {
-      const dateKey = new Date(disc.releaseDate).toISOString().split('T')[0];
-
-      if (!acc[dateKey]) {
-        acc[dateKey] = [];
-      }
-
-      acc[dateKey].push({
-        id: disc.id,
-        name: disc.name,
-        image: disc.image,
-        releaseDate: disc.releaseDate,
-        ep: disc.ep,
-        debut: disc.debut,
-        link: disc.link,
-        genre: disc.genre,
-        artist: {
-          id: disc.artist?.id,
-          name: disc.artist?.name,
-          image: disc.artist?.image,
-          country: disc.artist?.country
-            ? {
-                id: disc.artist.country.id,
-                name: disc.artist.country.name,
-              }
-            : null,
-        },
-      });
-      return acc;
-    }, {});
-
-    const groupedArray = Object.keys(groupedDiscs).map((releaseDate) => ({
-      releaseDate,
-      discs: groupedDiscs[releaseDate],
-    }));
-
-    return {
-      totalItems,
-      totalPages,
-      currentPage,
-      limit,
-      data: groupedArray,
-    };
+    return this.discCalendarService.findAllByDatePublic(paginationDto);
   }
 
-  // Listas completas de género/país usadas por al menos un disco, para que
-  // un consumidor externo del calendario público sepa qué ids mandar como
-  // filtro sin tener que paginar /genres o /countries.
-  async getPublicFilters() {
-    const genres = await this.genreRepository
-      .createQueryBuilder('genre')
-      .innerJoin('genre.disc', 'disc')
-      .select(['genre.id', 'genre.name', 'genre.color'])
-      .distinct(true)
-      .orderBy('genre.name', 'ASC')
-      .getMany();
-
-    const countries = await this.countryRepository
-      .createQueryBuilder('country')
-      .innerJoin('country.artist', 'artist')
-      .innerJoin('artist.disc', 'disc')
-      .select(['country.id', 'country.name', 'country.isoCode'])
-      .distinct(true)
-      .orderBy('country.name', 'ASC')
-      .getMany();
-
-    return { genres, countries };
+  getPublicFilters() {
+    return this.discCalendarService.getPublicFilters();
   }
 
   async findOne(id: string): Promise<Disc> {
@@ -1072,95 +479,19 @@ export class DiscsService {
     };
   }
 
-  private getFridayWeekRanges(month: number, year: number): { week: number; from: number; to: number }[] {
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const weeks: { week: number; from: number; to: number }[] = [];
-
-    // Find first Friday of the month (getDay: 0=Sun … 5=Fri)
-    let firstFriday = 1;
-    while (new Date(year, month - 1, firstFriday).getDay() !== 5) {
-      firstFriday++;
-    }
-
-    let weekNum = 1;
-
-    // Week 1: from day 1 through firstFriday+6 (pre-Friday days merged into first Friday week)
-    const firstWeekEnd = Math.min(firstFriday + 6, daysInMonth);
-    weeks.push({ week: weekNum++, from: 1, to: firstWeekEnd });
-
-    // Remaining weeks: each starts on a Friday, runs 7 days
-    let start = firstFriday + 7;
-    while (start <= daysInMonth) {
-      weeks.push({ week: weekNum++, from: start, to: Math.min(start + 6, daysInMonth) });
-      start += 7;
-    }
-
-    return weeks;
-  }
-
-  async findWeekly(month: number, year: number, week?: number): Promise<{
-    week: number;
-    label: string;
-    startDate: string;
-    endDate: string;
-    discs: { artistName: string; name: string; genre: string; genreColor: string | null; link: string | null; ep: boolean; image: string | null; releaseDate: string }[];
-  }[]> {
-    const startOfMonth = new Date(year, month - 1, 1);
-    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
-
-    const discs = await this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoinAndSelect('disc.artist', 'artist')
-      .leftJoinAndSelect('artist.country', 'country')
-      .leftJoinAndSelect('disc.genre', 'genre')
-      .where('disc.releaseDate BETWEEN :start AND :end', {
-        start: startOfMonth,
-        end: endOfMonth,
-      })
-      .orderBy('disc.releaseDate', 'ASC')
-      .addOrderBy('artist.name', 'ASC')
-      .getMany();
-
-    const weekRanges = this.getFridayWeekRanges(month, year);
-    const monthNames = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-    const monthLabel = monthNames[month - 1];
-    const pad = (n: number) => String(n).padStart(2, '0');
-
-    return weekRanges
-      .filter((w) => week === undefined || w.week === week)
-      .map((w) => {
-        const label = `${w.from}-${w.to} ${monthLabel}`;
-        const startDate = `${year}-${pad(month)}-${pad(w.from)}`;
-        const endDate   = `${year}-${pad(month)}-${pad(w.to)}`;
-
-        const weekDiscs = discs
-          .filter((d) => {
-            const day = new Date(d.releaseDate).getUTCDate();
-            return day >= w.from && day <= w.to;
-          })
-          .map((d) => ({
-            artistName: d.artist?.name ?? '',
-            countryCode: d.artist?.country?.isoCode ?? null,
-            countryName: d.artist?.country?.name ?? null,
-            name: d.name,
-            genre: d.genre?.name ?? '',
-            genreColor: d.genre?.color ?? null,
-            link: d.link ?? null,
-            ep: d.ep ?? false,
-            debut: d.debut ?? false,
-            image: d.image ?? null,
-            releaseDate: new Date(d.releaseDate).toISOString().split('T')[0],
-          }));
-
-        return { week: w.week, label, startDate, endDate, discs: weekDiscs };
-      });
+  findWeekly(
+    month: number,
+    year: number,
+    week?: number,
+  ): Promise<WeeklyCalendarGroup[]> {
+    return this.discCalendarService.findWeekly(month, year, week);
   }
 
   async findWeeklyWithoutImage(month: number, year: number, week?: number): Promise<{ id: string; artistName: string; name: string }[]> {
     const startOfMonth = new Date(year, month - 1, 1);
     const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
 
-    const weekRanges = this.getFridayWeekRanges(month, year);
+    const weekRanges = getFridayWeekRanges(month, year);
     const filtered = weekRanges.filter((w) => week === undefined || w.week === week);
     if (!filtered.length) return [];
 

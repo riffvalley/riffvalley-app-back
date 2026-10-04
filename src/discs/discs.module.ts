@@ -8,10 +8,12 @@ import { Genre } from 'src/genres/entities/genre.entity';
 import { Country } from 'src/countries/entities/country.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { WordpressModule } from 'src/wordpress/wordpress.module';
+import { DiscCatalogService } from './catalog/disc-catalog.service';
+import { DiscCalendarService } from './calendar/disc-calendar.service';
 
 @Module({
   controllers: [DiscsController],
-  providers: [DiscsService],
+  providers: [DiscsService, DiscCatalogService, DiscCalendarService],
   imports: [
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
     AuthModule,
