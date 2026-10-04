@@ -1,18 +1,25 @@
 import { Controller, Get, Post, Res, Logger, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
-import { ExcelService } from './excel.service';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { ExcelImportService } from '../import/excel-import.service';
+import { ExcelTemplateService } from '../template/excel-template.service';
 
-@Controller('excel')
+@Controller('catalog/import/excel')
 export class ExcelController {
   private readonly logger = new Logger(ExcelController.name);
-  constructor(private readonly excelService: ExcelService) { }
+  constructor(
+    private readonly excelService: ExcelImportService,
+    private readonly excelTemplateService: ExcelTemplateService,
+  ) { }
 
-  @Get('template/download')
+  @Get('template')
+  @Auth(ValidRoles.riffValley, ValidRoles.admin, ValidRoles.superUser)
   async downloadTemplate(@Res() res: Response) {
     this.logger.log('Received request for Excel template download');
     try {
-      const buffer = await this.excelService.generateTemplate();
+      const buffer = await this.excelTemplateService.generateTemplate();
       this.logger.log(`Excel template generated, size: ${buffer.length} bytes`);
       this.logger.log(`Buffer type: ${buffer.constructor.name}`);
 
@@ -34,7 +41,8 @@ export class ExcelController {
     }
   }
 
-  @Post('template/upload')
+  @Post()
+  @Auth(ValidRoles.riffValley, ValidRoles.admin, ValidRoles.superUser)
   @UseInterceptors(FileInterceptor('file'))
   async uploadTemplate(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
@@ -50,4 +58,3 @@ export class ExcelController {
     return result;
   }
 }
-

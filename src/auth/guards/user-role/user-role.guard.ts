@@ -23,23 +23,25 @@ export class UserRoleGuard implements CanActivate {
   async canActivate(
     context: ExecutionContext,
   ): Promise<boolean> {
-    const validRoles: string[] = this.reflector.get(
+    const validRoles = this.reflector.getAllAndOverride<string[]>(
       META_ROLES,
-      context.getHandler(),
+      [context.getHandler(), context.getClass()],
     );
 
     if (!validRoles) return true;
     if (validRoles.length === 0) return true;
 
     const req = context.switchToHttp().getRequest();
-    const user = req.user as User;
+    const user = req.user as User | undefined;
+    if (!user?.id) throw new BadRequestException('User not found');
+
     const userRep = await this.userRepository.findOne({
       where: { id: user.id },
       select: ['roles'], // Ajusta los campos que deseas incluir
     });
-    
-    const roles = userRep.roles;
-    if (!user) throw new BadRequestException('User not found');
+
+    if (!userRep) throw new BadRequestException('User not found');
+    const roles = userRep.roles ?? [];
     for (const role of roles) {
       if (validRoles.includes(role)) {
         return true;

@@ -1,49 +1,162 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { randomUUID } from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { INestApplication } from '@nestjs/common';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Test, TestingModule } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
+import * as ExcelJS from 'exceljs';
+import * as fs from 'fs';
 import * as request from 'supertest';
-import { AppModule } from '../src/app.module';
+import { Artist } from '../src/artists/entities/artist.entity';
+import { CatalogModule } from '../src/catalog/catalog.module';
+import { Country } from '../src/countries/entities/country.entity';
+import { Disc } from '../src/discs/entities/disc.entity';
+import { Genre } from '../src/genres/entities/genre.entity';
+import { Rate } from '../src/rates/entities/rate.entity';
+import { UserAccessLog } from '../src/auth/entities/user-access-log.entity';
+import { User } from '../src/auth/entities/user.entity';
+import { ValidRoles } from '../src/auth/interfaces/valid-roles';
 
-describe('Excel (e2e)', () => {
+interface TestUser {
+  id: string;
+  username: string;
+  isActive: boolean;
+  roles: string[];
+}
+
+describe('Excel import (e2e)', () => {
   let app: INestApplication;
+  let moduleRef: TestingModule;
+  let validRoleToken: string;
+  let invalidRoleToken: string;
+  const testUsers = new Map<string, TestUser>();
 
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+  beforeAll(async () => {
+    jest
+      .spyOn(fs, 'createWriteStream')
+      .mockReturnValue({ write: jest.fn() } as unknown as fs.WriteStream);
 
-    app = moduleFixture.createNestApplication();
+    const userRepository = {
+      findOneBy: jest.fn(({ id }: { id: string }) =>
+        Promise.resolve(testUsers.get(id) ?? null),
+      ),
+      findOne: jest.fn(({ where }: { where: { id: string } }) => {
+        const user = testUsers.get(where.id);
+        return Promise.resolve(user ? { roles: user.roles } : null);
+      }),
+    };
+    const genreRepository = {
+      find: jest.fn().mockResolvedValue([{ id: 'genre-1', name: 'Rock' }]),
+    };
+    const countryRepository = {
+      find: jest.fn().mockResolvedValue([{ id: 'country-1', name: 'Spain' }]),
+    };
+
+    const testingModule = Test.createTestingModule({
+      imports: [CatalogModule],
+    })
+      .overrideProvider(ConfigService)
+      .useValue({ get: jest.fn(() => 'excel-e2e-test-secret') })
+      .overrideProvider(getRepositoryToken(Artist))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(Disc))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(Country))
+      .useValue(countryRepository)
+      .overrideProvider(getRepositoryToken(Genre))
+      .useValue(genreRepository)
+      .overrideProvider(getRepositoryToken(User))
+      .useValue(userRepository)
+      .overrideProvider(getRepositoryToken(UserAccessLog))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(Rate))
+      .useValue({});
+
+    moduleRef = await testingModule.compile();
+    app = moduleRef.createNestApplication();
+    app.setGlobalPrefix('api');
     await app.init();
+
+    const jwtService = moduleRef.get(JwtService);
+    const createToken = (username: string, roles: string[]): string => {
+      const user: TestUser = {
+        id: randomUUID(),
+        username,
+        isActive: true,
+        roles,
+      };
+      testUsers.set(user.id, user);
+      return jwtService.sign({ id: user.id, username, roles });
+    };
+
+    validRoleToken = createToken('excel-e2e-riff-valley', [ValidRoles.riffValley]);
+    invalidRoleToken = createToken('excel-e2e-user', [ValidRoles.user]);
   });
 
-  afterEach(async () => {
-    await app.close();
+  afterAll(async () => {
+    await app?.close();
+    jest.restoreAllMocks();
   });
 
-  describe('/api/excel/template/download (GET)', () => {
-    it('should download Excel template successfully', () => {
-      return request(app.getHttpServer())
-        .get('/api/excel/template/download')
-        .expect(200)
-        .expect('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        .expect('Content-Disposition', 'attachment; filename="template_discos.xlsx"')
-        .then((response) => {
-          expect(response.body).toBeInstanceOf(Buffer);
-          expect(response.body.length).toBeGreaterThan(0);
-        });
-    });
+  it('rejects a template request without authentication', async () => {
+    await request(app.getHttpServer())
+      .get('/api/catalog/import/excel/template')
+      .expect(401);
+  });
 
-    it('should return 500 on error', async () => {
-      // Mock an error by temporarily modifying the service
-      // For this test, we assume the service might fail under certain conditions
-      // In a real scenario, you might need to mock database failures or other dependencies
+  it('rejects an authenticated template request without an allowed role', async () => {
+    await request(app.getHttpServer())
+      .get('/api/catalog/import/excel/template')
+      .set('Authorization', `Bearer ${invalidRoleToken}`)
+      .expect(403);
+  });
 
-      // Since we can't easily mock the service in e2e tests, we'll just test the happy path
-      // and assume errors are handled by the controller's try-catch
-      const response = await request(app.getHttpServer())
-        .get('/api/excel/template/download')
-        .expect(200);
+  it('downloads the template for an authenticated user with an allowed role', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/catalog/import/excel/template')
+      .set('Authorization', `Bearer ${validRoleToken}`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        res.on('end', () => callback(null, Buffer.concat(chunks)));
+      })
+      .expect(200)
+      .expect(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .expect(
+        'Content-Disposition',
+        'attachment; filename="template_discos.xlsx"',
+      );
 
-      expect(response.headers['content-type']).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    });
+    expect(response.body).toBeInstanceOf(Buffer);
+    expect(response.body.length).toBeGreaterThan(0);
+  });
+
+  it('imports an authenticated Excel upload from the current multipart route', async () => {
+    const workbook = new ExcelJS.Workbook();
+    workbook.addWorksheet('Discos').addRow([
+      'Fecha',
+      'Artista',
+      'Disco',
+      'Género',
+      'País',
+      'Debut',
+      'EP',
+    ]);
+    const fileBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
+
+    await request(app.getHttpServer())
+      .post('/api/catalog/import/excel')
+      .set('Authorization', `Bearer ${validRoleToken}`)
+      .attach('file', fileBuffer, {
+        filename: 'albums.xlsx',
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      .expect(201)
+      .expect({ created: 0, errors: [] });
   });
 });

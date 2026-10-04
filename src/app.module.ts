@@ -11,7 +11,7 @@ import { GenresModule } from './genres/genres.module';
 import { CountriesModule } from './countries/countries.module';
 import { ArtistsModule } from './artists/artists.module';
 import { DiscModule } from './discs/discs.module';
-import { ScrapingModule } from './scaping/scraping.module';
+import { CatalogModule } from './catalog/catalog.module';
 import { AuthModule } from './auth/auth.module';
 import { RatesModule } from './rates/rates.module';
 import { AsignationsModule } from './asignations/asignations.module';
@@ -31,7 +31,6 @@ import { VideosModule } from './videos/videos.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { NewsModule } from './news/news.module';
 import { UploadsModule } from './uploads/uploads.module';
-import { ExcelModule } from './excel/excel.module';
 import { RequestsModule } from './requests/requests.module';
 import { NationalReleasesModule } from './national-releases/national-releases.module';
 import { LastfmModule } from './lastfm/lastfm.module';
@@ -70,7 +69,7 @@ import { TiktokModule } from './tiktok/tiktok.module';
     CountriesModule,
     ArtistsModule,
     DiscModule,
-    ScrapingModule,
+    CatalogModule,
     AuthModule,
     RatesModule,
     AsignationsModule,
@@ -90,7 +89,6 @@ import { TiktokModule } from './tiktok/tiktok.module';
     TelegramModule,
     NewsModule,
     UploadsModule,
-    ExcelModule,
     RequestsModule,
     NationalReleasesModule,
     LastfmModule,
