@@ -10,10 +10,11 @@ import { AuthModule } from 'src/auth/auth.module';
 import { WordpressModule } from 'src/wordpress/wordpress.module';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';
+import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
 
 @Module({
   controllers: [DiscsController],
-  providers: [DiscsService, DiscCatalogService, DiscCalendarService],
+  providers: [DiscsService, DiscCatalogService, DiscCalendarService, DiscEnrichmentService],
   imports: [
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
     AuthModule,

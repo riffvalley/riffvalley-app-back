@@ -21,7 +21,7 @@ import { Pending } from 'src/pendings/entities/pending.entity';
 import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';
-import { getFridayWeekRanges } from './calendar/helpers/get-friday-week-ranges';
+import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
 import type { WeeklyCalendarGroup } from './calendar/helpers/map-weekly-discs-to-groups';
 
 @Injectable()
@@ -36,6 +36,7 @@ export class DiscsService {
     private readonly spotifyApiService: SpotifyApiService,
     private readonly discCatalogService: DiscCatalogService,
     private readonly discCalendarService: DiscCalendarService,
+    private readonly discEnrichmentService: DiscEnrichmentService,
   ) { }
 
   // Tracklist de Spotify de un disco, para que el front deje elegir la
@@ -487,35 +488,12 @@ export class DiscsService {
     return this.discCalendarService.findWeekly(month, year, week);
   }
 
-  async findWeeklyWithoutImage(month: number, year: number, week?: number): Promise<{ id: string; artistName: string; name: string }[]> {
-    const startOfMonth = new Date(year, month - 1, 1);
-    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
-
-    const weekRanges = getFridayWeekRanges(month, year);
-    const filtered = weekRanges.filter((w) => week === undefined || w.week === week);
-    if (!filtered.length) return [];
-
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const start = `${year}-${pad(month)}-${pad(filtered[0].from)}`;
-    const end   = `${year}-${pad(month)}-${pad(filtered[filtered.length - 1].to)}`;
-
-    const discs = await this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoinAndSelect('disc.artist', 'artist')
-      .where('disc.releaseDate BETWEEN :start AND :end', { start, end })
-      .andWhere('(disc.image IS NULL OR disc.image = :empty)', { empty: '' })
-      .orderBy('disc.releaseDate', 'ASC')
-      .getMany();
-
-    return discs.map((d) => ({
-      id: d.id,
-      artistName: d.artist?.name ?? '',
-      name: d.name,
-    }));
+  findWeeklyWithoutImage(month: number, year: number, week?: number): Promise<{ id: string; artistName: string; name: string }[]> {
+    return this.discEnrichmentService.findWeeklyWithoutImage(month, year, week);
   }
 
-  async updateImage(id: string, image: string): Promise<void> {
-    await this.discRepository.update(id, { image });
+  updateImage(id: string, image: string): Promise<void> {
+    return this.discEnrichmentService.updateImage(id, image);
   }
 
   private async resolveArtist(artistName: string, countryId?: string): Promise<Artist> {

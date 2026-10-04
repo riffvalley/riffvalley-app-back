@@ -1,5 +1,5 @@
 import type { Disc } from '../../entities/disc.entity';
-import type { FridayWeekRange } from './get-friday-week-ranges';
+import type { FridayWeekRange } from '../../shared/helpers/get-friday-week-ranges';
 
 export type WeeklyDiscPayload = {
   artistName: string;

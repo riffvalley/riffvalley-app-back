@@ -35,7 +35,8 @@ Mantener la estructura clásica del módulo: `discs.controller.ts`, `discs.servi
 La división inicial de responsabilidades es orientativa y podrá ajustarse al inspeccionar el código durante cada extracción:
 
 - **DiscCatalogService:** `findAll`, `findRandom`, `findOptions` y lógica compartida de filtros/mapping únicamente cuando realmente aplique.
-- **DiscCalendarService:** `findAllByDate`, `findAllByDatePublic`, `findWeekly`, `getFridayWeekRanges` y `findWeeklyWithoutImage`.
+- **DiscCalendarService:** `findAllByDate`, `findAllByDatePublic` y `findWeekly`.
+- **DiscEnrichmentService:** selección de discos semanales sin imagen y actualización de su imagen (`findWeeklyWithoutImage`, `updateImage`); reutiliza el helper puro compartido de rangos semanales.
 - **DiscHomeService:** `findTopRatedOrFeaturedAndStats` y estadísticas relacionadas con Home.
 - **DiscWriteService:** `create`, `createWithArtist`, `resolveArtist`, `update`, `remove` y `updateImage`.
 - **DiscSpotifyService:** `getSpotifyTracks`, `resolveSpotifyAlbum` y `getSpotifyAlbumDetails`.
@@ -857,7 +858,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 
 ### D21 — LastFM: discos sin imagen
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** preservar el contrato interno usado por LastFM para encontrar discos a completar.
 - **Alcance:** findWeeklyWithoutImage, sus callers en lastfm.service.ts, rango semanal y selección de id/artista/nombre.
 - **Fuera de alcance:** cliente LastFM, política de imágenes y endpoint semanal público.
@@ -865,10 +866,20 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** se conservan rango, criterio null/vacío de imagen, orden y forma de cada resultado; la llamada de LastFM sigue recibiendo los mismos datos.
 - **Verificaciones:** prueba de selección con imagen null/vacía/no vacía y llamada del caller; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/lastfm/lastfm.service.spec.ts --runInBand</code> si se incorpora la prueba de integración.
 - **Riesgo:** S.
+- **Resultado (2026-10-04):** caracterizado `findWeeklyWithoutImage` sin cambiar su rango ni su criterio: sin `week`, la consulta cubre del día 1 al último día del mes; con `week`, consulta solo los límites inclusivos del rango devuelto por `getFridayWeekRanges`. Una semana inexistente retorna `[]` antes de crear una query. `releaseDate` es de tipo SQL `date`.
+- **Query:** una llamada ejecuta una query `getRawMany()`; una semana inexistente ejecuta cero. Aplica `disc.releaseDate BETWEEN :start AND :end`, `(disc.image IS NULL OR disc.image = :empty)` con `empty: ''`, y orden `disc.releaseDate ASC` sin desempate adicional. Solo necesita el `LEFT JOIN disc.artist` para el nombre; la relación ausente conserva el fallback `artistName: ''`.
+- **Selección y payload:** se seleccionan `disc.id`, `disc.name` y `artist.name`, que son los campos que consume `LastfmService.fillWeeklyImages` (`id` para `updateImage`, artista y álbum para buscar la imagen). Se sustituyó `leftJoinAndSelect`/`getMany` por join sin hidratar la relación y una proyección raw de esos tres campos; la respuesta interna mantiene exactamente `{ id, artistName, name }[]` y el array vacío.
+- **Alcance temporal:** no se consulta necesariamente el mes completo; la semana concreta reduce el rango SQL. Sin `week`, el alcance mensual permite rellenar todos los candidatos del mes. No se alteró esta semántica.
+- **Responsabilidad estructural:** aunque usa los rangos semanales del calendario, la selección de discos sin imagen y el payload están determinados por el enriquecimiento de imágenes consumido por LastFM, no por la respuesta del calendario. Se recomienda asociarla al flujo de enriquecimiento LastFM si se revisa su ubicación; D21 no mueve el método ni crea servicios.
+- **Rendimiento:** la consulta era una sola, pero seleccionaba todas las columnas de Artist para usar únicamente `artist.name`; ahora proyecta los tres campos usados y conserva un único join izquierdo. No se identificó otro join eliminable.
+- **Tests:** añadidos casos de rango mensual y semanal, límites exactos, filtro null/vacío, join y selección, orden, payload con artista ausente, resultado vacío, semana inexistente y conteo de queries.
+- **Hallazgos contractuales:** no se detectó una rareza nueva que requiera cambio contractual. El orden solo define `releaseDate ASC`; no define desempate para varios discos con la misma fecha, y se conserva tal cual. `LastfmService` consume exclusivamente los tres campos caracterizados.
+- **Verificaciones:** con Node 20.20.2, `yarn test src/discs --runInBand` pasa (9 suites, 160 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check` pasan.
+- **Siguiente:** D22 permanece pendiente.
 
 ### D22 — LastFM: actualizar imagen
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** aclarar el resultado de la escritura updateImage sin cambiar el flujo de enriquecimiento.
 - **Alcance:** updateImage en DiscsService y su uso desde LastFM.
 - **Fuera de alcance:** cambiar proveedor, selección de imagen, concurrencia o payload HTTP.
@@ -876,6 +887,69 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** persistencia por id y comportamiento ante id inexistente están caracterizados; el caller conserva su flujo y no se añade trabajo a otra entidad.
 - **Verificaciones:** prueba de update y efecto en repositorio; suite focalizada de Discs y LastFM cuando exista.
 - **Riesgo:** XS.
+- **Resultado (2026-10-04):** `updateImage(id, image)` ejecuta exactamente `discRepository.update(id, { image })` y devuelve `undefined`; no consulta ni devuelve la entidad. El `UpdateResult` se descarta.
+- **Acceso y persistencia:** TypeORM localiza el disco por el criterio `id` y hace una única operación UPDATE directa. No carga relaciones ni otros campos; el patch incluye solo `image`. Un id inexistente produce `affected: 0`, pero el método no lo comprueba y resuelve igual que en una actualización correcta; no lanza NotFound.
+- **Valores y hooks:** URLs e imagen vacía se pasan sin transformación. La columna `image` es nullable, pero la firma `updateImage(id, image: string)` excluye `null`; en runtime se reenvía `null` al repositorio y la columna admite almacenarlo. `Repository.update` conserva su operación directa y el QueryBuilder emite los eventos genéricos BeforeUpdate/AfterUpdate; no hay hooks ni subscribers declarados para Disc. No se cambió a `save` ni se alteró ese lifecycle.
+- **Tests:** añadidos casos para actualización correcta, `affected: 0`, cadena vacía, `null` en runtime, retorno `undefined`, criterio por id, patch exclusivo de imagen y una llamada al repositorio.
+- **Responsabilidad conjunta D21–D22:** ambos métodos solo sirven al flujo de completar imágenes: D21 busca candidatos por rango sin imagen y D22 persiste la imagen por id. Se recomienda agrupar la lógica de acceso a datos en una responsabilidad `enrichment/` dentro de Discs, mientras `lastfm/` conserva la integración HTTP/proveedor y orquesta el flujo. Esto es más cohesivo que Calendar (la semana solo acota candidatos) o Write genérico; la extracción queda para una tarea estructural posterior.
+- **Hallazgo contractual:** la ausencia de disco se trata como éxito silencioso (`undefined`), indistinguible para el caller de una actualización realizada. El caller LastFM incrementa `updated` tras esa resolución, aunque TypeORM informe `affected: 0`; se preserva esta compatibilidad y no se cambia el flujo en D22.
+
+### Contract finding
+
+**Current behavior:** `updateImage` descarta `UpdateResult` y resuelve `undefined` incluso con `affected: 0`. `LastfmService.fillWeeklyImages` cuenta como actualizado cualquier disco cuyo `updateImage` resuelva.
+
+**Problem:** `updated` puede contar un disco inexistente como actualizado; el caller no puede distinguir persistencia de no-op.
+
+**Impact:** Backend-only.
+
+**Options:**
+
+1. Preserve compatibility.
+2. Refactor internamente.
+3. Change the contract.
+4. Coordinate a backend/frontend refactor.
+
+**Recommendation:** conservar el comportamiento en D22. Si la métrica de `updated` debe reflejar filas afectadas, abordar en una tarea backend independiente con decisión explícita sobre devolver `affected`, lanzar NotFound o mantener un resultado silencioso.
+
+**Blocks the current task:** No; D22 caracteriza y preserva el resultado actual.
+
+- **Nota de tipos:** la columna permite `NULL`, pero `Disc.image` y `updateImage` están declarados como `string`; no se amplió la firma. El test de null documenta el passthrough en runtime con un cast, no cambia el contrato TypeScript.
+- **Verificaciones:** con Node 20.20.2, `yarn test src/discs --runInBand` pasa (9 suites, 164 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check` pasan.
+- **Siguiente:** D23 permanece pendiente.
+
+### D22.1 — Extraer enriquecimiento de imágenes
+
+- [x] Completada
+- **Objetivo:** mover la selección de discos sin imagen y su actualización a una responsabilidad cohesionada sin cambiar lógica ni contrato.
+- **Alcance:** `findWeeklyWithoutImage`, `updateImage`, providers del módulo y traslado de sus tests D21–D22.
+- **Fuera de alcance:** cleanup de helpers, mover `getFridayWeekRanges`, cambios de query/rangos/payload/LastFM o avance a D23.
+- **Dependencias:** D21, D22.
+- **Criterios de finalización:** `DiscEnrichmentService` inyecta solo lo necesario; `DiscsService` conserva ambas firmas delegando; los tests específicos viven junto a Enrichment; la DI resuelve el provider; contratos y hallazgos D21–D22 permanecen documentados.
+- **Verificaciones:** `yarn test src/discs --runInBand`, `tsc --noEmit -p tsconfig.build.json` y `git diff --check` con Node 20.
+- **Riesgo:** XS.
+- **Resultado (2026-10-04):** movidos únicamente `findWeeklyWithoutImage` y `updateImage` a `DiscEnrichmentService`. El servicio inyecta directamente solo `Repository<Disc>`; `DiscsService` conserva ambas firmas públicas y delega. Se registró `DiscEnrichmentService` como provider de `DiscModule`.
+- **Tests:** los diez tests funcionales de D21–D22 se trasladaron a `enrichment/disc-enrichment.service.spec.ts`; `discs.service.spec.ts` conserva una prueba de delegación que comprueba argumentos y resultados. No se duplicaron las caracterizaciones.
+- **Comportamiento:** query, proyección, límites temporales, filtros, orden, payload, persistencia, retorno y resultado para id inexistente permanecen sin cambios. No se modificaron LastFM ni `getFridayWeekRanges`; sus helpers quedan para D22.2.
+- **Tamaño y estructura:** `DiscsService` queda en 549 líneas; `DiscEnrichmentService` tiene 47. `enrichment/` contiene únicamente `disc-enrichment.service.ts` y `disc-enrichment.service.spec.ts`.
+- **Verificaciones:** con Node 20.20.2 pasan `yarn test src/discs --runInBand` (10 suites, 165 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check`.
+- **Siguiente:** D23 permanece pendiente.
+
+### D22.2 — Shared helper y cleanup de Enrichment
+
+- [x] Completada
+- **Objetivo:** compartir el cálculo puro de rangos semanales entre Calendar y Enrichment y dejar la estructura de Enrichment en el tamaño mínimo claro.
+- **Alcance:** mover `getFridayWeekRanges` y su spec a `src/discs/shared/helpers/`, actualizar imports consumidores y retirar código local muerto de Enrichment si no afecta comportamiento.
+- **Fuera de alcance:** cambios en rangos, queries, filtros, orden, payload, persistencia, LastFM, frontend o avance a D23.
+- **Dependencias:** D22.1.
+- **Criterios de finalización:** helper y spec quedan juntos bajo shared; se comprueba pureza y ausencia de dependencia de Calendar/DI/repositorios; Calendar y Enrichment usan el nuevo path; no se extraen helpers triviales de Enrichment; hallazgos D21–D22 permanecen intactos.
+- **Verificaciones:** `yarn test src/discs --runInBand`, `tsc --noEmit -p tsconfig.build.json` y `git diff --check` con Node 20.
+- **Riesgo:** XS.
+- **Resultado (2026-10-04):** movidos `get-friday-week-ranges.ts` y su spec a `src/discs/shared/helpers/`. Los consumidores actualizados son `DiscCalendarService`, `DiscEnrichmentService` y el mapper de grupos semanales, que importa `FridayWeekRange` como tipo.
+- **Pureza y reutilización:** `getFridayWeekRanges` y `FridayWeekRange` no dependen de Calendar, NestJS, DI ni repositorios. Su implementación y expectativas no cambiaron. El helper ahora tiene consumidores de las responsabilidades Calendar y Enrichment, por lo que `shared/` responde a reutilización real.
+- **Cleanup:** `DiscEnrichmentService` no contiene otro helper puro suficientemente no trivial; el `pad` local se mantiene inline por ser una conversión simple. Se retiraron únicamente dos variables de fecha sin uso; los límites usados por la query permanecen idénticos.
+- **Hallazgos:** los hallazgos contractuales de D21–D22 y su recomendación de responsabilidad permanecen documentados sin cambios.
+- **Verificaciones:** con Node 20.20.2 pasan `yarn test src/discs --runInBand` (10 suites, 165 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check`.
+- **Siguiente:** D23 permanece pendiente.
 
 ### D23 — findOne: detalle de disco
 

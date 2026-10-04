@@ -6,6 +6,7 @@ import { SpotifyApiService } from '../../wordpress/spotify-api.service';
 import { Disc } from '../entities/disc.entity';
 import { DiscCatalogService } from '../catalog/disc-catalog.service';
 import { DiscCalendarService } from '../calendar/disc-calendar.service';
+import { DiscEnrichmentService } from '../enrichment/disc-enrichment.service';
 import { DiscsService } from '../discs.service';
 
 describe('DiscsService Spotify album operations', () => {
@@ -18,6 +19,7 @@ describe('DiscsService Spotify album operations', () => {
     {} as any,
     {} as any,
     spotifyApiService as any,
+    {} as any,
     {} as any,
     {} as any,
   );
@@ -78,6 +80,7 @@ describe('DiscsService baseline', () => {
       spotifyApiService as unknown as SpotifyApiService,
       {} as any,
       {} as any,
+      {} as any,
     );
   });
 
@@ -96,6 +99,7 @@ describe('DiscsService baseline', () => {
       {} as Repository<Artist>,
       spotifyApiService as unknown as SpotifyApiService,
       catalog as unknown as DiscCatalogService,
+      {} as any,
       {} as any,
     );
     const pagination = { limit: 2 } as any;
@@ -156,6 +160,33 @@ describe('DiscsService baseline', () => {
   });
 });
 
+describe('DiscsService enrichment facade', () => {
+  it('delegates image candidate lookup and image update unchanged', async () => {
+    const candidates = [{ id: 'disc-id', artistName: 'Artist', name: 'Album' }];
+    const enrichment = {
+      findWeeklyWithoutImage: jest.fn().mockResolvedValue(candidates),
+      updateImage: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new DiscsService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as DiscCatalogService,
+      {} as DiscCalendarService,
+      enrichment as unknown as DiscEnrichmentService,
+    );
+
+    await expect(service.findWeeklyWithoutImage(5, 2024, 3)).resolves.toBe(candidates);
+    await expect(service.updateImage('disc-id', 'https://image.test/album.jpg'))
+      .resolves.toBeUndefined();
+    expect(enrichment.findWeeklyWithoutImage).toHaveBeenCalledWith(5, 2024, 3);
+    expect(enrichment.updateImage).toHaveBeenCalledWith(
+      'disc-id',
+      'https://image.test/album.jpg',
+    );
+  });
+});
+
 
 
 describe('DiscsService calendar facade', () => {
@@ -175,6 +206,7 @@ describe('DiscsService calendar facade', () => {
       {} as any,
       {} as DiscCatalogService,
       calendar as unknown as DiscCalendarService,
+      {} as DiscEnrichmentService,
     );
     const pagination = { limit: 2, offset: 4 } as any;
     const user = { id: 'user-id' } as User;

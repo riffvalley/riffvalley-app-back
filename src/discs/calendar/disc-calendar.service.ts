@@ -14,7 +14,7 @@ import {
 } from './helpers/map-calendar-disc-groups';
 import { mapWeeklyDiscsToGroups } from './helpers/map-weekly-discs-to-groups';
 import type { WeeklyCalendarGroup } from './helpers/map-weekly-discs-to-groups';
-import { getFridayWeekRanges } from './helpers/get-friday-week-ranges';
+import { getFridayWeekRanges } from '../shared/helpers/get-friday-week-ranges';
 
 @Injectable()
 export class DiscCalendarService {
