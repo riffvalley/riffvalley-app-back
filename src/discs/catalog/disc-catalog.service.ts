@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Disc } from '../entities/disc.entity';
@@ -27,6 +27,24 @@ export class DiscCatalogService {
     @InjectRepository(Disc)
     private readonly discRepository: Repository<Disc>,
   ) { }
+
+  async findOne(id: string): Promise<Disc> {
+    try {
+      const disc = await this.discRepository.findOneOrFail({
+        where: { id },
+        relations: {
+          artist: { country: true },
+          genre: true,
+          favorites: { user: true },
+          pendings: { user: true },
+          comments: { user: true },
+        },
+      });
+      return disc;
+    } catch (error) {
+      throw new NotFoundException(`Disc with id ${id} not found`);
+    }
+  }
 
   async findAll(paginationDto: PaginationDto, user: User) {
     const { limit = 10, offset = 0, query, dateRange, genre, country, countryId, voted, votedType } = paginationDto;

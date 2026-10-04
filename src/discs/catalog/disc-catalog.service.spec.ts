@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { User } from '../../auth/entities/user.entity';
 import { Disc } from '../entities/disc.entity';
@@ -1299,7 +1300,7 @@ describe('DiscCatalogService.findRandom hydration', () => {
   it('selects artist, country and genre and defines each aggregate once without loading comments', async () => {
     setHydration(['disc-1']);
 
-    const { builders } = await run();
+    const { result, builders } = await run();
     const joins = builders[1].leftJoinAndSelect.mock.calls;
     const aggregateSelects = builders[1].addSelect.mock.calls
       .filter(([definition]: [unknown]) => typeof definition === 'function');
@@ -1321,6 +1322,7 @@ describe('DiscCatalogService.findRandom hydration', () => {
       'disc.rates', 'disc.favorites', 'disc.pendings',
     ]);
     expect(joins.some(([relation]) => relation === 'disc.comments')).toBe(false);
+    expect(result[0]).not.toHaveProperty('comments');
     expect(aggregateSelects.map(([, alias]) => alias)).toEqual([
       'averagerate', 'averageCover', 'rateCount', 'commentCount',
     ]);
@@ -1359,5 +1361,230 @@ describe('DiscCatalogService.findRandom hydration', () => {
         ],
       },
     ]);
+  });
+});
+
+
+describe('DiscCatalogService.findOne', () => {
+  let service: DiscCatalogService;
+  let discRepository: { findOneOrFail: jest.Mock };
+
+  beforeEach(() => {
+    discRepository = { findOneOrFail: jest.fn() };
+    service = new DiscCatalogService(
+      discRepository as unknown as Repository<Disc>,
+    );
+  });
+
+  it('returns the complete detail payload, including eager relations, unchanged', async () => {
+    const disc = {
+      id: 'disc-id',
+      name: 'Album',
+      description: 'Description',
+      image: 'https://images.test/album.jpg',
+      verified: true,
+      ep: false,
+      debut: true,
+      link: 'https://album.test',
+      releaseDate: new Date('2024-01-02T00:00:00.000Z'),
+      featured: false,
+      pinned: true,
+      artist: {
+        id: 'artist-id',
+        name: 'Artist',
+        nameNormalized: 'artist',
+        description: null,
+        image: null,
+        countryId: 'country-id',
+        needsReview: false,
+        updatedAt: new Date('2024-01-03T00:00:00.000Z'),
+        country: { id: 'country-id', name: 'Country', isoCode: 'CT' },
+      },
+      genre: { id: 'genre-id', name: 'Genre', color: '#123456' },
+      favorites: [
+        {
+          id: 'favorite-id',
+          createdAt: new Date('2024-01-04T00:00:00.000Z'),
+          editedAt: null,
+          user: {
+            id: 'user-id',
+            username: 'fan',
+            isActive: true,
+            image: null,
+            dashboardConfig: null,
+            mobileDashboardConfig: null,
+            dashboardButtonsEnabled: false,
+            createdAt: new Date('2024-01-01T00:00:00.000Z'),
+            notes: null,
+            lastLogin: null,
+          },
+        },
+        {
+          id: 'favorite-other-user-id',
+          createdAt: new Date('2024-01-07T00:00:00.000Z'),
+          editedAt: null,
+          user: {
+            id: 'other-user-id',
+            username: 'another-fan',
+            isActive: true,
+            image: null,
+            dashboardConfig: null,
+            mobileDashboardConfig: null,
+            dashboardButtonsEnabled: false,
+            createdAt: new Date('2024-01-02T00:00:00.000Z'),
+            notes: null,
+            lastLogin: null,
+          },
+        },
+      ],
+      pendings: [
+        {
+          id: 'pending-id',
+          createdAt: new Date('2024-01-05T00:00:00.000Z'),
+          editedAt: null,
+          user: {
+            id: 'user-id',
+            username: 'fan',
+            isActive: true,
+            image: null,
+            dashboardConfig: null,
+            mobileDashboardConfig: null,
+            dashboardButtonsEnabled: false,
+            createdAt: new Date('2024-01-01T00:00:00.000Z'),
+            notes: null,
+            lastLogin: null,
+          },
+        },
+        {
+          id: 'pending-other-user-id',
+          createdAt: new Date('2024-01-08T00:00:00.000Z'),
+          editedAt: null,
+          user: {
+            id: 'other-user-id',
+            username: 'another-fan',
+            isActive: true,
+            image: null,
+            dashboardConfig: null,
+            mobileDashboardConfig: null,
+            dashboardButtonsEnabled: false,
+            createdAt: new Date('2024-01-02T00:00:00.000Z'),
+            notes: null,
+            lastLogin: null,
+          },
+        },
+      ],
+      comments: [
+        {
+          id: 'comment-id',
+          comment: 'Great',
+          isDeleted: false,
+          createdAt: new Date('2024-01-06T00:00:00.000Z'),
+          editedAt: null,
+          user: {
+            id: 'user-id',
+            username: 'fan',
+            isActive: true,
+            image: null,
+            dashboardConfig: null,
+            mobileDashboardConfig: null,
+            dashboardButtonsEnabled: false,
+            createdAt: new Date('2024-01-01T00:00:00.000Z'),
+            notes: null,
+            lastLogin: null,
+          },
+        },
+        {
+          id: 'comment-other-user-id',
+          comment: 'Another listener agrees',
+          isDeleted: false,
+          createdAt: new Date('2024-01-09T00:00:00.000Z'),
+          editedAt: null,
+          user: {
+            id: 'other-user-id',
+            username: 'another-fan',
+            isActive: true,
+            image: null,
+            dashboardConfig: null,
+            mobileDashboardConfig: null,
+            dashboardButtonsEnabled: false,
+            createdAt: new Date('2024-01-02T00:00:00.000Z'),
+            notes: null,
+            lastLogin: null,
+          },
+        },
+      ],
+    } as unknown as Disc;
+    discRepository.findOneOrFail.mockResolvedValue(disc);
+
+    await expect(service.findOne(disc.id)).resolves.toEqual(disc);
+    expect(discRepository.findOneOrFail).toHaveBeenCalledWith({
+      where: { id: disc.id },
+      relations: {
+        artist: { country: true },
+        genre: true,
+        favorites: { user: true },
+        pendings: { user: true },
+        comments: { user: true },
+      },
+    });
+    expect(discRepository.findOneOrFail).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves null and empty optional relations in the detail payload', async () => {
+    const disc = {
+      id: 'disc-id',
+      name: 'Album',
+      artist: null,
+      genre: null,
+      favorites: [],
+      pendings: [],
+      comments: [],
+    } as unknown as Disc;
+    discRepository.findOneOrFail.mockResolvedValue(disc);
+
+    await expect(service.findOne(disc.id)).resolves.toEqual(disc);
+    expect(discRepository.findOneOrFail).toHaveBeenCalledWith({
+      where: { id: disc.id },
+      relations: {
+        artist: { country: true },
+        genre: true,
+        favorites: { user: true },
+        pendings: { user: true },
+        comments: { user: true },
+      },
+    });
+  });
+
+  it('maps an absent disc to the current 404 status and message', async () => {
+    discRepository.findOneOrFail.mockRejectedValue(new Error('missing'));
+
+    try {
+      await service.findOne('missing-id');
+      throw new Error('Expected findOne to reject');
+    } catch (error) {
+      expect(error).toBeInstanceOf(NotFoundException);
+      expect((error as NotFoundException).getStatus()).toBe(404);
+      expect((error as NotFoundException).getResponse()).toEqual({
+        message: 'Disc with id missing-id not found',
+        error: 'Not Found',
+        statusCode: 404,
+      });
+    }
+    expect(discRepository.findOneOrFail).toHaveBeenCalledTimes(1);
+  });
+
+  it('currently maps repository failures to the same 404 detail error', async () => {
+    discRepository.findOneOrFail.mockRejectedValue(
+      new Error('database unavailable'),
+    );
+
+    await expect(service.findOne('disc-id')).rejects.toMatchObject({
+      status: 404,
+      response: {
+        message: 'Disc with id disc-id not found',
+        error: 'Not Found',
+        statusCode: 404,
+      },
+    });
   });
 });

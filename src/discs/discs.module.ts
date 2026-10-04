@@ -11,10 +11,21 @@ import { WordpressModule } from 'src/wordpress/wordpress.module';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';
 import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
+import { DiscWriteService } from './write/disc-write.service';
+import { DiscSpotifyService } from './spotify/disc-spotify.service';
+import { DiscHomeService } from './home/disc-home.service';
 
 @Module({
   controllers: [DiscsController],
-  providers: [DiscsService, DiscCatalogService, DiscCalendarService, DiscEnrichmentService],
+  providers: [
+    DiscsService,
+    DiscCatalogService,
+    DiscCalendarService,
+    DiscEnrichmentService,
+    DiscWriteService,
+    DiscSpotifyService,
+    DiscHomeService,
+  ],
   imports: [
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
     AuthModule,

@@ -1,53 +1,35 @@
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
-import { CreateDiscDto } from './dto/create-discs.dto';
-import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
-import { UpdateDiscDto } from './dto/update-discs.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Disc } from './entities/disc.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
 import { OptionsQueryDto } from './dto/options-query.dto';
+import { CreateDiscDto } from './dto/create-discs.dto';
+import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
+import { UpdateDiscDto } from './dto/update-discs.dto';
 import { User } from 'src/auth/entities/user.entity';
-import { Genre } from 'src/genres/entities/genre.entity';
-import { Artist } from 'src/artists/entities/artist.entity';
-import { Pending } from 'src/pendings/entities/pending.entity';
 import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';
 import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
 import type { WeeklyCalendarGroup } from './calendar/helpers/map-weekly-discs-to-groups';
+import { DiscWriteService } from './write/disc-write.service';
+import { DiscSpotifyService } from './spotify/disc-spotify.service';
+import { DiscHomeService } from './home/disc-home.service';
 
 @Injectable()
 export class DiscsService {
-  private readonly logger = new Logger('DiscsService');
-
   constructor(
-    @InjectRepository(Disc)
-    private readonly discRepository: Repository<Disc>,
-    @InjectRepository(Artist)
-    private readonly artistRepository: Repository<Artist>,
     private readonly spotifyApiService: SpotifyApiService,
     private readonly discCatalogService: DiscCatalogService,
     private readonly discCalendarService: DiscCalendarService,
     private readonly discEnrichmentService: DiscEnrichmentService,
+    private readonly discWriteService: DiscWriteService,
+    private readonly discSpotifyService: DiscSpotifyService,
+    private readonly discHomeService: DiscHomeService,
   ) { }
 
-  // Tracklist de Spotify de un disco, para que el front deje elegir la
-  // canción a embeber en los posts de WordPress en vez de que se elija
-  // automáticamente.
   async getSpotifyTracks(id: string) {
-    const disc = await this.findOne(id);
-    return this.spotifyApiService.getAlbumTracks(
-      disc.artist?.name ?? '',
-      disc.name,
-    );
+    return this.discSpotifyService.getSpotifyTracks(id);
   }
 
   async resolveSpotifyAlbum(albumName: string, artistName: string) {
@@ -64,31 +46,11 @@ export class DiscsService {
   }
 
   async create(createDiscDto: CreateDiscDto) {
-    try {
-      const disc = this.discRepository.create(createDiscDto);
-      await this.discRepository.save(disc);
-      return disc;
-    } catch (error) {
-      this.handleDbExceptions(error);
-    }
+    return this.discWriteService.create(createDiscDto);
   }
 
   async createWithArtist(dto: CreateDiscWithArtistDto): Promise<Disc> {
-    const artist = await this.resolveArtist(dto.artistName, dto.countryId);
-
-    const disc = this.discRepository.create({
-      name: dto.discName,
-      artist,
-      ...(dto.genreId && { genre: { id: dto.genreId } as Genre }),
-      ...(dto.releaseDate && { releaseDate: new Date(dto.releaseDate) }),
-      ep: dto.ep ?? false,
-      debut: dto.debut ?? false,
-      link: dto.link,
-      image: dto.image,
-      description: dto.description,
-    });
-
-    return this.discRepository.save(disc);
+    return this.discWriteService.createWithArtist(dto);
   }
 
   findAll(paginationDto: PaginationDto, user: User) {
@@ -116,54 +78,21 @@ export class DiscsService {
   }
 
   async findOne(id: string): Promise<Disc> {
-    try {
-      const disc = await this.discRepository.findOneByOrFail({ id });
-      return disc;
-    } catch (error) {
-      throw new NotFoundException(`Disc with id ${id} not found`);
-    }
+    return this.discCatalogService.findOne(id);
   }
 
   async update(id: string, updateDiscDto: UpdateDiscDto) {
-    // Sacamos genreId aparte
-    const { genreId, artistId, ...restDto } = updateDiscDto;
-
-    // Cargamos un parcial de disc con preload
-    const disc = await this.discRepository.preload({
-      id,
-      ...restDto,
-    });
-
-    if (!disc) throw new NotFoundException(`Disc with id ${id} not found`);
-
-    try {
-      if (genreId) {
-        disc.genre = { id: genreId } as Genre;
-      }
-
-      if (artistId) {
-        disc.artist = { id: artistId } as Artist;
-      }
-
-      await this.discRepository.save(disc);
-      return disc;
-    } catch (error) {
-      this.handleDbExceptions(error);
-    }
+    return this.discWriteService.update(id, updateDiscDto);
   }
 
   async remove(id: string) {
-    const result = await this.discRepository.delete({ id });
-    if (result.affected === 0) {
-      throw new NotFoundException(`Disc with id ${id} not found`);
-    }
-    return { message: `Disc with id ${id} has been removed` };
+    return this.discWriteService.remove(id);
   }
 
-  async findTopRatedOrFeaturedAndStats(
+  findTopRatedOrFeaturedAndStats(
     paginationDto: PaginationDto,
     user: User,
-    genreId?: string
+    genreId?: string,
   ): Promise<{
     discs: Disc[];
     totalDiscs: number;
@@ -178,306 +107,11 @@ export class DiscsService {
     }[];
     ratingDistribution: { rate: number; count: number }[];
   }> {
-    const userId = user.id;
-    const { dateRange, country, countryId, statsDateRange, distributionDateRange } = paginationDto as any;
-    const countryFilter = country || countryId;
-    const today = new Date();
-
-    // Parámetros y condición para la consulta principal (incluye userId)
-    let dateCondition = '';
-    let genreCondition = '';
-    let countryCondition = '';
-    const params: any[] = [userId]; // $1 será userId
-    let paramCounter = 1;
-
-    if (dateRange && dateRange.length === 2) {
-      const [startDate, endDate] = dateRange;
-      dateCondition = `WHERE d."releaseDate" BETWEEN $${paramCounter + 1} AND $${paramCounter + 2} AND d."releaseDate" <= $${paramCounter + 3}`;
-      params.push(new Date(startDate));
-      params.push(new Date(endDate));
-      params.push(today);
-      paramCounter += 3;
-    } else {
-      dateCondition = `WHERE d."releaseDate" <= $${paramCounter + 1}`;
-      params.push(today);
-      paramCounter += 1;
-    }
-
-    if (genreId) {
-      genreCondition = dateCondition ? ' AND' : ' WHERE';
-      genreCondition += ` d."genreId" = $${paramCounter + 1}`;
-      params.push(genreId);
-      paramCounter += 1;
-    }
-
-    if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
-      countryCondition = (dateCondition || genreCondition) ? ' AND' : ' WHERE';
-      if (isUUID) {
-        countryCondition += ` c.id = $${paramCounter + 1}`;
-      } else {
-        countryCondition += ` c.name = $${paramCounter + 1}`;
-      }
-      params.push(countryFilter);
-      paramCounter += 1;
-    }
-
-    // --- Cálculo de estadísticas globales con filtro de fecha ---
-    // Para la consulta global no necesitamos el userId, así que definimos sus propios parámetros
-    let dateConditionGlobal = '';
-    let genreConditionGlobal = '';
-    let countryConditionGlobal = '';
-    const globalStatsParams: any[] = [];
-    let globalParamCounter = 0;
-
-    if (dateRange && dateRange.length === 2) {
-      const [startDate, endDate] = dateRange;
-      dateConditionGlobal = `WHERE d."releaseDate" BETWEEN $${globalParamCounter + 1} AND $${globalParamCounter + 2} AND d."releaseDate" <= $${globalParamCounter + 3}`;
-      globalStatsParams.push(new Date(startDate));
-      globalStatsParams.push(new Date(endDate));
-      globalStatsParams.push(today);
-      globalParamCounter += 3;
-    } else {
-      dateConditionGlobal = `WHERE d."releaseDate" <= $${globalParamCounter + 1}`;
-      globalStatsParams.push(today);
-      globalParamCounter += 1;
-    }
-
-    if (genreId) {
-      genreConditionGlobal = dateConditionGlobal ? ' AND' : ' WHERE';
-      genreConditionGlobal += ` d."genreId" = $${globalParamCounter + 1}`;
-      globalStatsParams.push(genreId);
-      globalParamCounter += 1;
-    }
-
-    if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
-      countryConditionGlobal = (dateConditionGlobal || genreConditionGlobal) ? ' AND' : ' WHERE';
-      if (isUUID) {
-        countryConditionGlobal += ` c.id = $${globalParamCounter + 1}`;
-      } else {
-        countryConditionGlobal += ` c.name = $${globalParamCounter + 1}`;
-      }
-      globalStatsParams.push(countryFilter);
-    }
-
-    const globalStatsQuery = `
-      SELECT 
-        AVG(avgRates) AS "globalAvgRate",
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY voteCount) AS "medianVotes"
-      FROM (
-        SELECT 
-          d.id, 
-          COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) AS voteCount,
-          COALESCE(AVG(r.rate), 0) AS avgRates
-        FROM disc d
-        LEFT JOIN rate r ON d.id = r."discId"
-        LEFT JOIN artist a ON d."artistId" = a.id
-        LEFT JOIN country c ON a."countryId" = c.id
-        ${dateConditionGlobal}
-        ${genreConditionGlobal}
-        ${countryConditionGlobal}
-        GROUP BY d.id
-      ) AS rate_stats;
-    `;
-    const globalStatsResult = await this.discRepository.query(
-      globalStatsQuery,
-      globalStatsParams,
+    return this.discHomeService.findTopRatedOrFeaturedAndStats(
+      paginationDto,
+      user,
+      genreId,
     );
-    const { globalAvgRate: globalAvgRateStr, medianVotes: medianVotesStr } =
-      globalStatsResult[0] || {};
-    const globalAvgRate = parseFloat(globalAvgRateStr) || 0;
-    const medianVotes = parseInt(medianVotesStr, 10) || 1;
-
-    // --- Consulta principal de discos (ordenados por featured y weightedScore) ---
-    const query = `
-      SELECT 
-        d.*, 
-        a.name AS "artistName", 
-        c.id AS "countryId",
-        c.name AS "countryName",
-        c."isoCode" AS "countryIsoCode",
-        g.name AS "genreName", 
-        g.color AS "genreColor", 
-        COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) AS "voteCount",
-        COALESCE(AVG(r.rate), 0) AS "averageRate",
-        COALESCE(AVG(r.cover), 0) AS "averageCover",
-        (SELECT r.id FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userRateId",
-        (SELECT f.id FROM favorite f WHERE f."discId" = d.id AND f."userId" = $1 LIMIT 1) AS "userFavoriteId",
-        (SELECT p.id FROM pending p WHERE p."discId" = d.id AND p."userId" = $1 LIMIT 1) AS "pendingId",
-        (SELECT r.rate FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userRate",
-        (SELECT r.cover FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userCover",
-        (SELECT COUNT(c.id) FROM comment c WHERE c."discId" = d.id) AS "commentCount",
-        (
-          (COALESCE(AVG(r.rate), 0) * COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END))
-          + (${globalAvgRate} * ${medianVotes})
-        ) / (COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) + ${medianVotes}) AS "weightedScore"
-      FROM disc d
-      LEFT JOIN artist a ON d."artistId" = a.id
-      LEFT JOIN country c ON a."countryId" = c.id
-      LEFT JOIN genre g ON d."genreId" = g.id
-      LEFT JOIN rate r ON d.id = r."discId"
-      LEFT JOIN favorite f ON f."discId" = d.id AND f."userId" = $1
-      LEFT JOIN pending p ON p."discId" = d.id AND p."userId" = $1
-      ${dateCondition}
-      ${genreCondition}
-      ${countryCondition}
-      GROUP BY d.id, a.name, g.name, g.color, f.id, c.id, c.name, c."isoCode"
-      HAVING COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) > 0 OR d."pinned" = true
-      ORDER BY "weightedScore" DESC
-      LIMIT 20;
-    `;
-
-    const topRatedDiscs = await this.discRepository.query(query, params);
-
-    // --- Parametros de filtrado para Top Users y Totales ---
-    let statsDateCondition = '';
-    const statsParams: any[] = [];
-    if (statsDateRange && statsDateRange.length === 2) {
-      const [startDate, endDate] = statsDateRange;
-      statsDateCondition = ' AND d."releaseDate" BETWEEN $1 AND $2';
-      statsParams.push(new Date(startDate));
-      statsParams.push(new Date(endDate));
-    }
-
-    // --- Otras estadísticas: total de discos y total de votos ---
-    let totalDiscs = 0;
-    let totalVotes = 0;
-
-    if (statsDateRange && statsDateRange.length === 2) {
-      const [startDate, endDate] = statsDateRange;
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-
-      totalDiscs = await this.discRepository
-        .createQueryBuilder('disc')
-        .where('disc.releaseDate BETWEEN :start AND :end', { start, end })
-        .getCount();
-
-      const totalVotesResult = await this.discRepository
-        .createQueryBuilder('disc')
-        .leftJoin('disc.rates', 'rates')
-        .select('COUNT(*)', 'totalVotes')
-        .where('rates.rate IS NOT NULL')
-        .andWhere('disc.releaseDate BETWEEN :start AND :end', { start, end })
-        .getRawOne();
-      totalVotes = parseInt(totalVotesResult.totalVotes, 10) || 0;
-    } else {
-      totalDiscs = await this.discRepository.count();
-      const totalVotesResult = await this.discRepository
-        .createQueryBuilder('disc')
-        .leftJoin('disc.rates', 'rates')
-        .select('COUNT(*)', 'totalVotes')
-        .where('rates.rate IS NOT NULL')
-        .getRawOne();
-      totalVotes = parseInt(totalVotesResult.totalVotes, 10) || 0;
-    }
-
-
-    // --- Consulta para obtener los top usuarios por cantidad de rates ---
-    const topUsersByRatesQuery = `
-      SELECT u.id AS "userId", u.username, COUNT(r.id) AS "rateCount"
-      FROM rate r
-      JOIN "users" u ON u.id = r."userId"
-      JOIN "disc" d ON d.id = r."discId"
-      WHERE r.rate IS NOT NULL${statsDateCondition}
-      GROUP BY u.id, u.username
-      ORDER BY "rateCount" DESC
-      LIMIT 20;
-    `;
-    const topUsersByRates =
-      await this.discRepository.query(topUsersByRatesQuery, statsParams);
-
-    // --- Consulta para obtener los top usuarios por cover ---
-    const topUsersByCoverQuery = `
-      SELECT u.id AS "userId", u.username, COUNT(r.id) AS "coverCount"
-      FROM rate r
-      JOIN "users" u ON u.id = r."userId"
-      JOIN "disc" d ON d.id = r."discId"
-      WHERE r.cover IS NOT NULL${statsDateCondition}
-      GROUP BY u.id, u.username
-      ORDER BY "coverCount" DESC
-      LIMIT 20;
-    `;
-    const topUsersByCover =
-      await this.discRepository.query(topUsersByCoverQuery, statsParams);
-
-    // --- Parametros de filtrado para Distribución ---
-    let distributionDateCondition = '';
-    const distributionParams: any[] = [];
-    if (distributionDateRange && distributionDateRange.length === 2) {
-      const [startDate, endDate] = distributionDateRange;
-      distributionDateCondition = ' AND d."releaseDate" BETWEEN $1 AND $2';
-      distributionParams.push(new Date(startDate));
-      distributionParams.push(new Date(endDate));
-    }
-
-    // --- Consulta: Distribución de ratings ---
-    const ratingDistributionQuery = `
-      SELECT r.rate AS "rateValue", COUNT(*) AS "count"
-      FROM rate r
-      JOIN "disc" d ON d.id = r."discId"
-      WHERE r.rate IS NOT NULL${distributionDateCondition}
-      GROUP BY r.rate
-      ORDER BY r.rate;
-    `;
-    const ratingDistributionResult = await this.discRepository.query(
-      ratingDistributionQuery,
-      distributionParams
-    );
-    const ratingDistribution = ratingDistributionResult.map((row: any) => ({
-      rate: parseFloat(row.rateValue),
-      count: parseInt(row.count, 10),
-    }));
-
-    // --- Transformación de los datos para el formato esperado ---
-    const processedDiscs = topRatedDiscs.map((disc: any) => ({
-      ...disc,
-      artist: {
-        name: disc.artistName,
-        country: {
-          id: disc.countryId,
-          name: disc.countryName || null,
-          isoCode: disc.countryIsoCode || null
-        }
-      },
-      genre: { name: disc.genreName, color: disc.genreColor },
-      userRate: disc.userRateId
-        ? {
-          id: disc.userRateId,
-          rate: parseFloat(disc.userRate) || null,
-          cover: parseFloat(disc.userCover) || null,
-        }
-        : null,
-      favoriteId: disc.userFavoriteId || null,
-      pendingId: disc.pendingId || null,
-      averageRate: disc.averageRate !== null ? parseFloat(disc.averageRate) : 0,
-      averageCover:
-        disc.averageCover !== null ? parseFloat(disc.averageCover) : 0,
-      voteCount: parseInt(disc.voteCount, 10) || 0,
-      commentCount: parseInt(disc.commentCount, 10) || 0,
-    }));
-
-    return {
-      discs: processedDiscs,
-      totalDiscs,
-      totalVotes,
-      topUsersByRates: topUsersByRates.map((row: any) => ({
-        user: {
-          id: row.userId,
-          username: row.username,
-        },
-        rateCount: parseInt(row.rateCount, 10),
-      })),
-      topUsersByCover: topUsersByCover.map((row: any) => ({
-        user: {
-          id: row.userId,
-          username: row.username,
-        },
-        totalCover: parseInt(row.coverCount, 10),
-      })),
-      ratingDistribution,
-    };
   }
 
   findWeekly(
@@ -494,56 +128,5 @@ export class DiscsService {
 
   updateImage(id: string, image: string): Promise<void> {
     return this.discEnrichmentService.updateImage(id, image);
-  }
-
-  private async resolveArtist(artistName: string, countryId?: string): Promise<Artist> {
-    const matches = await this.artistRepository.find({
-      where: { name: ILike(artistName) },
-    });
-
-    if (matches.length === 0) {
-      const normalized = artistName
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
-      return this.artistRepository.save(
-        this.artistRepository.create({
-          name: artistName,
-          nameNormalized: normalized,
-          ...(countryId && { countryId }),
-        }),
-      );
-    }
-
-    if (matches.length === 1) {
-      return matches[0];
-    }
-
-    // Más de un artista con el mismo nombre → necesitamos countryId para desambiguar
-    if (!countryId) {
-      throw new BadRequestException(
-        `Hay ${matches.length} artistas con el nombre "${artistName}". Especifica countryId para desambiguar.`,
-      );
-    }
-
-    const match = matches.find((a) => a.countryId === countryId);
-    if (match) return match;
-
-    // No hay ninguno con ese país → es un artista distinto, se crea
-    const normalized = artistName
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim();
-    return this.artistRepository.save(
-      this.artistRepository.create({ name: artistName, nameNormalized: normalized, countryId }),
-    );
-  }
-
-  private handleDbExceptions(error: any) {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
-    this.logger.error(error);
-    throw new InternalServerErrorException('An unexpected error occurred');
   }
 }

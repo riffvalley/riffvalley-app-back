@@ -526,9 +526,9 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 Añadir una tarea de extracción para cada bloque solo cuando sus tareas de caracterización/refactor estén completadas y sus tests pasen. Los puntos previstos son:
 
 - **Calendar → DiscCalendarService:** D16.1 extrae `findAllByDate` y `findAllByDatePublic` tras D12–D16. Los métodos semanales (`findWeekly`, `getFridayWeekRanges`, `findWeeklyWithoutImage`) se incorporarán después de estabilizar D17–D20 y D21, que caracteriza el uso desde LastFM.
-- **Home → DiscHomeService:** después de completar D30–D38; mover `findTopRatedOrFeaturedAndStats` y sus estadísticas relacionadas.
-- **Write → DiscWriteService:** después de completar D24–D28 y D22; mover creación, resolución de artista, actualización, eliminación y `updateImage`.
-- **Spotify → DiscSpotifyService:** después de completar la caracterización aplicable de `getSpotifyTracks`, `resolveSpotifyAlbum` y `getSpotifyAlbumDetails` —incluida D29 y la cobertura existente—; conservar las integraciones y errores actuales.
+- **Home → DiscHomeService:** D38.1, completada tras D30–D38, mueve `findTopRatedOrFeaturedAndStats` y sus estadísticas relacionadas; D38.2 queda para revisar cleanup de helpers.
+- **Write → DiscWriteService:** D29.1 la extrae tras completar D24–D28; contiene creación, resolución de artista, actualización y eliminación. `updateImage` permanece en `DiscEnrichmentService`.
+- **Spotify → DiscSpotifyService:** D29.3 extrae `getSpotifyTracks` tras D29; `resolveSpotifyAlbum` y `getSpotifyAlbumDetails` permanecen en la fachada hasta caracterizar cualquier extracción futura.
 
 Estas extracciones se incorporarán como tareas independientes en ese momento, sin fijar ahora sus IDs ni alterar el orden de las subtareas funcionales actuales. Cada una conservará `DiscsService` como fachada por defecto, actualizará la DI del módulo y aplicará las reglas generales de extracción anteriores.
 
@@ -953,7 +953,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 
 ### D23 — findOne: detalle de disco
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** explicitar las relaciones del detalle y caracterizar el error actual para un disco ausente.
 - **Alcance:** findOne, resultado HTTP de GET /discs/:id y su grafo eager actual.
 - **Fuera de alcance:** cambiar la respuesta, ocultar campos existentes o modificar eager en toda la aplicación.
@@ -961,10 +961,37 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** payload completo del detalle queda caracterizado; 404 para id ausente se conserva; cualquier cambio en traducción de errores queda fuera de esta tarea salvo decisión contractual explícita.
 - **Verificaciones:** tests de disco existente, inexistente y relaciones opcionales; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>.
 - **Riesgo:** S.
+- **Resultado (2026-10-04):** `findOne` conserva el `id` como único filtro y retorna la entidad Disc sin mapping adicional. El detalle incluye `artist.country`, `genre`, `favorites.user`, `pendings.user` y `comments.user`; no carga `rates`, `asignations`, `Comment.replies` ni otras relaciones no eager. Las relaciones opcionales conservan `null` y las colecciones vacías `[]`.
+- **Query y joins:** una invocación a `Repository.findOneOrFail` usa `where: { id }` y declara explícitamente el grafo anterior; las selecciones de columnas siguen siendo las predeterminadas de TypeORM, incluidos todos los campos seleccionables de las relaciones cargadas. No hay mapping, escritura, transacción ni efectos secundarios en el método. Con TypeORM 0.3.26, `findOne` configura `take: 1`; usando estrategia de relaciones `join` (predeterminada), la combinación de `take` y joins ejecuta una query distinta para resolver IDs y una segunda para hidratar el resultado. Si el disco no existe, la primera query no retorna ids y no se ejecuta la segunda. El mock de servicio verifica una invocación al repositorio; el número SQL se determinó inspeccionando la implementación instalada de TypeORM, sin conexión a base de datos.
+- **Error e input HTTP:** `GET /discs/:id` usa `ParseUUIDPipe` (UUID inválido: 400); un UUID válido se delega sin transformación. Si el disco no existe, el controller propaga el `NotFoundException` generado por el servicio (404, `Disc with id <id> not found`). El `catch` actual convierte también otros errores del repositorio al mismo 404; se caracteriza y conserva, sin ampliar esta tarea a traducción de errores.
+- **Tests:** se añadieron caracterizaciones de payload completo con las relaciones eager anidadas, relaciones opcionales (`null`/`[]`), query y grafo declarados, ausencia de disco con status y mensaje, conversión actual de errores de repositorio a 404, delegación HTTP y validación UUID.
+- **Responsabilidad estructural:** no aparece una responsabilidad nueva que justifique extracción; `findOne` es una lectura puntual sin mapping ni coordinación adicional.
+
+### Contract finding
+
+**Current behavior:** el detalle carga y serializa todas las filas relacionadas de favorites, pendings y comments, además de sus usuarios; también carga género, artista y país. La ausencia de Disco y cualquier error del repositorio producen el mismo 404.
+
+**Problem:** las tres colecciones pueden ser grandes. Sus joins multiplican filas intermedias; con la estrategia join de TypeORM y `take: 1`, el detalle ejecuta una consulta de IDs y otra de hidratación. El consumo de cada colección en frontend no está confirmado en este repositorio. El 404 indistinguible también puede ocultar una caída de base de datos como si el recurso no existiera.
+
+**Impact:** backend + frontend para reducir o proyectar las colecciones; backend-only para distinguir errores de base de datos de ausencia.
+
+**Options:**
+
+1. Preservar compatibilidad y el 404 actual.
+2. Mantener el payload y revisar internamente una estrategia de carga que reduzca la multiplicación, midiendo su coste.
+3. Cambiar el payload a proyecciones/paginación o cambiar la traducción de errores.
+4. Coordinar la forma del detalle con frontend si deja de incluir colecciones completas.
+
+**Recommendation:** preservar ambos comportamientos en D23. En D39 confirmar consumidores y relaciones; cualquier reducción del payload requiere decisión contractual explícita. Tratar la traducción de errores en una tarea independiente si se decide que los fallos de almacenamiento deben conservar su código 5xx.
+
+**Blocks the current task:** No; el grafo se hizo explícito y ambos comportamientos quedaron caracterizados sin cambiar contrato.
+
+- **Verificaciones:** con Node 20.20.2 pasan `yarn test src/discs --runInBand` (10 suites, 169 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check`.
+- **Siguiente:** D24 permanece pendiente.
 
 ### D24 — create: POST /discs
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** hacer explícita la construcción, persistencia y manejo de errores de creación básica.
 - **Alcance:** método create, CreateDiscDto y respuesta HTTP actual.
 - **Fuera de alcance:** createWithArtist, cambios de validación, permisos y nuevos valores por defecto.
@@ -972,10 +999,76 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** campos admitidos, defaults, relaciones indicadas por DTO y traducción actual de error 23505 quedan cubiertos; no cambia la ruta ni la respuesta.
 - **Verificaciones:** pruebas de DTO/servicio/controller y error de conflicto; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>.
 - **Riesgo:** XS.
+- **Resultado (2026-10-04):** sin cambios de producción. `POST /discs` sigue delegando el DTO completo a `DiscsService.create`; el servicio hace `discRepository.create(dto)`, una llamada `discRepository.save(disc)` y retorna la misma instancia `disc` después de esperar el guardado. No usa transacción explícita ni modifica la ruta, permisos, DTO o respuesta.
+- **Campos y defaults:** `Repository.create` copia `name`, `description`, `image`, `verified`, `link`, `releaseDate`, `ep`, `debut`, `featured` y `pinned` cuando vienen definidos. La instancia nueva mantiene `verified`, `ep`, `debut`, `featured` y `pinned` en `false` si se omiten; description/image/link/releaseDate no tienen inicializador en la entidad y quedan ausentes antes del retorno del ORM. La validación global mantiene `transform`, conversión implícita, whitelist y rechazo de propiedades desconocidas. El DTO acepta payload mínimo `{ name }`; el spec cubre todos sus campos, UUIDs de relación, URL y conversión de releaseDate string a Date.
+- **Relaciones y persistencia:** `artistId` y `genreId` son campos admitidos y validados del DTO, pero TypeORM `Repository.create` los ignora porque la entidad declara las relaciones `artist` y `genre` sin propiedades escalares `artistId`/`genreId`, y el servicio no los convierte en relaciones. La comprobación de `Repository.create` real (metadatos TypeORM cargados sin conexión a BD) confirmó que ambos campos no aparecen en la entidad y las relaciones quedan `undefined`. `create` es una construcción en memoria; hay una llamada de escritura `save` (un INSERT lógico), sin lectura, join ni carga de relaciones eager. La llamada de TypeORM puede gestionar su transacción implícita predeterminada; no se añadió transacción.
+- **Respuesta y errores:** el método devuelve el objeto construido y `save` puede completar sobre él valores generados como el id. El error PostgreSQL `code === '23505'` conserva `BadRequestException(error.detail)` (400 y detalle del driver). Cualquier otro error de `create` o `save` se registra y se traduce al 500 genérico `An unexpected error occurred`.
+- **Tests:** añadidos `src/discs/dto/create-discs.dto.spec.ts` para payload mínimo, todos los campos, fecha convertida, name requerido, whitelist y fecha inválida; pruebas de servicio para defaults, DTO completo, relaciones ignoradas por el servicio, instancia retornada después de save, `23505` y error general/log; prueba de delegación/retorno en controller. El caso de fecha inválida muestra que la conversión implícita produce `Invalid Date` pero la validación actual pasa porque el campo solo tiene `IsOptional`.
+
+### Contract finding
+
+**Current behavior:** el DTO admite `artistId` y `genreId`, pero `create` pasa esos valores directamente a `Repository.create`; TypeORM no asigna las relaciones `artist` ni `genre`, por lo que no se guardan esos vínculos.
+
+**Problem:** el request acepta IDs que parecen seleccionar relaciones, aunque esos campos no influyen en la persistencia. Mapearlos a referencias cambiaría los datos guardados y potencialmente el payload retornado.
+
+**Impact:** backend + frontend.
+
+**Options:**
+
+1. Preservar compatibilidad y documentar que los IDs se ignoran en este endpoint.
+2. Refactorizar internamente sin alterar la semántica actual.
+3. Acordar y cambiar el contrato para que esos IDs asignen relaciones.
+4. Coordinar con frontend la corrección y cualquier diferencia en la respuesta.
+
+**Recommendation:** preservar en D24. Crear una tarea contractual independiente para decidir si `POST /discs` debe asignar estas relaciones, revisar consumidores y caracterizar el response antes de modificar persistencia.
+
+**Blocks the current task:** No; se caracterizó y preservó la semántica actual.
+
+### Contract finding
+
+**Current behavior:** `releaseDate` solo tiene `IsOptional`; el `ValidationPipe` global convierte strings a `Date`, pero no hay `IsDate` ni otra validación de fecha. Un texto inválido se transforma en `Invalid Date` y pasa la validación DTO.
+
+**Problem:** la petición puede llegar a persistencia con una fecha inválida y terminar en el error genérico 500. Añadir validación cambiaría qué requests acepta el endpoint.
+
+**Impact:** backend-only.
+
+**Options:**
+
+1. Preservar la aceptación actual.
+2. Ajustar internamente sin efecto observable (no aplica a la validación).
+3. Cambiar la validación y el resultado HTTP para fechas inválidas.
+4. Coordinar con frontend si cambia la respuesta a esos requests.
+
+**Recommendation:** no cambiar en D24; abordar validación de fecha en una tarea contractual separada con decisión sobre el status de error esperado.
+
+**Blocks the current task:** No; el caso quedó caracterizado y no se modificó la validación.
+
+### Contract finding
+
+**Current behavior:** `POST /discs` no lleva `@Auth()`, mientras `POST /discs/with-artist` sí.
+
+**Problem:** rutas de creación del mismo recurso aplican políticas de acceso distintas. No se encontró evidencia en este módulo sobre si la ruta básica debe ser pública.
+
+**Impact:** Backend-only.
+
+**Options:**
+
+1. Preservar compatibilidad y política actual.
+2. Refactorizar internamente sin cambiar guards.
+3. Cambiar el acceso y la respuesta 401/403 de la ruta.
+4. Coordinar el cambio con los consumidores que crean discos.
+
+**Recommendation:** preservar en D24 y confirmar la política en una revisión de permisos independiente.
+
+**Blocks the current task:** No; D24 no cambia permisos.
+
+- **Responsabilidad estructural:** no hay lógica pura no trivial en `create` que justifique helper. La extracción futura de `DiscWriteService` puede agrupar creación, `createWithArtist`/resolución de artista, update y remove cuando concluya D24–D28; D24 por sí sola no justifica reorganización. `updateImage` ya pertenece a `DiscEnrichmentService` tras D22.1, así que cualquier plan conjunto posterior debe reconciliar esa ubicación antes de mover código.
+- **Verificaciones:** con Node 20.20.2 pasan `yarn test src/discs --runInBand` (11 suites, 178 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check`.
+- **Siguiente:** D25 permanece pendiente.
 
 ### D25 — createWithArtist: resolver artista
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** aislar los casos de artista existente, nuevo o ambiguo de la creación del disco.
 - **Alcance:** resolveArtist, búsqueda case-insensitive, normalización y countryId de desambiguación.
 - **Fuera de alcance:** cambiar la regla de coincidencia, el esquema de Artist o el flujo de Requests.
@@ -983,10 +1076,59 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** cero coincidencias crea artista, una coincidencia reutiliza, varias requieren countryId y país no coincidente crea artista; nameNormalized respeta el formato actual.
 - **Verificaciones:** pruebas de los cuatro caminos y error BadRequest; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
+- **Resultado (2026-10-04):** `resolveArtist` permanece privado en `DiscsService`; no se cambió el flujo de `createWithArtist`. Sin coincidencias crea y persiste un artista; una coincidencia reutiliza esa entidad; varias sin `countryId` producen `BadRequestException`; varias con `countryId` reutilizan la que coincida o crean una nueva si ninguna tiene ese país.
+- **Búsqueda:** una llamada `artistRepository.find({ where: { name: ILike(artistName) } })` por resolución. `ILike` hace la comparación insensible a mayúsculas/minúsculas; se pasa el nombre original sin añadir `%` o `_`. No hay otra lectura, query de país, join escrito en el método ni paginación. La búsqueda múltiple es necesaria para contar duplicados y seleccionar por `countryId`.
+- **Normalización:** al crear se preserva `name` exactamente como llega; `nameNormalized` aplica `normalize('NFD')`, elimina caracteres U+0300–U+036F, pasa a minúsculas y recorta espacios en los extremos. Ejemplo caracterizado: `  Árbol de Ñandú  ` queda como nombre visible sin cambios y `arbol de nandu` normalizado. La misma secuencia está duplicada en las dos ramas que crean artistas; se conserva tal cual.
+- **countryId:** sin coincidencias se añade al objeto nuevo solo si es truthy; con una sola coincidencia se ignora incluso si no concuerda; con varias, sin ID se lanza error, con ID coincidente se reutiliza y con ID no coincidente se crea otro artista con ese ID. La ambigüedad mantiene el mensaje `Hay N artistas con el nombre "<artistName>". Especifica countryId para desambiguar.` y status 400.
+- **Persistencia y errores:** creación llama una vez a `artistRepository.create` y una vez a `artistRepository.save`, y retorna el resultado de `save`. Reutilización y ambigüedad sin ID no hacen escrituras. No existe `catch` local: errores de `find`, `create` o `save` se propagan sin traducción por `resolveArtist`.
+- **Relaciones y selección:** `Artist.country` tiene eager activo; la búsqueda con `find` carga la fila de Artist y la relación Country eager con las columnas seleccionables predeterminadas. `resolveArtist` compara con `countryId` y devuelve Artist para que `createWithArtist` la asigne a Disc; D26 debe caracterizar el response de esa ruta antes de cambiar la carga de Country. No había una lectura claramente prescindible que pudiera eliminarse sin alterar esa entidad retornada.
+- **Tests:** cinco casos nuevos de servicio cubren cero coincidencias sin país, una coincidencia con país distinto, ambigüedad y mensaje, coincidencia por país entre duplicados, y creación por país no coincidente. Las expectativas comprueban `ILike`, el valor original, normalización, payload pasado a create/save, identidad retornada y número de llamadas.
+- **Responsabilidad estructural:** la resolución, búsqueda y persistencia de Artist forman parte de la escritura de Disc; se mantienen como candidata a `DiscWriteService` tras completar el bloque previsto, sin extracción en D25. La normalización es pura y no trivial por NFD y eliminación de marcas diacríticas, y está duplicada; se documenta como candidata a helper de escritura, sin crear helper ni fragmentar ahora el flujo.
+
+### Contract finding
+
+**Current behavior:** `countryId` solo restringe la selección si existen varias coincidencias por nombre. Si hay una coincidencia, se reutiliza aunque el país solicitado sea distinto; si hay varias y ninguna corresponde, se crea otro Artist con el `countryId` recibido. La búsqueda usa `ILike` con el texto original y sin comodines añadidos.
+
+**Problem:** la semántica de `countryId` varía según el número de coincidencias; además, `%` y `_` contenidos en el nombre conservan el significado de patrón de ILIKE. Un caller puede interpretar `countryId` como filtro estricto o esperar que el nombre siempre sea literal.
+
+**Impact:** backend + frontend.
+
+**Options:**
+
+1. Preservar compatibilidad y documentar la regla actual.
+2. Refactorizar internamente preservando todos los casos.
+3. Cambiar `countryId` a filtro estricto o escapar comodines como cambio contractual.
+4. Coordinar la semántica con los consumidores que envían `artistName` y `countryId`.
+
+**Recommendation:** preservar en D25; si los callers requieren filtro estricto o búsqueda literal, tratarlo en una tarea contractual independiente con evidencia de consumidores.
+
+**Blocks the current task:** No; se cubrieron las ramas actuales sin alterar coincidencias.
+
+### Contract finding
+
+**Current behavior:** la consulta `find` carga Artist con todas las columnas seleccionables y `Artist.country` eager; el objeto Artist encontrado se devuelve desde `resolveArtist` y se usa después como relación de Disc.
+
+**Problem:** se carga Country aunque la comparación usa el campo escalar `countryId`. No se ha caracterizado aún en D26 qué parte de esta relación aparece en el response de `createWithArtist`; retirarla ahora podría cambiar el payload.
+
+**Impact:** backend + frontend si cambia el response.
+
+**Options:**
+
+1. Preservar el objeto actual hasta caracterizar D26.
+2. Proyectar internamente los campos necesarios después de probar el payload completo de D26.
+3. Cambiar el response para omitir Country si ningún consumidor lo necesita.
+4. Coordinar la proyección con frontend si consume `artist.country`.
+
+**Recommendation:** mantener la carga eager en D25. Caracterizar el response de D26 y confirmar consumidores antes de considerar una proyección; el eager de `Artist.country` queda observable pero con consumo externo sin confirmar.
+
+**Blocks the current task:** No; la búsqueda y la selección necesaria se conservan.
+
+- **Verificaciones:** con Node 20.20.2 pasan `yarn test src/discs --runInBand` (11 suites, 183 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check`.
+- **Siguiente:** D26 permanece pendiente.
 
 ### D26 — createWithArtist: construir y guardar disco
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** hacer explícito el mapeo del DTO compuesto al registro Disc.
 - **Alcance:** construcción y save del disco después de resolver artista, valores opcionales y defaults.
 - **Fuera de alcance:** crear un caso de uso genérico, transacción nueva o cambiar validaciones HTTP.
@@ -994,43 +1136,133 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** todos los campos del DTO mantienen la conversión/default actual; countryId solo afecta a la resolución del artista; respuesta HTTP coincide con baseline.
 - **Verificaciones:** pruebas del mapeo, artista/genre opcionales y fecha; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>.
 - **Riesgo:** S.
+- **Resultado (2026-10-04):** sin cambios de producción. `createWithArtist` resuelve primero Artist con las reglas de D25, construye una sola entidad `Disc` con `discRepository.create` y la persiste una vez con `discRepository.save`; devuelve el resultado de `save` sin mapping posterior.
+- **Mapeo DTO → Disc:** `discName` pasa a `name`; el Artist resuelto se asigna entero a `artist`; `genreId` truthy se convierte en la referencia `genre: { id }`; `releaseDate` truthy se convierte con `new Date`; `ep` y `debut` usan `?? false`; `link`, `image` y `description` se pasan como están, incluso como `undefined`. `artistName` solo entra en `resolveArtist`; `countryId` solo entra en esa resolución y no pasa al Disc; `genreId` no se copia como campo escalar. El DTO no contiene `verified`, `featured` ni `pinned`, que conservan los defaults `false` de `Disc`.
+- **Opcionales y persistencia:** payload mínimo crea con ep/debut false, sin genre ni releaseDate; después de save las columnas Disc nullable ausentes son null. Con opciones presentes se conservan booleans, textos y fecha `Date`. La construcción del Artist existente/nuevo corresponde a D25; en caminos de artista nuevo hay una operación `Artist.find`, `Artist.create` en memoria y `Artist.save`, además de `Disc.create` en memoria y `Disc.save`. Con Artist existente no hay escritura de Artist. No hay lectura/join de Disc ni carga eager tras su save; no se añadió transacción explícita.
+- **Respuesta HTTP:** controller delega `POST /discs/with-artist` sin transformar DTO ni response. Se caracteriza el JSON completo simulado tras save: scalar Disc, defaults, nulls, Artist y Country eager cuando el artista vino de `find`, `genre: { id }` cuando se indicó género y ausencia de colecciones eager de Disc no cargadas por `save`. Si se crea Artist en la misma llamada, `Artist.save` no carga `country`; la relación country no aparece en esa respuesta aunque `countryId` esté asignado. Los errores de resolución (incluido BadRequest por ambigüedad) se propagan; `createWithArtist` no añade traducción a errores de persistencia.
+- **Tests:** dos casos de servicio cubren artista existente con Country, artista nuevo con countryId, mapeo mínimo/completo, genre/date presentes y ausentes, defaults, objeto pasado a `create`/`save`, número de llamadas y payload serializado completo. Dos tests DTO comprueban payload mínimo y todos los campos admitidos. El controller prueba delegación y propagación del error actual de ambigüedad.
+- **Duplicación/candidato estructural:** `create` y `createWithArtist` comparten el patrón repository `create` + `save`, pero sus mappings y errores difieren; no se introduce helper genérico. Cuando se complete D24–D28, ambos métodos pueden vivir en la futura responsabilidad `DiscWriteService`.
+
+### Contract finding
+
+**Current behavior:** el response de `POST /discs/with-artist` omite relaciones eager de Disc porque `save` no las carga; el género asignado desde `genreId` aparece como `{ id }`. `artist.country` aparece cuando se reutiliza un Artist obtenido por `find`, y falta cuando Artist acaba de crearse con `save`.
+
+**Problem:** el payload anidado varía según el camino interno de resolución y difiere del detalle GET, que sí caracteriza relaciones eager. El frontend no está disponible aquí para confirmar qué forma consume. En la rama de reutilización, `Artist.country` supone una relación eager cargada en el `find`; el coste es la carga de Country con sus columnas seleccionables para el/los Artist coincidentes.
+
+**Impact:** backend + frontend.
+
+**Options:**
+
+1. Preservar el payload actual hasta verificar consumidores.
+2. Mantener la compatibilidad cargando explícitamente la misma forma en ambos caminos.
+3. Cambiar el response a un projection estable con IDs/resúmenes y retirar relaciones accidentales.
+4. Coordinar una forma estable del response con frontend.
+
+**Recommendation:** preservar en D26. En D39 confirmar consumidores de eager; cualquier normalización de Country o reducción del payload requiere decisión contractual y pruebas de consumidores.
+
+**Blocks the current task:** No; ambas formas actuales quedaron caracterizadas sin cargar ni ocultar relaciones nuevas.
+
+- **Verificaciones:** con Node 20.20.2 pasan `yarn test src/discs --runInBand` (12 suites, 189 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check`.
+- **Siguiente:** D27 permanece pendiente.
 
 ### D27 — update: PATCH /discs/:id
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** clarificar preload, asignación de artista/género, campos opcionales y manejo de errores.
 - **Alcance:** update, UpdateDiscDto y response de PATCH.
 - **Fuera de alcance:** permitir limpiar relaciones con null si el contrato actual no lo hace; añadir permisos o campos.
 - **Dependencias:** D0.
 - **Criterios de finalización:** update parcial no borra campos omitidos; artistId/genreId conservan semántica actual; id inexistente sigue siendo 404 y errores de persistencia mantienen su traducción.
-- **Verificaciones:** tests de update parcial, relaciones, no encontrado y conflicto; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>.
+- **Caracterización:** `update` separa `artistId` y `genreId` y llama una vez a `discRepository.preload({ id, ...restDto })`; si no existe entidad lanza `NotFoundException` antes de guardar. Los campos escalares omitidos no aparecen en el patch. `false` y los valores escalares `null` permitidos por `UpdateDiscDto` pasan a `preload`; los IDs de relación truthy se asignan como referencias `{ id }`. IDs omitidos o `null` no reemplazan ni limpian relaciones. Después de `preload` se hace una llamada a `save`; se devuelve la entidad precargada y mutada, no se transforma la respuesta de `save`.
+- **Errores:** el error PostgreSQL `23505` de `save` sigue convertido a `BadRequestException` con `detail`; otros errores de `save` se registran y se convierten a `InternalServerErrorException('An unexpected error occurred')`. Errores de `preload` quedan fuera de esa traducción y se propagan sin cambios.
+- **Hallazgo de contrato/rendimiento:** `preload` carga la entidad y sus relaciones eager; el PATCH devuelve ese grafo, incluidas Artist/Country, Genre y colecciones eager de favorites, pendings y comments si existen. No se altera la respuesta en esta tarea; ver hallazgo detallado en el cierre de D27 y auditar consumidores en D39–D44 antes de proponer una respuesta menor.
+- **Responsabilidad estructural:** `update` es lógica de escritura de Discs y queda como candidata a la futura `DiscWriteService` al completar D24–D28. El mapeo parcial y la asignación de referencias son locales; no justifican helpers genéricos anticipados.
+- **Verificaciones:** con Node 20.20.2 pasan <code>yarn test src/discs --runInBand</code> (13 suites, 200 tests), <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D28 permanece pendiente.
 - **Riesgo:** S.
 
 ### D28 — remove: DELETE /discs/:id
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** documentar y verificar la eliminación del disco y sus cascadas reales.
 - **Alcance:** remove, resultado de delete, migración CascadeDeleteDiscOnArtist1774700000000 y claves externas directas de Disc.
 - **Fuera de alcance:** cambiar reglas de cascada, borrar entidades relacionadas no caracterizadas o cambiar el mensaje HTTP.
 - **Dependencias:** D0.
 - **Criterios de finalización:** id existente devuelve la respuesta actual, id ausente devuelve 404 y efectos de cascada se documentan desde schema/migraciones; toda modificación de cascadas requiere tarea explícita aparte.
-- **Verificaciones:** pruebas del resultado y revisión de migraciones/FKs; prueba de integración con PostgreSQL antes de cambiar una regla.
+- **Caracterización:** el controller delega `id` directamente y devuelve el resultado sin cambios. El servicio ejecuta únicamente `discRepository.delete({ id })`; no llama `findOne`, `preload` ni `remove`. TypeORM implementa `delete` como DELETE SQL directo, sin cascadas ni operaciones de relaciones en la capa ORM; solo pueden actuar las acciones de FK existentes en la base. Si `DeleteResult.affected === 0`, lanza `NotFoundException('Disc with id <id> not found')`; con filas afectadas devuelve exactamente `{ message: 'Disc with id <id> has been removed' }`. Los errores de persistencia se propagan sin traducción.
+- **Migraciones/FKs demostrables en el historial:** `CascadeDeleteDiscOnArtist1774700000000` define `disc.artistId → artist.id ON DELETE CASCADE` (borrar el Artist borra sus Disc; borrar el Disc no borra su Artist). `AddDiscToNationalRelease1774460022329` define `national_release.discId → disc.id ON DELETE NO ACTION`; un NationalRelease enlazado puede impedir el borrado mientras siga referenciándolo.
+- **Cascadas declaradas en entidades, pendientes de confirmar en PostgreSQL:** `Favorite.disc`, `Pending.disc`, `Rate.disc`, `Comment.disc` y `Asignation.disc` declaran `onDelete: 'CASCADE'`; para estas FKs entrantes no se halló migración de creación en el historial del repo, cuya tabla base Disc antecede a las migraciones revisadas. No se afirma que la base desplegada tenga estas reglas hasta probarlas con PostgreSQL. `List.discId` es un campo escalar sin relación TypeORM; no declara FK. Las FKs salientes de Disc hacia Artist/Genre no borran esas entidades al borrar Disc.
+- **Responsabilidad estructural:** `remove` queda como candidata a la futura `DiscWriteService` junto con las escrituras D24–D27; no se extrae ahora.
+- **Verificaciones:** con Node 20.20.2 pasan <code>yarn test src/discs --runInBand</code> (13 suites, 204 tests), <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>. Una prueba de integración con PostgreSQL sigue pendiente para verificar las reglas físicas de cascada antes de cambiarlas.
+- **Siguiente:** D29 permanece pendiente.
 - **Riesgo:** S.
 
 ### D29 — getSpotifyTracks
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** reducir las lecturas al mínimo necesario para llamar a Spotify sin cambiar el resultado visible.
 - **Alcance:** GET /discs/:id/spotify-tracks, carga de nombre de disco/artista e integración con SpotifyApiService.
 - **Fuera de alcance:** cambios de proveedor, errores de Spotify, autenticación o selección de track.
 - **Dependencias:** D23.
 - **Criterios de finalización:** disco ausente mantiene el error actual; artista ausente usa el nombre vacío actual; argumentos y payload de Spotify no cambian; no se carga el grafo de detalle innecesario.
-- **Verificaciones:** mocks de SpotifyApiService para disco presente/ausente; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Caracterización y cambio:** antes se llamaba `findOne(id)`, que solicitaba Artist/Country, Genre y favorites, pendings y comments con sus users. Solo se consumían `Disc.name` y `Artist.name`. Ahora una query con `LEFT JOIN` a Artist selecciona únicamente esos dos nombres; QueryBuilder no carga eager relations implícitamente y no se unen las colecciones.
+- **Queries:** la lectura anterior usaba `findOne` con `take: 1` y joins; TypeORM ejecuta dos SQL para paginar resultados con joins cuando hay coincidencia (y uno si no encuentra ID). La nueva proyección `getRawOne` hace una lectura SQL, con un join a Artist. No se consulta el grafo de detalle.
+- **Contrato preservado:** el artista ausente sigue pasando exactamente `''`; Spotify recibe `(artist.name ?? '', disc.name)`, y su payload se devuelve sin transformación. Disco ausente o error de lectura sigue siendo `NotFoundException('Disc with id <id> not found')`; errores de Spotify se propagan sin cambios. La ruta y permisos no cambian.
+- **Hallazgo de rendimiento:** el endpoint cargaba el grafo de detalle solo para leer dos campos; esto aumentaba joins y lecturas sin modificar el payload Spotify. La proyección de nombres es backend-only y no necesita cambios frontend.
+- **Responsabilidad estructural:** `getSpotifyTracks` queda dentro de `DiscsService` por ahora; la futura responsabilidad `spotify/` se deja para su secuencia prevista, sin extracción en D29.
+- **Verificaciones:** con Node 20.20.2 pasan <code>yarn test src/discs --runInBand</code> (13 suites, 207 tests), <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D30 permanece pendiente.
 - **Riesgo:** S.
+
+### D29.1 — Extraer DiscWriteService
+
+- [x] Completada
+- **Objetivo:** agrupar la escritura de Disc sin cambiar comportamiento ni contratos.
+- **Alcance:** `create`, `resolveArtist`, `createWithArtist`, `update` y `remove`; fachada `DiscsService`; provider de `DiscModule`.
+- **Resultado:** métodos movidos a `src/discs/write/disc-write.service.ts`. `DiscWriteService` inyecta directamente los repositorios `Disc` y `Artist`; `DiscsService` mantiene y delega las cuatro firmas públicas de escritura. `resolveArtist` sigue privado dentro de Write. No se movieron `findOne` ni `getSpotifyTracks`, ni se añadieron helpers/normalización.
+- **Pruebas:** los 23 tests funcionales de D24–D28 están en `write/disc-write.service.spec.ts`; `discs.service.spec.ts` conserva la delegación de fachada. Las pruebas controller→service permanecen junto al controller. Los hallazgos y contratos de D24–D28 se conservan sin cambios.
+- **Tamaño:** `DiscWriteService` 149 líneas; `DiscsService` 468 líneas; suite de Write 754 líneas.
+- **Verificaciones:** con Node 20.20.2 pasan <code>yarn test src/discs --runInBand</code> (14 suites, 208 tests), <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D30 permanece pendiente.
+
+### D29.2 — Mover findOne a DiscCatalogService
+
+- [x] Completada
+- **Objetivo:** ubicar la lectura del detalle de Disc en la responsabilidad Catalog sin alterar contrato.
+- **Alcance:** mover únicamente `findOne`; mantener `DiscsService.findOne` como fachada.
+- **Resultado:** `DiscCatalogService.findOne` reutiliza su `Repository<Disc>`. Se conservan `where: { id }`, el grafo explícito `artist.country`, `genre`, `favorites.user`, `pendings.user` y `comments.user`, `findOneOrFail`, payload y traducción de cualquier error a 404 con el mensaje existente. No se tocaron eager, `getSpotifyTracks` ni `D39–D44`.
+- **Pruebas:** las cuatro caracterizaciones de D23 (payload/grafo, relaciones opcionales, ausencia y fallo de repositorio traducido a 404) se trasladaron al spec de Catalog; el spec raíz conserva la delegación de fachada. No se duplicaron.
+- **Tamaño:** `DiscCatalogService` 394 líneas; `DiscsService` 454 líneas.
+- **Verificaciones:** con Node 20.20.2 pasan <code>yarn test src/discs --runInBand</code>, <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D30 permanece pendiente.
+
+### D29.3 — Extraer DiscSpotifyService
+
+- [x] Completada
+- **Objetivo:** trasladar la lectura de tracks Spotify a su responsabilidad sin cambiar comportamiento ni contrato.
+- **Alcance:** mover únicamente `getSpotifyTracks`; conservar `DiscsService` como fachada y registrar el provider.
+- **Resultado:** `DiscSpotifyService` en `src/discs/spotify/disc-spotify.service.ts` inyecta directamente `Repository<Disc>` y `SpotifyApiService`. La query, proyección de `disc.name` y `artist.name`, `LEFT JOIN`, 404 de lectura y argumentos Spotify permanecen iguales. La fachada delega con el mismo `id` y devuelve el resultado intacto.
+- **Pruebas:** las cuatro pruebas de D29 se trasladaron a `spotify/disc-spotify.service.spec.ts`; el spec raíz conserva la delegación de fachada. Los tests del controller permanecen junto a éste.
+- **Tamaño:** `DiscSpotifyService` 42 líneas; `DiscsService` 432 líneas.
+- **Verificaciones:** con Node 20.20.2 pasan <code>yarn test src/discs --runInBand</code> (15 suites, 209 tests), <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D30 permanece pendiente.
+
+### D29.4 — Cleanup estructural del bloque D23–D29
+
+- [x] Completada
+- **Objetivo:** cerrar la estructura de detalle, escritura y Spotify sin alterar contrato ni comportamiento.
+- **Revisión:** `DiscCatalogService.findOne` no contiene lógica pura separable; sus helpers existentes quedan bajo `catalog/helpers/`. `DiscSpotifyService` conserva junta la query y la coordinación Spotify. No se dividió Catalog por tamaño ni se extrajo lógica trivial de Spotify.
+- **Helper:** la normalización de nombre visible de D25 estaba duplicada en las dos ramas que crean Artist. Se extrajo la función pura no trivial `normalizeArtistName` a `write/helpers/normalize-artist-name.ts`; elimina marcas diacríticas vía NFD, convierte a minúsculas y recorta extremos como antes. Sus dos ramas siguen usándola y el spec específico caracteriza el resultado.
+- **Fachada:** `DiscsService` delega las operaciones ya extraídas de Write, Catalog, Calendar, Enrichment y Spotify. Conserva `Repository<Disc>` para Home/Stats y `SpotifyApiService` para `resolveSpotifyAlbum`/`getSpotifyAlbumDetails`; ambos siguen siendo necesarios. No quedan imports, dependencias ni métodos obsoletos de D23–D29.
+- **Hallazgos:** se preservan los hallazgos contractuales, de rendimiento y de arquitectura de D23–D29. No se modifican queries, payloads, errores, permisos, DTOs, eager loading ni frontend. No se inicia D30 ni se mueve Home/Stats.
+- **Tamaños:** `DiscsService` 432 líneas; `DiscCatalogService` 394; `DiscWriteService` 140; `DiscSpotifyService` 42.
+- **Estructura:** `catalog/` contiene servicio, spec y cuatro helpers con sus specs; `write/` contiene servicio, spec y `helpers/normalize-artist-name.ts` con spec; `spotify/` contiene servicio y spec.
+- **Verificaciones:** con Node 20.20.2 pasan <code>yarn test src/discs --runInBand</code> (16 suites, 211 tests), <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D30 permanece pendiente.
 
 ### D30 — homeDiscs: filtros y parámetros SQL
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** eliminar la duplicación accidental al construir filtros para las consultas principales y globales de homeDiscs.
 - **Alcance:** dateRange, genreId, country/countryId, valores bind y construcción de cláusulas SQL dinámicas de findTopRatedOrFeaturedAndStats.
 - **Fuera de alcance:** cambiar fórmulas, estadísticas por periodo o payload.
@@ -1038,10 +1270,16 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** cada valor sigue parametrizado; filtros de query principal y global son equivalentes; los parámetros no cambian de orden o tipo accidentalmente.
 - **Verificaciones:** pruebas de filtros individuales/combinados y SQL/params; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
+- **Resultado (2026-10-04):** las queries principal y global aplicaban los mismos filtros, pero duplicaban toda su construcción. Se centralizó en `buildHomeDiscFilters`, que conserva las cláusulas y genera los placeholders con el desplazamiento requerido por el `userId` adicional de la query principal.
+- **Caracterización:** el orden es fecha, `genreId`, país; sin `dateRange` se conserva `releaseDate <= today`. Un rango de dos valores enlaza `new Date(startDate)`, `new Date(endDate)` y `today`. `genreId` se enlaza como string. El país es `country || countryId`; un UUID (cualquiera de los dos campos) filtra `c.id`, y otro valor filtra `c.name`; el bind conserva el string recibido. La principal antepone `user.id` como `$1`; la global no lo recibe. Las condiciones restantes equivalen con placeholders desplazados en uno.
+- **Hallazgo:** el significado de `country` depende de si su string parece UUID y tiene precedencia sobre `countryId`. Se preserva en D30; se documenta la ambigüedad contractual para decidir por separado si merece una mejora.
+- **Tests:** casos sin filtros adicionales, por fecha, género, país nombre/UUID, combinaciones, precedencia/fallback, SQL y tipos/orden de los binds enviados a ambas queries.
+- **Verificaciones:** con Node 20.20.2 pasan <code>yarn test src/discs --runInBand</code> (17 suites, 218 tests), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D31 permanece pendiente.
 
 ### D31 — homeDiscs: media global y mediana
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** aislar la query que calcula globalAvgRate y medianVotes para la puntuación ponderada.
 - **Alcance:** globalStatsQuery, condiciones de D30, conversión de valores y defaults cuando no hay datos.
 - **Fuera de alcance:** fórmula de weightedScore o caché.
@@ -1049,10 +1287,37 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** media/mediana y fallback coinciden con baseline con ratings nulos, sin votos y varios discos; filtro temporal/género/país se aplica igual.
 - **Verificaciones:** casos de agregación en PostgreSQL; revisar el SQL generado; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
+- **Resultado (2026-10-04):** la query y la conversión se aislaron en `src/discs/home/home-global-stats.ts`; la llamada reutiliza `globalWhere` y `globalParams` de D30. El SQL de la query principal y la fórmula de `weightedScore` no cambiaron.
+- **Definición SQL:** por cada `d.id` filtrado, `COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END)` cuenta solo ratings no nulos y `COALESCE(AVG(r.rate), 0)` calcula el promedio de los rates no nulos, sustituyendo por cero los discos sin rates válidos. `LEFT JOIN` y `GROUP BY d.id` mantienen una fila incluso para un disco sin rates. En la query exterior, `AVG(avgRates)` promedia esas medias por disco, incluyendo los ceros de discos sin votos; `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY voteCount)` calcula la mediana continua de los recuentos de todos los discos filtrados, incluidos los ceros.
+- **NULL, tipos y defaults:** sin discos, ambos agregados PostgreSQL retornan `NULL`. Con `rate` decimal, `AVG` retorna `numeric`; el driver `pg` entrega ese valor como string. `PERCENTILE_CONT` sobre `voteCount` integer retorna `double precision`, entregado por el driver como number. La conversión existente queda igual: `parseFloat(valor) || 0` para `globalAvgRate`, `parseInt(valor, 10) || 1` para `medianVotes`; por tanto NULL/media cero producen 0 y NULL/mediana cero producen 1.
+- **PostgreSQL:** con cuatro discos que pasan filtros y fechas inclusivas (tasas válidas 4; 2 y 4; solo una tasa NULL; tasa 5), los valores por disco fueron 4, 3, 0 y 5; PostgreSQL devolvió media global `3.0000000000000000` y mediana de votos `1`. El fixture excluyó fechas fuera del rango, fecha posterior a `today`, otro género y otro país. Sin filas ambos resultados fueron NULL. Para recuentos 0 y 1, la mediana continua fue 0.5.
+- **Tests:** cuatro tests del helper cubren SQL/filtros D30, conversión de resultados y defaults; cuatro tests PostgreSQL opcionales con tablas temporales verifican discos múltiples, rating NULL, disco sin votos, filtros, extremos inclusivos de `dateRange`, límite independiente de `today`, ausencia de filas, tipos del driver y mediana fraccionaria. Las tablas son temporales de sesión y no alteran datos persistentes.
+
+### Contract finding
+
+**Current behavior:** `globalAvgRate` es el promedio de los promedios por disco e incluye como cero los discos sin ratings válidos. `medianVotes` usa mediana continua y después `parseInt(..., 10) || 1`.
+
+**Problem:** la media puede bajar por discos sin votos. Una mediana fraccionaria se trunca; si el valor es cero, el fallback la convierte en uno. Ambas decisiones afectan el prior de `weightedScore` y el orden de resultados.
+
+**Impact:** Backend-only.
+
+**Options:**
+
+1. Preservar compatibilidad y la semántica actual.
+2. Refactorizar internamente sin cambiar agregados ni conversiones.
+3. Cambiar el universo de la media, el tipo de mediana o sus defaults.
+4. Coordinar con frontend solo si una futura decisión modifica campos o el contrato expuesto; el cambio actual de ranking se origina en backend.
+
+**Recommendation:** preservar en D31. Decidir cualquier ajuste analítico en una tarea independiente, caracterizando su efecto en el ranking antes de cambiarlo.
+
+**Blocks the current task:** No; la query quedó aislada y sus resultados/efectos actuales se verificaron sin cambiar la semántica.
+
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (19 suites, 226 tests; incluye PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D32 permanece pendiente.
 
 ### D32 — homeDiscs: discos destacados y ranking
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** simplificar la consulta que obtiene los 20 discos rateados o pinned y su orden de puntuación.
 - **Alcance:** joins disc/artist/country/genre/rate, HAVING, weightedScore, orden y límite.
 - **Fuera de alcance:** estadísticas auxiliares y modificar la fórmula ponderada.
@@ -1060,76 +1325,292 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Criterios de finalización:** incluye los mismos discos rateados o pinned; weightedScore, desempates observables, orden y límite mantienen el baseline; joins no multiplican métricas.
 - **Verificaciones:** pruebas PostgreSQL con pinned sin votos, ratings repetidos y filtros; revisar EXPLAIN ANALYZE si se propone optimizar el plan.
 - **Riesgo:** M.
+- **Resultado (2026-10-04):** se caracterizó la query de producción y no se cambió su SQL. No hay una simplificación con equivalencia demostrable para toda la cardinalidad permitida por las tablas y que, además, preserve la selección no determinista de empates.
+- **Membresía y métricas:** tras los filtros principales de D30, `HAVING COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) > 0 OR d."pinned" = true` incluye discos con al menos un rate no nulo y todos los pinned, aunque no tengan votos; excluye discos sin rates válidos que no estén pinned, incluidos los que solo tienen rates NULL. `COUNT(CASE...)` es el número de votos válidos y `COALESCE(AVG(r.rate), 0)` su media por disco. `averageCover` se calcula aparte y no entra en `weightedScore`.
+- **Fórmula:** `((COALESCE(AVG(r.rate), 0) * COUNT(valid rates)) + (globalAvgRate * medianVotes)) / (COUNT(valid rates) + medianVotes)`. Los parámetros globales provienen de D31; la expresión SQL y sus defaults permanecen idénticos.
+- **Joins y cardinalidad:** Artist, Country y Genre son joins a referencias many-to-one. Rate es one-to-many y aporta las filas que se agregan por disco. Favorite y Pending se unen para el usuario actual; no hay unicidad `(discId, userId)` declarada en entidades/migraciones. `f.id` aparece en el `GROUP BY`, por lo que Favorites duplicados pueden dar varias filas del mismo disco, cada una con el conteo de ratings original. `p.id` no está agrupado: Pendings duplicados multiplican las filas de rate antes del agregado y elevan `voteCount`/`weightedScore`. `commentCount` usa subquery correlacionada y no expande el join. PostgreSQL confirmó cada uno de esos casos.
+- **Orden y límite:** únicamente `ORDER BY "weightedScore" DESC`, seguido por `LIMIT 20`. No hay criterio secundario; PostgreSQL no garantiza orden entre scores iguales y, si el empate cruza el límite, tampoco qué filas empatadas quedan. Se conserva esa selección actual.
+- **Tests:** cinco pruebas PostgreSQL optativas llaman el método de producción y ejecutan sus queries contra tablas temporales: membership/HAVING, rates repetidos y NULL, filtros D30, score y orden, límites inclusivos, corte `today`, pinned empatados con límite 20, Favorites duplicados y multiplicación de ratings por Pendings duplicados. La prueba de empate verifica el conjunto y el límite sin afirmar orden físico dentro del empate.
+- **Rendimiento:** no se propuso ni aplicó optimización SQL; no se ejecutó `EXPLAIN ANALYZE`. No se añade candidato nuevo: `rate(discId)` ya figura para D45 y también cubre el join agregado de este ranking; cualquier cambio de índice/plan queda para D45.
+
+### Contract finding
+
+**Current behavior:** el ranking ordena solo por `weightedScore DESC`; no define desempate. El join de Favorite se agrupa por `f.id`; filas duplicadas pueden repetir un disco. El join de Pending no agrupa por `p.id`; filas duplicadas multiplican los rates agregados y alteran el score. El esquema no declara unicidad por usuario y disco para estos estados.
+
+**Problem:** los scores empatados tienen orden no especificado y pueden cambiar qué discos ocupan los últimos puestos del límite 20. Las filas de Favorite/Pending duplicadas pueden repetir discos o alterar el count/score; quitar joins o agregar restricciones cambiaría el resultado para esos datos.
+
+**Impact:** Backend + frontend.
+
+**Options:**
+
+1. Preservar compatibilidad y ambos comportamientos actuales.
+2. Refactorizar internamente solo si se prueba equivalencia también con estados duplicados y empates.
+3. Definir un desempate estable o cambiar la deduplicación/membresía como cambio contractual.
+4. Coordinar con frontend si se decide cambiar orden o filas que recibe.
+
+**Recommendation:** preservar en D32. Evaluar en tareas independientes si se quieren limpiar estados duplicados, corregir el fanout de Pending y fijar un desempate; los cambios de estado/joins corresponden a una decisión explícita posterior a D33.
+
+**Blocks the current task:** No; D32 caracteriza y conserva el orden, el límite y la cardinalidad vigentes.
+
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (20 suites, 231 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D33 permanece pendiente.
 
 ### D33 — homeDiscs: estado personal
 
-- [ ] Pendiente
-- **Objetivo:** cargar la tasa/cover, favorito y pendiente del usuario sin duplicar la fila rankeada.
+- [x] Completada
+- **Objetivo:** caracterizar y aislar el mapping de tasa/cover, favorito y pendiente del usuario sin alterar la query rankeada.
 - **Alcance:** subqueries/joins actuales para userRateId, userFavoriteId, pendingId, userRate y userCover, y su mapeo.
 - **Fuera de alcance:** cambiar qué usuario se consulta o exponer nuevas relaciones.
 - **Dependencias:** D32.
-- **Criterios de finalización:** combinaciones con/sin rate, favorite y pending mantienen identificadores y valores actuales; cada disco sale una sola vez.
-- **Verificaciones:** pruebas de estado por usuario y query; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Criterios de finalización:** las combinaciones sin estados duplicados mantienen identificadores y valores; la cardinalidad con duplicados conserva el comportamiento PostgreSQL vigente, incluido el split por Favorite y el fanout de Pending.
+- **Verificaciones:** pruebas unitarias del mapping y suite PostgreSQL optativa para estados y cardinalidad.
 - **Riesgo:** M.
+- **Resultado (2026-10-04):** la SQL, sus joins, `GROUP BY`, ranking y payload no cambiaron. Se extrajo únicamente `mapHomePersonalState` a `src/discs/home/home-personal-state.ts`; el helper conserva el objeto `userRate` condicionado por `userRateId`, las conversiones `parseFloat(...) || null` y los fallbacks actuales de IDs.
+- **Selección y mapping:** la query tiene cinco subqueries correlacionadas con el usuario actual y `LIMIT 1`: tres para `rate.id`, `rate.rate` y `rate.cover`, una para `favorite.id` y una para `pending.id`. Ninguna incluye `ORDER BY`; no hay una selección determinista si existen candidatos repetidos. Las tres subqueries de rate son independientes y podrían tomar candidatos distintos. `favoriteId` y `pendingId` usan `id || null`; solo se crea `userRate` cuando `userRateId` es truthy. Rate/cover pasan por `parseFloat(...) || null`, por lo que `NULL`, valores no numéricos y cero se exponen como `null`.
+- **Joins y agregados:** Artist, Country y Genre son joins many-to-one. Rate, Favorite y Pending se unen por `discId`, limitando estos dos últimos al usuario actual. El `GROUP BY` incluye `d.id, a.name, g.name, g.color, f.id, c.id, c.name, c."isoCode"`; no incluye `p.id`. Rate alimenta `voteCount`, `averageRate`, `averageCover` y `weightedScore`. Favorite no altera esas métricas cuando cada ID forma su propio grupo, pero Favorites duplicados producen filas repetidas para el mismo disco. Pendings duplicados multiplican uniformemente las filas de Rate antes de agregar: elevan `voteCount` y pueden cambiar `weightedScore`, mientras `averageRate` y `averageCover` permanecen iguales. Esa query queda intacta según el resultado de D32. Con un único registro de cada estado y un rate del usuario, la salida contiene una fila.
+- **Tests:** cinco tests unitarios cubren ausencia, rate, cover NULL-rate, favorito, pendiente, combinación, conversiones SQL y defaults. Cinco tests PostgreSQL optativos llaman la query de producción contra tablas temporales y verifican usuario sin estado frente a otros usuarios, rate/cover, favorite y pending individual/combinado, varios rates candidatos, subqueries/`GROUP BY`, una fila sin duplicados, dos filas para Favorite duplicado y fanout/score para Pending duplicado.
+- **Rendimiento:** no se modificó la SQL ni se propuso optimización; no se ejecutó `EXPLAIN ANALYZE` ni se encontró candidato nuevo para D45.
+
+### Contract finding
+
+**Current behavior:** las subqueries personales de rate (`id`, `rate`, `cover`), Favorite y Pending usan `LIMIT 1` sin orden. Las tres subqueries de rate se evalúan por separado. El join principal conserva la cardinalidad ya descrita en D32: Favorites repetidos dividen el grupo por `f.id`, mientras Pendings repetidos multiplican las filas de Rate.
+
+**Problem:** con varios rates del mismo usuario/disco, el `userRate` mapeado puede combinar el ID, rate y cover de candidatos distintos, sin una regla estable. Favorite/Pending duplicados también pueden repetir el disco o alterar estadísticas del ranking. Los servicios de creación inspeccionados guardan el registro sin comprobación previa de existencia y el esquema no declara unicidad por usuario/disco.
+
+**Impact:** Backend + frontend para filas/estadísticas duplicadas; backend-only para la selección incoherente de los valores personales dentro del objeto existente.
+
+**Options:**
+
+1. Preservar los resultados actuales para compatibilidad.
+2. Refactorizar internamente solo después de definir una selección equivalente y determinista.
+3. Cambiar el contrato o la cardinalidad para deduplicar y elegir un rate canónico.
+4. Coordinar una refactorización backend/frontend si cambia qué filas recibe la UI.
+
+**Recommendation:** preservar en D33. Si se decide limpiar estados duplicados o fijar una fila canónica de rate, caracterizarlo como cambio independiente de datos/contrato y coordinar la cardinalidad con frontend; no introducir una corrección silenciosa en el refactor actual.
+
+**Blocks the current task:** No; el mapping se aisló sin cambiar selección, ranking, métricas, cardinalidad ni payload.
+
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (22 suites, 241 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D34 permanece pendiente.
 
 ### D34 — homeDiscs: totalDiscs y totalVotes
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** precisar el alcance temporal de los contadores generales y reducir lecturas redundantes si la semántica lo permite.
 - **Alcance:** las queries de totalDiscs/totalVotes con y sin statsDateRange.
 - **Fuera de alcance:** imponer filtros de genre/country o releaseDate al conteo si no aparecen en el comportamiento actual.
 - **Dependencias:** D30.
 - **Criterios de finalización:** se mantiene la diferencia actual entre la ventana statsDateRange y el caso sin rango; rate null no cuenta como voto; cero datos devuelve cero.
-- **Verificaciones:** pruebas de rango, sin rango, fecha borde y rates null; comparación de SQL/count.
+- **Verificaciones:** pruebas unitarias de SQL, params y conversión; PostgreSQL para rango, fecha borde, nulos y múltiples rates.
 - **Riesgo:** S.
+- **Resultado (2026-10-04):** `totalDiscs` y `totalVotes` se cargan en una sola query mediante `loadHomeDiscTotals`. Se redujeron dos lecturas a una sin alterar valores ni tipos expuestos. `totalDiscs` cuenta discos distintos; `totalVotes` cuenta cada rate cuyo `rate IS NOT NULL`.
+- **Alcance temporal:** sin `statsDateRange` de dos elementos se cuenta todo el catálogo, incluidos discos con `releaseDate` NULL, y todos sus rates válidos. Con dos elementos, ambos contadores solo consideran discos cuyo `releaseDate BETWEEN start AND end`; PostgreSQL confirma que los extremos son inclusivos. Rates múltiples del mismo disco cuentan individualmente. El rango se enlaza como dos objetos Date, en orden start/end.
+- **Filtros:** estos contadores no aplican `dateRange`, `genreId`, `country` ni `countryId` del ranking principal. Solo `statsDateRange` limita por `releaseDate`. No se añadieron esos filtros ni se cambió su semántica.
+- **Tipos y defaults:** PostgreSQL devuelve `COUNT` como `bigint`; node-postgres entrega ambos valores como strings. La implementación convierte con `parseInt(value, 10) || 0` y retorna números JS. Las agregaciones devuelven una fila incluso en tablas vacías y ambos resultados son `'0'`, convertidos a `0`.
+- **Tests:** tres unitarios verifican una sola llamada, forma de SQL y ausencia de filtros ajenos, binds Date/orden y conversiones/defaults. Tres tests PostgreSQL optativos cubren catálogo completo, varias rates por disco, `rate NULL`, rango con límites exactos, discos fuera de rango y `releaseDate NULL`, cero votos y catálogo vacío.
+- **Rendimiento:** no se ejecutó `EXPLAIN ANALYZE`; la reducción de lecturas se verificó por la única llamada al repositorio y el resultado PostgreSQL. No se añade candidato nuevo: `disc(releaseDate)` y `rate(discId)` ya están registrados para D45.
+
+### Contract finding
+
+**Current behavior:** `totalDiscs` y `totalVotes` ignoran los filtros del bloque principal (`dateRange`, género y país). Solo `statsDateRange` filtra ambos contadores por `Disc.releaseDate`; cuando falta, cuentan todo el catálogo, incluso discos sin fecha.
+
+**Problem:** los contadores pueden describir un universo distinto al de los discos filtrados que aparecen junto a ellos, lo que puede resultar confuso si el consumidor interpreta las cifras como totales del resultado principal.
+
+**Impact:** Backend + frontend.
+
+**Options:**
+
+1. Preservar compatibilidad con el alcance actual.
+2. Refactorizar internamente la carga sin alterar los universos.
+3. Cambiar los contadores para que hereden filtros del ranking.
+4. Coordinar con frontend una definición y presentación distintas de los totales.
+
+**Recommendation:** preservar en D34. Si el producto espera cifras del conjunto filtrado, definir ese alcance en una tarea contractual independiente con los consumidores frontend antes de cambiarlo.
+
+**Blocks the current task:** No; la query combinada reproduce ambos universos y la salida actual.
+
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 D34_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (24 suites, 247 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D35 permanece pendiente.
 
 ### D35 — homeDiscs: top users por rate
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** aislar el ranking de usuarios por número de ratings.
 - **Alcance:** topUsersByRates query, statsDateRange, agrupación y mapping.
 - **Fuera de alcance:** estadísticas de cover y cambios de desempate/límite.
 - **Dependencias:** D30.
 - **Criterios de finalización:** cuenta solo rate no null, aplica el rango actual, conserva top 20 y estructura user/rateCount.
-- **Verificaciones:** PostgreSQL con empates, nulos y rango de fechas; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** PostgreSQL con empates, nulos, varios rates del mismo usuario, rango temporal y límite 20.
 - **Riesgo:** S.
+- **Resultado (2026-10-04):** query y mapping aislados en `src/discs/home/home-top-users-by-rates.ts`; `DiscsService` delega y devuelve la estructura generada sin cambiar el payload.
+- **Semántica:** se unen Rate con User y Disc; solo cuentan filas con `r.rate IS NOT NULL`. `COUNT(r.id)` cuenta cada fila de Rate, incluidas varias del mismo usuario/disco. Se agrupa por `u.id, u.username`, se proyectan esos dos campos y `rateCount`, y se ordena únicamente por `rateCount DESC` antes de `LIMIT 20`. Los empates no tienen orden secundario y su orden/membresía al cruzar el límite no está garantizado.
+- **Tiempo:** si `statsDateRange` tiene exactamente dos elementos, añade `d."releaseDate" BETWEEN $1 AND $2` con dos valores `Date` en orden inicio/fin; ambos extremos son inclusivos. Sin ese rango, no limita por fecha. No hereda `dateRange`, género ni país del ranking principal.
+- **Tipos y mapping:** PostgreSQL `COUNT` retorna `bigint`, recibido por node-postgres como string y convertido con `parseInt(..., 10)`. La salida conserva `{ user: { id, username }, rateCount }`. El ID UUID llega y se expone como string; la firma de retorno de `DiscsService` lo declara actualmente `number`, discrepancia tipada sin efecto sobre el JSON.
+- **Tests:** tres unitarios cubren SQL/proyección/agrupación/orden sin desempate, binds de rango y resultado vacío. Cuatro tests PostgreSQL optativos prueban múltiples usuarios, empate sin imponer orden, exclusión de NULL, múltiples rates de un mismo usuario, ambas fechas borde, usuarios/discos fuera del rango, resultado vacío y límite 20.
+- **Rendimiento:** no se modificó el plan ni se ejecutó `EXPLAIN ANALYZE`; no se registra candidato nuevo para D45, donde ya constan `rate(discId)`, índices por `userId`/`discId` y `disc(releaseDate)`.
+
+### Contract finding
+
+**Current behavior:** el ranking ordena solo por `rateCount DESC` y limita a 20, sin desempate. La query proyecta `users.id` (UUID) como `user.id` string en runtime, aunque el tipo de retorno de `DiscsService` declara `id: number`.
+
+**Problem:** si hay un empate en el puesto 20, PostgreSQL no garantiza qué usuario queda dentro ni el orden entre empatados. Además, el tipo TypeScript de la fachada no describe el ID que devuelve el esquema.
+
+**Impact:** Backend + frontend para la selección/orden de usuarios empatados; backend-only para la firma TypeScript, ya que el consumidor frontend usa el ID como key y muestra username/count, sin exigir que sea numérico.
+
+**Options:**
+
+1. Preservar el orden indeterminado y el JSON actual.
+2. Corregir únicamente la firma TypeScript para reflejar el UUID string sin alterar el JSON.
+3. Definir un desempate estable como cambio del ranking.
+4. Coordinar cambios con frontend solo si se decide modificar el orden o los usuarios seleccionados.
+
+**Recommendation:** preservar en D35 y abordar la firma de ID como corrección de tipos independiente. Definir un desempate solo si producto necesita estabilidad explícita y tras considerar que puede cambiar la selección actual del top 20.
+
+**Blocks the current task:** No; la query conserva el mismo conteo, límite y orden sin desempate, y el mapping conserva el UUID string observable.
+
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 D34_POSTGRES_TEST=1 D35_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (26 suites, 254 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D36 permanece pendiente.
 
 ### D36 — homeDiscs: top users por cover
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** aislar el ranking de usuarios por cantidad de covers valoradas.
 - **Alcance:** topUsersByCover query, statsDateRange, agrupación y mapping.
 - **Fuera de alcance:** ranking por rate y cambios de contrato.
 - **Dependencias:** D30.
 - **Criterios de finalización:** cuenta solo cover no null, mantiene el nombre totalCover, rango y top 20 actuales.
-- **Verificaciones:** PostgreSQL con cover null/no null y límites temporales; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** PostgreSQL con cover NULL/no NULL, rate NULL, empate, rango temporal y límite 20.
 - **Riesgo:** S.
+- **Resultado (2026-10-04):** query y mapping aislados en `src/discs/home/home-top-users-by-cover.ts`; `DiscsService` delega sin cambiar el payload ni el orden.
+- **Semántica:** joins internos de Rate con User y Disc; cuenta cada fila donde `r.cover IS NOT NULL` mediante `COUNT(r.id)`. No exige `rate IS NOT NULL`, por lo que una fila con cover y rate NULL cuenta; varias covers del mismo usuario cuentan individualmente. Agrupa por `u.id, u.username`, proyecta esos campos y `coverCount`, y ordena solo por `coverCount DESC` antes de `LIMIT 20`. Los empates carecen de desempate y el orden/membresía al cruzar el límite no está garantizado.
+- **Tiempo:** cuando `statsDateRange` tiene dos valores, filtra por `d."releaseDate" BETWEEN $1 AND $2` con valores `Date` inicio/fin y límites inclusivos. Sin rango no limita por fecha. No hereda los filtros principales `dateRange`, género o país.
+- **Tipos y mapping:** PostgreSQL `COUNT` retorna `bigint`, que node-postgres entrega como string; el mapper aplica `parseInt(..., 10)`. El payload conserva `{ user: { id, username }, totalCover }`; User.id se proyecta como UUID string, aunque el tipo de retorno de la fachada lo declara `number`, según el hallazgo anotado en D35.
+- **Tests:** tres unitarios verifican SQL, filtro de cover, agrupación, orden sin desempate, binds y mapping vacío. Cuatro tests PostgreSQL optativos cubren varios usuarios, empates, `cover NULL`, cover con rate NULL, múltiples covers por usuario, rango y extremos exactos, discos fuera de rango/con fecha NULL, resultado vacío y límite 20.
+- **Rendimiento:** no se cambió el plan ni se ejecutó `EXPLAIN ANALYZE`; no aparece candidato nuevo para D45, que ya registra `rate(discId)`, columnas de estado `userId`/`discId` y `disc(releaseDate)`.
+
+### Contract finding
+
+**Current behavior:** el ranking ordena únicamente por `totalCover DESC` y limita a 20, sin desempate. La salida proyecta `users.id` UUID como string aunque el tipo TypeScript de la fachada indica number.
+
+**Problem:** PostgreSQL no garantiza el orden ni la selección de usuarios empatados cuando el empate cruza el límite 20; la firma tipada tampoco refleja el ID real.
+
+**Impact:** Backend + frontend para orden/selección de empates; backend-only para la discrepancia de tipo, ya que el consumidor usa el ID como key y muestra username/count.
+
+**Options:**
+
+1. Preservar el orden indeterminado y el JSON actual.
+2. Corregir la firma TypeScript para UUID string sin cambiar el JSON.
+3. Definir un desempate estable como cambio del ranking.
+4. Coordinar con frontend si cambia el orden o la selección del top 20.
+
+**Recommendation:** preservar en D36 y tratar la corrección de tipo por separado. Añadir desempate solo tras decidir que la estabilidad justifica modificar la selección actual.
+
+**Blocks the current task:** No; se conservan filtros, conteo, límite, estructura y orden SQL.
+
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 D34_POSTGRES_TEST=1 D35_POSTGRES_TEST=1 D36_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (28 suites, 261 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D37 permanece pendiente.
 
 ### D37 — homeDiscs: distribución de ratings
 
-- [ ] Pendiente
+- [x] Completada
 - **Objetivo:** caracterizar el rango independiente de la distribución y sus valores decimales.
 - **Alcance:** distributionDateRange, agrupación por rate, orden y conversión del resultado.
 - **Fuera de alcance:** hacer que herede filtros de otra estadística o cambiar la escala de rate.
 - **Dependencias:** D30.
 - **Criterios de finalización:** solo se agrupan rates no null; se preservan rango, orden ascendente y tipos numéricos del payload.
-- **Verificaciones:** casos con escala decimal, sin rates y ambos extremos del rango; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** PostgreSQL con decimales, repetidos, NULL, resultado vacío, rango independiente y ambos extremos.
 - **Riesgo:** S.
+- **Resultado (2026-10-04):** query y mapping aislados en `src/discs/home/home-rating-distribution.ts`; `DiscsService` delega y conserva el campo `ratingDistribution` del response sin alterar el envelope.
+- **Semántica:** participan las filas Rate con `rate IS NOT NULL`, unidas a Disc por `discId`. Se agrupa por el valor numérico exacto `r.rate`; ratings repetidos producen un grupo cuyo count es el número de filas. La query aplica `ORDER BY r.rate` ascendente.
+- **Rango independiente:** solo `distributionDateRange` agrega `d."releaseDate" BETWEEN $1 AND $2`, con extremos inclusivos y dos valores Date. No hereda `statsDateRange`, `dateRange`, genre ni country; la función recibe únicamente `distributionDateRange`.
+- **Tipos y payload:** PostgreSQL devuelve `numeric(4,2)` como string, conservando la escala en el valor raw (por ejemplo, `'4.50'`), y `COUNT(*)` (`bigint`) como string. El mapping aplica `parseFloat(rateValue)` y `parseInt(count, 10)`, y retorna una lista `{ rate: number, count: number }[]`; sin grupos, devuelve `[]`.
+- **Tests:** tres unitarios prueban SQL/filtros independientes, rango y binds, orden y conversión vacía; tres tests PostgreSQL optativos comprueban decimales, agrupación de repetidos, rate NULL, orden ascendente, extremos inclusivos, fecha fuera de rango y NULL, y resultado vacío.
+- **Rendimiento:** no se modificó el plan ni se ejecutó `EXPLAIN ANALYZE`; no hay candidato nuevo para D45, donde ya constan `rate(discId)` y `disc(releaseDate)`.
+- **Hallazgos:** no se detectó una incompatibilidad nueva. `distributionDateRange` es un filtro independiente explícito y el consumer del Dashboard inspeccionado pasa el rango elegido para las estadísticas también como rango de distribución; se conserva el alcance que permite la API.
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 D34_POSTGRES_TEST=1 D35_POSTGRES_TEST=1 D36_POSTGRES_TEST=1 D37_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (30 suites, 267 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D38 permanece pendiente.
 
 ### D38 — homeDiscs: mapping y envelope
 
-- [ ] Pendiente
+- [x] Cerrada (2026-10-04)
 - **Objetivo:** mantener la respuesta combinada al separar la carga de discos de los cuatro grupos de estadísticas.
 - **Alcance:** artist/country/genre, usuario, métricas, topUsersByRates, topUsersByCover, ratingDistribution y envelope final.
 - **Fuera de alcance:** renombrar claves, cambiar null/0 o dividir la ruta.
 - **Dependencias:** D31, D32, D33, D34, D35, D36, D37.
-- **Criterios de finalización:** respuesta completa coincide con baseline para todos los subresultados; no se exponen aliases SQL auxiliares nuevos ni se pierden campos.
-- **Verificaciones:** expectativa de payload completo con respuestas vacías/parciales; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>.
+- **Resultado:** se extrajo el mapper puro por disco a `src/discs/home/map-home-ranked-disc.ts`; conserva el spread del row SQL, mapping Artist/Country/Genre, estado personal y conversiones numéricas. El envelope mantiene exactamente `discs`, `totalDiscs`, `totalVotes`, `topUsersByRates`, `topUsersByCover` y `ratingDistribution`. Los top users siguen como `{ user: { id, username }, rateCount }` y `{ user: { id, username }, totalCover }`; la distribución sigue como `{ rate, count }`. Totales, métricas de rating/cover, votos, comentarios, conteos, rating y distribución son números; los valores null de métricas por disco se convierten a 0; sin estado personal se devuelven `userRate`, `favoriteId` y `pendingId` como null; relaciones opcionales mantienen objetos Artist/Country/Genre con los campos actuales null. Los arrays estadísticos vacíos permanecen `[]`; respuesta sin filas conserva totales 0.
+- **Aliases:** `userId`, `coverCount` y `rateValue` de las queries extraídas se convierten a las claves públicas actuales y no se filtran al envelope. Las columnas y aliases del row de la query principal permanecen observables por `...disc`, incluido `weightedScore`; se conserva este comportamiento histórico y se prueba expresamente.
+- **Contrato:** ver hallazgo detallado a continuación. No bloquea D38, que fija el comportamiento actual sin alterarlo.
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 D34_POSTGRES_TEST=1 D35_POSTGRES_TEST=1 D36_POSTGRES_TEST=1 D37_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (32 suites, 273 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D39 permanece pendiente.
+
+### Contract finding
+
+**Current behavior:** cada elemento de `discs` combina los campos de `d.*` con aliases de la query principal porque el mapper hace spread del row completo. Entre ellos se exponen `artistName`, `countryId`, `countryName`, `countryIsoCode`, `genreName`, `genreColor`, `userRateId`, `userFavoriteId`, `voteCount`, `averageRate`, `averageCover`, `userRate`, `userCover`, `commentCount` y `weightedScore`, además de las relaciones y campos derivados mapeados.
+
+**Problem:** el payload repite datos ya representados en `artist`, `genre`, `userRate`, `favoriteId`, `pendingId` y métricas. `weightedScore` también se expone aunque sirve para el orden. No se ha confirmado si callers consumen estos aliases.
+
+**Impact:** backend + frontend.
+
+**Options:**
+
+1. Preservar compatibilidad y clasificar consumidores antes de retirar aliases.
+2. Refactorizar internamente solo cuando no cambie el row público; el spread actual mantiene la exposición.
+3. Cambiar el contrato retirando aliases redundantes, con decisión y migración explícitas.
+4. Coordinar backend/frontend si se confirma que algún consumidor depende de ellos.
+
+**Recommendation:** preservar compatibilidad durante D38 y revisar consumidores antes de una futura reducción contractual; D39–D44 ya requieren el inventario de callers y pueden aportar esa evidencia.
+
+**Blocks the current task:** No. D38 caracteriza y conserva todos los campos observables; retirar aliases queda fuera del alcance aprobado.
 - **Riesgo:** M.
+
+### D38.1 — Extraer DiscHomeService
+
+- [x] Completada (2026-10-04)
+- **Objetivo:** trasladar la operación Home/Stats a un servicio cohesivo sin cambiar queries, comportamiento ni contrato.
+- **Alcance:** `findTopRatedOrFeaturedAndStats`, coordinación D30–D38, fachada `DiscsService` y pruebas de la operación.
+- **Fuera de alcance:** cleanup adicional de helpers (D38.2), cambios de contrato o avance a D39.
+- **Dependencias:** D30–D38.
+- **Resultado:** se creó `src/discs/home/disc-home.service.ts` con el método completo y su coordinación de filtros, ranking, estadísticas y envelope. Inyecta únicamente `Repository<Disc>`. `DiscsService` conserva la firma pública y delega el mismo `paginationDto`, `user` y `genreId`; `DiscModule` registra el nuevo provider. SQL, parámetros, fórmulas, orden, cardinalidad, aliases observables, null/0, errores y payload permanecen intactos.
+- **Tests:** la caracterización funcional del método se trasladó a `src/discs/home/disc-home.service.spec.ts`, incluida la comprobación de filtros y parámetros D30 y el envelope D38. Las suites PostgreSQL D32 y D33 ahora llaman `DiscHomeService`. `src/discs/__tests__/discs.service.spec.ts` conserva la prueba de delegación Home; las pruebas unitarias de helpers permanecen junto a sus helpers.
+- **Tamaños:** `DiscHomeService` tiene 134 líneas y `DiscsService` 135 líneas. No se realizó cleanup adicional de los helpers.
+- **Estructura Home:** servicio/spec de coordinación; helpers de filtros, stats globales, estado personal y mapper, totals, top users por rate/cover y distribución, con sus specs unitarios y PostgreSQL existentes.
+- **Hallazgos:** se conservan los hallazgos contractuales de D30–D38, incluido el comportamiento histórico de aliases de la query principal. No se corrigió ninguno.
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 D34_POSTGRES_TEST=1 D35_POSTGRES_TEST=1 D36_POSTGRES_TEST=1 D37_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (32 suites, 274 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D39 permanece pendiente.
+
+### D38.2 — Cleanup estructural de Home
+
+- [x] Completada (2026-10-04)
+- **Objetivo:** dejar `DiscHomeService` centrado en la coordinación Home y organizar los helpers por responsabilidad.
+- **Alcance:** estructura de `src/discs/home/`, filtros D30 y preparación de fechas compartida por las estadísticas.
+- **Fuera de alcance:** cambios de SQL, contratos o hallazgos; no se avanza D39.
+- **Resultado:** se movieron `home-disc-filters.ts` y su spec a `home/`, junto a la responsabilidad que los usa. Se añadió `home-date-range.ts` para compartir el fragmento `releaseDate BETWEEN` y la conversión de rangos D34–D37 a los mismos dos binds `Date`; cada loader conserva la posición del fragmento (`WHERE` o `AND`) y su query local. No se descartó ningún helper.
+- **Revisión por responsabilidad:** `DiscHomeService` conserva Repository, query/ranking principal y coordinación de filtros, estadísticas y respuesta. `home-global-stats`, `home-personal-state`, `home-totals`, `home-top-users-by-rates`, `home-top-users-by-cover`, `home-rating-distribution` y `map-home-ranked-disc` mantienen límites claros y SQL/mapping específicos. Los loaders de rate y cover comparten forma, pero sus predicados, alias y claves públicas son distintos; se mantienen separados para no crear una abstracción genérica de ranking.
+- **Duplicación y cobertura:** se eliminó la repetición del fragmento SQL y de detección/conversión del rango temporal entre totals, ambos top users y distribución. La construcción D30 usa conversión distinta y conserva su política independiente. Cada helper puro tiene spec directo o cobertura cercana; `home-date-range.spec.ts` cubre las condiciones exactas, binds, tipos/orden y rangos incompletos; los specs de los cuatro loaders comprueban su integración. Las pruebas PostgreSQL D31–D37 siguen verificando sus agregados y rangos reales.
+- **Limpieza:** no quedaron imports Home en `DiscsService`, variables obsoletas ni código sin uso en los helpers revisados. No se dividió `DiscHomeService`, que permanece cohesionado.
+- **Tamaños:** `DiscHomeService`, 133 líneas; `DiscsService`, 135 líneas.
+- **Estructura:** `home/` contiene coordinación, filtros, preparación de rango, stats globales, estado personal, totals, rankings por rate/cover, distribución, mapping de disco y los specs unitarios/PostgreSQL asociados.
+- **Hallazgos:** se conservan todos los hallazgos D30–D38; ninguno se corrigió.
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 D34_POSTGRES_TEST=1 D35_POSTGRES_TEST=1 D36_POSTGRES_TEST=1 D37_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (33 suites, 277 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D39 permanece pendiente.
+
+### D38.3 — Organizar Home y limpiar imports/dependencias
+
+- [x] Completada (2026-10-04)
+- **Objetivo:** organizar `home/` por responsabilidad y eliminar residuos de imports/dependencias sin cambiar comportamiento.
+- **Alcance:** estructura Home, rutas de imports, tipos exportados y auditoría de `DiscsService`, `DiscHomeService` y `DiscModule`.
+- **Fuera de alcance:** cambios de SQL, contratos, queries o avance a D39.
+- **Estructura:** la raíz de `home/` contiene únicamente `disc-home.service.ts` y `disc-home.service.spec.ts`. `loaders/` reúne los loaders de global stats, totals, top users por rates/cover y rating distribution, con sus specs unitarios. `helpers/` reúne filtros, rango de fechas, estado personal y ranked-disc mapping, con sus specs unitarios. `__tests__/` contiene las siete suites PostgreSQL/integración D31–D37.
+- **Imports y exports:** se actualizaron las rutas internas tras los movimientos; no quedan imports desde ubicaciones antiguas. `HomeGlobalStats`, `HomeDiscTotals` y `HomeRatingDistributionItem` dejaron de exportarse porque no tienen consumidores externos. Los exports de funciones sí tienen consumidores en la coordinación o los tests.
+- **Dependencias:** `DiscsService` inyecta sus siete servicios usados por la fachada. `DiscHomeService` inyecta únicamente `Repository<Disc>`. La lista de providers, `TypeOrmModule.forFeature` y los imports de `DiscModule` ya tenían consumidores reales; no se requirieron cambios en `discs.module.ts`.
+- **Comportamiento:** no se modificaron SQL, binds, filtros, fórmulas, ranking, cardinalidad, payload ni semántica null/0. Se conservan los hallazgos D30–D38.
+- **Tamaños:** `DiscHomeService`, 133 líneas; `DiscsService`, 135 líneas.
+- **Verificaciones:** con Node 20.20.2 pasan <code>D31_POSTGRES_TEST=1 D32_POSTGRES_TEST=1 D33_POSTGRES_TEST=1 D34_POSTGRES_TEST=1 D35_POSTGRES_TEST=1 D36_POSTGRES_TEST=1 D37_POSTGRES_TEST=1 yarn test src/discs --runInBand</code> (33 suites, 277 tests; PostgreSQL local), <code>./node_modules/.bin/tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Siguiente:** D39 permanece pendiente.
 
 ### D39 — Eager loading: inventario y consumidores
 
-- [ ] Pendiente
+- [x] Completada (2026-10-04)
 - **Objetivo:** inventariar el contrato observable y determinar con evidencia qué callers dependen de cada relación eager.
 - **Alcance:** eager de Disc.artist, Disc.genre, Disc.favorites, Disc.pendings y Disc.comments; revisar endpoints, callers de Disc en el repositorio y relaciones próximas como Artist.country, Rate.disc y Asignation.disc. Revisar consumidores/frontend cuando su código o evidencia esté disponible; si no puede confirmarse el consumo, clasificar la relación como OBSERVABLE PERO NO CONFIRMADA.
 - **Fuera de alcance:** cambiar eager en entidades de otros módulos o cambiar el grafo visible sin pruebas.
@@ -1138,9 +1619,67 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Verificaciones:** revisión de usos de repository.find/findOne y QueryBuilder, pruebas de los consumidores afectados; <code>pnpm build</code>.
 - **Riesgo:** M.
 
+#### Inventario de Disc y consumidores
+
+La carga eager de `Disc` solo aplica automáticamente a operaciones TypeORM `find*`; los QueryBuilder del módulo y de los consumidores relacionados cargan lo que declaran con joins/selects. Las filas agrupan operaciones con la misma evidencia de uso. `OBSERVABLE PERO NO CONFIRMADA` significa que la respuesta incluye la relación pero no se localizó un consumidor verificable para ese payload concreto.
+
+| Relación | Endpoint/caller | Carga actual y presencia en payload | Uso comprobado | Clasificación | Carga explícita que preserva el uso | Test protector existente / faltante | ¿Retirar eager? |
+|---|---|---|---|---|---|---|---|
+| `Disc.artist` | `GET /discs/:id` (detalle) | `findOneOrFail` declara `artist.country`; retorna `Disc` completo. | Ningún uso de este endpoint localizado en el frontend; la respuesta sí contiene artista. | OBSERVABLE PERO NO CONFIRMADA | Mantener `relations.artist.country` y caracterizar response antes de D40. | `src/discs/catalog/disc-catalog.service.spec.ts` comprueba relaciones; falta fixture de contrato serializado consumido por frontend/API. | No por ahora. |
+| `Disc.artist` | `GET /discs`, `/discs/random` (Catalog) | QueryBuilder selecciona `disc.artist` y `artist.country`; mapper devuelve artista/país. | Front usa nombre, imagen y país en `DiscList`, `DiscCardComponent` y llamadas auxiliares; los filtros/orden también usan artista. | REQUERIDA | Mantener joins `artist` y `country` existentes. | Catalog specs caracterizan joins y mapping; frontend no tiene suite de contrato de este response. | Sí, después de D40 si el detalle incierto queda resuelto; QueryBuilder ya carga explícitamente. |
+| `Disc.artist` | `GET /discs/date`, `/discs/date/public`, `/discs/weekly` (Calendar) | QueryBuilder selecciona artista/país; semanal selecciona columnas de artista/país. | Front usa artista y país en calendario autenticado, público y semanal. | REQUERIDA | Mantener joins y columnas explícitas de Calendar. | `src/discs/calendar/disc-calendar.service.spec.ts`; falta prueba frontend/API del payload completo. | Sí, después de D40; todos estos callers usan QueryBuilder explícito. |
+| `Disc.artist` | `GET /discs/homeDiscs` (Home/Stats) | SQL manual une Artist/Country y el mapper construye `artist`. | Home muestra artista y país. | REQUERIDA | Mantener joins y aliases SQL actuales. | `src/discs/home/disc-home.service.spec.ts`, suites `home-*.postgres.spec.ts`; no aplica eager al SQL manual. | Sí desde el punto de vista de Home; no cambia su query. |
+| `Disc.artist` | Enrichment, Spotify tracks, Artists, Favorites, Pendings, Rates, Comments, National Releases, Asignations, Lists/WordPress, Excel, Content scheduler, Scraping | Hay QueryBuilder con join explícito en consultas de lectura; las operaciones `manager.findOne(Disc)`/`discRepository.findOneBy` cargan eager automáticamente. En varias escrituras se retorna la entidad persistida. | Las respuestas de Rates/Favorites/Pendings/Comments/National Releases y Asignations/Lists consumidas por frontend acceden a artista; Enrichment/Spotify lo proyectan en crudo. Para callers de escritura se usa Disc para validar/asignar FK, pero no se consume su árbol eager. | REQUERIDA en respuestas de lectura; NO CONSUMIDA en consultas de Disc usadas solo para validar/escribir; OBSERVABLE PERO NO CONFIRMADA en respuestas de escritura | Mantener joins explícitos para lecturas y revisar cada respuesta TypeORM `find*`/`preload` antes de D40. | Specs de Discs, `rates`, `favorites`, `pendings`, `comments`, `national-releases`, `asignations`, `lists`, `excel` existentes donde hay; faltan pruebas de response en varios módulos. | No globalmente mientras haya responses no confirmadas. |
+| `Disc.genre` | `GET /discs/:id` (detalle) | `findOneOrFail` declara `genre`; retorna `Disc` completo. | No se localizó llamada frontend al endpoint detalle; el campo queda observable. | OBSERVABLE PERO NO CONFIRMADA | Mantener `relations.genre` y caracterizar response. | Catalog detail spec verifica que se pide genre; falta consumo extremo a extremo confirmado. | No por ahora. |
+| `Disc.genre` | Catalog, Calendar y Home (`/discs`, `/discs/random`, `/discs/options`, `/discs/date*`, `/discs/weekly`, `/discs/homeDiscs`) | QueryBuilder selecciona explícitamente genre cuando devuelve discos; Options devuelve solo filas de opción y se une a genre al pedir/filtrar el campo. | Front usa nombre/id/color en listados, filtros, calendarios y Home. | REQUERIDA | Mantener joins/selecciones explícitas ya presentes. | Catalog/Calendar/Home specs y tests de mapping; falta contrato frontend automatizado. | Sí tras D41 si queda cubierto el detalle; Options solo devuelve proyección explícita. |
+| `Disc.genre` | Rates, Favorites, Pendings, Comments, National Releases, Asignations/Lists | Los QueryBuilder de lectura hacen join explícito; `NationalReleases` mapea genre dentro de Disc y Asignations/List devuelve discos relacionados. | El frontend muestra género/color en las vistas de rates/favorites/pendings, comments, national releases y listas. | REQUERIDA | Mantener joins explícitos en cada QueryBuilder propietario. | Specs disponibles en `rates`, `favorites`, `pendings`, `comments`, `national-releases`, `lists`; comprobar individualmente que cubran el campo completo antes de D41. | Sí para esos QueryBuilder; no para respuestas `find*` sin auditoría de payload. |
+| `Disc.favorites` | Catalog `/discs`, `/discs/random`; Calendar `/discs/date` | QueryBuilder selecciona solo favoritos del usuario actual. El mapper propaga el array y deriva `favoriteId`. | Front consume `favoriteId`; no se encontraron lecturas del array `disc.favorites` en componentes. El array filtrado es parte observable del JSON actual. | REQUERIDA para derivar `favoriteId`; OBSERVABLE PERO NO CONFIRMADA como array público | Preservar selección del favorito actual y caracterizar si se mantiene el array. | Catalog/Calendar specs cubren mapping y joins parcialmente; falta prueba de shape completa por usuario con/sin favorito. | No hasta caracterizar; posible D42 contractual por exposición del array. |
+| `Disc.favorites` | Pendings `/pendings` | QueryBuilder une explícitamente favorito del usuario y el servicio lee `pending.disc.favorites[0].id` para emitir `favoriteId`. | El payload lo consume `DiscList`; se consume el ID derivado, no la colección completa. | REQUERIDA para `favoriteId`; array observable | Mantener join filtrado por `userId` mientras el mapper lea la relación; evaluar después una proyección sin cambiar response. | Falta spec focalizado de `PendingsService.findAllByUser` que pruebe `favoriteId` ausente/presente y el shape. | No hasta tener esa cobertura y caracterizar array. |
+| `Disc.favorites` | `GET /discs/:id`; `manager.findOne(Disc)` en Favorites, Pendings, Rates, Comments; `findOneBy` en Asignations; `preload` de Disc | Detalle lo carga explícitamente y lo devuelve; los `find*` disparan eager, aunque varios callers solo comprueban existencia/asignan FK. `preload` se usa para update y retorna la entidad; no se verificó aquí el efecto exacto de eager en esa operación. | Arrays del detalle/update son observables, pero el consumidor del detalle no está confirmado. Los find de validación no leen favorites; Pendings de lectura sí depende de su join explícito señalado arriba. | OBSERVABLE PERO NO CONFIRMADA en respuestas; NO CONSUMIDA en validaciones verificadas | Mantener detail relation explícita; en validaciones no usar la relación en lógica. Revisar `preload` response antes de D42. | Disc Catalog y Write cubren options/relaciones parcialmente; faltan pruebas de payload de update y callers de validación. | No globalmente; posibles optimizaciones internas no deben alterar el payload. |
+| `Disc.pendings` | Catalog `/discs`, `/discs/random`; Calendar `/discs/date` | QueryBuilder selecciona solo pendientes del usuario actual; mapper propaga array y deriva `pendingId`. | Front usa `pendingId`; no se encontraron lecturas de `disc.pendings` en componentes. El array actual es observable en esas respuestas. | REQUERIDA para `pendingId`; OBSERVABLE PERO NO CONFIRMADA como array | Mantener la selección del estado del usuario y caracterizar el array antes de considerar cambios. | Catalog/Calendar specs cubren mapper y joins; falta prueba de shape con varios usuarios y ausencia de pending. | No hasta caracterizar; potencial candidato contractual D43. |
+| `Disc.pendings` | Pendings `/pendings` (lista del usuario), detalle y `find*` de validación | La lista usa la entidad Pending como raíz y no selecciona `disc.pendings`; detalle la carga expresamente y la devuelve; los `findOne(Disc)` de validación disparan eager. | Lista usa `pending.id` y el favoriteId de Favorites; no usa la colección Disc.pendings. El array de detalle permanece visible, sin consumidor confirmado. | NO CONSUMIDA en lista y validaciones; OBSERVABLE PERO NO CONFIRMADA en detalle/update | No añadir joins en la lista; conservar relations de detalle mientras el contrato no se decida. | Pendings spec focalizada del mapper falta; Catalog detail spec sí comprueba relation solicitada. | No globalmente por la respuesta de detalle no verificada. |
+| `Disc.comments` | `GET /discs/:id` (detalle) | `findOneOrFail` declara `comments.user`; devuelve colección completa. | No hay llamada de detalle ni lectura de `disc.comments` identificada en el frontend. La relación es observable en JSON, pero su cliente externo no puede descartarse. | OBSERVABLE PERO NO CONFIRMADA | Mantener `relations.comments.user` hasta verificar consumidores/contrato. | Catalog detail spec verifica la carga y null/empty; falta consumidor extremo a extremo y fixture del JSON. | No; payload visible impide retirada silenciosa. |
+| `Disc.comments` | Catalog list/random, Calendar, Home/Stats y listas de Rates/Favorites/Pendings | QueryBuilder no une Disc.comments; calcula `commentCount` mediante subquery/SQL y el mapeo usa el count. | El frontend usa `commentCount` en las tarjetas; no usa arrays de comentarios desde Disc en esos responses. | NO CONSUMIDA (colección); `commentCount` requerido es dato separado | Mantener los conteos actuales; no añadir join de colección. | Catalog/Home specs protegen conteos; Calendar y módulos relacionados necesitan cobertura de payload/count donde falte. | Sí en estas rutas QueryBuilder, cuya carga no depende de eager; retirada global sigue bloqueada por detalle. |
+
+#### Relaciones próximas y callers que reciben Disc
+
+| Relación próxima | Caller/endpoint | Evidencia y clasificación | Protección/cobertura |
+|---|---|---|---|
+| `Artist.country` (`eager`) | Disc detalle y `find*` con Artist; rates/favorites/pendings/comments; Asignations/Lists/National Releases | Country aparece dentro de `Disc.artist.country`; Catalog/Calendar/Home lo unen explícitamente y el frontend utiliza `name`/`isoCode`. REQUERIDA en esos payloads; no modificar en D39 ni D40. Algunas consultas `find*` lo cargan transitivamente y no se puede quitar su eager sin tarea propia. | Tests Catalog/Calendar/Home y specs de módulos consumidores; cobertura de response incompleta en callers de módulos. |
+| `Rate.disc` (`eager`) | Rates `findOne`/listados; respuestas anidadas Rate→Disc | La relación Disc se selecciona en QueryBuilder de listados y aparece en respuestas; frontend lee artista/género del disco en rates/comentarios mensuales. REQUERIDA para esos consumers. Rate.disc no se modifica en D39. | `rates.service.spec.ts` si existe y tests de los callers; comprobar cobertura de la respuesta anidada antes de cualquier fase de Rate. |
+| `Asignation.disc` (`eager`) | Asignations `findOne`; listas y publicación WordPress | El frontend de Listas lee `asignation.disc.artist` y `.genre`; WordPress usa identidad/nombre/disco para generar secciones. REQUERIDA. Los endpoints que cargan Asignation por `find*` pueden devolver el árbol Disc eager. No modificar en D39. | `lists.service.spec.ts`/Asignations si existen; falta cubrir el response completo de Asignation en varios callers. |
+
+#### Hallazgo contractual conservado y evaluación D39
+
+Se conservan íntegros los hallazgos contractuales previos del roadmap, incluidos los de D5, D7 y el mapping de `artist.country` ausente. D39 añade evidencia concreta sobre los arrays de estado y comentarios; no cambia el contrato.
+
+### Contract finding
+
+**Current behavior:** El detalle `/discs/:id` solicita y devuelve `favorites`, `pendings` y `comments` completos (incluido usuario en cada relación). Los listados de Catalog/Calendar seleccionan favorito/pendiente del usuario actual, los propagan como arrays y también devuelven `favoriteId`/`pendingId`; el frontend localizado usa esos IDs y `commentCount`, no las colecciones. Pendings además lee Favorites para producir `favoriteId`.
+
+**Problem:** Las relaciones eager generan lecturas de colecciones y el detalle expone datos potencialmente grandes. Para los listados, la UI conocida solo requiere proyecciones personales y el conteo, aunque los arrays son observables en la respuesta actual. No se pudo verificar un consumidor de `/discs/:id` ni clientes externos a este frontend.
+
+**Impact:** Backend + frontend.
+
+**Options:**
+
+1. Preservar compatibilidad hasta verificar callers externos y los payloads completos.
+2. Refactorizar internamente cada consulta para cargar explícitamente la relación que usa, manteniendo respuesta.
+3. Cambiar contrato de los listados a `favoriteId`, `pendingId` y `commentCount`, y decidir por separado si el detalle omite colecciones.
+4. Coordinar una refactorización backend/frontend para consumir proyecciones y retirar campos no usados.
+
+**Recommendation:** Mantener compatibilidad durante D40–D44. La UI encontrada ya trabaja con las proyecciones, así que la reducción de arrays en listados podría ser una mejora contractual coordinada concreta; requiere una decisión independiente y no se realiza en D39. Conservar las colecciones del detalle hasta verificar clientes externos.
+
+**Blocks the current task:** No; el inventario se completa sin cambiar producción. Sí impide retirar ahora los eager de colecciones en D42–D44 sin una decisión contractual y cobertura adicional.
+
+- **Conclusión de retirada:** `Disc.artist` y `Disc.genre` son candidatos técnicos para D40/D41 en las consultas que ya hacen joins explícitos, sujeto a resolver la respuesta de detalle y los callers de `find*`. `Disc.favorites` y `Disc.pendings` no son candidatos a retirada global mientras la respuesta actual exponga arrays y Pendings use Favorites; pueden revisarse por consulta después de caracterizar payloads. `Disc.comments` no se carga en listados QueryBuilder y se necesita como array observable en detalle sin consumidor frontend confirmado; mantener globalmente hasta decisión contractual.
+- **Tests faltantes identificados:** caracterización de JSON completo de detalle y update; shape de arrays de Catalog/Calendar con estados presentes/ausentes; caller de Pendings que protege `favoriteId`; responses anidadas de Rates/Asignations en los módulos que no tengan spec de contrato. No se añadieron tests en D39.
+- **Verificaciones:** `yarn test src/discs --runInBand` con Node 20.20.2: 26 suites aprobadas, 7 suites PostgreSQL omitidas por sus guards; 249 tests aprobados, 28 omitidos. `yarn test src/excel/excel.service.spec.ts src/lists/list.service.spec.ts --runInBand`: Lists aprobada (15 tests); Excel falló en sus 3 tests porque el módulo de pruebas no registra el `DiscRepository` que requiere `ExcelService`. `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` pasan. `pnpm exec jest` fue rechazado por la configuración `packageManager: yarn@1.22.22`; las pruebas se ejecutaron con Yarn y Node 20, que es el engine declarado.
+- **Estado final:** no se cambió ninguna entidad, `eager: true`, query, mapper ni payload. D39 queda cerrada con el fallo de fixture de Excel anotado; D40 permanece pendiente.
+
 ### D40 — Eager de Disc.artist
 
-- [ ] Pendiente
+- [x] Completada sin cambio de entidad (2026-10-04)
 - **Objetivo:** quitar la carga automática de artista de Disc solo cuando todos los consumidores necesarios carguen esa relación explícitamente.
 - **Alcance:** Disc.artist en disc.entity.ts y consultas identificadas en D39 que dependan del eager.
 - **Fuera de alcance:** cambiar Artist.country eager ni modificar respuestas de otros módulos.
@@ -1149,9 +1688,22 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Verificaciones:** comparar payload completo de detalle y endpoints/callers identificados antes y después; pruebas de Discs y de consumidores aplicables; <code>pnpm build</code>.
 - **Riesgo:** M.
 
+#### Cobertura y decisión
+
+- **Detalle:** `DiscCatalogService.findOne` ya pide explícitamente `artist.country` y retorna la entidad con relaciones. El spec existente verifica el árbol `relations` y que el objeto resultante conserva relaciones opcionales; no ejecuta serialización HTTP contra TypeORM ni compara una respuesta real completa. No se añadió otra carga porque ya está declarada.
+- **Lecturas Disc ya cubiertas:** Catalog (`findAll`, `findRandom`), Calendar (autenticado, público y semanal), Home/Stats, Enrichment, Spotify, Artists, Favorites/Pendings/Rates/Comments QueryBuilder, y National Releases usan joins/selections explícitos cuando proyectan artista. No se modificaron esas consultas.
+- **Otros callers pendientes de cobertura explícita:** `Rate.disc` es eager y sus `findOne`/`findRatesByDisc` devuelven Disc anidado; `Asignation.disc` es eager y `findOne` lo devuelve; las lecturas `List.find*` propagan asignaciones/discos eager y las vistas de Lists usan artista. En esos caminos `Disc.artist` llega por el grafo eager; no hay prueba que fije la respuesta anidada completa ni carga `artist` declarada en el caller propietario.
+- **Escrituras pendientes de caracterización:** `POST /rates`, `/favorites`, `/pendings`, `/comments` y creación de Asignation asocian el resultado de `manager.findOne(Disc)` a una entidad que se devuelve. `PATCH /discs/:id` retorna el resultado de `preload`. La API expone esas respuestas, pero no se localizaron specs de respuesta que demuestren si el artista anidado forma parte del JSON actual y que quedaría preservado con carga explícita. Las creaciones de Disc que reciben una entidad Artist ya asignada no dependen de `Disc.artist` eager.
+- **Caller interno:** Scraping lee `disc.artist.name` tras `discRepository.findOne`; ese caller necesita Artist explícito si se retira eager y no tiene spec. Excel usa `Disc.findOne` solo para detectar duplicados, sin leer ni devolver el artista.
+- **Payloads comparados:** no se pudo comparar una respuesta real pre/post porque la cobertura indicada no está implementada y no se hizo cambio de entidad. El spec de detalle confirma la relación solicitada, no una línea base HTTP completa. No se cambió payload ni frontend.
+- **Cambios/tests:** no se añadieron cargas ni tests en D40. Mantener las consultas actuales conserva todas las respuestas. No hay specs en este repo para Rates, Asignations, Favorites, Pendings o Comments que fijen los payloads anidados correspondientes.
+- **Bloqueo:** `Disc.artist` sigue **OBSERVABLE PERO NO CONFIRMADA** en respuestas de detalle y escritura, y carece de cobertura completa en Rates/Asignations/Listas. Por el criterio de D40, se mantiene `eager: true` hasta declarar esas cargas en los callers que deban preservarlo y caracterizar sus payloads. No es necesario decidir ni modificar `Artist.country`.
+- **Verificaciones con Node 20.20.2:** suite Discs: 26 suites aprobadas y 7 omitidas por guards PostgreSQL (249 tests aprobados, 28 omitidos). Suites focalizadas Catalog detalle + Lists: 2 suites, 96 tests aprobados. Regresión Lists/Excel: Lists 15 tests aprobados; Excel 3 tests fallaron porque su fixture no registra `DiscRepository` (falla preexistente anotada en D39, sin corregir). `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados.
+- **Estado final:** D40 queda cerrada sin cambio de producción porque la evidencia no permite retirar eager de forma segura. D41 permanece pendiente.
+
 ### D41 — Eager de Disc.genre
 
-- [ ] Pendiente
+- [x] Completada sin cambio de entidad (2026-10-04)
 - **Objetivo:** quitar la carga automática de género de Disc si los callers requeridos ya lo seleccionan.
 - **Alcance:** Disc.genre y consumidores identificados en D39.
 - **Fuera de alcance:** cambiar filtros/opciones de género o la entidad Genre completa.
@@ -1160,9 +1712,21 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Verificaciones:** comparar payload completo de los endpoints/callers identificados antes y después; pruebas focalizadas de Discs y consumidores aplicables; <code>pnpm build</code>.
 - **Riesgo:** S.
 
+#### Cobertura y decisión
+
+- **Consultas con Genre explícito que se mantienen:** Catalog (`findOne`, listado, random y opciones), Calendar (público/autenticado/semanal), Home/Stats (SQL explícito), Rates/Favorites/Pendings/Comments QueryBuilder, National Releases (`findAll`, público, admin y sugerencias) y `createFromDisc` (`relations: ['artist', 'genre']`). Sus joins/selections ya sostienen el género que consumen; no se modificaron.
+- **Callers aún ligados al eager de Disc.genre:** `Rate.findOne` y `findRatesByDisc` devuelven Rate con `Rate.disc` eager; `Asignations.findOne` devuelve `Asignation.disc` eager; `Comments.findCommentsByDisc` incluye `disc` por `relations` y depende de que Disc cargue genre; las lecturas `List.find*` propagan asignaciones/discos eager, y el frontend de Listas muestra genre/color. `DiscWriteService.update` retorna el resultado de `preload`; varias creaciones Rate/Favorite/Pending/Comment/Asignation devuelven la entidad vinculada a un `manager.findOne(Disc)`.
+- **Detalle y escrituras:** detalle ya declara `relations.genre`, pero el spec solo comprueba la llamada/opciones y el objeto mockeado, no una respuesta HTTP serializada completa. Las respuestas de `PATCH /discs/:id` y escrituras anidadas no tienen pruebas de payload que fijen la presencia, campos y nullability de `genre`.
+- **Pruebas por caller:** el repo tiene suites para Discs y Lists; no hay suites en Rates, Asignations, Comments, Favorites, Pendings ni National Releases que protejan el género anidado. El spec de Lists existente no caracteriza los campos `disc.genre` de sus respuestas.
+- **Payloads comparados:** ninguno en un entorno TypeORM/HTTP real antes/después. Los specs existentes cubren joins y mappers en Catalog/Calendar/Home, no todas las respuestas anidadas. No se retiró eager, así que no hubo cambio observable.
+- **Cambios/tests:** no se añadieron cargas explícitas ni tests en D41: modificar callers sin una caracterización que pruebe el shape actual no permitiría demostrar compatibilidad.
+- **Bloqueo:** `Disc.genre` permanece **REQUERIDA** en varios payloads y **OBSERVABLE PERO NO CONFIRMADA** en detalle/escrituras. Rates, Asignations, Comments y Lists tampoco tienen cobertura de respuesta suficiente. Por el criterio de D41 se conserva `eager: true`; `Genre`, filtros y opciones quedan intactos.
+- **Verificaciones con Node 20.20.2:** suite Discs: 26 suites aprobadas y 7 omitidas por guards PostgreSQL (249 tests aprobados, 28 omitidos). Suites focalizadas Catalog + Calendar + Lists: 3 suites, 139 tests aprobados. Regresión Lists/Excel: Lists 15 tests aprobados; Excel 3 tests fallaron porque su fixture no registra `DiscRepository` (falla preexistente anotada en D39, sin corregir). `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados.
+- **Estado final:** D41 queda cerrada sin cambio de producción por cobertura insuficiente; D42 permanece pendiente.
+
 ### D42 — Eager de Disc.favorites
 
-- [ ] Pendiente
+- [x] Completada sin cambio de entidad (2026-10-04)
 - **Objetivo:** evitar cargar favoritos completos cuando ningún consumidor los necesita, preservando el contenido actualmente observable.
 - **Alcance:** Disc.favorites y callers identificados en D39, manteniendo las selecciones del favorito del usuario donde correspondan.
 - **Fuera de alcance:** cambiar el módulo Favorites, unicidad o endpoints de favoritos.
@@ -1171,71 +1735,196 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Verificaciones:** comparar payload completo con varios favoritos, usuario actual y ausente; pruebas de Discs y consumidores aplicables; <code>pnpm build</code>.
 - **Riesgo:** M.
 
+#### Consumidores, estado personal y decisión
+
+| Caller | ¿Qué obtiene y cómo se carga? | Uso / presencia observable | Cobertura y decisión |
+|---|---|---|---|
+| Catalog `GET /discs`, `/discs/random` | QueryBuilder hace `leftJoinAndSelect(disc.favorites)` con filtro `favorite.userId = :userId`; el mapper mantiene `disc.favorites` y deriva `favoriteId`. `eager` no se aplica a QueryBuilder. | La UI usa `favoriteId`, no lee el array; aun así el array filtrado actual queda en el JSON por el spread de Disc. | Tests existentes cubren favorito presente/ausente, IDs derivados, array preservado, condición por usuario y múltiples filas favoritas. Sin cambios. |
+| Calendar autenticado `GET /discs/date` | QueryBuilder hace join explícito con `favorite.userId = :userId`; mapping mantiene el array y deriva `favoriteId`. | UI usa `favoriteId`; el array filtrado permanece visible en respuesta. | Test existente fija presencia y ausencia de favorito, orden/payload y mapping. Sin cambios. |
+| Calendar público y semanal; Home/Stats | QueryBuilder público/semanal no selecciona favorites. Home usa SQL propio y emite `favoriteId` como proyección, no `favorites`. | Colección **NO CONSUMIDA/NO PRESENTE** en estas respuestas; Home requiere solo `favoriteId`. | Tests actuales de Calendar y Home protegen sus respuestas; `eager` no se aplica al QueryBuilder/SQL. Sin cambios. |
+| Pendings `GET /pendings` | QueryBuilder selecciona favoritos solo del usuario actual. El servicio devuelve el array `disc.favorites` y lee el primero para `favoriteId`. | UI usa `favoriteId`; el array seleccionado aparece en JSON. | Nuevo `src/pendings/pendings.service.spec.ts` cubre ausencia, una coincidencia, filas duplicadas del usuario actual, array emitido y filtro `userId`. |
+| Detalle `GET /discs/:id` | `findOneOrFail` pide explícitamente `favorites.user`; retorna la colección completa de usuarios. | El frontend disponible no llama al detalle; la colección completa es observable y su uso externo no se puede descartar. | El spec de Catalog amplía el fixture a favoritos de dos usuarios y compara la entidad/payload de servicio completo. La carga explícita ya existe. |
+| `POST /favorites` y escrituras de Pending/Rate/Comment/Asignation; `PATCH /discs/:id` | `findOne(Disc)`, `findOneBy(Disc)` o `preload` cargan/retienen el grafo actual; algunas respuestas devuelven el `Disc` anidado. En particular Favorite.create está en el módulo Favorites, que queda fuera de alcance. | En escritura, la colección puede seguir presente en JSON aunque la UI no lea el array; los payloads no están caracterizados. | Sin suites que fijen esos payloads. No cambiar esos módulos ni la escritura de Favorite impide garantizar equivalencia retirando el eager. |
+| Rates `GET /rates/:id`, `/rates/disc/:discId`; Asignations `GET /asignations/:id`; Listas `GET` | `Rate.disc` y `Asignation.disc` son eager; las consultas `List.find*` también entregan asignaciones/discos eager. Disc.favorites puede aparecer en la entidad anidada. | Respuestas observables con colección; la UI conocida no lee directamente `disc.favorites`, pero no se puede suprimir del JSON durante D42. | No hay tests de payload en Rates/Asignations; Listas tiene suite, pero no caracteriza esa colección. Sin cambios fuera de alcance. |
+| Favorites `GET /favorites`, Rates/Favorites QueryBuilder, Comments `GET /comments/disc/:id`, Excel y validaciones Disc | Los QueryBuilder de lectura no cargan `Disc.favorites` salvo Catalog/Calendar/Pendings, y Comments mapea Disc solo a `{ id, name }`. Las comprobaciones de existencia/duplicado usan Disc únicamente como referencia. | Colección **NO CONSUMIDA/NO PRESENTE** en esas respuestas. | Revisado en código; no se añade carga para estos callers. |
+
+- **Tests añadidos:** se amplió el test de detalle para cubrir favoritos de dos usuarios. Se añadió `src/pendings/pendings.service.spec.ts` con ausencia/presencia, múltiples filas y filtro de usuario. Catalog y Calendar ya cubrían el estado personal, por lo que se conservaron sus tests actuales.
+- **Cargas explícitas añadidas:** ninguna. Catalog, Calendar, Pendings y detalle ya cargan explícitamente lo que requieren; no se modificaron sus queries.
+- **Payloads comparados:** los tests unitarios verifican el objeto devuelto por el servicio, incluidos arrays y `favoriteId`, antes de cualquier cambio. No se hizo comparación pre/post de endpoint real porque el eager se mantiene. En el detalle el spec compara la respuesta completa del servicio con la colección de varios usuarios.
+- **Bloqueo:** aunque los consumidores principales de estado personal filtran explícitamente por usuario, el detalle expone toda la colección y varias respuestas anidadas/escrituras pueden propagarla por `find*`/eager. Sus consumidores y payloads no están completamente caracterizados; además, `/favorites` queda fuera de alcance. Retirar eager podría cambiar el JSON, así que se conserva `eager: true`.
+- **Verificaciones con Node 20.20.2:** suite Discs: 26 suites aprobadas y 7 omitidas por guards PostgreSQL (249 tests aprobados, 28 omitidos). Suites focalizadas Catalog, helper de estado Catalog, Calendar, Pendings y Lists: 5 suites y 153 tests aprobados. Regresión Lists/Excel: Lists 15 tests aprobados; Excel 3 tests fallaron porque su fixture no registra `DiscRepository` (falla preexistente anotada en D39, sin corregir). `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados.
+- **Estado final:** D42 queda cerrada sin cambio de producción por payloads anidados no cubiertos; D43 permanece pendiente.
+
 ### D43 — Eager de Disc.pendings
 
-- [ ] Pendiente
+- [x] Cerrada sin cambio de entidad (2026-10-04)
 - **Objetivo:** impedir lecturas automáticas de todos los pendientes de un disco sin perder el estado del usuario.
 - **Alcance:** Disc.pendings y callers auditados en D39.
 - **Fuera de alcance:** flujo de escritura de Pendings o cambios de permisos.
 - **Dependencias:** D39, D23, D4, D10, D14.
 - **Criterios de finalización:** solo retirar eager si D39 demuestra cobertura completa de consumidores; cargar explícitamente y caracterizar antes el payload actual, incluyendo la colección si hoy aparece. Para endpoints que solo requieren pendingId, seleccionar el pendiente del usuario sin cargar la colección completa únicamente si la respuesta no la expone. Si hay consumo visible no confirmado, mantener eager y cerrar sin cambio de producción; si se clasifica NO CONSUMIDA pero retirarla cambia el payload observable, mantenerla y documentar una futura tarea contractual.
-- **Verificaciones:** comparar payload completo con pendientes de varios usuarios y ausencia de pending; pruebas de Discs y consumidores aplicables; <code>pnpm build</code>.
+- **Inventario de consumidores y respuesta actual:**
+
+| Endpoint/caller | Necesidad actual | Cómo se carga y presencia en el JSON | Uso confirmado / clasificación | Cobertura D43 |
+|---|---|---|---|---|
+| Catalog `GET /discs`, `/discs/random` | `pendingId` más colección filtrada | QueryBuilder une `disc.pendings` con `pending.userId = :userId`; el mapper devuelve Disc (incluido `pendings`) y deriva `pendingId`. | El frontend lee `pendingId`; no se localizaron lecturas de `disc.pendings`, pero el array filtrado es observable. `pendingId`: REQUERIDA. Array: OBSERVABLE PERO NO CONFIRMADA. | Specs existentes cubren presente/ausente, aislamiento por usuario y filas raw duplicadas; se preservan join y payload.
+| Calendar autenticado `GET /discs/date` | `pendingId` más colección filtrada | QueryBuilder une solo el pendiente del usuario; respuesta conserva el array y deriva `pendingId`. | Front lee `pendingId`; el array es observable sin lectura localizada. `pendingId`: REQUERIDA. Array: OBSERVABLE PERO NO CONFIRMADA. | Spec de payload con pendiente presente y ausente y join por usuario.
+| Calendar público/semanal | No requiere colección ni `pendingId` | QueryBuilder no selecciona `disc.pendings`; los tests y mapping del endpoint no exponen el array. | Colección: NO CONSUMIDA en estas respuestas verificadas. | Specs Calendar existentes protegen el payload público/semanal.
+| Home/Stats `GET /discs/homeDiscs` | Solo `pendingId` | SQL manual proyecta un pendiente del usuario como `pendingId`; no hidrata la colección. | `pendingId`: REQUERIDA. Colección: NO CONSUMIDA en esta respuesta SQL verificada. | Home usa sus tests de proyección; eager de TypeORM no se aplica al SQL manual.
+| Detalle `GET /discs/:id` | Colección completa en el payload | `findOneOrFail` carga `pendings.user` explícitamente y devuelve Disc completo. | Array observable; no se encontró llamada frontend al detalle. `OBSERVABLE PERO NO CONFIRMADA`. | Spec existente compara el objeto completo y ahora incluye pendientes de dos usuarios; también cubre relación vacía.
+| Pendings `GET /pendings` | El pendiente de usuario actual, expuesto como `userPending`; no `Disc.pendingId` ni colección | QueryBuilder usa Pending como raíz y une Disc, Artist, Genre y Favorites del usuario. No une `disc.pendings`; QueryBuilder no aplica eager automáticamente. | Colección: NO CONSUMIDA en la consulta/JSON verificados. El ID es `pending.id` asignado como `userPending`, no derivado de `Disc.pendings`. | Spec verifica ausencia de join/propiedad `pendings`, `userPending` y favoriteId con favorites ausentes, presentes y filas múltiples.
+| Pendings `POST /pendings` | Devuelve Pending anidado con Disc | `manager.findOne(Disc)` carga eager; el Disc asignado y devuelto puede incluir su colección `pendings`. | Array anidado observable; consumo externo no confirmado: `OBSERVABLE PERO NO CONFIRMADA`. | Spec nueva fija la colección de varios usuarios en el Disc anidado devuelto. No se cambió la escritura.
+| Detalle/PATCH de Disc (`findOneOrFail`/`preload`) | Colección completa en la respuesta actual | Detalle declara `relations.pendings.user`; `preload` devuelve el grafo eager registrado por TypeORM. | Payload visible con consumidores no confirmados: `OBSERVABLE PERO NO CONFIRMADA`. | Detalle cubierto; falta fixture de respuesta de PATCH que incluya varios pendientes.
+| Rates, Favorites, Comments, Asignations y Lists: escrituras que resuelven Disc; respuestas anidadas `Rate.disc`/`Asignation.disc` | Las validaciones solo necesitan resolver Disc; algunas respuestas retornan Disc anidado | `manager.findOne(Disc)`/`findOneBy` cargan eager. Las respuestas de escritura pueden incluir el árbol; `Rate.disc` y `Asignation.disc` son relaciones eager. Lists también devuelve asignaciones/discos. | La colección no participa en la validación. En respuestas que pueden incluir Disc, el array es observable y no se confirmó su consumo: `OBSERVABLE PERO NO CONFIRMADA`. | No hay cobertura conjunta de payloads para estos callers; no es seguro retirar el eager global.
+| Rates `GET` y Favorites `GET` | Solo proyección `pendingId` del usuario | QueryBuilder calcula/selecciona `pendingId` mediante join/subquery; no selecciona `disc.pendings`. | `pendingId`: REQUERIDA donde se proyecta. Colección: NO CONSUMIDA en esas respuestas QueryBuilder verificadas. | Revisados los joins de servicios; sus suites no fijan la colección de respuesta anidada.
+| Comments `GET /comments/disc/:id` | Disc reducido a ID/nombre | QueryBuilder une Disc, pero el mapper construye solo `{ id, name }`; no selecciona la colección. | Colección: NO CONSUMIDA en esta respuesta verificada. | Mapping existente revisado; sin cambios.
+| Enrichment, Spotify, LastFM y otros consumidores internos | Uso dependiente de cada ruta | SQL/QueryBuilder y proyecciones no requieren eager; las rutas TypeORM `find*` que retornan entidades pueden incluirlo. | Donde se devuelve solo proyección: NO CONSUMIDA. Para retornos de entidad sin contrato interno verificable: `OBSERVABLE PERO NO CONFIRMADA`. | La clasificación D39 se conserva; no todos los payloads de integración tienen test de respuesta.
+
+- **Consumidores `pendingId` frente a colección:** Catalog autenticado y Calendar autenticado necesitan el ID del usuario y mantienen su join filtrado existente; Home, Rates y Favorites proyectan el ID sin cargar la colección. Pendings `GET` utiliza el ID de la entidad raíz Pending como `userPending`. El detalle, el alta de Pending y rutas de escritura/relaciones anidadas pueden incluir arrays completos. La colección del detalle y de los retornos anidados no se sustituye por un ID.
+- **Carga explícita añadida:** ninguna. Los consumidores con necesidad confirmada ya declaran sus joins/proyecciones, y no se alteraron consultas.
+- **Tests añadidos:** el test de detalle de Catalog ahora compara la colección completa con pendientes de dos usuarios; el spec de Pendings verifica ausencia/presencia de estado personal, duplicados, que el listado no una `disc.pendings` y que `POST /pendings` conserve la colección del Disc anidado. Los tests Catalog y Calendar existentes ya cubren `pendingId` presente/ausente y filtrado por usuario.
+- **Comparación de payloads:** se fijaron objetos completos de servicio para el detalle y respuesta anidada de creación. No hubo comparación pre/post de endpoint con TypeORM real porque no se retiró eager. El campo `pendingId` conserva las consultas actuales.
+- **Bloqueo:** el detalle y varias escrituras/respuestas anidadas observables incluyen la colección. D39 marca ese payload como no confirmado externamente; faltan pruebas de respuesta para PATCH de Disc y varios consumers de Rates/Favorites/Comments/Asignations/Lists e integraciones. Mantener `eager: true` evita cambiar esos JSON. Reabrir la retirada requiere caracterizar esos callers o una decisión contractual independiente.
+- **Verificaciones con Node 20.20.2:** `yarn test src/discs --runInBand`: 26 suites aprobadas, 7 suites PostgreSQL omitidas por guard, 249 tests aprobados y 28 omitidos. Suites focalizadas Catalog, mapper Catalog, Calendar, Pendings y Lists: 5 suites y 154 tests aprobados. No existen suites focalizadas en este checkout para Rates, Favorites, Comments o Asignations. `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados.
+- **Estado final:** D43 queda cerrada sin cambio de entidad; D44 permanece pendiente.
 - **Riesgo:** M.
 
 ### D44 — Eager de Disc.comments
 
-- [ ] Pendiente
+- [x] Cerrada sin cambio de entidad (2026-10-04)
 - **Objetivo:** distinguir los callers que requieren la colección de comentarios de los que solo necesitan el count, sin alterar el payload actual del detalle.
 - **Alcance:** Disc.comments y consumidores auditados en D39; conservar el contador donde se calcula por subquery.
 - **Fuera de alcance:** módulo Comments, paginación de comentarios y reglas de borrado.
 - **Dependencias:** D39, D23.
 - **Criterios de finalización:** solo retirar eager si D39 demuestra cobertura completa de consumidores; cargar explícitamente y caracterizar antes el payload del detalle u otra ruta que hoy entregue comentarios. Rutas que solo requieren commentCount no traen la colección únicamente si no la exponen actualmente. Si hay consumo visible no confirmado, mantener eager y cerrar sin cambio de producción; si se clasifica NO CONSUMIDA pero retirarla cambia el payload observable, mantenerla y documentar una futura tarea contractual.
-- **Verificaciones:** comparar payload completo del detalle y count con muchos comentarios; pruebas de Discs y consumidores aplicables; <code>pnpm build</code>.
+- **Inventario de consumidores:**
+
+| Endpoint/caller | Necesidad actual | Carga actual y presencia de `Disc.comments` | Clasificación de la colección | Cobertura/hallazgo |
+|---|---|---|---|---|
+| Disc detalle `GET /discs/:id` | Devuelve el disco completo | `findOneOrFail` declara `comments.user`; devuelve todos los comentarios y cada usuario. | **OBSERVABLE PERO NO CONFIRMADA**: no se localizó llamada frontend a este detalle y no se descarta un cliente externo. | El spec fija el payload completo con comentarios de dos usuarios y también la relación vacía. La carga explícita ya existe.
+| Catalog `GET /discs`, `/discs/random` | `commentCount` | QueryBuilder define `COUNT(comment.id)` en subquery y no une `disc.comments`; la colección no está en el resultado. Frontend usa el contador. | `commentCount`: **REQUERIDA**. Colección: **NO CONSUMIDA** en estos payloads verificados. | Spec confirma que no existe join/propiedad `comments` y preserva la subquery y el mapping del contador.
+| Calendar `/discs/date*`, `/discs/weekly` | Datos de Disc y calendario; no usa colección de comentarios | QueryBuilder selecciona las relaciones declaradas; no une `disc.comments`. La colección no se expone. Calendar no proyecta `commentCount` en estos resultados. | **NO CONSUMIDA** en respuestas verificadas. | Specs protegen el payload Calendar y eliminan internals de las entidades.
+| Home/Stats `GET /discs/homeDiscs` | `commentCount` | SQL manual proyecta `(SELECT COUNT(c.id) ... ) AS "commentCount"`; no une ni hidrata la colección. | `commentCount`: **REQUERIDA**. Colección: **NO CONSUMIDA** en el payload SQL. | Spec fija contador y ausencia de `comments`/JOIN a la colección.
+| Rates, Favorites y Pendings: listados por usuario | `commentCount` | QueryBuilder usa subquery `COUNT(comment.id)`; QueryBuilder no activa eager loading y ninguno une `disc.comments`. | `commentCount`: **REQUERIDA**. Colección: **NO CONSUMIDA** en estos listados verificados. | Catalog/Home y Pendings tienen cobertura de mapping/shape; no hay suites de Rates o Favorites en este checkout.
+| Rates `GET /rates/:id`, `GET /rates/disc/:discId` | Devuelve Rate y Disc anidado | `Rate.disc` es eager; las operaciones repository `find*` pueden propagar el eager recursivo de `Disc.comments`. La colección queda observable. | **OBSERVABLE PERO NO CONFIRMADA**. | No hay spec de Rates que caracterice el payload anidado; necesita fixture antes de cambiar el eager.
+| Comments `GET /comments` | Comment con Disc | QueryBuilder une `comment.disc`, no `disc.comments`; QueryBuilder no activa eager loading. La colección inversa no forma parte de la respuesta. | **NO CONSUMIDA** en este resultado verificado. | Código de mapping revisado; no hay suite de Comments en este checkout.
+| Comments `GET /comments/disc/:id` | Lista plana de comentarios del disco; Disc se reduce a `{id,name}` | La validación inicial hace `findOne(Disc)` y carga eager pero descarta ese Disc. El `find` de Comment con relación Disc puede cargar la colección inversa por eager; el mapper la elimina del Disc anidado. Los comentarios devueltos son filas raíz, no `Disc.comments`. | La colección inversa: **NO CONSUMIDA** en el payload verificado. Las filas Comment: **REQUERIDAS**. | El mapper excluye el Disc completo; sin spec focalizada en este checkout.
+| Comments `POST /comments` | Comment creado con Disc asignado | `manager.findOne(Disc)` carga eager; el objeto Disc asignado se devuelve anidado y puede exponer su colección completa. | **OBSERVABLE PERO NO CONFIRMADA**: el frontend recibe el resultado, pero no se verificó que lea `disc.comments`. | No existe spec de respuesta; preservar eager hasta caracterizarla o una decisión contractual.
+| Favorites, Pendings, Rates y Asignations: escrituras | Devuelven la entidad creada con Disc asignado | Sus servicios obtienen Disc mediante `manager.findOne`/`findOneBy` y asignan la instancia a Favorite, Pending, Rate o Asignation. La respuesta puede incluir `Disc.comments`. | **OBSERVABLE PERO NO CONFIRMADA**. | Falta cobertura de respuestas anidadas para esos módulos; no modificar sus escrituras en D44.
+| Asignations/Lists `GET` | Devuelve asignaciones y discos para listas/UI | `Asignation.disc` es eager y las lecturas `find*` pueden propagar `Disc.comments`; el frontend conocido usa datos del disco, no la colección de comentarios. | **OBSERVABLE PERO NO CONFIRMADA** por el JSON; consumo de la colección no localizado. | La suite Lists no fija el payload de esta colección; no hay suite de Asignations.
+| Disc PATCH y National Releases que adjuntan Disc | Respuestas de entidad o Release con Disc relacionado | `DiscWriteService.update` devuelve el resultado de `preload`; `NationalReleases.createFromDisc`/`linkDisc` pueden guardar o devolver un Disc unido que conserva comentarios eager. | **OBSERVABLE PERO NO CONFIRMADA**. | Faltan tests de respuesta que fijen la colección anidada en esos callers.
+| Excel, Scraping, Content scheduler y consultas internas que solo verifican/actualizan Disc | Campos de Disc o FK, sin retorno de esa instancia como respuesta | `findOne` puede cargar la colección, pero el código la descarta/usa Disc internamente y no devuelve ese objeto. QueryBuilder/SQL tampoco aplica eager. | **NO CONSUMIDA** en las rutas internas verificadas. | Inspección estática del caller; sin cambios.
+
+- **Resumen de necesidad:** Catalog, Home, Rates, Favorites y Pendings usan el contador mediante subqueries; Calendar no carga ni devuelve la colección. Los payloads de detalle, escrituras con Disc asignado y relaciones Rate/Asignation pueden incluir el array completo. El endpoint dedicado de Comments devuelve filas de Comment, pero reduce el Disc anidado o lo excluye.
+- **Tests añadidos/ajustados:** el detalle de Catalog fija varios comentarios de distintos usuarios; el test existente cubre cero comentarios. Catalog verifica que el listado no una ni devuelva `Disc.comments` y conserve `commentCount`. Home verifica la subquery de contador, ausencia de JOIN y ausencia de la propiedad. Pendings verifica que su QB no cargue ni devuelva la colección.
+- **Cargas explícitas añadidas:** ninguna. El detalle ya declara `comments.user`; las rutas de contador mantienen sus subqueries actuales.
+- **Comparación de payloads:** se fijó el payload completo del detalle y se protegieron los payloads de Catalog/Home/Pendings. No se comparó antes/después con eager retirado porque los callers anidados de escritura/Rate/Asignation no tienen cobertura suficiente.
+- **Bloqueo y hallazgo contractual:** `Disc.comments` es **OBSERVABLE PERO NO CONFIRMADA** en el detalle y en varias respuestas anidadas (`POST /comments`, escrituras con Disc, Rate/Asignation/List y PATCH). Quitar eager alteraría esos JSON salvo que cada caller haga carga explícita; faltan specs de esas respuestas y los consumidores externos no se verifican completamente. Mantener compatibilidad es la opción recomendada. Una reducción intencional de esas colecciones sería un cambio contractual backend + frontend si un cliente las consume; debe decidirse aparte. La carga innecesaria en rutas de validación es una mejora backend-only posible cuando se caractericen sus respuestas.
+- **Verificaciones con Node 20.20.2:** `yarn test src/discs --runInBand`: 26 suites aprobadas, 7 suites PostgreSQL omitidas por guard, 249 tests aprobados y 28 omitidos. Suites focalizadas Catalog, mapper Catalog, Calendar, Home, Pendings y Lists: 6 suites y 158 tests aprobados. Comments, Rates, Favorites y Asignations no tienen specs en este checkout. `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados.
+- **Estado final:** D44 queda cerrada sin cambio de entidad porque el payload observable de varios callers no está completamente caracterizado. `Disc.comments` conserva `eager: true`; D45 permanece pendiente.
 - **Riesgo:** M.
 
 ### D45 — Índices: inventario de queries y esquema
 
-- [ ] Pendiente
+- [x] Cerrada (2026-10-04)
 - **Objetivo:** contrastar consultas observadas con índices existentes y decidir si hay una carencia medible.
 - **Alcance:** filtros/orden de Disc.releaseDate, Disc.artistId/genreId, rates por discId/userId, comments/favorites/pendings/asignaciones por discId; migraciones que los crean y consultas de D1–D38.
-- **Candidatos registrados en D7.1:** `rate(discId)` para agregados por disco; `comment(discId)` para `commentCount`; índices compuestos de estado por `userId`/`discId` en `rate`, `favorite` y `pending`; `disc(releaseDate)` para el filtro/orden frecuente. Contrastar también la necesidad de índices sobre `releaseDate` y campos ordenables con los planes de la aplicación real.
+- **Candidatos registrados en D7.1:** `rate(discId)` para agregados por disco (incluye el join de ranking observado en D32); `comment(discId)` para `commentCount`; índices compuestos de estado por `userId`/`discId` en `rate`, `favorite` y `pending`; `disc(releaseDate)` para el filtro/orden frecuente. Contrastar también la necesidad de índices sobre `releaseDate` y campos ordenables con los planes de la aplicación real.
 - **Fuera de alcance:** añadir índices por intuición o convertir esta revisión en una migración.
 - **Dependencias:** D1–D38.
 - **Criterios de finalización:** se reúnen también todos los candidatos registrados durante D1–D38; cada uno se vincula a una query concreta, filtro/join/orden beneficiado, frecuencia/cardinalidad, índice existente, plan actual y decisión. Sin evidencia de beneficio no se propone migración.
 - **Verificaciones:** revisar esquema/migraciones y planes representativos con EXPLAIN ANALYZE; registrar parámetros usados.
+- **Inventario de entidades/migraciones:** `Disc` declara relaciones Artist/Genre y `releaseDate`, sin `@Index`; Rate, Comment, Favorite, Pending y Asignation tampoco declaran índices. Las migraciones que afectan a Disc/relaciones (sync inicial, debut, cascada Artist → Disc y National Release) no crean índices secundarios para estos campos; PostgreSQL no crea índices automáticamente por las FK. La inspección de `pg_indexes` en `SpamMusicDB` confirma solo PK en `disc`, `rate`, `comment`, `favorite`, `pending`, `asignation`, `artist` y `genre`.
+- **Esquema PostgreSQL observado:** PostgreSQL 17.10; estimaciones `reltuples`: disc 6.630 (1.800 kB total), rate 18.938 (2.600 kB), comment 797 (272 kB), favorite 1.679 (264 kB), pending 4.951 (656 kB), asignation 654 (296 kB), artist 6.483 (1.280 kB), genre 80 (32 kB). Hay 18.940 rates, 1.679 favorites y 4.951 pendings con `userId` y `discId`; Asignation tiene `discId` no nulo en 576 de 654 filas. Los datos/plans corresponden a esta base local y a tablas calientes en caché.
+- **Planes y decisiones (EXPLAIN ANALYZE, BUFFERS):**
+
+| Candidato/decisión | Query, uso y cardinalidad | Índice actual | Plan y evidencia |
+| --- | --- | --- | --- |
+| `rate(discId)` — **JUSTIFICADO** | Catalog `findAll`/`findRandom`: AVG(rate), AVG(cover), count no nulo por Disc; varias subqueries por fila de página. Home D32 une Rate por Disc. Rate ~18.940 filas. | PK `rate(id)` únicamente. | Página representativa de 10: dos subplanes hacen `Seq Scan rate`, 18.940 examinadas × 10 loops, 2.460 buffers por subplan; ejecución 17,84 ms. `rate(discId)` permitiría buscar solo las filas del disco y apoyaría el join de ranking. Coste: espacio e I/O de escrituras en ~19k filas. |
+| `comment(discId)` — **JUSTIFICADO** | Catalog y Home calculan `commentCount` correlacionado; una ejecución por Disc mostrado (página de 10–20). Comment: 797 filas. | PK `comment(id)` únicamente. | Catalog, página de 10: scan de 797 × 10 loops, 240 buffers y 4,04 ms; cero coincidencias en esos discos recientes. `comment(discId)` evitaría recorrer la tabla por cada Disc. Candidato moderado: tabla pequeña, así que el ahorro local no garantiza mejora global; coste bajo pero no nulo de espacio/escritura. |
+| `rate(userId,discId)` — **JUSTIFICADO** | Catalog D4 une Rate personal por ambos campos; Home D33 hace tres subqueries de Rate con `LIMIT 1` por Disc (página máxima 20). | PK únicamente. | Proyección representativa de las cinco subqueries personales de Home, limitada a 20 discos: cada subquery Rate recorrió 18.940 filas en 20 loops, 4.920 buffers por subplan (14.760 combinados), ~0,88–0,90 ms por loop; total 60,87 ms. El usuario con más Rates no tenía estado en esos 20 discos recientes. Lookup puntual por pareja existente: scan de 18.940 filas, 246 buffers, 0,94 ms. Compuesto permitiría index lookup exacto y reduciría scans repetidos; coste de espacio/escritura. |
+| `favorite(userId,discId)` — **JUSTIFICADO** | Catalog D4 y Home D33 consultan favorito del usuario por Disc, con `LIMIT 1` y hasta 20 discos. Favorite: 1.679 filas. | PK únicamente. | Subquery Home: Seq Scan × 20, 400 buffers combinados, ~0,078 ms por loop. Pareja puntual: scan de 1.679, 20 buffers, 0,080 ms. La repetición sustenta el compuesto aunque el ahorro absoluto esperado es menor que en Rate; tabla pequeña, coste de escritura/espacio. |
+| `pending(userId,discId)` — **JUSTIFICADO** | Catalog D4 une pendiente del usuario; Home D33 proyecta `pendingId` por pareja, hasta 20 discos. Pending: 4.951 filas. | PK únicamente. | Subquery Home: Seq Scan × 20, 1.140 buffers combinados, ~0,216 ms por loop. Pareja puntual: scan de 4.951, 57 buffers, 0,207 ms. Compuesto soporta lookup exacto y búsquedas por `userId` en listados; coste de espacio/escritura. |
+| `disc(releaseDate)` — **NO JUSTIFICADO** | Catalog filtra hasta hoy/ordena DESC; Calendar selecciona un mes y ordena ASC; Home usa fecha. Disc: 6.630 filas, 6.630 ≤ `2026-10-04` (2 futuras). | PK únicamente. | Catalog: scan de 6.630 + top-N de 10, 192 buffers, 1,22 ms. Calendar octubre 2026: 5 resultados, scan de 192 buffers y sort, 0,49 ms. La query habitual selecciona prácticamente toda la tabla y el top-N ocupa 25 kB; no compensa indexar con la evidencia actual. |
+| `disc(genreId)` — **NO JUSTIFICADO** | Filtro opcional en Catalog/Home/random; Disc 6.630, Genre 80. | PK únicamente. | El género más frecuente devuelve 895 filas en scan; la selección exterior cuesta ~0,7 ms. El EXPLAIN total fue 2,23 ms porque además calculó en la misma query el género más frecuente. Sin volumen/coste suficiente para índice ahora. |
+| `disc(artistId)` — **NO JUSTIFICADO** | Join Disc → Artist y filtro `EXISTS` por artista/género; 6.630 Disc, 6.429 artistas distintos. | PK únicamente. | El artista más frecuente devuelve 13 filas de 6.632; EXPLAIN total 3,54 ms incluyendo subplan que encuentra ese artista. No indexar solo por ser FK; no hay carga medida que pruebe beneficio. |
+| `asignation(discId)` — **NO JUSTIFICADO** | La query actual `findAndCount` pagina Asignation sin filtro Disc; creación valida Disc usando PK. No se halló filtro de aplicación por `discId`. Tabla 654; 576 con disco. | PK únicamente. | Lookup diagnóstico por Disc más frecuente: scan de 654, cuatro filas, 26 buffers, 0,063 ms. No es query observada del servicio; no añadir índice genérico FK. |
+
+- **Parámetros medidos:** `releaseDate <= 2026-10-04`; Calendar `2026-10-01`–`2026-10-31`; páginas de 10 discos (20 en proyección de estado); género/artista de mayor frecuencia; parejas user/disc existentes y usuario con mayor número de rates. Se omiten UUIDs concretos. No se creó índice de prueba ni se modificó el esquema.
+- **Candidatos D1–D38 consolidados:** D3/D5/D6.1/D6.2 registran repetición de `AVG(rate.rate)` al filtrar/ordenar por `averageRate`; D7.1 midió y reemplazó el filtro por `EXISTS`, mantuvo la media y dejó scans repetidos de Rate/Comment como candidatos. `rate(discId)` cubre también el join de ranking de D32. D33 evidencia cinco subqueries personales por Disco; D34–D38 no añaden candidatos. D8 (`RANDOM()`) y D19 (mes completo tras filtrar semana) no aportan evidencia para un índice nuevo. No se encontraron otros candidatos registrados entre D1–D38.
+- **Artist trigram:** `1758355724537-SyncEntities.ts` crea `artist_name_normalized_trgm_idx` GIN `gin_trgm_ops`, pero `1758424806274-AddStateToVersionItem.ts` lo elimina en `up` y no lo recrea. No está en el catálogo vivo: solo existe PK en Artist. El filtro de Catalog D1 busca `artist.name`/`disc.name` mediante `ILIKE`, no `artist.name_normalized`; el GIN declarado no cubriría esa query. Se registra la inconsistencia migratoria, sin incorporarla como índice de Disc ni proponer restaurarlo en D46 (búsqueda Artist fuera de este alcance). Los índices de Version, National Release y Spotify Playlist Artist observados en otras migraciones no aplican a estas queries.
+- **Recomendación para D46:** comparar antes/después y evaluar una migración reversible con `rate(discId)`, `comment(discId)`, `rate(userId,discId)`, `favorite(userId,discId)` y `pending(userId,discId)`. Scans repetidos justifican probar esos cinco; el beneficio medido más claro está en Rate. D46 deberá verificar beneficio real y coste de escritura/espacio, en especial para Comment/Favorite/Pending, que hoy son tablas modestas.
+- **Descartados para D46:** `disc(releaseDate)`, `disc(artistId)`, `disc(genreId)` y `asignation(discId)` quedan **NO JUSTIFICADO** con el tamaño, consultas y planes actuales. No cambia ningún contrato o query de producción; siguen vigentes las decisiones contractuales de D5, D7 y D39–D44.
+- **Tests focalizados:** no se tocaron queries ni código de producción; no aplica suite adicional de medición.
+- **Verificaciones:** entidades, migraciones y esquema vivo revisados; planes `EXPLAIN ANALYZE` representativos para releaseDate, artistId/genreId, agregados Rate/Comment, estados userId/discId y diagnóstico Asignation registrados; `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` ejecutados al cierre.
+- **Estado final:** D45 cerrada. D46 sigue pendiente; no se añadieron índices ni migraciones.
 - **Riesgo:** XS.
 
 ### D46 — Índices: migración justificada
 
-- [ ] Pendiente
+- [x] Cerrada (2026-10-04)
 - **Objetivo:** implementar únicamente los índices que D45 demuestre necesarios.
 - **Alcance:** nueva migración TypeORM con up/down limitada a las consultas justificadas; no modificar migraciones históricas.
 - **Fuera de alcance:** índices genéricos para cada FK o cambios de query no relacionados.
 - **Dependencias:** D45.
 - **Criterios de finalización:** cada índice tiene query objetivo y evidencia antes/después; la migración es reversible, no duplica índices existentes y no cambia datos ni contratos. Si D45 no demuestra beneficio, cerrar esta tarea sin migración y documentar la decisión.
 - **Verificaciones:** revisar up/down y SQL; ejecutar migración en PostgreSQL de prueba; comparar EXPLAIN ANALYZE antes/después; <code>pnpm build</code>.
+- **Migración:** `src/migrations/1791127430930-AddDiscQueryIndexes.ts`, con nombres estables `IDX_rate_disc_id_d46`, `IDX_comment_disc_id_d46`, `IDX_rate_user_disc_d46`, `IDX_favorite_user_disc_d46` y `IDX_pending_user_disc_d46`. `up` crea solo estos cinco B-tree; `down` los elimina en orden inverso. Antes de aplicarla se confirmó que no existía un índice equivalente, aparte de las PKs, en el esquema vivo. No se cambiaron queries/contratos ni migraciones históricas.
+- **EXPLAIN ANALYZE antes/después (misma base y parámetros representativos de D45):**
+
+| Índice | Query/plan antes → después | Tiempo y buffers antes → después | Uso y decisión final |
+| --- | --- | --- | --- |
+| `rate(discId)` | Agregados de página de 10: `Seq Scan rate` (18.940 filas × 10 loops por subquery) → `Bitmap Heap Scan` con `Bitmap Index Scan IDX_rate_disc_id_d46`. | **17,90 ms → 1,91 ms**; 5.112 → ~250 buffers totales en el plan después (rate por disco baja de 4.920 buffers a decenas). | PostgreSQL usa el índice en AVG/count por disco; conservar. |
+| `comment(discId)` | `commentCount` para página de 10: `Seq Scan comment` (797 × 10) → `Index Scan IDX_comment_disc_id_d46`. | **1,80 ms → 1,18 ms**; 432 → ~212 buffers. | Índice usado por el contador. Mejora absoluta pequeña en esta tabla y muestra, pero elimina los scans repetidos; conservar. |
+| `rate(userId,discId)` | Cinco subqueries personales Home para 20 discos: tres scans completos de Rate, cada uno 20 loops → index scans `IDX_rate_user_disc_d46` en esas tres expresiones. Lookup puntual por pareja: seq scan → index scan. | Home **58,16 ms → 1,54 ms**; 16.492 → ~401 buffers. Pareja **0,94 ms → 0,14 ms** (D45, mismos valores representativos). | PostgreSQL usa el índice en Home y lookup exacto. El join global de Catalog mantiene hash join y seq scan de Rate (5.112 buffers / 6,78 ms antes; 519 buffers / 7,37 ms después para el join completo), sin mejora de tiempo ahí; mantenerlo por las subqueries personales que sí se aceleran. |
+| `favorite(userId,discId)` | Subquery `LIMIT 1` de Home, 20 discos: seq scan × 20 → index scan `IDX_favorite_user_disc_d46`; lookup por pareja: seq scan → index scan. | Home contribuye al total de 58,16 → 1,54 ms; buffers del subplan 400 → ~40. Pareja **0,080 ms → 0,034 ms** (D45). | PostgreSQL usa el índice en ambas formas. El join de Catalog usa bitmap por prefijo `userId`, aunque el plan global no reduce el tiempo; conservar. |
+| `pending(userId,discId)` | Subquery `LIMIT 1` de Home, 20 discos: seq scan × 20 → index scan `IDX_pending_user_disc_d46`; lookup por pareja: seq scan → index scan. | Home contribuye al total de 58,16 → 1,54 ms; buffers del subplan 1.140 → ~40. Pareja **0,207 ms → 0,018 ms** (D45). | PostgreSQL usa el índice en Home y lookup exacto. En el join global de Catalog mantiene hash/seq scan de Pending por el volumen seleccionado por ese usuario; no se atribuye ahorro a ese plan. Conservar por el acceso personal repetido de Home. |
+
+- **Parámetros y lectura de tiempos:** `releaseDate <= 2026-10-04`, top 10 para agregados, top 20 para la proyección de cinco subqueries personales; mismo usuario con más Rates, género/artista de mayor frecuencia y parejas existentes que D45. No se imprimen UUIDs. Los tiempos son de ejecuciones locales y pueden variar con caché; la caída de filas/buffers y el cambio de scan corroboran los accesos. En Catalog, Rate/Pending siguen en secuencial/hash porque el usuario seleccionado conserva una fracción grande de sus tablas; no se fuerza un scan de índice.
+- **Migración y rollback:** el historial local tenía pendiente una migración anterior ajena (`AddDashboardButtonsEnabledToUsers1786507000000`). Para no ejecutarla ni ampliar alcance, se usó TypeORM `MigrationExecutor` limitado a `AddDiscQueryIndexes1791127430930`. `up` aplicó solo D46. `down` eliminó los cinco índices y su registro; se comprobó ausencia. Se volvió a aplicar `up`: los cinco índices y el registro D46 están presentes, y la migración ajena continúa pendiente.
+- **Descartes después de medir:** ninguno de los cinco candidatos se quitó; todos son usados por PostgreSQL al menos en el agregado o subquery por el que se justificó. Los índices compuestos de Rate/Pending no se seleccionan en el join global de Catalog, pero sí en el estado personal correlacionado de Home. No se añadieron índices de Disc, Asignation, trigram ni otros.
+- **Verificaciones:** `up/down/up` de TypeORM, catálogo de índices e historial comprobados; `EXPLAIN ANALYZE` antes/después con agregados Rate, `commentCount`, cinco estados personales Home, join de estado Catalog y lookups de pareja; suite completa de Discs, `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` ejecutados al cerrar.
+- **Estado final:** D46 queda cerrada con cinco índices aplicados en la base local. D47 permanece pendiente.
 - **Riesgo:** M.
 
 ### D47 — Limpieza final de Discs
 
-- [ ] Pendiente
+- [x] Cerrada (2026-10-04)
 - **Objetivo:** retirar duplicación o código/imports obsoletos que queden después de completar las subtareas, sin crear capas innecesarias.
 - **Alcance:** src/discs y helpers de Discs creados por tareas anteriores; comentarios que ya no describan el código.
 - **Fuera de alcance:** cambios funcionales nuevos o limpieza oportunista de otros módulos.
 - **Dependencias:** D1–D46.
 - **Criterios de finalización:** no hay responsabilidades mezcladas restantes que se hayan acordado para esta fase; helpers tienen un uso/responsabilidad clara; no se introducen abstracciones genéricas sin consumidor.
 - **Verificaciones:** revisar diff completo, <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>, <code>pnpm build</code>.
+- **Limpieza realizada:** en `calendar/helpers/map-weekly-discs-to-groups.ts`, `WeeklyDiscPayload` queda como tipo interno porque no tiene consumidores externos; `WeeklyCalendarGroup` sigue exponiendo la misma forma inferida. Se retiró de `DiscsService.getSpotifyTracks` el comentario explicativo que duplicaba palabra por palabra el comentario de la implementación en `DiscSpotifyService`.
+- **Revisión estructural:** `DiscsService` permanece como fachada de 132 líneas: no tiene repositorio propio, helpers privados ni lógica duplicada de Catalog, Calendar, Home, Write, Enrichment o Spotify. Inyecta los siete servicios que usa; conserva `SpotifyApiService` para las dos operaciones Spotify aún coordinadas allí y el 404 específico de resolver álbum. Los servicios extraídos mantienen sus dependencias directas. Helpers puros tienen consumidores; `getFridayWeekRanges` se comparte entre Calendar y Enrichment. No se reubicaron ni borraron archivos.
+- **Tamaños aproximados:** `DiscsService` 132 líneas; `DiscCatalogService` 394 (varios endpoints caracterizados); `DiscCalendarService` 261; `DiscHomeService` 133; `DiscWriteService` 140; `DiscEnrichmentService` 44; `DiscSpotifyService` 42. Los specs de Catalog y Calendar son extensos por las caracterizaciones de contratos y consultas; permanecen junto a sus responsabilidades y no se fragmentaron sin beneficio demostrable.
+- **DiscModule:** sin cambios. Providers: fachada y seis servicios de responsabilidad; `TypeOrmModule.forFeature([Disc, Artist, Genre, Country])` cubre los repositorios inyectados. `AuthModule` y `WordpressModule` siguen siendo necesarios; exporta únicamente `DiscsService`, consumido externamente.
+- **Tests y duplicación:** specs raíz de `DiscsService`/controller verifican delegación y límites HTTP; las suites de Catalog, Calendar, Home, Write, Enrichment y Spotify conservan sus pruebas específicas. Los helpers tienen specs junto a ellos. Las siete suites PostgreSQL permanecen en `home/__tests__/` como integración transversal. No se encontraron caracterizaciones completas duplicadas tras las extracciones ni otros exports/helpers/imports sin consumidor demostrable.
+- **Migración D46:** revisada sin cambios; `up`/`down` contienen los mismos cinco índices D46 en orden reversible y no hay índices ajenos al alcance.
+- **Hallazgos deliberadamente abiertos:** se preservan sin corrección los permisos y contratos observados; las relaciones eager/payloads visibles y consumidores sin confirmar de D39–D44; duplicados Favorite/Pending y su fanout; falta de desempate para ranking/ordenaciones; selección personal de Rate sin orden; semánticas de filtros/fechas como `year=0`, fecha/rangos semanales; y discrepancias entre el tipo de Calendar y campos runtime. También permanecen las decisiones de D5/D7 sobre exclusión de discos sin `averageRate`, arrays observables y país ausente. D47 no cambia queries, permisos, tipos públicos ni payloads.
+- **Verificaciones con Node 20.20.2:** suite completa con las siete pruebas PostgreSQL optativas habilitadas: 33 suites y 277 tests aprobados. Suites focalizadas de fachada, controller y Calendar: 3 suites y 65 tests aprobados. `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados. En primer intento, las suites PostgreSQL dieron `EPERM` al conectar desde sandbox; al repetir con acceso local autorizado, todas pasaron.
+- **Estado final:** D47 cerrada. D48 permanece pendiente.
 - **Riesgo:** S.
 
 ### D48 — Regresión final de Discs
 
-- [ ] Pendiente
+- [x] Completada (2026-10-04)
 - **Objetivo:** demostrar que el módulo refactorizado mantiene las rutas, contratos y permisos actuales.
 - **Alcance:** todos los endpoints y callers internos de Discs cubiertos en la fase, incluyendo LastFM y Spotify.
 - **Fuera de alcance:** cambios contractuales nuevos o refactors de fases futuras.
 - **Dependencias:** D47.
 - **Criterios de finalización:** suite de caracterización/regresión completa, pruebas relacionadas y build pasan; se revisan migraciones y alcance final; quedan documentadas excepciones verificables, sin tareas de Discs implícitas.
 - **Verificaciones:** <code>pnpm exec jest src/discs --runInBand</code>, <code>pnpm run test:e2e -- --runInBand</code> si hay e2e aplicables, y <code>pnpm build</code>.
+- **Regresión Discs (Node 20.20.2):** `yarn test src/discs --runInBand` con `D31_POSTGRES_TEST=1` … `D37_POSTGRES_TEST=1`: **33 suites y 277 tests aprobados**, incluidas las siete suites PostgreSQL. El primer intento dentro del sandbox no pudo conectar a `127.0.0.1:5432` (`EPERM`); la repetición con acceso local autorizado pasó completa.
+- **Consumidores internos:** `yarn test src/lists/list.service.spec.ts src/excel/excel.service.spec.ts src/pendings/pendings.service.spec.ts --runInBand`: Lists y Pendings pasan (**19 tests**). Los **3 tests de Excel fallan** al construir su fixture porque no registra el provider `DiscRepository` requerido por `ExcelService`; es el mismo fallo documentado desde D39, preexistente y ajeno a esta fase, por lo que no se corrigió. No hay specs en el repo para Favorites, Rates, Comments, Asignations o National Releases.
+- **E2E:** `test/` contiene `app.e2e-spec.ts` y `excel.e2e-spec.ts`, pero ninguno prueba rutas de Discs; por tanto no hay E2E aplicables a endpoints de Discs y no se ejecutó una suite E2E no relacionada.
+- **Contratos y migraciones:** revisión final del diff confirma que `discs.controller.ts`, DTOs de producción, entidades y migraciones históricas no se modificaron en la fase; las rutas y guards actuales permanecen en el controller. La única migración nueva es D46, `1791127430930-AddDiscQueryIndexes.ts`: su `up`/`down` contiene los cinco índices D46 y sus drops inversos; la aplicación, rollback y reaplicación quedaron verificados en D46. No hay migraciones accidentales, temporales ni cambios de `.impeccable/config.json`.
+- **Diff final:** los cambios de fase están limitados al refactor y caracterizaciones bajo `src/discs`, el spec de `Pendings` añadido para su caller y la migración D46; no se detectaron imports/configuración obsoletos ni cambios contractuales nuevos sin documentar. No hubo regresiones de Discs que corregir.
+- **Estado de servicios:** `DiscsService` 132 líneas (fachada); Catalog 394; Calendar 261; Home 133; Write 140; Enrichment 44; Spotify 42. La estructura final conserva las responsabilidades y specs junto a sus servicios, helpers locales y las siete pruebas PostgreSQL transversales en `home/__tests__/`.
+- **Hallazgos contractuales deliberadamente abiertos:** eager loading y arrays/payloads observables o consumidores no confirmados; permisos y respuestas anidadas sin caracterización completa; duplicados Favorite/Pending y fanout; empates sin desempate y Rate personal sin orden; semánticas de filtros/fechas (`year=0`, límites semanales) y discrepancias entre tipos y datos runtime; exclusión de discos sin `averageRate` y mapeo de país ausente. Se conservan las decisiones de D39–D47 sin resolverlas en D48.
+- **Verificaciones finales:** suite completa Discs (33/33 suites, 277/277 tests); consumidores Lists/Pendings (19 tests aprobados) y Excel (3 fallos preexistentes descritos); E2E de Discs no aplicables; `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` aprobado; `git diff --check` aprobado; revisión del diff completo realizada.
+- **Estado final:** D48 completada y **fase Discs (D0–D48) cerrada** (2026-10-04). No se inició ninguna fase futura.
 - **Riesgo:** M.
 
 ## Fases futuras
