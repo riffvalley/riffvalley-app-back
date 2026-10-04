@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { User } from 'src/auth/entities/user.entity';
 import { ContentsService } from './contents.service';
 import { ContentType } from './entities/content.entity';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import * as cheerio from 'cheerio';
 
 @Injectable()

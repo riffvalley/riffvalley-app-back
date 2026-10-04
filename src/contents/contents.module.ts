@@ -8,7 +8,7 @@ import { Reunion } from 'src/reunions/entities/reunion.entity';
 import { Spotify } from 'src/spotify/entities/spotify.entity';
 import { Article } from 'src/articles/entities/article.entity';
 import { Video } from 'src/videos/entities/video.entity';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { List } from 'src/lists/entities/list.entity';
 
 import { ListsModule } from 'src/lists/list.module';

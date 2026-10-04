@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import { Repository } from 'typeorm';
-import { Country } from '../../../../countries/entities/country.entity';
-import { Genre } from '../../../../genres/entities/genre.entity';
+import { Country } from '../../../countries/entities/country.entity';
+import { Genre } from '../../../genres/entities/genre.entity';
 
 @Injectable()
 export class ExcelTemplateService {

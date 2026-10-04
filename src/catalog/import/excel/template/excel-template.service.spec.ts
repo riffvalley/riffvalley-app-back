@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
-import { Country } from '../../../../countries/entities/country.entity';
-import { Genre } from '../../../../genres/entities/genre.entity';
+import { Country } from '../../../countries/entities/country.entity';
+import { Genre } from '../../../genres/entities/genre.entity';
 import { ExcelTemplateService } from './excel-template.service';
 
 describe('ExcelTemplateService', () => {

@@ -7,10 +7,6 @@ import { CommonModule } from './common/common.module';
 import { I18nConfigModule } from './i18n/i18n.module';
 
 //MODULES
-import { GenresModule } from './genres/genres.module';
-import { CountriesModule } from './countries/countries.module';
-import { ArtistsModule } from './artists/artists.module';
-import { DiscModule } from './discs/discs.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { AuthModule } from './auth/auth.module';
 import { RatesModule } from './rates/rates.module';
@@ -65,10 +61,6 @@ import { TiktokModule } from './tiktok/tiktok.module';
     CommonModule,
 
     //MODULES
-    GenresModule,
-    CountriesModule,
-    ArtistsModule,
-    DiscModule,
     CatalogModule,
     AuthModule,
     RatesModule,

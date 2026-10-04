@@ -1929,7 +1929,7 @@ Se conservan íntegros los hallazgos contractuales previos del roadmap, incluido
 
 ## Fases futuras
 
-Los módulos se priorizan por tamaño observado, cantidad de responsabilidades, consultas repetidas/costosas, integraciones y riesgo. No se desglosan todavía: al iniciar cada fase se inspeccionarán su código, DTOs, entidades, tests y migraciones y se generarán subtareas pequeñas con este mismo formato.
+Los módulos se priorizan por tamaño observado, cantidad de responsabilidades, consultas repetidas/costosas, integraciones y riesgo. Catalog queda desglosada abajo porque su objetivo es cerrar ownership y estructura; las demás fases se inspeccionarán al iniciarlas y se desglosarán con este mismo formato.
 
 ### Fase 2 — Rates, Favorites, Pendings y Comments
 
@@ -1937,10 +1937,174 @@ Los módulos se priorizan por tamaño observado, cantidad de responsabilidades, 
 - Candidato prioritario por agregados de puntuación, estado de usuario y patrones de consulta que se repiten en Discs; revisar joins, conteos, eager loading y N+1 entre módulos.
 - Mantener cada endpoint y cada métrica como trabajo separado; no centralizarlo en un repositorio genérico.
 
-### Fase 3 — Artists
+### Fase 3 — Catalog
 
-- Artists tiene 504 líneas y varias consultas de discos, agregados y mapeos de respuesta similares.
-- Riesgos principales: carga de Disc/Rate por artista, duplicación de estadísticas y eager de Country; conservar el contrato del catálogo y detalle de artista.
+- **Estado:** cerrada (2026-10-04). Artists, Genres, Countries, Discs e Import viven bajo `src/catalog/`; `CatalogModule` es composición interna y las capacidades conservan sus rutas independientes.
+- **Estructura objetivo:** `src/catalog/{artists,genres,countries,discs,import}/` y `src/catalog/catalog.module.ts`.
+- `catalog/` expresa organización interna y ownership; no es una API pública ni un barrel obligatorio. Las capacidades conservan las rutas `/api/artists`, `/api/genres`, `/api/countries` y `/api/discs`; `GET /api/catalog` permanece fuera del alcance de esta fase y no cambia de ownership por compartir el nombre.
+- Catalog Import ya está estructuralmente cerrado. No reabrirlo salvo los ajustes de integración de módulos/imports imprescindibles para completar esta fase; no refactorizar sus flujos.
+- No crear `/catalog/artists`, `/catalog/genres`, `/catalog/countries` ni `/catalog/discs`, ni cambiar auth o frontend como parte de movimientos internos.
+
+#### Reglas de ejecución de Catalog
+
+- Caracterizar antes de extraer responsabilidades o mover archivos; comprobar los casos aplicables de rutas, auth, requests, responses completos, errores, orden, paginación, relaciones, nulos y efectos secundarios.
+- Mantener separados la caracterización, la extracción funcional justificada y el movimiento estructural cuando así se pueda atribuir mejor cualquier regresión.
+- Preservar rutas y responses. Cualquier cambio contractual requiere una decisión y tarea explícitas; mantener los findings abajo como trabajo separado.
+- Mantener `GenresModule` y `CountriesModule` como módulos Nest propios, pequeños y sin subdivisión interna salvo evidencia posterior. Artists y Discs mantienen también su frontera de módulo.
+- No crear `shared/` por anticipado ni unificar normalizadores con semánticas diferentes. Usar helpers/servicios solo para responsabilidad cohesionada y reutilización real.
+- Un servicio de 300–400 líneas es una señal para revisar cohesión, no un límite rígido ni motivo suficiente para dividirlo.
+- No optimizar SQL ni añadir índices por intuición; cualquier cambio de rendimiento requiere query y evidencia representativa, con `EXPLAIN ANALYZE` cuando corresponda.
+- Aplicar Impeccable según las reglas existentes: hallazgos preexistentes, de atribución desconocida o fuera de alcance se reportan; no se corrigen ni suprimen, no se modifica `.impeccable/config.json` y solo se corrigen regresiones introducidas por la tarea actual.
+
+#### C1 — Artists
+
+**Objetivo:** caracterizar y ordenar Artists antes de moverlo bajo Catalog, manteniendo rutas y contratos.
+
+- [x] **C1 completada (2026-10-04).** Artists vive en `src/catalog/artists/` con fachada fina y servicios de Catalog, Write, Search, Details, Management y Orphans; `normalize-for-search` sigue siendo helper puro local. `ArtistsModule` queda integrado una vez desde `CatalogModule`, sin import directo adicional en `AppModule`.
+- **Regresión de cierre (Node 20.20.2):** Artists **10 suites / 46 tests**; regresión focalizada de Artists, Catalog DI, Catalog Import, Disc Write y Festival Playlists **24 suites / 168 tests**; `tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados. Las suites DI de Artists y Catalog están incluidas. Requests y National Releases no tienen specs de servicio en el repositorio.
+
+##### C1.1 — Caracterizar ArtistsController y ArtistsService
+
+- **Alcance:** CRUD, búsquedas, management y operaciones de orphans; auth/roles; DTOs/query params; filtros, orden, paginación, payloads, errores, relaciones y side effects.
+- **Criterios de finalización:** tests fijan los contratos actuales de cada operación afectada; queda documentado qué campos vienen de relaciones eager y qué consumers los usan.
+- **Verificaciones:** specs focalizados de controller/service; revisar callers frontend e internos; `pnpm exec jest` sobre las suites de Artists.
+- **Riesgo:** M.
+
+##### C1.2 — Caracterizar `normalizeForSearch`
+
+- **Alcance:** fijar el comportamiento de `normalizeForSearch` en Artists con sus entradas relevantes y aislarlo solo si mejora la cobertura/claridad del límite de búsqueda.
+- **Fuera de alcance:** sustituir o unificarlo con normalizadores de import manual, Excel, Disc Write u otros flujos.
+- **Criterios de finalización:** las diferencias entre normalizadores permanecen explícitas y cubiertas; no cambia el resultado observable de búsqueda.
+- **Verificaciones:** tests unitarios focalizados del helper y de sus usos en Artists.
+- **Riesgo:** S.
+
+##### C1.3 — Revisar cohesión de ArtistsService
+
+- **Alcance:** revisar el servicio actual de unas 500 líneas y extraer management u orphans únicamente si se demuestra una responsabilidad cohesiva y una reducción real de complejidad. Mantener una fachada cuando ayude a preservar callers.
+- **Criterios de finalización:** extracción incremental después de C1.1/C1.2, moviendo implementación y tests, o decisión documentada de no extraer cuando no aporte claridad.
+- **Fuera de alcance:** refactor por tamaño, clases por endpoint, cambios de queries o contratos.
+- **Verificaciones:** suites de servicio/controller afectadas y comprobación de DI.
+- **Riesgo:** M.
+
+##### C1.4 — Mover Artists bajo Catalog
+
+- **Alcance:** mover `src/artists/` a `src/catalog/artists/`; actualizar imports, `AppModule`, módulos y tests.
+- **Criterios de finalización:** no quedan imports rotos; `ArtistsModule` conserva sus providers/repositorios y las rutas `/api/artists` no cambian.
+- **Verificaciones:** `pnpm exec jest` de Artists, Catalog y consumers que importan Artist; `pnpm build`; revisar rutas y auth.
+- **Riesgo:** M.
+
+##### C1.5 — Regresión e integración de Artists
+
+- **Alcance:** comprobar la resolución de Artists dentro de Catalog y la integración con Disc, importadores y callers internos/frontend.
+- **Criterios de finalización:** los payloads, permisos y side effects caracterizados siguen iguales; fallos previos quedan distinguidos de regresiones.
+- **Verificaciones:** suites focalizadas de Catalog/Artists/importadores/Disc Write y consumidores aplicables; TypeScript y `git diff --check`.
+- **Riesgo:** M.
+
+**Findings pendientes, fuera de C1 y preservados sin corrección:** `countryId` enviado por el frontend pero ignorado en management; el conteo de huérfanos no aplica `genreId`; una página de management vacía devuelve `orphanCount: 0`; `countryId` vacío no limpia la relación; DELETE de ID inexistente no responde 404; cascada Artist → Disc; ausencia de orden explícito en `GET /artists`; manejo de `23505` sin índice único de Artist confirmado; helpers frontend obsoletos detectados en la auditoría. Decidir cualquier cambio contractual por separado.
+
+#### C2 — Genres y Countries
+
+**Objetivo:** caracterizar y mover las capacidades pequeñas de Genre y Country a Catalog sin sobrearquitectura.
+
+- [x] **C2 cerrada (2026-10-04).** C2.1–C2.5 completadas: Genre y Country conservan sus módulos Nest y services cohesivos bajo `src/catalog/`; contratos, relaciones y consumers verificados. Los findings contractuales listados bajo C2 siguen abiertos y fuera de este cierre.
+
+##### C2.1 — Caracterizar Genres
+
+- [x] **Completada (2026-10-04).** Añadidos specs del controller y service, sin cambios de producción.
+- **Alcance:** CRUD, bulk actual, orden, DTOs, contratos, errores, auth y relaciones con Disc.
+- **Criterios de finalización:** responses, validaciones actuales, orden, paginación y códigos/errores quedan cubiertos; se documenta el alcance de `POST /genres/bultCreateGenre`.
+- **Verificaciones:** specs focalizados de Genres y consumers directos.
+- **Riesgo:** S.
+- **Rutas caracterizadas:** `POST /api/genres`, `POST /api/genres/bultCreateGenre` (typo preservado), `GET /api/genres`, `GET /api/genres/:id`, `PATCH /api/genres/:id` y `DELETE /api/genres/:id`; verbos, paths, DTOs/body/query, delegación, response, propagación de errores y ausencia de metadata explícita de auth quedan fijados.
+- **Service y cobertura:** `GenresService` tiene 122 líneas y solo inyecta `Repository<Genre>`. `findAll`/`findOne` son lectura/catalog; `create`/`update`/`remove` y `bulkCreate` son write. Bulk es una variante de escritura por lote, no demuestra por sí sola una responsabilidad de importación separada: valida manualmente el array, convierte cada elemento, guarda una vez y devuelve los entities en orden de entrada. La decisión de cohesión se cierra en C2.2, sin extraer.
+- **Contratos fijados:** `CreateGenreDto.color` es opcional en TypeScript pero, al carecer de `IsOptional`, la `ValidationPipe` global produce 400 si falta. Bulk no tiene DTO y rechaza `genres` no-array con 400 y el mensaje actual; solo valida que sea array, sin validar sus elementos. El array vacío llama `save([])` y responde con `0 genres have been successfully created.` y `data: []`. `findAll` usa `findAndCount`, `name ASC`, defaults limit 10/offset 0 y envelope `{ totalItems, totalPages, currentPage, limit, data }`; la DTO transforma query numéricas, rechaza limit 0 por `IsPositive` y permite offset negativo. También quedan congelados los resultados aritméticos de limit/offset cero o negativos si llegan al service. `findOne` y `update` devuelven 404 con `Genre with id <id> not found`; `update` usa `preload` y `save`. DELETE devuelve el `DeleteResult` sin convertir `affected: 0` en 404. Errores DB `23505` son 400 con `detail`; otros errores de create/update/bulk son 500 con `An unexpected error occurred`.
+- **Dependencias e integración:** durante la caracterización, `GenresModule` registraba `TypeOrmModule.forFeature([Genre])` y se importaba desde `AppModule`; C2.4 lo reubicó bajo `CatalogModule`. Otros módulos mantienen sus propios registros/repositorios y/o importan la entidad: Discs, Catalog, Common (`GET /api/catalog` devuelve genres y countries en orden `name ASC`), Requests, Seeds y Catalog Import. `Genre` tiene `OneToMany` hacia `Disc`; `Disc.genre` es `ManyToOne` eager. También usan/importan la entidad los servicios de Disc Calendar/Write, Requests, Catalog Import manual/Excel, Seeds y National Releases. El movimiento no cambió imports de TypeORM ni metadata.
+- **Findings adicionales preservados:** `findOne` convierte cualquier excepción de `findOneByOrFail`, incluidos errores de persistencia ajenos a ausencia del ID, en el mismo 404. Bulk comprueba el array, pero no valida el shape de sus elementos; propiedades ausentes llegan a `repository.create/save` como `undefined`.
+- **Verificación (Node 20.20.2):** 2 suites / 31 tests de Genres aprobados; `tsc --noEmit -p tsconfig.build.json` y `git diff --check` verificados en C2.1. No hay regresión de consumers requerida por este cambio solo de tests; las dependencias quedan inventariadas para C2.4/C2.5.
+
+##### C2.2 — Cierre arquitectónico de Genres
+
+- [x] **Completada (2026-10-04).** Se conserva `GenresModule`, `GenresController` y `GenresService` sin fachada ni subdivisión interna.
+- **Revisión de cohesión:** las consultas se limitan a `findAndCount` con orden/paginación y `findOneByOrFail`; no hay QueryBuilder, joins ni mapping no trivial. La respuesta paginada es un envelope pequeño y bulk mapea los elementos de entrada directamente a entidades. Las reglas de negocio se limitan a validar que `genres` sea array, construir/guardar entidades y traducir errores de persistencia. La única dependencia es `Repository<Genre>` y no hay lógica compartida que requiera una capa común.
+- **Decisión:** lectura/catalog (`findAll`, `findOne`) y escritura (`create`, `update`, `remove`, bulk) son categorías distinguibles, pero cada bloque es pequeño, opera sobre el mismo agregado y no tiene dependencias ni consumidores independientes. Separarlos añadiría providers, delegación y puntos de coordinación sin reducir complejidad real. Bulk es escritura por lote, no importación independiente. `GenresService` (122 líneas) queda intacto.
+- **Criterio aplicado:** decisión deliberada por cohesión y bajo volumen, coherente con el criterio usado en Discs/Artists. Sus servicios se separaron donde había responsabilidades y complejidad funcional concretas; no se crean clases por método ni se usa el tamaño como regla automática. Genres se mantiene como módulo Nest independiente y pequeño, sin subservicios read/write, fachada ni `shared/`; C2.4 lo ubicó bajo el ownership físico `src/catalog/genres/`. Sin cambios funcionales; los 31 tests de C2.1 se mantienen.
+- **Verificaciones (Node 20.20.2):** suite Genres (2 suites / 31 tests), `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check`.
+
+##### C2.3 — Caracterizar Countries
+
+- [x] **Completada (2026-10-04).** Se añadieron `src/catalog/countries/countries.service.spec.ts` y `src/catalog/countries/__tests__/countries.controller.spec.ts` (26 tests) para CRUD, DTOs, paginación, errores, auth y metadatos de relación; sin cambios de producción.
+- **Alcance:** CRUD, `isoCode`, DTOs, contratos, errores, auth y relación con Artist, incluidas las consecuencias de borrado de registros referenciados.
+- **Criterios de finalización:** queda caracterizado qué campos se leen y escriben por la API y los callers; no cambia la persistencia.
+- **Consumidores:** durante la caracterización, `CountriesModule` se importaba desde `AppModule`; C2.4 lo reubicó bajo `CatalogModule`. Los demás módulos registran o usan directamente `Country`. `GET /api/catalog` (Common), Artists, Disc Catalog/Calendar, Requests, Seeds, Catalog Import manual, Excel Import y Excel Template consumen Country. `Artist.country` es eager y nullable; `Country.artist` es la inversa `OneToMany` con `cascade: true`. No se probó una FK real: `repository.delete` devuelve `DeleteResult` con `affected = 0` sin 404 y propaga sin traducir un posible error FK; el cascade ORM de la entidad no equivale a `repository.delete`.
+- **Revisión del servicio:** 92 líneas, solo `Repository<Country>`, sin QueryBuilder, joins, mapeos relevantes ni reglas de negocio complejas. Lecturas (`findAll`, `findOne`) y writes (`create`, `update`, `remove`) son bloques distinguibles pero pequeños y cohesionados; separarlos añadiría providers/delegación sin reducir complejidad. Se mantiene `CountriesService` intacto y su módulo/entidad quedó bajo `src/catalog/countries/` en C2.4, junto con Genres y conservando las rutas públicas.
+- **Findings confirmados:** entidad y respuestas incluyen `isoCode`, pero los DTOs solo permiten `name` (`name` tiene longitud 1–50); `GET /countries` no fija orden; `findOne` convierte cualquier error del repositorio en el mismo 404; no hay `@Auth()` explícito; DELETE inexistente no da 404; y un borrado de Country referenciado podría fallar por FK. Sin cambios a estos comportamientos.
+- **Frontend:** Artist Management consume `GET /countries` y usa `isoCode`; los stores de catálogo consumen países desde `/catalog` para Discs, Calendars, Home, Requests y Catalog Import. El helper exportado `getAllCountries()` apunta a `/countries/all`, ruta que no existe en el controller y que no tiene callers actuales. `getCountries(limit, offset)` envía siempre `limit=500`, ignorando `limit`; ambos hallazgos quedan fuera de alcance.
+- **Verificaciones (Node 20.20.2):** Countries 2 suites / 26 tests; consumers directos 11 suites / 96 tests; `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json`; `git diff --check`.
+- **Riesgo:** S.
+
+##### C2.4 — Mover Genres y Countries bajo Catalog
+
+- [x] **Completada (2026-10-04).** Se movieron `src/genres/` y `src/countries/` a `src/catalog/genres/` y `src/catalog/countries/`, preservando cada módulo, controller, service, DTO, entity y sus tests. Imports de módulos, entidades y consumers actualizados; `CatalogModule` compone ambos módulos y `AppModule` registra solo `CatalogModule`. Sin subdivisión ni cambios de lógica, contratos, rutas o relaciones TypeORM.
+- **Alcance:** mover `src/genres/` a `src/catalog/genres/` y `src/countries/` a `src/catalog/countries/`; actualizar imports, `AppModule`, `TypeOrmModule`, entidades y tests.
+- **Criterios de finalización:** ambos conservan módulos Nest propios, sin nuevas subdivisiones; no quedan imports rotos ni cambios en `/api/genres` o `/api/countries`.
+- **Verificaciones (Node 20.20.2):** Genres y Countries 4 suites / 57 tests; Artists 10 suites / 46 tests; Catalog Import 10 suites / 73 tests; Catalog DI 1 suite / 3 tests; consumidores de Disc Catalog/Calendar/Write/Home 4 suites / 151 tests; `./node_modules/.bin/tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados. Sin imports activos a las ubicaciones raíz antiguas `src/genres` o `src/countries`; sin registros directos de Genres/Countries en `AppModule`.
+- **Riesgo:** M.
+
+##### C2.5 — Regresión conjunta de Genres y Countries
+
+- [x] **Completada (2026-10-04).** Validada estructura, composición, relaciones y consumers después de C2.4; sin cambios funcionales ni corrección de findings.
+- **Alcance:** validar ambos módulos junto a Catalog, sus relaciones y consumers.
+- **Criterios de finalización:** las rutas, responses y comportamientos caracterizados permanecen iguales.
+- **Verificaciones (Node 20.20.2):** Genres/Countries 4 suites / 57 tests; Artists 10 / 46; Catalog Import 10 / 73; Catalog DI 1 / 3; Discs Catalog/Calendar/Write/Home 4 / 151; TypeScript y `git diff --check` aprobados. La primera ejecución concurrente de Catalog Import tuvo un timeout de 5 s en un caso del parser por contención; la repetición aislada pasó completa. No hay suites específicas disponibles de Requests, Seeds o Common. Resolución Nest verificada por Catalog DI; consumidores externos conservan sus propios `TypeOrmModule.forFeature` y no dependen de importar `CatalogModule`.
+- **Riesgo:** M.
+
+**Findings a preservar, no correcciones de C2:** typo contractual `bultCreateGenre`; `Genre.color` opcional en TypeScript pero exigido por validación; Country DTO no permite escribir `isoCode`; DELETE sin comprobación de inexistencia; ausencia actual de auth explícita. Mantenerlos documentados y sin cambios salvo decisión aparte.
+
+#### C3 — Decisión de ownership de Catalog
+
+`src/catalog/` es una agrupación interna y de ownership para `artists/`, `genres/`, `countries/`, `discs/` e `import/`. `CatalogModule` sirve como composición cuando corresponde; Catalog no es una API pública ni un barrel obligatorio.
+
+`GET /api/catalog` queda fuera del alcance de esta fase y no se traslada automáticamente por compartir el nombre Catalog. Las capacidades conservan sus rutas independientes (`/api/artists`, `/api/genres`, `/api/countries` y `/api/discs`); no se crean `/catalog/artists`, `/catalog/genres`, `/catalog/countries` ni `/catalog/discs`. Las importaciones mantienen sus rutas bajo `/api/catalog/import/...`. Los módulos externos pueden depender directamente de la capacidad concreta que necesitan.
+
+#### C4 — Discs dentro de Catalog
+
+**Objetivo:** mover el módulo Discs ya refactorizado a su ownership final sin reabrir su arquitectura interna.
+
+- [x] **C4 completada (2026-10-04).** C4.1 auditó los consumers; C4.2 movió los 69 archivos a `src/catalog/discs/` y actualizó los imports; C4.3 confirmó la regresión de Discs, Catalog y consumers sin cambios de comportamiento, contratos ni relaciones.
+- **Verificaciones (Node 20.20.2):** Discs **33 suites / 277 tests aprobados**, incluidas las siete suites PostgreSQL (**28 tests**, ejecutadas fuera del sandbox tras `EPERM` local); Artists, Catalog Import, Catalog DI, Artists DI y Pendings **22 suites / 127 tests aprobados**. `tsc --noEmit -p tsconfig.build.json` y `git diff --check` aprobados. DI de Catalog y Last.fm aprobada; metadata TypeORM revisada; no quedan imports activos hacia las carpetas raíz anteriores ni ruta `/api/catalog/discs`.
+- **Excepción preexistente fuera de C4:** `test/excel.e2e-spec.ts` falla sus cuatro casos durante la compilación del fixture porque no proporciona `DataSource`/override para `NationalReleaseRepository`, registrado por `ArtistsModule`, que ya componía `CatalogModule`. No afecta a las rutas ni al módulo Discs; no se modificó el fixture.
+- **Last.fm:** no existe suite específica; su resolución directa de `DiscsService` se verificó mediante el spec de integración DI de Catalog.
+
+##### C4.1 — Auditar impacto y consumers de Discs
+
+- **Alcance:** inventariar referencias a `src/discs/`, módulos, servicios, entidades y tests; determinar el conjunto exacto de imports y posibles ciclos antes del movimiento.
+- **Criterios de finalización:** lista revisada de consumers, con especial atención a Artists, Rates, Favorites, Pendings, Comments, Requests, Asignations, Contents, Festival/Last.fm y demás referencias encontradas.
+- **Verificaciones:** búsqueda de imports directos y revisión de `AppModule`, `DiscModule` y relaciones TypeORM.
+- **Riesgo:** S.
+
+##### C4.2 — Mover Discs bajo Catalog
+
+- **Alcance:** mover `src/discs/` a `src/catalog/discs/`; actualizar imports externos/internos, módulos, relaciones de entidades y tests según C4.1.
+- **Criterios de finalización:** la estructura interna D0–D48 permanece igual salvo ajustes de paths y DI requeridos por el movimiento; no quedan referencias rotas.
+- **Fuera de alcance:** cambiar rutas `/api/discs`, contratos, responsabilidades ya cerradas, normalizadores, queries o índices, salvo regresión demostrablemente introducida por el movimiento.
+- **Verificaciones:** suites de Discs y pruebas de compilación/DI antes del cierre.
+- **Riesgo:** M.
+
+##### C4.3 — Regresión de Discs y consumers
+
+- **Alcance:** regresión del módulo completo y callers relevantes después del movimiento.
+- **Criterios de finalización:** rutas, permisos, payloads, relaciones y efectos preservados; fallos preexistentes conocidos permanecen identificados y no se confunden con regresiones.
+- **Verificaciones:** `pnpm exec jest src/catalog/discs --runInBand`; suites aplicables de consumers; E2E existentes aplicables; `pnpm build` y `git diff --check`.
+- **Riesgo:** M.
+
+#### C5 — Cierre de Catalog
+
+**Objetivo y criterio de cierre:** declarar Catalog cerrada solo después de comprobar el ownership final `src/catalog/{artists,genres,countries,discs,import}/` y `src/catalog/catalog.module.ts`; que no quedan módulos raíz antiguos de Artists/Genres/Countries/Discs ni imports legacy; que DI y relaciones están resueltas sin duplicidad/ciclos Nest; y que las rutas públicas independientes siguen siendo `/api/artists`, `/api/genres`, `/api/countries`, `/api/discs` y `/api/catalog`, con las importaciones explícitas bajo `/api/catalog/import/`. Ejecutar regresión relevante global, TypeScript/build y `git diff --check`; documentar los findings contractuales aún abiertos. Catalog Import permanece cerrado salvo integración imprescindible. Marcar la fase como cerrada únicamente con estas verificaciones aprobadas o con excepciones preexistentes descritas y atribuidas.
+
+- [x] **C5 completada (2026-10-04).** Estructura y ownership final verificados; rutas públicas preservadas; Catalog/Artists DI y dependencia directa de Last.fm resueltas; relaciones TypeORM revisadas; sin imports legacy activos ni nuevas rutas `/api/catalog/{artists,genres,countries,discs}`.
+- **Regresión global (Node 20.20.2):** `src/catalog/` y consumers disponibles (Pendings y Festival Playlists), 53 suites / 455 tests aprobados; las siete suites PostgreSQL de Discs, 28 tests aprobados fuera del sandbox después de que el sandbox bloqueara `127.0.0.1:5432` con `EPERM`; TypeScript y `git diff --check` aprobados.
+- **E2E conocidos, fuera del cierre:** `test/excel.e2e-spec.ts` no compila el fixture por falta de `DataSource` para `NationalReleaseRepository`; `test/app.e2e-spec.ts` no carga el ESM de `sanitize-html/htmlparser2` en Jest. No se modificaron producción ni fixtures para corregirlos.
+- **Findings contractuales y de infraestructura:** permanecen documentados en C1–C4 y fuera del criterio de cierre; no se modificó `.impeccable/config.json`.
 
 ### Fase 4 — Lists
 
@@ -1970,5 +2134,5 @@ Los módulos se priorizan por tamaño observado, cantidad de responsabilidades, 
 ### Fase 9 — Auth y módulos restantes
 
 - Auth tiene 381 líneas y alto impacto transversal por JWT, roles y acceso; requiere caracterización de seguridad antes de modificar guards o contratos.
-- Otros candidatos de menor tamaño pero con impacto transversal o persistencia propia: Excel (280 líneas), Links (164), Mail (154), Suggestions (128), Genres (122), Countries (92), Reunions (67), Points (58), Uploads (46) y Access Requests (37).
+- Otros candidatos de menor tamaño pero con impacto transversal o persistencia propia: Excel (280 líneas), Links (164), Mail (154), Suggestions (128), Reunions (67), Points (58), Uploads (46) y Access Requests (37).
 - Ordenar esos módulos según uso real, duplicación y coste de queries al preparar la fase; agrupar únicamente cuando compartan una responsabilidad demostrable.

@@ -8,10 +8,10 @@ import { parseManualAlbumLine } from '../parser/parse-manual-album-line';
 import { parseManualDate } from '../parser/parse-manual-date';
 import { normalizeImportArtistName } from '../parser/normalize-import-artist-name';
 import { ManualImportLogger } from '../logging/manual-import-logger';
-import { Artist } from '../../../../artists/entities/artist.entity';
-import { Disc } from '../../../../discs/entities/disc.entity';
-import { Country } from '../../../../countries/entities/country.entity';
-import { Genre } from '../../../../genres/entities/genre.entity';
+import { Artist } from '../../../artists/entities/artist.entity';
+import { Disc } from '../../../discs/entities/disc.entity';
+import { Country } from '../../../countries/entities/country.entity';
+import { Genre } from '../../../genres/entities/genre.entity';
 
 export interface ProcessedDiscEntry {
   discId: string;

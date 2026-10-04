@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Genre } from '../../../../genres/entities/genre.entity';
-import { Country } from '../../../../countries/entities/country.entity';
-import { Disc } from '../../../../discs/entities/disc.entity';
-import { Artist } from '../../../../artists/entities/artist.entity';
+import { Genre } from '../../../genres/entities/genre.entity';
+import { Country } from '../../../countries/entities/country.entity';
+import { Disc } from '../../../discs/entities/disc.entity';
+import { Artist } from '../../../artists/entities/artist.entity';
 import { ExcelWorkbookParser } from '../parser/excel-workbook.parser';
 
 export interface ImportResult {

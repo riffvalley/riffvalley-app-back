@@ -1,9 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { ILike, Repository } from 'typeorm';
-import { Artist } from '../../../../artists/entities/artist.entity';
-import { Country } from '../../../../countries/entities/country.entity';
-import { Disc } from '../../../../discs/entities/disc.entity';
-import { Genre } from '../../../../genres/entities/genre.entity';
+import { Artist } from '../../../artists/entities/artist.entity';
+import { Country } from '../../../countries/entities/country.entity';
+import { Disc } from '../../../discs/entities/disc.entity';
+import { Genre } from '../../../genres/entities/genre.entity';
 import { CatalogImportService } from './catalog-import.service';
 import { ManualImportLogger } from '../logging/manual-import-logger';
 

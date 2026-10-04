@@ -4,7 +4,7 @@ import { RatesController } from './rates.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Rate } from './entities/rate.entity';
 import { AuthModule } from 'src/auth/auth.module';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { RatesStatsService } from './rates-stats.service';
 
 @Module({

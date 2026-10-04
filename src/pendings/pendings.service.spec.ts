@@ -1,6 +1,6 @@
 import { Repository } from 'typeorm';
 import { User } from '../auth/entities/user.entity';
-import { Disc } from '../discs/entities/disc.entity';
+import { Disc } from '../catalog/discs/entities/disc.entity';
 import { CreatePendingDto } from './dto/create-pendings.dto';
 import { Pending } from './entities/pending.entity';
 import { PendingsService } from './pendings.service';

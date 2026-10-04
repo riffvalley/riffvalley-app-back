@@ -11,7 +11,7 @@ import { Repository } from 'typeorm';
 import { Favorite } from './entities/favorite.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { User } from 'src/auth/entities/user.entity';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 // Importamos la entidad Pending para poder hacer el join
 import { Pending } from 'src/pendings/entities/pending.entity';
 import {

@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
-import { Artist } from '../../../../artists/entities/artist.entity';
-import { Country } from '../../../../countries/entities/country.entity';
-import { Disc } from '../../../../discs/entities/disc.entity';
-import { Genre } from '../../../../genres/entities/genre.entity';
+import { Artist } from '../../../artists/entities/artist.entity';
+import { Country } from '../../../countries/entities/country.entity';
+import { Disc } from '../../../discs/entities/disc.entity';
+import { Genre } from '../../../genres/entities/genre.entity';
 import { ExcelWorkbookParser } from '../parser/excel-workbook.parser';
 import { ExcelImportService } from './excel-import.service';
 

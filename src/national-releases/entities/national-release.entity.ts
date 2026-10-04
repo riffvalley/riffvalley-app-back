@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
-import { Disc } from '../../discs/entities/disc.entity';
+import { Disc } from '../../catalog/discs/entities/disc.entity';
 
 export enum DiscType {
   SINGLE = 'single',

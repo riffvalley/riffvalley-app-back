@@ -1,0 +1,129 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  ParseUUIDPipe,
+  Query,
+} from '@nestjs/common';
+import { DiscsService } from './discs.service';
+import { CreateDiscDto } from './dto/create-discs.dto';
+import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
+import { UpdateDiscDto } from './dto/update-discs.dto';
+import { PaginationDto } from '../../common/dtos/pagination.dto';
+
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { GetUser } from 'src/auth/decorators/get-user.decorator';
+import { User } from 'src/auth/entities/user.entity';
+import { TopStatsQueryDto } from 'src/common/dtos/top-stats-query.dto';
+import { WeeklyQueryDto } from './dto/weekly-query.dto';
+import { RandomQueryDto } from './dto/random-query.dto';
+import { OptionsQueryDto } from './dto/options-query.dto';
+import { ResolveSpotifyAlbumQueryDto } from './dto/resolve-spotify-album-query.dto';
+
+@Controller('discs')
+export class DiscsController {
+  constructor(private readonly discsServices: DiscsService) {}
+
+  @Post()
+  create(@Body() createDiscDto: CreateDiscDto) {
+    return this.discsServices.create(createDiscDto);
+  }
+
+  @Post('with-artist')
+  @Auth()
+  createWithArtist(@Body() dto: CreateDiscWithArtistDto) {
+    return this.discsServices.createWithArtist(dto);
+  }
+
+  @Get('weekly')
+  findWeekly(@Query() dto: WeeklyQueryDto) {
+    return this.discsServices.findWeekly(dto.month, dto.year, dto.week);
+  }
+
+  @Get('random')
+  @Auth()
+  findRandom(@Query() dto: RandomQueryDto, @GetUser() user: User) {
+    return this.discsServices.findRandom(dto, user);
+  }
+
+  @Get('options')
+  @Auth()
+  findOptions(@Query() dto: OptionsQueryDto) {
+    return this.discsServices.findOptions(dto);
+  }
+
+  @Get('date')
+  @Auth()
+  findAllByDate(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
+    return this.discsServices.findAllByDate(paginationDto, user);
+  }
+
+  @Get('date/public')
+  findAllByDatePublic(@Query() paginationDto: PaginationDto) {
+    return this.discsServices.findAllByDatePublic(paginationDto);
+  }
+
+  @Get('date/public/filters')
+  getPublicFilters() {
+    return this.discsServices.getPublicFilters();
+  }
+
+  @Auth()
+  @Get('homeDiscs')
+  findTopRatedOrFeatured(
+    @Query() dto: TopStatsQueryDto,
+    @GetUser() user: User,
+  ) {
+    return this.discsServices.findTopRatedOrFeaturedAndStats(
+      dto,
+      user,
+      dto.genreId,
+    );
+  }
+
+  @Get()
+  @Auth()
+  findAll(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
+    return this.discsServices.findAll(paginationDto, user);
+  }
+
+  @Get('spotify/album')
+  resolveSpotifyAlbum(@Query() query: ResolveSpotifyAlbumQueryDto) {
+    return this.discsServices.resolveSpotifyAlbum(
+      query.albumName,
+      query.artistName,
+    );
+  }
+
+  @Get('spotify/album/:spotifyAlbumId')
+  getSpotifyAlbumDetails(@Param('spotifyAlbumId') spotifyAlbumId: string) {
+    return this.discsServices.getSpotifyAlbumDetails(spotifyAlbumId);
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.discsServices.findOne(id);
+  }
+
+  @Get(':id/spotify-tracks')
+  getSpotifyTracks(@Param('id', ParseUUIDPipe) id: string) {
+    return this.discsServices.getSpotifyTracks(id);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateDiscDto: UpdateDiscDto,
+  ) {
+    return this.discsServices.update(id, updateDiscDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.discsServices.remove(id);
+  }
+}

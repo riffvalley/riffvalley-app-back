@@ -25,7 +25,7 @@ import {
   SpotifyStatus,
   SpotifyType,
 } from 'src/spotify/entities/spotify.entity';
-import { Artist } from 'src/artists/entities/artist.entity';
+import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import {
   PlaylistArtistSelectionMode,
   PlaylistArtistSyncStatus,

@@ -1,4 +1,4 @@
-import { Artist } from 'src/artists/entities/artist.entity';
+import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { Spotify } from 'src/spotify/entities/spotify.entity';
 import {
   Column,
