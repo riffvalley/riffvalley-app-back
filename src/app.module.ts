@@ -18,7 +18,7 @@ import { LinksModule } from './links/links.module';
 import { SeedModule } from './seeds/seed.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { PendingsModule } from './pendings/pendings.module';
-import { CommentsModule } from './comments/comments.module';
+import { CommentsModule } from './community/comments/comments.module';
 import { VersionsModule } from './versions/versions.module';
 import { SpotifyModule } from './spotify/spotify.module';
 import { ContentsModule } from './contents/contents.module';

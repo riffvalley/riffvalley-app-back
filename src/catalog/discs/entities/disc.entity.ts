@@ -11,7 +11,7 @@ import {
 import { Asignation } from '../../../asignations/entities/asignations.entity';
 import { Favorite } from '../../../favorites/entities/favorite.entity';
 import { Pending } from '../../../pendings/entities/pending.entity';
-import { Comment } from '../../../comments/entities/comment.entity';
+import { Comment } from '../../../community/comments/entities/comment.entity';
 
 @Entity()
 export class Disc {
