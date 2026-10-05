@@ -8,7 +8,7 @@ import { User } from '../entities/user.entity';
 import { UserAccessLog } from '../entities/user-access-log.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { RatesModule } from 'src/community/rates/rates.module';
-import { CatalogModule } from 'src/catalog/catalog.module';
+import { CatalogImportModule } from 'src/catalog/import/catalog-import.module';
 
 describe('Auth → Rate consumer characterization', () => {
   let moduleRef: TestingModule;
@@ -87,7 +87,7 @@ describe('Auth → Rate consumer characterization', () => {
   it('keeps the previous module direction without adding duplicates or a cycle', () => {
     const authImports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, AuthModule) as unknown[];
     const ratesImports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, RatesModule) as unknown[];
-    const catalogImports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, CatalogModule) as unknown[];
+    const catalogImports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, CatalogImportModule) as unknown[];
     expect(authImports).not.toContain(RatesModule);
     expect(ratesImports).toContain(AuthModule);
     expect(catalogImports).toContain(AuthModule);
