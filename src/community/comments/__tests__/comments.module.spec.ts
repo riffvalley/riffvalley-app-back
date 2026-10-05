@@ -58,9 +58,9 @@ describe('CommentsModule characterization', () => {
     const expectedRoutes = [
       ['create', RequestMethod.POST, '/', true],
       ['findAll', RequestMethod.GET, '/', true],
-      ['findOne', RequestMethod.GET, ':id', false],
-      ['update', RequestMethod.PATCH, ':id', false],
-      ['remove', RequestMethod.DELETE, ':id', false],
+      ['findOne', RequestMethod.GET, ':id', true],
+      ['update', RequestMethod.PATCH, ':id', true],
+      ['remove', RequestMethod.DELETE, ':id', true],
       ['findCommentsByDisc', RequestMethod.GET, '/disc/:discId', false],
     ] as const;
 

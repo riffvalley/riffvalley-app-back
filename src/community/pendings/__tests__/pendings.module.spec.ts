@@ -62,8 +62,8 @@ describe('PendingsModule characterization', () => {
     const expectedRoutes = [
       ['create', RequestMethod.POST, '/', true],
       ['findAll', RequestMethod.GET, '/', true],
-      ['findOne', RequestMethod.GET, ':id', false],
-      ['remove', RequestMethod.DELETE, ':id', false],
+      ['findOne', RequestMethod.GET, ':id', true],
+      ['remove', RequestMethod.DELETE, ':id', true],
     ] as const;
 
     for (const [method, requestMethod, path, authenticated] of expectedRoutes) {

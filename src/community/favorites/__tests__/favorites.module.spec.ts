@@ -61,8 +61,8 @@ describe('FavoritesModule characterization', () => {
     const expectedRoutes = [
       ['findAll', RequestMethod.GET, '/', true],
       ['create', RequestMethod.POST, '/', true],
-      ['findOne', RequestMethod.GET, ':id', false],
-      ['remove', RequestMethod.DELETE, ':id', false],
+      ['findOne', RequestMethod.GET, ':id', true],
+      ['remove', RequestMethod.DELETE, ':id', true],
     ] as const;
 
     for (const [method, requestMethod, path, authenticated] of expectedRoutes) {
