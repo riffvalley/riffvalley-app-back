@@ -90,6 +90,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** Requests queda ubicado bajo Community; los consumers y dependencias con Catalog/Auth siguen funcionando; rutas, permisos, payloads, errores y side effects se preservan.
 - **Verificaciones previstas:** specs de Requests existentes o añadidos para caracterizar; revisión de guards/decoradores, dependencias de entidades Catalog y providers; build TypeScript.
 - **Tamaño estimado:** M.
+- [x] **Completada (2026-10-05).** Requests y su caracterización mínima quedaron bajo `src/community/requests/`; C.2 permanece pendiente.
 
 ##### C.2 — Verificar consumidores y dependencias con Catalog/Auth
 
@@ -100,6 +101,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** consumers identificados siguen obteniendo los mismos datos y resultados; Catalog y Auth conservan sus dependencias actuales cuando sean necesarias; fallos preexistentes quedan documentados y fuera del cambio.
 - **Verificaciones previstas:** specs focalizados de Requests y suites de los consumers disponibles; revisión de DI/imports; build.
 - **Tamaño estimado:** S.
+- [x] **Completada (2026-10-05).** Resolución Nest, repositorios Catalog, guards/Auth, rutas y aislamiento de `access-requests` verificados; D.1 permanece pendiente.
 
 #### D — Favorites y Pendings
 

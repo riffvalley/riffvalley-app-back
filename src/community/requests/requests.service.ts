@@ -9,11 +9,11 @@ import { Repository } from 'typeorm';
 import { DiscRequest, RequestStatus } from './entities/disc-request.entity';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
-import { User } from '../auth/entities/user.entity';
-import { Artist } from '../catalog/artists/entities/artist.entity';
-import { Disc } from '../catalog/discs/entities/disc.entity';
-import { Genre } from '../catalog/genres/entities/genre.entity';
-import { Country } from '../catalog/countries/entities/country.entity';
+import { User } from '../../auth/entities/user.entity';
+import { Artist } from '../../catalog/artists/entities/artist.entity';
+import { Disc } from '../../catalog/discs/entities/disc.entity';
+import { Genre } from '../../catalog/genres/entities/genre.entity';
+import { Country } from '../../catalog/countries/entities/country.entity';
 
 @Injectable()
 export class RequestsService {

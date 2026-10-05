@@ -5,9 +5,9 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from '../../auth/entities/user.entity';
-import { Genre } from '../../catalog/genres/entities/genre.entity';
-import { Country } from '../../catalog/countries/entities/country.entity';
+import { User } from '../../../auth/entities/user.entity';
+import { Genre } from '../../../catalog/genres/entities/genre.entity';
+import { Country } from '../../../catalog/countries/entities/country.entity';
 
 export enum RequestStatus {
   PENDING = 'pending',

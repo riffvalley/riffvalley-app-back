@@ -27,7 +27,7 @@ import { VideosModule } from './videos/videos.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { NewsModule } from './news/news.module';
 import { UploadsModule } from './uploads/uploads.module';
-import { RequestsModule } from './requests/requests.module';
+import { RequestsModule } from './community/requests/requests.module';
 import { NationalReleasesModule } from './national-releases/national-releases.module';
 import { LastfmModule } from './lastfm/lastfm.module';
 import { SuggestionsModule } from './suggestions/suggestions.module';

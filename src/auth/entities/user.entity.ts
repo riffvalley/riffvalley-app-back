@@ -6,7 +6,7 @@ import { Rate } from '../../rates/entities/rate.entity';
 import { Spotify } from '../../spotify/entities/spotify.entity';
 import { Article } from '../../articles/entities/article.entity';
 import { Video } from '../../videos/entities/video.entity';
-import { DiscRequest } from '../../requests/entities/disc-request.entity';
+import { DiscRequest } from '../../community/requests/entities/disc-request.entity';
 import {
   BeforeInsert,
   BeforeUpdate,
