@@ -101,7 +101,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** consumers identificados siguen obteniendo los mismos datos y resultados; Catalog y Auth conservan sus dependencias actuales cuando sean necesarias; fallos preexistentes quedan documentados y fuera del cambio.
 - **Verificaciones previstas:** specs focalizados de Requests y suites de los consumers disponibles; revisión de DI/imports; build.
 - **Tamaño estimado:** S.
-- [x] **Completada (2026-10-05).** Resolución Nest, repositorios Catalog, guards/Auth, rutas y aislamiento de `access-requests` verificados; D.1 permanece pendiente.
+- [x] **Completada (2026-10-05).** Resolución Nest, repositorios Catalog, guards/Auth, rutas y aislamiento de `access-requests` verificados; E.1 permanece pendiente.
 
 #### D — Favorites y Pendings
 
@@ -114,6 +114,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** Favorites queda bajo Community como módulo/capacidad independiente; rutas, respuestas, permisos, side effects y referencias caracterizadas permanecen iguales.
 - **Verificaciones previstas:** specs de Favorites; revisión de imports y DI; pruebas de consumers aplicables; build TypeScript.
 - **Tamaño estimado:** M.
+- [x] **Completada (2026-10-05).** Favorites y sus tres bloques de caracterización mínima quedaron bajo `src/community/favorites/`; los consumers Catalog y el cruce existente con Pending siguen caracterizados. E.1 permanece pendiente.
 
 ##### D.2 — Migrar Pendings a Community
 
@@ -124,6 +125,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** Pendings queda bajo Community como capacidad independiente; su metadata permanece intacta, incluido el hallazgo preexistente de `Pending.user`; rutas, permisos, respuestas y efectos caracterizados se preservan.
 - **Verificaciones previstas:** specs de Pendings; revisión de imports y DI; suites de consumers aplicables; confirmar que no hay cambios de metadata TypeORM; build.
 - **Tamaño estimado:** M.
+- [x] **Completada (2026-10-05).** Pendings y sus dos bloques nuevos de caracterización quedaron bajo `src/community/pendings/`; se reutilizó la cobertura existente y se preservó `Pending.user → user.rate`. E.1 permanece pendiente.
 
 ##### D.3 — Verificar consultas y consumidores cruzados
 
@@ -134,6 +136,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** consumers conocidos mantienen datos y semántica actuales; no hay cambios de SQL intencionales ni de metadata; las capacidades siguen separadas.
 - **Verificaciones previstas:** suites focalizadas y consumers aplicables; comparación de respuestas caracterizadas; revisión de consultas/metadatos para detectar cambios accidentales; build.
 - **Tamaño estimado:** M.
+- [x] **Completada (2026-10-05).** Favorites, Pendings, Home y Calendar conservaron sus cruces y payloads; metadata e imports quedaron verificados. El conjunto focalizado dio 140/141 tests por el fallo preexistente de `DiscCatalogService` en `addSelect('disc.id', 'discId')`, que permanece sin cambios. E.1 permanece pendiente.
 
 #### E — Rates
 

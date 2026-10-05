@@ -5,27 +5,33 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CreatePendingDto } from './dto/create-pendings.dto';
+import { CreateFavoriteDto } from './dto/create-favorites.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Pending } from './entities/pending.entity';
-import { PaginationDto } from '../common/dtos/pagination.dto';
+import { Favorite } from './entities/favorite.entity';
+import { PaginationDto } from '../../common/dtos/pagination.dto';
 import { User } from 'src/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
+// Importamos la entidad Pending para poder hacer el join
+import { Pending } from 'src/community/pendings/entities/pending.entity';
+import {
+  applyOrder,
+  parseOrdersRaw,
+} from 'src/common/helpers/apply-order.helper';
 
 @Injectable()
-export class PendingsService {
-  private readonly logger = new Logger('PendingsService');
+export class FavoritesService {
+  private readonly logger = new Logger('FavoritesService');
 
   constructor(
-    @InjectRepository(Pending)
-    private readonly pendingRepository: Repository<Pending>,
+    @InjectRepository(Favorite)
+    private readonly favoriteRepository: Repository<Favorite>,
   ) { }
 
-  async create(createPendingDto: CreatePendingDto, user: User) {
+  async create(createFavoriteDto: CreateFavoriteDto, user: User) {
     try {
-      const { discId, ...pendingData } = createPendingDto;
-      const disc = await this.pendingRepository.manager.findOne(Disc, {
+      const { discId, ...favoriteData } = createFavoriteDto;
+      const disc = await this.favoriteRepository.manager.findOne(Disc, {
         where: { id: discId },
       });
 
@@ -33,14 +39,14 @@ export class PendingsService {
         throw new NotFoundException(`Disc with id ${discId} not found`);
       }
 
-      const pending = this.pendingRepository.create({
-        ...pendingData,
+      const favorite = this.favoriteRepository.create({
+        ...favoriteData,
         user,
         disc, // Se asigna la entidad Disc encontrada
       });
 
-      await this.pendingRepository.save(pending);
-      return pending;
+      await this.favoriteRepository.save(favorite);
+      return favorite;
     } catch (error) {
       this.handleDbExceptions(error);
     }
@@ -57,10 +63,10 @@ export class PendingsService {
       [startDate, endDate] = dateRange;
     }
 
-    // Construimos el query para los pendings y añadimos los joins similares a FavoritesService
-    const queryBuilder = this.pendingRepository
-      .createQueryBuilder('pending')
-      .leftJoinAndSelect('pending.disc', 'disc')
+    // Construimos el query para los favorites y añadimos el join con pending
+    const queryBuilder = this.favoriteRepository
+      .createQueryBuilder('favorite')
+      .leftJoinAndSelect('favorite.disc', 'disc')
       .leftJoinAndSelect('disc.artist', 'artist')
       .leftJoinAndSelect('disc.genre', 'genre')
       .leftJoinAndSelect('artist.country', 'country')
@@ -70,15 +76,19 @@ export class PendingsService {
         'rate.discId = disc.id AND rate.userId = :userId',
         { userId },
       )
-      .leftJoinAndSelect(
-        'disc.favorites',
-        'favorite',
-        'favorite.userId = :userId',
+      .leftJoin(
+        Pending,
+        'pending',
+        'pending.discId = disc.id AND pending.userId = :userId',
         { userId },
       )
       .addSelect('rate.id', 'rateId')
       .addSelect('rate.rate', 'userRate')
       .addSelect('rate.cover', 'userCover')
+      .addSelect('pending.id', 'pendingId')
+      .addSelect('rate.rate', 'rate_rate')
+      .addSelect('rate.cover', 'rate_cover')
+
       // Agrega el conteo de votos para cada disco
       .addSelect((subQuery) => {
         return subQuery
@@ -93,9 +103,9 @@ export class PendingsService {
           .from('comment', 'comment')
           .where('comment.discId = disc.id');
       }, 'commentCount')
-      .where('pending.userId = :userId', { userId });
+      .where('favorite.userId = :userId', { userId });
 
-    // Subconsultas para promedios (rate y cover)
+    // Subqueries para cálculos de promedios (en caso de necesitarse)
     queryBuilder
       .addSelect((subQuery) => {
         return subQuery
@@ -110,7 +120,7 @@ export class PendingsService {
           .where('rate.discId = disc.id AND rate.cover IS NOT NULL');
       }, 'averageCover');
 
-    // Filtros según fecha, búsqueda y género
+    // Filtros según el rango de fechas, búsqueda y género
     if (startDate && endDate) {
       queryBuilder.andWhere(
         'disc.releaseDate BETWEEN :startDate AND :endDate',
@@ -138,25 +148,48 @@ export class PendingsService {
         queryBuilder.andWhere('country.name = :country', { country });
       }
     }
+    const ALLOWED_ORDER_FIELDS = new Set<string>([
+      // columnas reales/relaciones
+      'disc.releaseDate',
+      'disc.name',
+      'artist.name',
+      'favorite.createdAt',
+      // campos del join de rate del propio usuario
+      'rate.rate',
+      'rate.cover',
+      // aliases calculados / subselects
+      'averageRate',
+      'averageCover',
+      'rateCount',
+      'commentCount',
+      // opcional: si prefieres ordenar por el alias seleccionado arriba
+      'userRate',
+    ]);
 
-    queryBuilder
-      .take(limit)
-      .skip(offset)
-      .orderBy('disc.releaseDate', 'DESC')
-      .addOrderBy('artist.name', 'ASC');
+    const orders = parseOrdersRaw(paginationDto.orderBy, {
+      allowlist: ALLOWED_ORDER_FIELDS,
+      defaultDirection: 'ASC',
+    });
 
-    const { entities: pendings, raw } = await queryBuilder.getRawAndEntities();
+    queryBuilder.take(limit).skip(offset);
 
-    // Procesamos los resultados para incluir los datos de rate y el detalle del pending
-    const processedPendings = pendings.map((pending, index) => ({
-      ...pending,
+    applyOrder(queryBuilder, orders, [
+      { field: 'disc.releaseDate', direction: 'DESC', nulls: 'NULLS LAST' },
+      { field: 'artist.name', direction: 'ASC' },
+    ]);
+
+    const { entities: favorites, raw } = await queryBuilder.getRawAndEntities();
+
+    // Procesamos los resultados para incluir la información de rate y pending
+    const processedFavorites = favorites.map((favorite, index) => ({
+      ...favorite,
       disc: {
-        ...pending.disc,
+        ...favorite.disc,
         artist: {
-          ...pending.disc.artist,
-          country: pending.disc.artist?.country || null,
+          ...favorite.disc.artist,
+          country: favorite.disc.artist?.country || null,
         },
-        userPending: pending.id,
+        userFavorite: { id: favorite.id },
         voteCount: parseInt(raw[index].rateCount, 10) || null,
         commentCount: parseInt(raw[index].commentCount, 10) || 0,
         userRate: raw[index].rateId
@@ -166,27 +199,34 @@ export class PendingsService {
             cover: raw[index].userCover,
           }
           : null,
-        averageRate: raw[index].averageRate
-          ? parseFloat(raw[index].averageRate)
-          : null,
-        averageCover: raw[index].averageCover
-          ? parseFloat(raw[index].averageCover)
-          : null,
-        favoriteId:
-          pending.disc.favorites.length > 0
-            ? pending.disc.favorites[0].id
-            : null, // Enviar el ID del favorito si existe
+        userPending: raw[index].pendingId ? { id: raw[index].pendingId } : null,
+        averageRate: raw[index].averageRate != null ? parseFloat(raw[index].averageRate) : null,
+        averageCover: raw[index].averageCover != null ? parseFloat(raw[index].averageCover) : null,
       },
     }));
 
     // Construimos el query para obtener el total de elementos
-    const totalItemsQueryBuilder = this.pendingRepository
-      .createQueryBuilder('pending')
-      .leftJoin('pending.disc', 'disc')
+    const totalItemsQueryBuilder = this.favoriteRepository
+      .createQueryBuilder('favorite')
+      .leftJoin('favorite.disc', 'disc')
       .leftJoin('disc.artist', 'artist')
       .leftJoin('artist.country', 'country')
       .leftJoin('disc.genre', 'genre')
-      .where('pending.userId = :userId', { userId });
+      .leftJoin(
+        'rate',
+        'rate',
+        'rate.discId = disc.id AND rate.userId = :userId',
+        { userId },
+      )
+      .addSelect('rate.rate', 'rate_rate')
+      .addSelect('rate.cover', 'rate_cover')
+      .leftJoin(
+        Pending,
+        'pending',
+        'pending.discId = disc.id AND pending.userId = :userId',
+        { userId },
+      )
+      .where('favorite.userId = :userId', { userId });
 
     if (startDate && endDate) {
       totalItemsQueryBuilder.andWhere(
@@ -225,28 +265,29 @@ export class PendingsService {
       totalPages,
       currentPage,
       limit,
-      data: processedPendings,
+      data: processedFavorites,
     };
   }
 
-  async findOne(id: string): Promise<Pending> {
+  async findOne(id: string): Promise<Favorite> {
     try {
-      const pending = await this.pendingRepository.findOneByOrFail({ id });
-      return pending;
+      const favorite = await this.favoriteRepository.findOneByOrFail({ id });
+      return favorite;
     } catch (error) {
-      throw new NotFoundException(`Pending with id ${id} not found`);
+      throw new NotFoundException(`Favorite with id ${id} not found`);
     }
   }
 
   async remove(id: string) {
-    const result = await this.pendingRepository.delete({ id });
+    const result = await this.favoriteRepository.delete({ id });
     if (result.affected === 0) {
-      throw new NotFoundException(`Pending with id ${id} not found`);
+      throw new NotFoundException(`Favorite with id ${id} not found`);
     }
-    return { message: `Pending with id ${id} has been removed` };
+    return { message: `Favorite with id ${id} has been removed` };
   }
 
   private handleDbExceptions(error: any) {
+    // Por ejemplo, error.code === '23505' en PostgreSQL para entradas duplicadas
     if (error.code === '23505') {
       throw new BadRequestException(error.detail);
     }

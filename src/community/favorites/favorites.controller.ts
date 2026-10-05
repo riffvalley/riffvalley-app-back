@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { FavoritesService } from './favorites.service';
 import { CreateFavoriteDto } from './dto/create-favorites.dto';
-import { PaginationDto } from '../common/dtos/pagination.dto';
+import { PaginationDto } from '../../common/dtos/pagination.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';

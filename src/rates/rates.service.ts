@@ -14,7 +14,7 @@ import { Rate } from './entities/rate.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { User } from 'src/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
-import { Pending } from 'src/pendings/entities/pending.entity';
+import { Pending } from 'src/community/pendings/entities/pending.entity';
 import {
   applyOrder,
   parseOrdersRaw,

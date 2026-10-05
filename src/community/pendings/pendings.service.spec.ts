@@ -1,6 +1,6 @@
 import { Repository } from 'typeorm';
-import { User } from '../auth/entities/user.entity';
-import { Disc } from '../catalog/discs/entities/disc.entity';
+import { User } from '../../auth/entities/user.entity';
+import { Disc } from '../../catalog/discs/entities/disc.entity';
 import { CreatePendingDto } from './dto/create-pendings.dto';
 import { Pending } from './entities/pending.entity';
 import { PendingsService } from './pendings.service';
@@ -31,7 +31,18 @@ describe('PendingsService.findAllByUser favorite state', () => {
     return query;
   };
 
-  const run = async (favorites: { id: string; userId: string }[]) => {
+  const run = async (
+    favorites: { id: string; userId: string }[],
+    rawValues = {
+      rateCount: '0',
+      commentCount: '2',
+      rateId: null,
+      userRate: null,
+      userCover: null,
+      averageRate: null,
+      averageCover: null,
+    },
+  ) => {
     const pending = {
       id: 'pending-id',
       disc: {
@@ -45,15 +56,7 @@ describe('PendingsService.findAllByUser favorite state', () => {
 
     dataQuery.getRawAndEntities.mockResolvedValue({
       entities: [pending],
-      raw: [{
-        rateCount: '0',
-        commentCount: '2',
-        rateId: null,
-        userRate: null,
-        userCover: null,
-        averageRate: null,
-        averageCover: null,
-      }],
+      raw: [rawValues],
     });
     countQuery.getCount.mockResolvedValue(1);
 
@@ -116,6 +119,50 @@ describe('PendingsService.findAllByUser favorite state', () => {
       'favorite.userId = :userId',
       { userId },
     );
+  });
+
+  it('preserves the populated Rate, Favorite and aggregate fields in the enriched page', async () => {
+    const favorite = { id: 'favorite-id', userId };
+    const { result, pending } = await run([favorite], {
+      rateCount: '4',
+      commentCount: '3',
+      rateId: 'rate-id',
+      userRate: '8.5',
+      userCover: '7.25',
+      averageRate: '6.75',
+      averageCover: '5.5',
+    });
+
+    expect(result).toMatchObject({
+      totalItems: 1,
+      totalPages: 1,
+      currentPage: 1,
+      limit: 10,
+      data: [
+        {
+          ...pending,
+          disc: {
+            userPending: pending.id,
+            userRate: { id: 'rate-id', rate: '8.5', cover: '7.25' },
+            favoriteId: favorite.id,
+            voteCount: 4,
+            commentCount: 3,
+            averageRate: 6.75,
+            averageCover: 5.5,
+          },
+        },
+      ],
+    });
+    expect(dataQuery.leftJoin).toHaveBeenCalledWith(
+      'rate',
+      'rate',
+      'rate.discId = disc.id AND rate.userId = :userId',
+      { userId },
+    );
+    expect(dataQuery.addSelect).toHaveBeenCalledWith(expect.any(Function), 'rateCount');
+    expect(dataQuery.addSelect).toHaveBeenCalledWith(expect.any(Function), 'commentCount');
+    expect(dataQuery.addSelect).toHaveBeenCalledWith(expect.any(Function), 'averageRate');
+    expect(dataQuery.addSelect).toHaveBeenCalledWith(expect.any(Function), 'averageCover');
   });
 });
 

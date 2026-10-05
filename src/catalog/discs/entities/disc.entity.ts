@@ -9,8 +9,8 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Asignation } from '../../../asignations/entities/asignations.entity';
-import { Favorite } from '../../../favorites/entities/favorite.entity';
-import { Pending } from '../../../pendings/entities/pending.entity';
+import { Favorite } from '../../../community/favorites/entities/favorite.entity';
+import { Pending } from '../../../community/pendings/entities/pending.entity';
 import { Comment } from '../../../community/comments/entities/comment.entity';
 
 @Entity()
