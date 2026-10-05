@@ -1,11 +1,12 @@
 import { BadGatewayException, NotFoundException } from '@nestjs/common';
+import { SpotifyPublicApiService } from './spotify-public-api.service';
+import { SpotifyClientCredentialsService } from './spotify-client-credentials.service';
 import { ConfigService } from '@nestjs/config';
-import { SpotifyApiService } from './spotify-api.service';
 
-describe('SpotifyApiService album operations', () => {
+describe('SpotifyPublicApiService album operations', () => {
   const originalFetch = global.fetch;
   let fetchMock: jest.Mock;
-  let service: SpotifyApiService;
+  let service: SpotifyPublicApiService;
 
   const response = (body: unknown, status = 200) => ({
     ok: status >= 200 && status < 300,
@@ -29,7 +30,9 @@ describe('SpotifyApiService album operations', () => {
           : 'backend-client-secret',
       ),
     } as unknown as ConfigService;
-    service = new SpotifyApiService(configService);
+    service = new SpotifyPublicApiService(
+      new SpotifyClientCredentialsService(configService),
+    );
   });
 
   afterEach(() => {
@@ -433,9 +436,9 @@ describe('SpotifyApiService album operations', () => {
     queueToken();
     fetchMock.mockResolvedValueOnce(response({ artists: { items: [] } }));
 
-    await expect(
-      service.findArtistCandidates('Desconocido'),
-    ).resolves.toEqual([]);
+    await expect(service.findArtistCandidates('Desconocido')).resolves.toEqual(
+      [],
+    );
   });
 
   it('limita los candidatos a cinco aunque el proveedor devuelva más', async () => {
@@ -451,9 +454,9 @@ describe('SpotifyApiService album operations', () => {
       }),
     );
 
-    await expect(
-      service.findArtistCandidates('Artista'),
-    ).resolves.toHaveLength(5);
+    await expect(service.findArtistCandidates('Artista')).resolves.toHaveLength(
+      5,
+    );
   });
 
   it('traduce errores del proveedor al buscar candidatos de artista', async () => {

@@ -100,7 +100,7 @@ describe('ArtistManagementService', () => {
     }] });
     nationalReleaseRepository.createQueryBuilder.mockReturnValue(releasesQb);
     const playlistQb = queryBuilder({ many: [{
-      artistId: 'artist-id', spotify: {
+      artistId: 'artist-id', riffValleyPlaylist: {
         id: 'playlist-id', name: 'Playlist', link: 'playlist-link',
         type: 'album', imageUrl: 'playlist.jpg',
       },
@@ -122,7 +122,7 @@ describe('ArtistManagementService', () => {
           id: 'release-id', discName: 'Single', discType: 'single', genre: 'Rock',
           releaseDay: '2024-02-01', approved: true, link: 'release-link', discId: 'disc-id',
         }],
-        spotifyPlaylists: [{
+        riffValleyPlaylists: [{
           id: 'playlist-id', name: 'Playlist', link: 'playlist-link',
           type: 'album', imageUrl: 'playlist.jpg',
         }],

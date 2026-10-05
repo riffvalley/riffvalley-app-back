@@ -20,7 +20,8 @@ import { FavoritesModule } from './community/favorites/favorites.module';
 import { PendingsModule } from './community/pendings/pendings.module';
 import { CommentsModule } from './community/comments/comments.module';
 import { VersionsModule } from './versions/versions.module';
-import { SpotifyModule } from './spotify/spotify.module';
+import { SpotifyIntegrationModule } from './spotify-integration/spotify-integration.module';
+import { RiffValleyPlaylistModule } from './riff-valley-playlists/riff-valley-playlist.module';
 import { ContentsModule } from './contents/contents.module';
 import { ArticlesModule } from './articles/articles.module';
 import { VideosModule } from './videos/videos.module';
@@ -74,7 +75,8 @@ import { TiktokModule } from './tiktok/tiktok.module';
     PendingsModule,
     CommentsModule,
     VersionsModule,
-    SpotifyModule,
+    SpotifyIntegrationModule,
+    RiffValleyPlaylistModule,
     ContentsModule,
     ArticlesModule,
     VideosModule,

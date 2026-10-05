@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
-import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
+import { SpotifyPublicApiService } from 'src/spotify-integration';
 import { Disc } from '../entities/disc.entity';
 import { DiscSpotifyService } from './disc-spotify.service';
 
@@ -14,12 +14,15 @@ describe('DiscSpotifyService', () => {
     spotifyApiService = { getAlbumTracks: jest.fn() };
     service = new DiscSpotifyService(
       discRepository as unknown as Repository<Disc>,
-      spotifyApiService as unknown as SpotifyApiService,
+      spotifyApiService as unknown as SpotifyPublicApiService,
     );
   });
 
   it('passes a found disc name and artist name to Spotify', async () => {
-    const query = mockSpotifyTracksQuery({ disc_name: 'Album', artist_name: 'Artist' });
+    const query = mockSpotifyTracksQuery({
+      disc_name: 'Album',
+      artist_name: 'Artist',
+    });
     spotifyApiService.getAlbumTracks.mockResolvedValue([]);
 
     await expect(service.getSpotifyTracks('disc-id')).resolves.toEqual([]);
@@ -31,7 +34,10 @@ describe('DiscSpotifyService', () => {
   });
 
   it('uses empty artist name when a found disc has no artist', async () => {
-    const query = mockSpotifyTracksQuery({ disc_name: 'Album', artist_name: null });
+    const query = mockSpotifyTracksQuery({
+      disc_name: 'Album',
+      artist_name: null,
+    });
     spotifyApiService.getAlbumTracks.mockResolvedValue([]);
 
     await service.getSpotifyTracks('disc-id');
@@ -42,12 +48,18 @@ describe('DiscSpotifyService', () => {
 
   it('preserves a non-empty Spotify payload and maps a missing disc to the current 404', async () => {
     const payload = [{ id: 'spotify-track', name: 'Track', duration: 123 }];
-    const query = mockSpotifyTracksQuery({ disc_name: 'Album', artist_name: 'Artist' });
+    const query = mockSpotifyTracksQuery({
+      disc_name: 'Album',
+      artist_name: 'Artist',
+    });
     spotifyApiService.getAlbumTracks.mockResolvedValue(payload);
 
     await expect(service.getSpotifyTracks('disc-id')).resolves.toBe(payload);
     expectSpotifyTracksProjection(query, 'disc-id');
-    expect(spotifyApiService.getAlbumTracks).toHaveBeenCalledWith('Artist', 'Album');
+    expect(spotifyApiService.getAlbumTracks).toHaveBeenCalledWith(
+      'Artist',
+      'Album',
+    );
 
     jest.clearAllMocks();
     const missingQuery = mockSpotifyTracksQuery(undefined);
@@ -79,7 +91,9 @@ describe('DiscSpotifyService', () => {
     const spotifyError = new Error('Spotify unavailable');
     spotifyApiService.getAlbumTracks.mockRejectedValue(spotifyError);
 
-    await expect(service.getSpotifyTracks('disc-id')).rejects.toBe(spotifyError);
+    await expect(service.getSpotifyTracks('disc-id')).rejects.toBe(
+      spotifyError,
+    );
   });
 
   function mockSpotifyTracksQuery(result: unknown) {

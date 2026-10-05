@@ -6,7 +6,7 @@ import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { NationalRelease } from 'src/national-releases/entities/national-release.entity';
-import { SpotifyPlaylistArtist } from 'src/festival-playlists/entities/spotify-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from 'src/festival-playlists/entities/riff-valley-playlist-artist.entity';
 import { Artist } from '../entities/artist.entity';
 import { ArtistCatalogService } from '../catalog/artist-catalog.service';
 import { ArtistDetailsService } from '../details/artist-details.service';
@@ -26,7 +26,7 @@ describe('ArtistsModule dependency injection', () => {
       Artist,
       Disc,
       NationalRelease,
-      SpotifyPlaylistArtist,
+      RiffValleyPlaylistArtist,
       User,
       UserAccessLog,
       Rate,

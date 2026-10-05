@@ -7,7 +7,7 @@ import { CreateDiscDto } from './dto/create-discs.dto';
 import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
 import { User } from 'src/auth/entities/user.entity';
-import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
+import { SpotifyPublicApiService } from 'src/spotify-integration';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';
 import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
@@ -19,14 +19,14 @@ import { DiscHomeService } from './home/disc-home.service';
 @Injectable()
 export class DiscsService {
   constructor(
-    private readonly spotifyApiService: SpotifyApiService,
+    private readonly spotifyApiService: SpotifyPublicApiService,
     private readonly discCatalogService: DiscCatalogService,
     private readonly discCalendarService: DiscCalendarService,
     private readonly discEnrichmentService: DiscEnrichmentService,
     private readonly discWriteService: DiscWriteService,
     private readonly discSpotifyService: DiscSpotifyService,
     private readonly discHomeService: DiscHomeService,
-  ) { }
+  ) {}
 
   async getSpotifyTracks(id: string) {
     return this.discSpotifyService.getSpotifyTracks(id);
@@ -122,7 +122,11 @@ export class DiscsService {
     return this.discCalendarService.findWeekly(month, year, week);
   }
 
-  findWeeklyWithoutImage(month: number, year: number, week?: number): Promise<{ id: string; artistName: string; name: string }[]> {
+  findWeeklyWithoutImage(
+    month: number,
+    year: number,
+    week?: number,
+  ): Promise<{ id: string; artistName: string; name: string }[]> {
     return this.discEnrichmentService.findWeeklyWithoutImage(month, year, week);
   }
 

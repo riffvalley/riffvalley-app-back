@@ -1,9 +1,7 @@
 import { BadGatewayException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
-import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
-import { DiscsService } from 'src/catalog/discs/discs.service';
-import { DiscsController } from 'src/catalog/discs/discs.controller';
+import { SpotifyPublicApiService } from 'src/spotify-integration';
 import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
 import { SpotifyArtistsController } from './spotify-artists.controller';
 import { SpotifyAlbumsController } from './spotify-albums.controller';
@@ -11,10 +9,6 @@ import { SpotifyAlbumsController } from './spotify-albums.controller';
 describe('SpotifyArtistsController contracts', () => {
   let app;
   let moduleRef: TestingModule;
-  const discsService = {
-    resolveSpotifyAlbum: jest.fn(),
-    getSpotifyAlbumDetails: jest.fn(),
-  };
   const spotifyApiService = {
     findArtist: jest.fn(),
     findArtistCandidates: jest.fn(),
@@ -30,11 +24,9 @@ describe('SpotifyArtistsController contracts', () => {
       controllers: [
         SpotifyArtistsController,
         SpotifyAlbumsController,
-        DiscsController,
       ],
       providers: [
-        { provide: SpotifyApiService, useValue: spotifyApiService },
-        { provide: DiscsService, useValue: discsService },
+        { provide: SpotifyPublicApiService, useValue: spotifyApiService },
       ],
     })
       .overrideGuard(UserRoleGuard)
@@ -159,45 +151,6 @@ describe('SpotifyArtistsController contracts', () => {
     await request(app.getHttpServer())
       .get('/api/spotify/artists/artist-id/albums')
       .expect(502);
-  });
-
-  it('preserva los contratos HTTP de búsqueda y detalle de álbum bajo /api/discs', async () => {
-    const summary = {
-      spotifyId: 'album-id',
-      name: 'Disco',
-      listenUrl: null,
-      coverUrl: null,
-    };
-    const details = {
-      ...summary,
-      artistNames: ['Banda'],
-      releaseDate: '2025-01',
-      totalTracks: 1,
-      tracks: [
-        {
-          id: 'track-id',
-          name: 'Tema',
-          number: 1,
-          durationMs: 120000,
-          previewUrl: null,
-        },
-      ],
-    };
-    discsService.resolveSpotifyAlbum.mockResolvedValue(summary);
-    discsService.getSpotifyAlbumDetails.mockResolvedValue(details);
-
-    await request(app.getHttpServer())
-      .get('/api/discs/spotify/album')
-      .query({ albumName: 'Disco', artistName: 'Banda' })
-      .expect(200, summary);
-    expect(discsService.resolveSpotifyAlbum).toHaveBeenCalledWith(
-      'Disco',
-      'Banda',
-    );
-
-    await request(app.getHttpServer())
-      .get('/api/discs/spotify/album/album-id')
-      .expect(200, details);
   });
 
   it('preserva el contrato de track más popular bajo /api/spotify/albums', async () => {

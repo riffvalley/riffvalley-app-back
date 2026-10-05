@@ -7,22 +7,22 @@ import {
   IsUUID,
   MaxLength,
 } from 'class-validator';
-import { SpotifyStatus, SpotifyType } from '../entities/spotify.entity';
+import { RiffValleyPlaylistStatus, RiffValleyPlaylistType } from '../entities/riff-valley-playlist.entity';
 
-export class CreateSpotifyDto {
+export class CreateRiffValleyPlaylistDto {
   @IsString()
   @MaxLength(200)
   name: string;
 
-  @IsEnum(SpotifyStatus)
-  status: SpotifyStatus;
+  @IsEnum(RiffValleyPlaylistStatus)
+  status: RiffValleyPlaylistStatus;
 
   @IsUrl()
   @MaxLength(500)
   link: string;
 
-  @IsEnum(SpotifyType)
-  type: SpotifyType;
+  @IsEnum(RiffValleyPlaylistType)
+  type: RiffValleyPlaylistType;
 
   @IsISO8601()
   updateDate: string; // vendrá como ISO8601

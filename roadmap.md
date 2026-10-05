@@ -16,6 +16,7 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 
 - [Catalog](roadmap/catalog.md) — ownership de Catalog y planificación de Discs, Artists, Genres, Countries e integración de Catalog.
 - [Community](roadmap/community.md) — Comments, Requests, Favorites, Pendings y Rates como capacidades de interacción y contribución al catálogo.
+- [Spotify](roadmap/spotify.md) — separación del dominio de la playlist de Riff Valley y la integración con la API externa de Spotify.
 
 ## Estado de alto nivel
 

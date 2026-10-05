@@ -7,19 +7,20 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
+import { SpotifyPublicApiService } from 'src/spotify-integration/api/spotify-public-api.service';
 import { ListSpotifyArtistAlbumsQueryDto } from './dto/list-spotify-artist-albums.query.dto';
 import { SearchSpotifyArtistQueryDto } from './dto/search-spotify-artist-query.dto';
 
 @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 @Controller('spotify/artists')
 export class SpotifyArtistsController {
-  constructor(private readonly spotifyApiService: SpotifyApiService) {}
+  constructor(private readonly spotifyApiService: SpotifyPublicApiService) {}
 
   @Get('search')
   async findArtist(@Query() query: SearchSpotifyArtistQueryDto) {
     const artist = await this.spotifyApiService.findArtist(query.artistName);
-    if (!artist) throw new NotFoundException('Artista no encontrado en Spotify');
+    if (!artist)
+      throw new NotFoundException('Artista no encontrado en Spotify');
     return artist;
   }
 

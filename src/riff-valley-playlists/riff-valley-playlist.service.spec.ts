@@ -1,7 +1,7 @@
-import { SpotifyStatus } from './entities/spotify.entity';
-import { SpotifyService } from './spotify.service';
+import { RiffValleyPlaylistStatus } from './entities/riff-valley-playlist.entity';
+import { RiffValleyPlaylistService } from './riff-valley-playlist.service';
 
-describe('SpotifyService', () => {
+describe('RiffValleyPlaylistService', () => {
   it('incluye el número de artistas sin cargar la relación completa', async () => {
     const playlists = [
       { id: 'playlist-id', name: 'Festival', playlistArtistsCount: 3 },
@@ -18,25 +18,25 @@ describe('SpotifyService', () => {
     const repository = {
       createQueryBuilder: jest.fn().mockReturnValue(query),
     };
-    const service = new SpotifyService(repository as any, {} as any);
+    const service = new RiffValleyPlaylistService(repository as any, {} as any);
 
     await expect(
       service.findAll({ type: 'festival', limit: 50 }),
     ).resolves.toEqual(playlists);
     expect(query.loadRelationCountAndMap).toHaveBeenCalledWith(
-      'spotify.playlistArtistsCount',
-      'spotify.playlistArtists',
+      'riffValleyPlaylist.playlistArtistsCount',
+      'riffValleyPlaylist.playlistArtists',
     );
     expect(query.leftJoinAndSelect).toHaveBeenCalledWith(
-      'spotify.content',
+      'riffValleyPlaylist.content',
       'content',
     );
-    expect(query.andWhere).toHaveBeenCalledWith('spotify.type = :type', {
+    expect(query.andWhere).toHaveBeenCalledWith('riffValleyPlaylist.type = :type', {
       type: 'festival',
     });
   });
 
-  // Spotify y Content son independientes: cambiar el estado de una playlist
+  // RiffValleyPlaylist y Content son independientes: cambiar el estado de una playlist
   // nunca debe crear, actualizar ni borrar el Content asociado. Sincronizar
   // el Content es ahora una acción manual explícita
   // (ContentsService.syncMediaStatus() / POST /contents/:id/sync-media).
@@ -44,34 +44,34 @@ describe('SpotifyService', () => {
     const playlist = {
       id: 'playlist-id',
       name: 'Playlist terminada',
-      status: SpotifyStatus.EDITING,
+      status: RiffValleyPlaylistStatus.EDITING,
       user: { id: 'user-id' },
     };
     const repository = {
       findOne: jest
         .fn()
         .mockResolvedValueOnce(playlist)
-        .mockResolvedValue({ ...playlist, status: SpotifyStatus.READY }),
+        .mockResolvedValue({ ...playlist, status: RiffValleyPlaylistStatus.READY }),
       save: jest.fn().mockResolvedValue(undefined),
     };
     const contentsService = {
-      findOneBySpotifyId: jest.fn(),
+      findOneByRiffValleyPlaylistId: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new SpotifyService(
+    const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
     );
 
-    await service.update('playlist-id', { status: SpotifyStatus.READY });
+    await service.update('playlist-id', { status: RiffValleyPlaylistStatus.READY });
 
     expect(contentsService.create).not.toHaveBeenCalled();
     expect(contentsService.update).not.toHaveBeenCalled();
     expect(contentsService.remove).not.toHaveBeenCalled();
     expect(repository.save).toHaveBeenCalledWith(
-      expect.objectContaining({ status: SpotifyStatus.READY }),
+      expect.objectContaining({ status: RiffValleyPlaylistStatus.READY }),
     );
   });
 
@@ -79,7 +79,7 @@ describe('SpotifyService', () => {
     const playlist = {
       id: 'playlist-id',
       name: 'Playlist sin usuario',
-      status: SpotifyStatus.EDITING,
+      status: RiffValleyPlaylistStatus.EDITING,
       user: null,
     };
     const repository = {
@@ -91,26 +91,26 @@ describe('SpotifyService', () => {
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new SpotifyService(
+    const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
     );
 
     await expect(
-      service.update('playlist-id', { status: SpotifyStatus.READY }),
+      service.update('playlist-id', { status: RiffValleyPlaylistStatus.READY }),
     ).rejects.toThrow('debe tener un usuario asignado');
     expect(repository.save).not.toHaveBeenCalled();
   });
 
   it.each([
-    SpotifyStatus.NOT_STARTED,
-    SpotifyStatus.IN_PROGRESS,
-    SpotifyStatus.EDITING,
+    RiffValleyPlaylistStatus.NOT_STARTED,
+    RiffValleyPlaylistStatus.IN_PROGRESS,
+    RiffValleyPlaylistStatus.EDITING,
   ])('no toca Content al retroceder una playlist a %s', async (status) => {
     const playlist = {
       id: 'playlist-id',
       name: 'Playlist terminada',
-      status: SpotifyStatus.READY,
+      status: RiffValleyPlaylistStatus.READY,
       user: { id: 'user-id' },
     };
     const repository = {
@@ -121,12 +121,12 @@ describe('SpotifyService', () => {
       save: jest.fn().mockResolvedValue(undefined),
     };
     const contentsService = {
-      findOneBySpotifyId: jest.fn(),
+      findOneByRiffValleyPlaylistId: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new SpotifyService(
+    const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
     );
@@ -146,7 +146,7 @@ describe('SpotifyService', () => {
     const playlist = {
       id: 'playlist-id',
       name: 'Playlist terminada',
-      status: SpotifyStatus.READY,
+      status: RiffValleyPlaylistStatus.READY,
       user: { id: 'user-id' },
     };
     const repository = {
@@ -157,12 +157,12 @@ describe('SpotifyService', () => {
       save: jest.fn().mockResolvedValue(undefined),
     };
     const contentsService = {
-      findOneBySpotifyId: jest.fn(),
+      findOneByRiffValleyPlaylistId: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new SpotifyService(
+    const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
     );
@@ -178,7 +178,7 @@ describe('SpotifyService', () => {
     const playlist = {
       id: 'playlist-id',
       name: 'Playlist terminada',
-      status: SpotifyStatus.READY,
+      status: RiffValleyPlaylistStatus.READY,
       user: { id: 'user-id' },
     };
     const repository = {
@@ -190,22 +190,22 @@ describe('SpotifyService', () => {
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new SpotifyService(
+    const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
     );
 
     await expect(
-      service.update('playlist-id', { status: SpotifyStatus.PUBLISHED }),
+      service.update('playlist-id', { status: RiffValleyPlaylistStatus.PUBLISHED }),
     ).rejects.toThrow('debe proporcionar una fecha');
     expect(repository.save).not.toHaveBeenCalled();
   });
 
-  it('createContentForSpotify crea un Content en backlog y lo enlaza', async () => {
+  it('createContentForRiffValleyPlaylist crea un Content en backlog y lo enlaza', async () => {
     const playlist = {
       id: 'playlist-id',
       name: 'Playlist terminada',
-      status: SpotifyStatus.EDITING,
+      status: RiffValleyPlaylistStatus.EDITING,
       user: { id: 'user-id' },
       content: null,
     };
@@ -215,61 +215,61 @@ describe('SpotifyService', () => {
     const contentsService = {
       create: jest.fn().mockResolvedValue({ id: 'content-id' }),
     };
-    const service = new SpotifyService(
+    const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
     );
 
-    await service.createContentForSpotify('playlist-id');
+    await service.createContentForRiffValleyPlaylist('playlist-id');
 
     expect(contentsService.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Playlist terminada',
         authorId: 'user-id',
-        spotifyId: 'playlist-id',
+        riffValleyPlaylistId: 'playlist-id',
         backlog: true,
       }),
     );
   });
 
-  it('createContentForSpotify falla si ya hay un Content asociado', async () => {
+  it('createContentForRiffValleyPlaylist falla si ya hay un Content asociado', async () => {
     const playlist = {
       id: 'playlist-id',
       name: 'Playlist terminada',
-      status: SpotifyStatus.EDITING,
+      status: RiffValleyPlaylistStatus.EDITING,
       user: { id: 'user-id' },
       content: { id: 'content-id' },
     };
     const repository = { findOne: jest.fn().mockResolvedValue(playlist) };
     const contentsService = { create: jest.fn() };
-    const service = new SpotifyService(
+    const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
     );
 
     await expect(
-      service.createContentForSpotify('playlist-id'),
+      service.createContentForRiffValleyPlaylist('playlist-id'),
     ).rejects.toThrow('ya tiene un Content asociado');
     expect(contentsService.create).not.toHaveBeenCalled();
   });
 
-  it('createContentForSpotify falla si no hay usuario asignado', async () => {
+  it('createContentForRiffValleyPlaylist falla si no hay usuario asignado', async () => {
     const playlist = {
       id: 'playlist-id',
       name: 'Playlist terminada',
-      status: SpotifyStatus.EDITING,
+      status: RiffValleyPlaylistStatus.EDITING,
       user: null,
       content: null,
     };
     const repository = { findOne: jest.fn().mockResolvedValue(playlist) };
     const contentsService = { create: jest.fn() };
-    const service = new SpotifyService(
+    const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
     );
 
     await expect(
-      service.createContentForSpotify('playlist-id'),
+      service.createContentForRiffValleyPlaylist('playlist-id'),
     ).rejects.toThrow('debe tener un usuario asignado');
     expect(contentsService.create).not.toHaveBeenCalled();
   });

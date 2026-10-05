@@ -101,26 +101,26 @@ export class FestivalPlaylistsController {
     return this.festivalPlaylistsService.createLinkedFestivalPlaylist(dto);
   }
 
-  @Post(':spotifyId/link')
+  @Post(':riffValleyPlaylistId/link')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   linkExistingFestivalPlaylist(
-    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
     return this.festivalPlaylistsService.linkExistingFestivalPlaylist(
-      spotifyId,
+      riffValleyPlaylistId,
     );
   }
 
-  @Patch(':spotifyId')
+  @Patch(':riffValleyPlaylistId')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   updateFestivalPlaylist(
-    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: UpdateSyncedPlaylistDto,
   ) {
-    return this.festivalPlaylistsService.updateFestivalPlaylist(spotifyId, dto);
+    return this.festivalPlaylistsService.updateFestivalPlaylist(riffValleyPlaylistId, dto);
   }
 
-  @Put(':spotifyId/image')
+  @Put(':riffValleyPlaylistId/image')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   @UseInterceptors(
     FileInterceptor('image', {
@@ -137,72 +137,72 @@ export class FestivalPlaylistsController {
     }),
   )
   updateFestivalPlaylistImage(
-    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @UploadedFile() image: Express.Multer.File,
   ) {
     if (!image) throw new BadRequestException('Falta la imagen de portada');
     return this.festivalPlaylistsService.updateFestivalPlaylistImage(
-      spotifyId,
+      riffValleyPlaylistId,
       image.buffer,
     );
   }
 
-  @Get(':spotifyId')
+  @Get(':riffValleyPlaylistId')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
-  getFestivalPlaylist(@Param('spotifyId', ParseUUIDPipe) spotifyId: string) {
-    return this.festivalPlaylistsService.getFestivalPlaylist(spotifyId);
+  getFestivalPlaylist(@Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string) {
+    return this.festivalPlaylistsService.getFestivalPlaylist(riffValleyPlaylistId);
   }
 
-  @Post(':spotifyId/artists')
+  @Post(':riffValleyPlaylistId/artists')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   addArtist(
-    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: SyncPlaylistArtistDto,
   ) {
-    return this.festivalPlaylistsService.addArtist(spotifyId, dto);
+    return this.festivalPlaylistsService.addArtist(riffValleyPlaylistId, dto);
   }
 
-  @Get(':spotifyId/artists/:artistId/tracks')
+  @Get(':riffValleyPlaylistId/artists/:artistId/tracks')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   searchArtistTracks(
-    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
     @Query() query: SearchSpotifyTracksQueryDto,
   ) {
     return this.festivalPlaylistsService.searchFestivalArtistTracks(
-      spotifyId,
+      riffValleyPlaylistId,
       artistId,
       query.q,
     );
   }
 
-  @Put(':spotifyId/artists/:artistId/tracks')
+  @Put(':riffValleyPlaylistId/artists/:artistId/tracks')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   replaceFailedArtistTracks(
-    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
     @Body() dto: ReplaceFailedFestivalArtistTracksDto,
   ) {
     return this.festivalPlaylistsService.replaceFailedFestivalArtistTracks(
-      spotifyId,
+      riffValleyPlaylistId,
       artistId,
       dto.spotifyTrackIds,
     );
   }
 
-  @Delete(':spotifyId/tracks')
+  @Delete(':riffValleyPlaylistId/tracks')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
-  clearFestivalPlaylist(@Param('spotifyId', ParseUUIDPipe) spotifyId: string) {
-    return this.festivalPlaylistsService.clearFestivalPlaylist(spotifyId);
+  clearFestivalPlaylist(@Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string) {
+    return this.festivalPlaylistsService.clearFestivalPlaylist(riffValleyPlaylistId);
   }
 
-  @Delete(':spotifyId/artists/:artistId')
+  @Delete(':riffValleyPlaylistId/artists/:artistId')
   @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
   removeArtist(
-    @Param('spotifyId', ParseUUIDPipe) spotifyId: string,
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
   ) {
-    return this.festivalPlaylistsService.removeArtist(spotifyId, artistId);
+    return this.festivalPlaylistsService.removeArtist(riffValleyPlaylistId, artistId);
   }
 
   private frontendRedirectUrl(status: 'connected' | 'error'): string | null {

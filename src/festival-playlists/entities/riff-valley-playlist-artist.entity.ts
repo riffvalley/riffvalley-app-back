@@ -1,5 +1,5 @@
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
-import { Spotify } from 'src/spotify/entities/spotify.entity';
+import { RiffValleyPlaylist } from 'src/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import {
   Column,
   CreateDateColumn,
@@ -9,6 +9,7 @@ import {
   PrimaryGeneratedColumn,
   Unique,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 export enum PlaylistArtistSyncStatus {
@@ -34,26 +35,35 @@ export interface PlaylistTrackRecord {
   durationMs?: number;
 }
 
-@Entity('spotify_playlist_artists')
-@Unique('UQ_spotify_playlist_artist', ['spotifyId', 'artistId'])
-export class SpotifyPlaylistArtist {
-  @PrimaryGeneratedColumn('uuid')
+@Entity('riff_valley_playlist_artists')
+@Index('IDX_riff_valley_playlist_artists_artist', ['artistId'])
+@Unique('UQ_riff_valley_playlist_artist', ['riffValleyPlaylistId', 'artistId'])
+export class RiffValleyPlaylistArtist {
+  @PrimaryGeneratedColumn('uuid', {
+    primaryKeyConstraintName: 'PK_riff_valley_playlist_artists',
+  })
   id: string;
 
-  @Column({ name: 'spotify_id', type: 'uuid' })
-  spotifyId: string;
+  @Column({ name: 'riff_valley_playlist_id', type: 'uuid' })
+  riffValleyPlaylistId: string;
 
-  @ManyToOne(() => Spotify, (spotify) => spotify.playlistArtists, {
+  @ManyToOne(() => RiffValleyPlaylist, (playlist) => playlist.playlistArtists, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'spotify_id' })
-  spotify: Spotify;
+  @JoinColumn({
+    name: 'riff_valley_playlist_id',
+    foreignKeyConstraintName: 'FK_riff_valley_playlist_artists_playlist',
+  })
+  riffValleyPlaylist: RiffValleyPlaylist;
 
   @Column({ name: 'artist_id', type: 'uuid' })
   artistId: string;
 
   @ManyToOne(() => Artist, { eager: true, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'artist_id' })
+  @JoinColumn({
+    name: 'artist_id',
+    foreignKeyConstraintName: 'FK_riff_valley_playlist_artists_artist',
+  })
   artist: Artist;
 
   @Column({ type: 'varchar', length: 20 })

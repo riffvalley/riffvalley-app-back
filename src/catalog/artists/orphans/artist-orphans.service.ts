@@ -20,7 +20,7 @@ export class ArtistOrphansService {
         `NOT EXISTS (SELECT 1 FROM national_release nr WHERE LOWER(nr."artistName") = LOWER(artist.name))`,
       )
       .andWhere(
-        'NOT EXISTS (SELECT 1 FROM spotify_playlist_artists spa WHERE spa.artist_id = artist.id)',
+        'NOT EXISTS (SELECT 1 FROM riff_valley_playlist_artists spa WHERE spa.artist_id = artist.id)',
       );
 
     if (query) {
@@ -46,7 +46,7 @@ export class ArtistOrphansService {
         `NOT EXISTS (SELECT 1 FROM national_release nr WHERE LOWER(nr."artistName") = LOWER(artist.name))`,
       )
       .andWhere(
-        'NOT EXISTS (SELECT 1 FROM spotify_playlist_artists spa WHERE spa.artist_id = artist.id)',
+        'NOT EXISTS (SELECT 1 FROM riff_valley_playlist_artists spa WHERE spa.artist_id = artist.id)',
       )
       .getMany();
 

@@ -63,16 +63,16 @@ GET /api/tiktok/callback?code=...&scopes=user.info.basic,video.list&state=...
 ```
 
 Si `TIKTOK_FRONTEND_REDIRECT_URL` está configurada (lo está en prod:
-`https://app.riffvalley.es/spotify/festivales`), responde con un **302** a:
+`https://app.riffvalley.es/riff-valley-playlists/festivales`), responde con un **302** a:
 
 ```
-https://app.riffvalley.es/spotify/festivales?tiktok=connected
+https://app.riffvalley.es/riff-valley-playlists/festivales?tiktok=connected
 ```
 
 o, si algo falla (state inválido/caducado, error de TikTok, `invalid_grant`...):
 
 ```
-https://app.riffvalley.es/spotify/festivales?tiktok=error
+https://app.riffvalley.es/riff-valley-playlists/festivales?tiktok=error
 ```
 
 El frontend debe leer el query param `tiktok` en esa página de destino para
