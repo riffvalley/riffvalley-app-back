@@ -80,7 +80,6 @@ export class DiscCatalogService {
         'pending.userId = :userId',
         { userId },
       )
-      .addSelect('disc.id', 'discId')
       .addSelect((subQuery) => {
         return subQuery
           .select('AVG(rate.rate)', 'averageRate')
