@@ -12,7 +12,7 @@ import { User } from 'src/auth/entities/user.entity';
 import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
-import { Rate } from 'src/rates/entities/rate.entity';
+import { Rate } from 'src/community/rates/entities/rate.entity';
 import { DiscRequest } from '../entities/disc-request.entity';
 import { RequestsController } from '../requests.controller';
 import { RequestsModule } from '../requests.module';

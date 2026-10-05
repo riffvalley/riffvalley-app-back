@@ -13,7 +13,7 @@ import { RatesService } from './rates.service';
 import { RatesStatsService } from './rates-stats.service';
 import { CreateRateDto } from './dto/create-rates.dto';
 import { UpdateRateDto } from './dto/update-rates.dto';
-import { PaginationDto } from '../common/dtos/pagination.dto';
+import { PaginationDto } from '../../common/dtos/pagination.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';

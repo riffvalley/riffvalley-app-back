@@ -9,7 +9,7 @@ import { I18nConfigModule } from './i18n/i18n.module';
 //MODULES
 import { CatalogModule } from './catalog/catalog.module';
 import { AuthModule } from './auth/auth.module';
-import { RatesModule } from './rates/rates.module';
+import { RatesModule } from './community/rates/rates.module';
 import { AsignationsModule } from './asignations/asignations.module';
 import { ListsModule } from './lists/list.module';
 import { ReunionsModule } from './reunions/reunions.module';

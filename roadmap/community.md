@@ -149,6 +149,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** Rates queda bajo Community como capacidad independiente; rutas, respuestas, orden, errores, permisos y side effects caracterizados no cambian.
 - **Verificaciones previstas:** specs de Rates y consumers directos; inspección de DI y repositorios; build TypeScript.
 - **Tamaño estimado:** M.
+- [x] **Completada (2026-10-05).** Rates y las cuatro caracterizaciones mínimas quedaron bajo `src/community/rates/`; las suites propias de controller/stats y los consumers focalizados de Home, Calendar y Artists pasan. El typecheck y `git diff --check` pasan y no quedan imports al path anterior. `DiscCatalogService` conserva el fallo preexistente de `addSelect('disc.id', 'discId')`, documentado en D.3; no se modificó.
 
 ##### E.2 — Verificar consumidores de Catalog y Auth
 
@@ -159,6 +160,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** Catalog y Auth siguen resolviendo las dependencias necesarias; datos y reglas visibles a consumidores permanecen iguales; no se introducen abstracciones compartidas con Favorites/Pendings.
 - **Verificaciones previstas:** suites focalizadas de Rates, Catalog y Auth aplicables; revisión de DI/imports y build.
 - **Tamaño estimado:** S.
+- [x] **Completada (2026-10-05).** Rates, Auth → Rate y los consumers focalizados de Home, Calendar y Artists pasan; Auth resuelve el repositorio y conserva las proyecciones de actividad. RatesModule se registra una vez en AppModule; no hay dependencia inversa ni imports legacy. El typecheck y `git diff --check` pasan. `DiscCatalogService` conserva el fallo preexistente de `addSelect('disc.id', 'discId')`; no se modificó. Dos suites PostgreSQL se omitieron por no estar habilitadas en este entorno. F.1 permanece pendiente.
 
 #### F — Composición y regresión final
 

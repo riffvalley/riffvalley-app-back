@@ -1,5 +1,5 @@
 import { Artist } from '../../artists/entities/artist.entity';
-import { Rate } from '../../../rates/entities/rate.entity';
+import { Rate } from '../../../community/rates/entities/rate.entity';
 import { Genre } from '../../genres/entities/genre.entity';
 import {
   Column,

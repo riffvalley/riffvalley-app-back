@@ -12,7 +12,7 @@ import { CatalogModule } from '../src/catalog/catalog.module';
 import { Country } from '../src/catalog/countries/entities/country.entity';
 import { Disc } from '../src/catalog/discs/entities/disc.entity';
 import { Genre } from '../src/catalog/genres/entities/genre.entity';
-import { Rate } from '../src/rates/entities/rate.entity';
+import { Rate } from '../src/community/rates/entities/rate.entity';
 import { UserAccessLog } from '../src/auth/entities/user-access-log.entity';
 import { User } from '../src/auth/entities/user.entity';
 import { ValidRoles } from '../src/auth/interfaces/valid-roles';

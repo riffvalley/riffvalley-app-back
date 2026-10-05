@@ -11,7 +11,7 @@ import { UpdateRateDto } from './dto/update-rates.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Rate } from './entities/rate.entity';
-import { PaginationDto } from '../common/dtos/pagination.dto';
+import { PaginationDto } from '../../common/dtos/pagination.dto';
 import { User } from 'src/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Pending } from 'src/community/pendings/entities/pending.entity';

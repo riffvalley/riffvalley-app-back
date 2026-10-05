@@ -7,7 +7,7 @@ import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
-import { Rate } from 'src/rates/entities/rate.entity';
+import { Rate } from 'src/community/rates/entities/rate.entity';
 import { NationalRelease } from 'src/national-releases/entities/national-release.entity';
 import { SpotifyPlaylistArtist } from 'src/festival-playlists/entities/spotify-playlist-artist.entity';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';

@@ -9,7 +9,7 @@ import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
 import { User } from 'src/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
-import { Rate } from 'src/rates/entities/rate.entity';
+import { Rate } from 'src/community/rates/entities/rate.entity';
 import { Comment } from '../entities/comment.entity';
 import { CommentsController } from '../comments.controller';
 import { CommentsModule } from '../comments.module';

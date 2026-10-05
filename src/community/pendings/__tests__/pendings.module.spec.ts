@@ -14,7 +14,7 @@ import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
 import { User } from 'src/auth/entities/user.entity';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
-import { Rate } from 'src/rates/entities/rate.entity';
+import { Rate } from 'src/community/rates/entities/rate.entity';
 import { Pending } from '../entities/pending.entity';
 import { PendingsController } from '../pendings.controller';
 import { PendingsModule } from '../pendings.module';
