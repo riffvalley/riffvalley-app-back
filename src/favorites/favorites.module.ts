@@ -4,7 +4,7 @@ import { FavoritesController } from './favorites.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Favorite } from './entities/favorite.entity';
 import { AuthModule } from 'src/auth/auth.module';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 
 @Module({
   controllers: [FavoritesController], // Controladores que gestionan las rutas

@@ -15,6 +15,73 @@ export class RatesStatsService {
         private readonly userRepository: Repository<User>,
     ) { }
 
+    async getHomeInsights(user: User) {
+        const userId = user.id;
+
+        const topArtistsRaw = await this.rateRepository
+            .createQueryBuilder('rate')
+            .innerJoin('rate.disc', 'disc')
+            .innerJoin('disc.artist', 'artist')
+            .select('artist.id', 'id')
+            .addSelect('artist.name', 'name')
+            .addSelect('artist.image', 'image')
+            .addSelect('AVG(rate.rate)', 'averageRate')
+            .addSelect('COUNT(rate.id)', 'ratingCount')
+            .where('rate.userId = :userId', { userId })
+            .andWhere('rate.rate IS NOT NULL')
+            .groupBy('artist.id')
+            .addGroupBy('artist.name')
+            .addGroupBy('artist.image')
+            .orderBy('AVG(rate.rate)', 'DESC')
+            .addOrderBy('COUNT(rate.id)', 'DESC')
+            .addOrderBy('artist.name', 'ASC')
+            .limit(7)
+            .getRawMany();
+
+        const countriesRaw = await this.rateRepository
+            .createQueryBuilder('rate')
+            .innerJoin('rate.disc', 'disc')
+            .innerJoin('disc.artist', 'artist')
+            .innerJoin('artist.country', 'country')
+            .select('country.isoCode', 'isoCode')
+            .addSelect('country.name', 'name')
+            .addSelect('COUNT(rate.id)', 'count')
+            .where('rate.userId = :userId', { userId })
+            .andWhere('rate.rate IS NOT NULL')
+            .andWhere('country.id IS NOT NULL')
+            .andWhere('country.isoCode IS NOT NULL')
+            .groupBy('country.isoCode')
+            .addGroupBy('country.name')
+            .orderBy('COUNT(rate.id)', 'DESC')
+            .getRawMany();
+
+        const totalWithCountry = countriesRaw.reduce(
+            (total, country) => total + Number(country.count),
+            0,
+        );
+
+        return {
+            topArtists: topArtistsRaw.map((artist) => ({
+                id: artist.id,
+                name: artist.name,
+                image: artist.image ?? '',
+                averageRate: Number(artist.averageRate),
+                ratingCount: Number(artist.ratingCount),
+            })),
+            countries: countriesRaw.slice(0, 10).map((country) => {
+                const count = Number(country.count);
+                return {
+                    isoCode: country.isoCode,
+                    name: country.name,
+                    count,
+                    percentage: totalWithCountry
+                        ? Math.round((count / totalWithCountry) * 100)
+                        : 0,
+                };
+            }),
+        };
+    }
+
     async getUserStats(user: User, year?: string) {
         const userId = user.id;
         // Sin año concreto => discos de todos los años (coherente con el leaderboard del dashboard).

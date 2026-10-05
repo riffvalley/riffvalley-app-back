@@ -7,9 +7,9 @@ import { UpdateNationalReleaseDto } from './dto/update-national-release.dto';
 import { LinkDiscDto } from './dto/link-disc.dto';
 import { CreateNationalReleaseFromDiscDto } from './dto/create-national-release-from-disc.dto';
 import { MailService } from '../mail/mail.service';
-import { Disc } from '../discs/entities/disc.entity';
-import { Artist } from '../artists/entities/artist.entity';
-import { Genre } from '../genres/entities/genre.entity';
+import { Disc } from '../catalog/discs/entities/disc.entity';
+import { Artist } from '../catalog/artists/entities/artist.entity';
+import { Genre } from '../catalog/genres/entities/genre.entity';
 
 @Injectable()
 export class NationalReleasesService {

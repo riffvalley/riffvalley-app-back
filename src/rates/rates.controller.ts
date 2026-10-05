@@ -35,6 +35,12 @@ export class RatesController {
     return this.ratesStatsService.getUserStats(user, year);
   }
 
+  @Get('home-insights')
+  @Auth()
+  getHomeInsights(@GetUser() user: User) {
+    return this.ratesStatsService.getHomeInsights(user);
+  }
+
   // Esta estaba abajo y fallaba porque chocaba con :id
   @Get('user/:userId/history')
   getUserHistoryQB(

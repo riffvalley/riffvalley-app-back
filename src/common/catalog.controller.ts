@@ -1,8 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Genre } from '../genres/entities/genre.entity';
-import { Country } from '../countries/entities/country.entity';
+import { Genre } from '../catalog/genres/entities/genre.entity';
+import { Country } from '../catalog/countries/entities/country.entity';
 
 @Controller('catalog')
 export class CatalogController {

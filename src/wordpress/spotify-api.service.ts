@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SpotifyAlbumGroup } from 'src/spotify/dto/list-spotify-artist-albums.query.dto';
 
 export interface SpotifyAlbumSummary {
   spotifyId: string;
@@ -44,6 +45,20 @@ export interface SpotifyArtistCandidate {
   listenUrl: string | null;
   imageUrl: string | null;
   genres: string[];
+}
+
+export interface SpotifyArtistAlbum {
+  id: string;
+  name: string;
+  albumType: string;
+  releaseDate: string | null;
+  listenUrl: string | null;
+  coverUrl: string | null;
+}
+
+export interface SpotifyArtistAlbums {
+  spotifyId: string;
+  items: SpotifyArtistAlbum[];
 }
 
 export interface SpotifyArtistTopTrack {
@@ -206,6 +221,60 @@ export class SpotifyApiService {
         : null,
       durationMs: track.duration_ms ?? null,
     }));
+  }
+
+  async getArtistAlbums(
+    spotifyArtistId: string,
+    includeGroups: SpotifyAlbumGroup[],
+    limit: number,
+  ): Promise<SpotifyArtistAlbums> {
+    const query = new URLSearchParams({
+      include_groups: includeGroups.join(','),
+      market: 'ES',
+      limit: String(limit),
+    });
+    const data = await this.getRequired(
+      `/artists/${encodeURIComponent(spotifyArtistId)}/albums?${query.toString()}`,
+      'Artista no encontrado en Spotify',
+    );
+
+    if (!Array.isArray(data?.items)) {
+      throw new BadGatewayException(
+        'Respuesta de álbumes no válida de Spotify',
+      );
+    }
+
+    return {
+      spotifyId: spotifyArtistId,
+      items: data.items.map((album: any) => {
+        if (
+          typeof album?.id !== 'string' ||
+          typeof album?.name !== 'string' ||
+          typeof album?.album_type !== 'string'
+        ) {
+          throw new BadGatewayException(
+            'Respuesta de álbumes no válida de Spotify',
+          );
+        }
+
+        return {
+          id: album.id,
+          name: album.name,
+          albumType: album.album_type,
+          releaseDate:
+            typeof album.release_date === 'string' ? album.release_date : null,
+          listenUrl:
+            typeof album.external_urls?.spotify === 'string'
+              ? album.external_urls.spotify
+              : null,
+          coverUrl: Array.isArray(album.images)
+            ? (album.images.find(
+                (image: any) => typeof image?.url === 'string',
+              )?.url ?? null)
+            : null,
+        };
+      }),
+    };
   }
 
   async getArtistImageCandidates(spotifyArtistId: string): Promise<string[]> {

@@ -3,8 +3,8 @@ import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from 'src/auth/entities/user.entity';
-import { Genre } from 'src/genres/entities/genre.entity';
-import { Country } from 'src/countries/entities/country.entity';
+import { Genre } from 'src/catalog/genres/entities/genre.entity';
+import { Country } from 'src/catalog/countries/entities/country.entity';
 
 @Injectable()
 export class SeedService {

@@ -12,7 +12,7 @@ import { Repository } from 'typeorm';
 import { Comment } from './entities/comment.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { User } from 'src/auth/entities/user.entity';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { CommentResponseDto } from './dto/comment-response.dto';
 
 @Injectable()
