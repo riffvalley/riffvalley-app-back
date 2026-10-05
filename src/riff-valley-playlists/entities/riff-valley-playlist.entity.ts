@@ -7,12 +7,14 @@ import {
   OneToOne,
   ManyToOne,
   OneToMany,
+  JoinColumn,
+  Unique,
 } from 'typeorm';
 import { Content } from 'src/contents/entities/content.entity';
 import { User } from 'src/auth/entities/user.entity';
-import { SpotifyPlaylistArtist } from 'src/festival-playlists/entities/spotify-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from 'src/festival-playlists/entities/riff-valley-playlist-artist.entity';
 
-export enum SpotifyStatus {
+export enum RiffValleyPlaylistStatus {
   NOT_STARTED = 'not_started',
   IN_PROGRESS = 'in_progress',
   EDITING = 'editing',
@@ -20,23 +22,30 @@ export enum SpotifyStatus {
   PUBLISHED = 'published',
 }
 
-export enum SpotifyType {
+export enum RiffValleyPlaylistType {
   FESTIVAL = 'festival',
   ESPECIAL = 'especial',
   GENERO = 'genero',
   OTRAS = 'otras',
 }
 
-@Entity('spotify')
-export class Spotify {
-  @PrimaryGeneratedColumn('uuid')
+@Entity('riff_valley_playlists')
+@Unique('UQ_riff_valley_playlists_spotify_playlist_id', ['spotifyPlaylistId'])
+export class RiffValleyPlaylist {
+  @PrimaryGeneratedColumn('uuid', {
+    primaryKeyConstraintName: 'PK_riff_valley_playlists',
+  })
   id: string;
 
   @Column({ type: 'varchar', length: 200 })
   name: string;
 
-  @Column({ type: 'enum', enum: SpotifyStatus })
-  status: SpotifyStatus;
+  @Column({
+    type: 'enum',
+    enum: RiffValleyPlaylistStatus,
+    enumName: 'riff_valley_playlist_status_enum',
+  })
+  status: RiffValleyPlaylistStatus;
 
   @Column({ type: 'varchar', length: 500 })
   link: string;
@@ -46,7 +55,6 @@ export class Spotify {
     type: 'varchar',
     length: 100,
     nullable: true,
-    unique: true,
   })
   spotifyPlaylistId: string | null;
 
@@ -66,8 +74,12 @@ export class Spotify {
   })
   protectedTrackUris: string[];
 
-  @Column({ type: 'enum', enum: SpotifyType })
-  type: SpotifyType;
+  @Column({
+    type: 'enum',
+    enum: RiffValleyPlaylistType,
+    enumName: 'riff_valley_playlist_type_enum',
+  })
+  type: RiffValleyPlaylistType;
 
   @Column({
     type: 'timestamp with time zone',
@@ -81,19 +93,23 @@ export class Spotify {
   @UpdateDateColumn({ type: 'timestamp with time zone' })
   updatedAt: Date;
 
-  @OneToOne(() => Content, (content) => content.spotify)
+  @OneToOne(() => Content, (content) => content.riffValleyPlaylist)
   content: Content;
 
-  @ManyToOne(() => User, (user) => user.spotify, {
+  @ManyToOne(() => User, (user) => user.riffValleyPlaylists, {
     nullable: true,
     onDelete: 'SET NULL',
   })
+  @JoinColumn({
+    name: 'userId',
+    foreignKeyConstraintName: 'FK_riff_valley_playlists_user',
+  })
   user: User;
 
-  @OneToMany(() => SpotifyPlaylistArtist, (item) => item.spotify, {
+  @OneToMany(() => RiffValleyPlaylistArtist, (item) => item.riffValleyPlaylist, {
     cascade: true,
   })
-  playlistArtists: SpotifyPlaylistArtist[];
+  playlistArtists: RiffValleyPlaylistArtist[];
 
   /** Se rellena explícitamente en los listados sin cargar toda la relación. */
   playlistArtistsCount?: number;

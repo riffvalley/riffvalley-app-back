@@ -5,7 +5,7 @@ import { normalizeForSearch } from '../helpers/normalize-for-search';
 import { Artist } from '../entities/artist.entity';
 import { Disc } from '../../discs/entities/disc.entity';
 import { NationalRelease } from '../../../national-releases/entities/national-release.entity';
-import { SpotifyPlaylistArtist } from '../../../festival-playlists/entities/spotify-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from '../../../festival-playlists/entities/riff-valley-playlist-artist.entity';
 import { ArtistOrphansService } from '../orphans/artist-orphans.service';
 
 @Injectable()
@@ -17,8 +17,8 @@ export class ArtistManagementService {
     private readonly discRepository: Repository<Disc>,
     @InjectRepository(NationalRelease)
     private readonly nationalReleaseRepository: Repository<NationalRelease>,
-    @InjectRepository(SpotifyPlaylistArtist)
-    private readonly playlistArtistRepository: Repository<SpotifyPlaylistArtist>,
+    @InjectRepository(RiffValleyPlaylistArtist)
+    private readonly playlistArtistRepository: Repository<RiffValleyPlaylistArtist>,
     private readonly artistOrphansService: ArtistOrphansService,
   ) {}
 
@@ -126,7 +126,7 @@ export class ArtistManagementService {
 
       this.playlistArtistRepository
         .createQueryBuilder('association')
-        .innerJoinAndSelect('association.spotify', 'playlist')
+        .innerJoinAndSelect('association.riffValleyPlaylist', 'playlist')
         .where('association.artistId IN (:...artistIds)', { artistIds })
         .orderBy('playlist.name', 'ASC')
         .getMany(),
@@ -182,11 +182,11 @@ export class ArtistManagementService {
         playlistsByArtist.set(association.artistId, []);
       }
       playlistsByArtist.get(association.artistId).push({
-        id: association.spotify.id,
-        name: association.spotify.name,
-        link: association.spotify.link,
-        type: association.spotify.type,
-        imageUrl: association.spotify.imageUrl,
+        id: association.riffValleyPlaylist.id,
+        name: association.riffValleyPlaylist.name,
+        link: association.riffValleyPlaylist.link,
+        type: association.riffValleyPlaylist.type,
+        imageUrl: association.riffValleyPlaylist.imageUrl,
       });
     });
 
@@ -205,7 +205,7 @@ export class ArtistManagementService {
         discs: discsByArtist.get(artist.id) ?? [],
         nationalReleases:
           releasesByArtistName.get(artist.name.toLowerCase()) ?? [],
-        spotifyPlaylists: playlistsByArtist.get(artist.id) ?? [],
+        riffValleyPlaylists: playlistsByArtist.get(artist.id) ?? [],
       })),
     };
   }

@@ -7,15 +7,17 @@ const SPOTIFY_SCOPES_FOR_TEST =
 describe('FestivalPlaylistsService', () => {
   let service: FestivalPlaylistsService;
   let connectionRepository: any;
-  let spotifyRepository: any;
+  let riffValleyPlaylistRepository: any;
   let artistRepository: any;
   let playlistArtistRepository: any;
   let mailService: any;
   let tokenCrypto: any;
+  let spotifyOAuthApi: any;
+  let spotifyAccountApi: any;
 
   beforeEach(() => {
     connectionRepository = { findOne: jest.fn() };
-    spotifyRepository = {
+    riffValleyPlaylistRepository = {
       create: jest.fn((value) => ({ id: 'playlist-local', ...value })),
       find: jest.fn(),
       findOne: jest.fn(),
@@ -36,6 +38,30 @@ describe('FestivalPlaylistsService', () => {
       decrypt: jest.fn((value) => value),
       encrypt: jest.fn((value) => value),
     };
+    spotifyOAuthApi = {
+      getAuthorizationUrl: jest
+        .fn()
+        .mockReturnValue('https://accounts.spotify.com/authorize'),
+      exchangeAuthorizationCode: jest.fn(),
+      refreshAccessToken: jest
+        .fn()
+        .mockRejectedValue(new Error('unexpected refresh')),
+      request: jest.fn(),
+    };
+    spotifyAccountApi = {
+      getProfile: jest.fn(),
+      createPlaylist: jest.fn(),
+      getPlaylist: jest.fn(),
+      updatePlaylist: jest.fn(),
+      uploadPlaylistImage: jest.fn(),
+      getPlaylistImages: jest.fn(),
+      getPlaylistTrackUris: jest.fn().mockResolvedValue([]),
+      searchTracks: jest.fn().mockResolvedValue([]),
+      getTracks: jest.fn().mockResolvedValue([]),
+      addPlaylistItems: jest.fn().mockResolvedValue(undefined),
+      removePlaylistItems: jest.fn().mockResolvedValue(undefined),
+      replacePlaylistTrackUris: jest.fn().mockResolvedValue(undefined),
+    };
     const config = {
       get: jest.fn((name: string) => {
         const values: Record<string, string> = {
@@ -48,12 +74,14 @@ describe('FestivalPlaylistsService', () => {
     } as unknown as ConfigService;
     service = new FestivalPlaylistsService(
       connectionRepository,
-      spotifyRepository,
+      riffValleyPlaylistRepository,
       artistRepository,
       playlistArtistRepository,
       config,
       tokenCrypto,
       mailService,
+      spotifyOAuthApi,
+      spotifyAccountApi,
     );
   });
 
@@ -62,7 +90,7 @@ describe('FestivalPlaylistsService', () => {
   it('avisa cuando la autorización de Spotify caduca pronto', async () => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     connectionRepository.findOne.mockResolvedValue({
-      spotifyUserId: 'spotify-user',
+      spotifyUserId: 'riffValleyPlaylist-user',
       displayName: 'Riff Valley',
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       refreshTokenExpiresAt: expiresAt,
@@ -82,7 +110,7 @@ describe('FestivalPlaylistsService', () => {
 
   it('exige reautorizar cuando el refresh token ha caducado', async () => {
     connectionRepository.findOne.mockResolvedValue({
-      spotifyUserId: 'spotify-user',
+      spotifyUserId: 'riffValleyPlaylist-user',
       displayName: 'Riff Valley',
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       refreshTokenExpiresAt: new Date(Date.now() - 60 * 1000),
@@ -103,7 +131,7 @@ describe('FestivalPlaylistsService', () => {
 
   it('envía una sola vez el recordatorio diario de reautorización', async () => {
     const connection = {
-      spotifyUserId: 'spotify-user',
+      spotifyUserId: 'riffValleyPlaylist-user',
       displayName: 'Riff Valley',
       refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       reauthorizationReminderSentAt: null,
@@ -127,7 +155,7 @@ describe('FestivalPlaylistsService', () => {
     const connection = {
       accessToken: 'old-access-token',
       refreshToken: 'refresh-token',
-      spotifyUserId: 'spotify-user',
+      spotifyUserId: 'riffValleyPlaylist-user',
       expiresAt: new Date(Date.now() - 60 * 1000),
       refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       authorizationInvalidatedAt: null,
@@ -142,11 +170,12 @@ describe('FestivalPlaylistsService', () => {
       .fn()
       .mockReturnValue(queryBuilder);
     connectionRepository.save = jest.fn();
-    jest.spyOn(global, 'fetch').mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: 'invalid_grant' }),
-    } as Response);
+    const { SpotifyInvalidGrantError } = await import(
+      'src/spotify-integration/oauth/spotify-oauth-api.service'
+    );
+    spotifyOAuthApi.refreshAccessToken.mockRejectedValue(
+      new SpotifyInvalidGrantError('invalid_grant'),
+    );
 
     await expect((service as any).getValidAccessToken()).rejects.toThrow(
       'Spotify ha invalidado la autorización',
@@ -214,13 +243,11 @@ describe('FestivalPlaylistsService', () => {
     jest
       .spyOn(service as any, 'getValidAccessToken')
       .mockResolvedValue('access-token');
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockResolvedValue({
-        id: 'playlist-remote',
-        name: 'Festival',
-        external_urls: { spotify: 'https://open.spotify.com/playlist/remote' },
-      });
+    spotifyAccountApi.createPlaylist.mockResolvedValue({
+      id: 'playlist-remote',
+      name: 'Festival',
+      external_urls: { spotify: 'https://open.spotify.com/playlist/remote' },
+    });
     jest
       .spyOn(service, 'getFestivalPlaylist')
       .mockResolvedValue({ id: 'playlist-local' } as any);
@@ -231,12 +258,15 @@ describe('FestivalPlaylistsService', () => {
       public: false,
     });
 
-    expect(spotifyRequest).toHaveBeenCalledWith(
-      '/me/playlists',
+    expect(spotifyAccountApi.createPlaylist).toHaveBeenCalledWith(
       'access-token',
-      expect.objectContaining({ method: 'POST' }),
+      {
+        name: 'Festival',
+        description: 'Descripción',
+        public: false,
+      },
     );
-    expect(spotifyRepository.save).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         spotifyPlaylistId: 'playlist-remote',
         link: 'https://open.spotify.com/playlist/remote',
@@ -253,9 +283,7 @@ describe('FestivalPlaylistsService', () => {
     jest
       .spyOn(service as any, 'getValidAccessToken')
       .mockResolvedValue('access-token');
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockResolvedValue(undefined);
+    spotifyAccountApi.updatePlaylist.mockResolvedValue(undefined);
 
     await service.updateFestivalPlaylist(playlist.id, {
       name: 'Festival actualizado',
@@ -263,19 +291,16 @@ describe('FestivalPlaylistsService', () => {
       public: true,
     });
 
-    expect(spotifyRequest).toHaveBeenCalledWith(
-      '/playlists/playlist-remote',
+    expect(spotifyAccountApi.updatePlaylist).toHaveBeenCalledWith(
       'access-token',
+      'playlist-remote',
       {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: 'Festival actualizado',
-          description: '',
-          public: true,
-        }),
+        name: 'Festival actualizado',
+        description: '',
+        public: true,
       },
     );
-    expect(spotifyRepository.update).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.update).toHaveBeenCalledWith(
       playlist.id,
       expect.objectContaining({
         name: 'Festival actualizado',
@@ -294,7 +319,7 @@ describe('FestivalPlaylistsService', () => {
       link: 'https://open.spotify.com/playlist/playlistremote?si=test',
       spotifyPlaylistId: null,
     } as any;
-    spotifyRepository.findOne
+    riffValleyPlaylistRepository.findOne
       .mockResolvedValueOnce(legacyPlaylist)
       .mockResolvedValueOnce(null);
     jest
@@ -303,31 +328,28 @@ describe('FestivalPlaylistsService', () => {
     jest
       .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
       .mockResolvedValue(['spotify:track:existing']);
-    jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockImplementation((path: string) => {
-        if (path === '/me') {
-          return Promise.resolve({ id: 'riff-valley', display_name: 'RV' });
-        }
-        return Promise.resolve({
-          id: 'playlistremote',
-          name: 'Festival existente',
-          description: 'Descripción remota',
-          public: true,
-          owner: { id: 'riff-valley', display_name: 'Riff Valley' },
-          external_urls: {
-            spotify: 'https://open.spotify.com/playlist/playlistremote',
-          },
-          images: [{ url: 'https://image.test/cover.jpg' }],
-        });
-      });
+    spotifyAccountApi.getProfile.mockResolvedValue({
+      id: 'riff-valley',
+      display_name: 'RV',
+    });
+    spotifyAccountApi.getPlaylist.mockResolvedValue({
+      id: 'playlistremote',
+      name: 'Festival existente',
+      description: 'Descripción remota',
+      public: true,
+      owner: { id: 'riff-valley', display_name: 'Riff Valley' },
+      external_urls: {
+        spotify: 'https://open.spotify.com/playlist/playlistremote',
+      },
+      images: [{ url: 'https://image.test/cover.jpg' }],
+    });
     jest
       .spyOn(service, 'getFestivalPlaylist')
       .mockResolvedValue({ id: legacyPlaylist.id } as any);
 
     await service.linkExistingFestivalPlaylist(legacyPlaylist.id);
 
-    expect(spotifyRepository.update).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.update).toHaveBeenCalledWith(
       legacyPlaylist.id,
       expect.objectContaining({
         name: 'Festival existente',
@@ -341,8 +363,8 @@ describe('FestivalPlaylistsService', () => {
   });
 
   it('crea un registro local pegando la URL de una playlist existente', async () => {
-    spotifyRepository.findOne.mockResolvedValue(null);
-    spotifyRepository.find.mockResolvedValue([]);
+    riffValleyPlaylistRepository.findOne.mockResolvedValue(null);
+    riffValleyPlaylistRepository.find.mockResolvedValue([]);
     jest.spyOn(service as any, 'getOwnedSpotifyPlaylist').mockResolvedValue({
       remotePlaylist: {
         id: 'playlistremote',
@@ -365,7 +387,7 @@ describe('FestivalPlaylistsService', () => {
       spotifyUrl: 'https://open.spotify.com/playlist/playlistremote?si=example',
     });
 
-    expect(spotifyRepository.save).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Festival importado',
         spotifyPlaylistId: 'playlistremote',
@@ -389,27 +411,20 @@ describe('FestivalPlaylistsService', () => {
     const getToken = jest
       .spyOn(service as any, 'getValidAccessToken')
       .mockResolvedValue('access-token');
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce([
-        { url: 'https://image-cdn.test/cover.jpg', width: 640, height: 640 },
-      ]);
+    spotifyAccountApi.uploadPlaylistImage.mockResolvedValue(undefined);
+    spotifyAccountApi.getPlaylistImages.mockResolvedValue([
+      { url: 'https://image-cdn.test/cover.jpg', width: 640, height: 640 },
+    ]);
 
     await service.updateFestivalPlaylistImage(playlist.id, image);
 
     expect(getToken).toHaveBeenCalledWith(['ugc-image-upload']);
-    expect(spotifyRequest).toHaveBeenNthCalledWith(
-      1,
-      '/playlists/playlist-remote/images',
+    expect(spotifyAccountApi.uploadPlaylistImage).toHaveBeenCalledWith(
       'access-token',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'image/jpeg' },
-        body: image.toString('base64'),
-      },
+      'playlist-remote',
+      image.toString('base64'),
     );
-    expect(spotifyRepository.update).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.update).toHaveBeenCalledWith(
       playlist.id,
       expect.objectContaining({
         imageUrl: 'https://image-cdn.test/cover.jpg',
@@ -420,7 +435,7 @@ describe('FestivalPlaylistsService', () => {
 
   it('informa cuando la conexión necesita autorizar la subida de imágenes', async () => {
     connectionRepository.findOne.mockResolvedValue({
-      spotifyUserId: 'spotify-user',
+      spotifyUserId: 'riffValleyPlaylist-user',
       expiresAt: new Date(),
       scope: 'playlist-modify-private playlist-modify-public user-read-private',
     });
@@ -463,9 +478,7 @@ describe('FestivalPlaylistsService', () => {
       external_urls: { spotify: 'https://open.spotify.com/track/track-id' },
       artists: [{ name: 'Ghost' }],
     });
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockResolvedValue({});
+    spotifyAccountApi.addPlaylistItems.mockResolvedValue(undefined);
 
     await service.addArtist(playlist.id, {
       artistId: 'artist-id',
@@ -473,13 +486,10 @@ describe('FestivalPlaylistsService', () => {
       recentSetlists: 10,
     });
 
-    expect(spotifyRequest).toHaveBeenCalledWith(
-      '/playlists/playlist-remote/items',
+    expect(spotifyAccountApi.addPlaylistItems).toHaveBeenCalledWith(
       'access-token',
-      {
-        method: 'POST',
-        body: JSON.stringify({ uris: ['spotify:track:track-id'] }),
-      },
+      'playlist-remote',
+      ['spotify:track:track-id'],
     );
     expect(playlistArtistRepository.save).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -487,11 +497,11 @@ describe('FestivalPlaylistsService', () => {
         tracks: [expect.objectContaining({ spotifyTrackId: 'track-id' })],
       }),
     );
-    expect(spotifyRepository.update).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.update).toHaveBeenCalledWith(
       playlist.id,
       expect.objectContaining({ updateDate: expect.any(Date) }),
     );
-    expect(spotifyRepository.save).not.toHaveBeenCalled();
+    expect(riffValleyPlaylistRepository.save).not.toHaveBeenCalled();
   });
 
   it('no duplica una pista que ya existe en la playlist real', async () => {
@@ -525,9 +535,7 @@ describe('FestivalPlaylistsService', () => {
     jest
       .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
       .mockResolvedValue(['spotify:track:track-id']);
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockResolvedValue({});
+    spotifyAccountApi.addPlaylistItems.mockResolvedValue(undefined);
 
     await service.addArtist(playlist.id, {
       artistId: 'artist-id',
@@ -535,11 +543,7 @@ describe('FestivalPlaylistsService', () => {
       recentSetlists: 10,
     });
 
-    expect(spotifyRequest).not.toHaveBeenCalledWith(
-      '/playlists/playlist-remote/items',
-      'access-token',
-      expect.objectContaining({ method: 'POST' }),
-    );
+    expect(spotifyAccountApi.addPlaylistItems).not.toHaveBeenCalled();
     expect(playlistArtistRepository.save).toHaveBeenLastCalledWith(
       expect.objectContaining({
         status: 'synced',
@@ -548,7 +552,7 @@ describe('FestivalPlaylistsService', () => {
     );
   });
 
-  it('vacía Spotify por lotes y elimina todo el estado musical local', async () => {
+  it('vacía la playlist de Spotify por lotes y elimina todo el estado musical local', async () => {
     const playlist = {
       id: 'playlist-local',
       spotifyPlaylistId: 'playlist-remote',
@@ -565,28 +569,26 @@ describe('FestivalPlaylistsService', () => {
     jest
       .spyOn(service as any, 'getSpotifyPlaylistTrackUris')
       .mockResolvedValue(remoteUris);
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockResolvedValue({});
+    spotifyAccountApi.removePlaylistItems.mockResolvedValue(undefined);
 
     await service.clearFestivalPlaylist(playlist.id);
 
-    const deleteCalls = spotifyRequest.mock.calls.filter(
-      ([path, , init]) =>
-        path === '/playlists/playlist-remote/items' &&
-        (init as RequestInit).method === 'DELETE',
-    );
+    const deleteCalls = spotifyAccountApi.removePlaylistItems.mock.calls;
     expect(deleteCalls).toHaveLength(3);
-    expect(
-      JSON.parse((deleteCalls[0][2] as RequestInit).body as string).items,
-    ).toHaveLength(100);
-    expect(
-      JSON.parse((deleteCalls[2][2] as RequestInit).body as string).items,
-    ).toHaveLength(5);
+    expect(deleteCalls[0]).toEqual([
+      'access-token',
+      'playlist-remote',
+      remoteUris.slice(0, 100),
+    ]);
+    expect(deleteCalls[2]).toEqual([
+      'access-token',
+      'playlist-remote',
+      remoteUris.slice(200),
+    ]);
     expect(playlistArtistRepository.delete).toHaveBeenCalledWith({
-      spotifyId: playlist.id,
+      riffValleyPlaylistId: playlist.id,
     });
-    expect(spotifyRepository.update).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.update).toHaveBeenCalledWith(
       playlist.id,
       expect.objectContaining({
         protectedTrackUris: [],
@@ -617,28 +619,21 @@ describe('FestivalPlaylistsService', () => {
     jest
       .spyOn(service as any, 'getValidAccessToken')
       .mockResolvedValue('access-token');
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockResolvedValue({});
+    spotifyAccountApi.removePlaylistItems.mockResolvedValue(undefined);
 
     await service.removeArtist(playlist.id, 'artist-id');
 
-    expect(spotifyRequest).toHaveBeenCalledWith(
-      '/playlists/playlist-remote/items',
+    expect(spotifyAccountApi.removePlaylistItems).toHaveBeenCalledWith(
       'access-token',
-      {
-        method: 'DELETE',
-        body: JSON.stringify({
-          items: [{ uri: 'spotify:track:only-this-artist' }],
-        }),
-      },
+      'playlist-remote',
+      ['spotify:track:only-this-artist'],
     );
     expect(playlistArtistRepository.remove).toHaveBeenCalledWith(association);
-    expect(spotifyRepository.update).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.update).toHaveBeenCalledWith(
       playlist.id,
       expect.objectContaining({ updateDate: expect.any(Date) }),
     );
-    expect(spotifyRepository.save).not.toHaveBeenCalled();
+    expect(riffValleyPlaylistRepository.save).not.toHaveBeenCalled();
   });
 
   it('al quitar un artista conserva las pistas anteriores a la vinculación', async () => {
@@ -654,13 +649,11 @@ describe('FestivalPlaylistsService', () => {
     playlistArtistRepository.findOne.mockResolvedValue(association);
     playlistArtistRepository.find.mockResolvedValue([association]);
     jest.spyOn(service, 'getFestivalPlaylist').mockResolvedValue(playlist);
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockResolvedValue({});
+    spotifyAccountApi.removePlaylistItems.mockResolvedValue(undefined);
 
     await service.removeArtist(playlist.id, 'artist-id');
 
-    expect(spotifyRequest).not.toHaveBeenCalled();
+    expect(spotifyAccountApi.removePlaylistItems).not.toHaveBeenCalled();
     expect(playlistArtistRepository.remove).toHaveBeenCalledWith(association);
   });
 
@@ -688,38 +681,34 @@ describe('FestivalPlaylistsService', () => {
       name: `Song ${index + 1}`,
       uri: `spotify:track:${id}`,
       external_urls: { spotify: `https://open.spotify.com/track/${id}` },
-      artists: [{ id: 'spotify-artist', name: 'Igorrr' }],
+      artists: [{ id: 'riffValleyPlaylist-artist', name: 'Igorrr' }],
       album: {
         name: 'Album',
         images: [{ url: 'https://image', height: 300, width: 300 }],
       },
       duration_ms: 180000,
     }));
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockImplementation(async (path: string) =>
-        path.startsWith('/tracks?') ? { tracks: selectedTracks } : {},
-      );
+    spotifyAccountApi.getTracks.mockResolvedValue(selectedTracks);
+    spotifyAccountApi.addPlaylistItems.mockResolvedValue(undefined);
 
     await service.addGenreArtist(playlist.id, 'artist-id', [
       'track-one',
       'track-two',
     ]);
 
-    expect(spotifyRequest).toHaveBeenCalledWith(
-      '/playlists/playlist-remote/items',
+    expect(spotifyAccountApi.getTracks).toHaveBeenCalledWith('access-token', [
+      'track-one',
+      'track-two',
+    ]);
+    expect(spotifyAccountApi.addPlaylistItems).toHaveBeenCalledWith(
       'access-token',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          uris: ['spotify:track:track-one', 'spotify:track:track-two'],
-        }),
-      },
+      'playlist-remote',
+      ['spotify:track:track-one', 'spotify:track:track-two'],
     );
     expect(playlistArtistRepository.save).toHaveBeenLastCalledWith(
       expect.objectContaining({
         selectionMode: 'manual',
-        spotifyArtistId: 'spotify-artist',
+        spotifyArtistId: 'riffValleyPlaylist-artist',
         status: 'synced',
         tracks: [
           expect.objectContaining({ spotifyTrackId: 'track-one' }),
@@ -737,7 +726,7 @@ describe('FestivalPlaylistsService', () => {
     } as any;
     const association = {
       id: 'association-one',
-      spotifyId: playlist.id,
+      riffValleyPlaylistId: playlist.id,
       artistId: 'artist-id',
       spotifyArtistId: null,
       status: 'failed',
@@ -761,27 +750,21 @@ describe('FestivalPlaylistsService', () => {
       name: 'Song one',
       uri: 'spotify:track:track-one',
       external_urls: { spotify: 'https://open.spotify.com/track/track-one' },
-      artists: [{ id: 'spotify-artist', name: 'Igorrr' }],
+      artists: [{ id: 'riffValleyPlaylist-artist', name: 'Igorrr' }],
       album: { name: 'Album', images: [] },
       duration_ms: 180000,
     };
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockImplementation(async (path: string) =>
-        path.startsWith('/tracks?') ? { tracks: [spotifyTrack] } : {},
-      );
+    spotifyAccountApi.getTracks.mockResolvedValue([spotifyTrack]);
+    spotifyAccountApi.addPlaylistItems.mockResolvedValue(undefined);
 
     await service.replaceFailedFestivalArtistTracks(playlist.id, 'artist-id', [
       'track-one',
     ]);
 
-    expect(spotifyRequest).toHaveBeenCalledWith(
-      '/playlists/playlist-remote/items',
+    expect(spotifyAccountApi.addPlaylistItems).toHaveBeenCalledWith(
       'access-token',
-      {
-        method: 'POST',
-        body: JSON.stringify({ uris: ['spotify:track:track-one'] }),
-      },
+      'playlist-remote',
+      ['spotify:track:track-one'],
     );
     expect(playlistArtistRepository.save).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -826,7 +809,7 @@ describe('FestivalPlaylistsService', () => {
     } as any;
     const association = {
       id: 'association-one',
-      spotifyId: playlist.id,
+      riffValleyPlaylistId: playlist.id,
       artistId: 'artist-id',
       spotifyArtistId: null,
       tracks: [
@@ -858,35 +841,20 @@ describe('FestivalPlaylistsService', () => {
       name: id,
       uri: `spotify:track:${id}`,
       external_urls: { spotify: `https://open.spotify.com/track/${id}` },
-      artists: [{ id: 'spotify-artist', name: 'Igorrr' }],
+      artists: [{ id: 'riffValleyPlaylist-artist', name: 'Igorrr' }],
     }));
-    const spotifyRequest = jest
-      .spyOn(service as any, 'spotifyRequest')
-      .mockImplementation(async (path: string) =>
-        path.startsWith('/tracks?') ? { tracks: selectedTracks } : {},
-      );
+    spotifyAccountApi.getTracks.mockResolvedValue(selectedTracks);
+    spotifyAccountApi.removePlaylistItems.mockResolvedValue(undefined);
 
     await service.replaceGenreArtistTracks(playlist.id, 'artist-id', [
       'new-one',
       'new-two',
     ]);
 
-    expect(spotifyRequest).toHaveBeenCalledWith(
-      '/playlists/playlist-remote/items',
+    expect(spotifyAccountApi.removePlaylistItems).toHaveBeenCalledWith(
       'access-token',
-      {
-        method: 'DELETE',
-        body: JSON.stringify({
-          items: [{ uri: 'spotify:track:old-only' }],
-        }),
-      },
-    );
-    expect(spotifyRequest).not.toHaveBeenCalledWith(
-      '/playlists/playlist-remote/items',
-      'access-token',
-      expect.objectContaining({
-        body: expect.stringContaining('spotify:track:shared'),
-      }),
+      'playlist-remote',
+      ['spotify:track:old-only'],
     );
   });
 
@@ -918,7 +886,7 @@ describe('FestivalPlaylistsService', () => {
     expect(shuffledUris).not.toEqual(originalUris);
     expect([...shuffledUris].sort()).toEqual([...originalUris].sort());
     expect(replaceTracks).toHaveBeenCalledTimes(1);
-    expect(spotifyRepository.update).toHaveBeenCalledWith(
+    expect(riffValleyPlaylistRepository.update).toHaveBeenCalledWith(
       playlist.id,
       expect.objectContaining({ updateDate: expect.any(Date) }),
     );
@@ -948,6 +916,6 @@ describe('FestivalPlaylistsService', () => {
 
     expect(replaceTracks).toHaveBeenCalledTimes(2);
     expect(replaceTracks.mock.calls[1][2]).toEqual(originalUris);
-    expect(spotifyRepository.update).not.toHaveBeenCalled();
+    expect(riffValleyPlaylistRepository.update).not.toHaveBeenCalled();
   });
 });

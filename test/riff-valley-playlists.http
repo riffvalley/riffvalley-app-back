@@ -15,10 +15,10 @@ Content-Type: application/json
 }
 
 ### =========================================
-# CREAR SPOTIFY (válido)
+# CREAR PLAYLIST DE RIFF VALLEY (válido)
 # =========================================
-# @name createSpotify
-POST {{baseUrl}}/spotify
+# @name createRiffValleyPlaylist
+POST {{baseUrl}}/riff-valley-playlists
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.access_token}}
 
@@ -31,10 +31,10 @@ Authorization: Bearer {{login.response.body.access_token}}
 }
 
 ### =========================================
-# CREAR OTRO SPOTIFY (válido, otro tipo/estado)
+# CREAR OTRA PLAYLIST DE RIFF VALLEY (válido, otro tipo/estado)
 # =========================================
-# @name createSpotify2
-POST {{baseUrl}}/spotify
+# @name createRiffValleyPlaylist2
+POST {{baseUrl}}/riff-valley-playlists
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.access_token}}
 
@@ -49,19 +49,19 @@ Authorization: Bearer {{login.response.body.access_token}}
 ### =========================================
 # LISTAR TODOS
 # =========================================
-GET {{baseUrl}}/spotify
+GET {{baseUrl}}/riff-valley-playlists
 Authorization: Bearer {{login.response.body.access_token}}
 
 ### =========================================
 # OBTENER POR ID (usa el creado)
 # =========================================
-GET {{baseUrl}}/spotify/{{createSpotify.response.body.id}}
+GET {{baseUrl}}/riff-valley-playlists/{{createRiffValleyPlaylist.response.body.id}}
 Authorization: Bearer {{login.response.body.access_token}}
 
 ### =========================================
 # ACTUALIZAR (PUT/PATCH) CAMPOS DE UNO
 # =========================================
-PATCH {{baseUrl}}/spotify/{{createSpotify.response.body.id}}
+PATCH {{baseUrl}}/riff-valley-playlists/{{createRiffValleyPlaylist.response.body.id}}
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.access_token}}
 
@@ -74,7 +74,7 @@ Authorization: Bearer {{login.response.body.access_token}}
 ### =========================================
 # ELIMINAR UNO
 # =========================================
-DELETE {{baseUrl}}/spotify/{{createSpotify2.response.body.id}}
+DELETE {{baseUrl}}/riff-valley-playlists/{{createRiffValleyPlaylist2.response.body.id}}
 Authorization: Bearer {{login.response.body.access_token}}
 
 ### =========================================
@@ -82,7 +82,7 @@ Authorization: Bearer {{login.response.body.access_token}}
 # =========================================
 
 # 1) estado inválido
-POST {{baseUrl}}/spotify
+POST {{baseUrl}}/riff-valley-playlists
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.access_token}}
 
@@ -96,7 +96,7 @@ Authorization: Bearer {{login.response.body.access_token}}
 
 ### 
 # 2) enlace NO es URL
-POST {{baseUrl}}/spotify
+POST {{baseUrl}}/riff-valley-playlists
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.access_token}}
 
@@ -110,7 +110,7 @@ Authorization: Bearer {{login.response.body.access_token}}
 
 ### 
 # 3) fecha no ISO
-POST {{baseUrl}}/spotify
+POST {{baseUrl}}/riff-valley-playlists
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.access_token}}
 
@@ -125,5 +125,5 @@ Authorization: Bearer {{login.response.body.access_token}}
 ### =========================================
 # OBTENER ID INEXISTENTE (espera 404)
 # =========================================
-GET {{baseUrl}}/spotify/00000000-0000-0000-0000-000000000000
+GET {{baseUrl}}/riff-valley-playlists/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{login.response.body.access_token}}

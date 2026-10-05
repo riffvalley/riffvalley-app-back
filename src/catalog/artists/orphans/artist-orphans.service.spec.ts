@@ -33,7 +33,7 @@ describe('ArtistOrphansService', () => {
       expect.stringContaining('national_release'),
     );
     expect(qb.andWhere).toHaveBeenCalledWith(
-      'NOT EXISTS (SELECT 1 FROM spotify_playlist_artists spa WHERE spa.artist_id = artist.id)',
+      'NOT EXISTS (SELECT 1 FROM riff_valley_playlist_artists spa WHERE spa.artist_id = artist.id)',
     );
     expect(qb.andWhere).toHaveBeenCalledWith(
       'artist.name_normalized LIKE :q', { q: '%bjork co%' },

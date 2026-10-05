@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
+import { SpotifyPublicApiService } from 'src/spotify-integration';
 import { Disc } from '../entities/disc.entity';
 
 @Injectable()
@@ -9,7 +9,7 @@ export class DiscSpotifyService {
   constructor(
     @InjectRepository(Disc)
     private readonly discRepository: Repository<Disc>,
-    private readonly spotifyApiService: SpotifyApiService,
+    private readonly spotifyApiService: SpotifyPublicApiService,
   ) {}
 
   // Tracklist de Spotify de un disco, para que el front deje elegir la

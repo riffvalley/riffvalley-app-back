@@ -9,7 +9,7 @@ import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { NationalRelease } from 'src/national-releases/entities/national-release.entity';
-import { SpotifyPlaylistArtist } from 'src/festival-playlists/entities/spotify-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from 'src/festival-playlists/entities/riff-valley-playlist-artist.entity';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
 import { User } from 'src/auth/entities/user.entity';
 import { DiscsController } from '../discs/discs.controller';
@@ -31,6 +31,7 @@ import { ExcelWorkbookParser } from '../import/excel/parser/excel-workbook.parse
 import { ExcelTemplateService } from '../import/excel/template/excel-template.service';
 import { LastfmModule } from 'src/lastfm/lastfm.module';
 import { LastfmService } from 'src/lastfm/lastfm.service';
+import { SpotifyConnection } from 'src/spotify-integration';
 
 describe('CatalogModule dependency injection', () => {
   let moduleRef: TestingModule;
@@ -49,7 +50,8 @@ describe('CatalogModule dependency injection', () => {
       UserAccessLog,
       Rate,
       NationalRelease,
-      SpotifyPlaylistArtist,
+      RiffValleyPlaylistArtist,
+      SpotifyConnection,
     ];
 
     const testingModule = Test.createTestingModule({
@@ -59,9 +61,7 @@ describe('CatalogModule dependency injection', () => {
       .useValue({ get: jest.fn(() => 'catalog-module-test-secret') });
 
     for (const entity of repositoryEntities) {
-      testingModule
-        .overrideProvider(getRepositoryToken(entity))
-        .useValue({});
+      testingModule.overrideProvider(getRepositoryToken(entity)).useValue({});
     }
 
     moduleRef = await testingModule.compile();
@@ -89,7 +89,9 @@ describe('CatalogModule dependency injection', () => {
   });
 
   it('wires each controller and service to the providers for its responsibility', () => {
-    const manualController = moduleRef.get(CatalogImportController) as unknown as {
+    const manualController = moduleRef.get(
+      CatalogImportController,
+    ) as unknown as {
       catalogImportService: CatalogImportService;
     };
     const manualService = moduleRef.get(CatalogImportService) as unknown as {
@@ -109,7 +111,9 @@ describe('CatalogModule dependency injection', () => {
     expect(manualService.manualImportLogger).toBe(
       moduleRef.get(ManualImportLogger),
     );
-    expect(excelController.excelService).toBe(moduleRef.get(ExcelImportService));
+    expect(excelController.excelService).toBe(
+      moduleRef.get(ExcelImportService),
+    );
     expect(excelController.excelTemplateService).toBe(
       moduleRef.get(ExcelTemplateService),
     );
@@ -119,10 +123,17 @@ describe('CatalogModule dependency injection', () => {
   });
 
   it('composes the independent Genres and Countries modules once under Catalog', () => {
-    const catalogImports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, CatalogModule) as unknown[];
+    const catalogImports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      CatalogModule,
+    ) as unknown[];
 
-    expect(catalogImports.filter((module) => module === GenresModule)).toHaveLength(1);
-    expect(catalogImports.filter((module) => module === CountriesModule)).toHaveLength(1);
+    expect(
+      catalogImports.filter((module) => module === GenresModule),
+    ).toHaveLength(1);
+    expect(
+      catalogImports.filter((module) => module === CountriesModule),
+    ).toHaveLength(1);
     expect(moduleRef.get(GenresController, { strict: false })).toBeDefined();
     expect(moduleRef.get(GenresService, { strict: false })).toBeDefined();
     expect(moduleRef.get(CountriesController, { strict: false })).toBeDefined();
@@ -130,16 +141,28 @@ describe('CatalogModule dependency injection', () => {
   });
 
   it('composes Discs once under Catalog and keeps the direct Last.fm dependency resolvable', () => {
-    const catalogImports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, CatalogModule) as unknown[];
-    const lastfmImports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, LastfmModule) as unknown[];
+    const catalogImports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      CatalogModule,
+    ) as unknown[];
+    const lastfmImports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      LastfmModule,
+    ) as unknown[];
     const lastfmService = moduleRef.get(LastfmService) as unknown as {
       discsService: DiscsService;
     };
 
-    expect(catalogImports.filter((module) => module === DiscModule)).toHaveLength(1);
-    expect(lastfmImports.filter((module) => module === DiscModule)).toHaveLength(1);
+    expect(
+      catalogImports.filter((module) => module === DiscModule),
+    ).toHaveLength(1);
+    expect(
+      lastfmImports.filter((module) => module === DiscModule),
+    ).toHaveLength(1);
     expect(moduleRef.get(DiscsController, { strict: false })).toBeDefined();
     expect(moduleRef.get(DiscsService, { strict: false })).toBeDefined();
-    expect(lastfmService.discsService).toBe(moduleRef.get(DiscsService, { strict: false }));
+    expect(lastfmService.discsService).toBe(
+      moduleRef.get(DiscsService, { strict: false }),
+    );
   });
 });

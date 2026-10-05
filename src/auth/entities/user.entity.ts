@@ -3,7 +3,7 @@ import { Comment } from '../../community/comments/entities/comment.entity';
 import { Favorite } from '../../community/favorites/entities/favorite.entity';
 import { Pending } from '../../community/pendings/entities/pending.entity';
 import { Rate } from '../../community/rates/entities/rate.entity';
-import { Spotify } from '../../spotify/entities/spotify.entity';
+import { RiffValleyPlaylist } from '../../riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Article } from '../../articles/entities/article.entity';
 import { Video } from '../../videos/entities/video.entity';
 import { DiscRequest } from '../../community/requests/entities/disc-request.entity';
@@ -85,8 +85,8 @@ export class User {
   })
   asignations: Asignation[];
 
-  @OneToMany(() => Spotify, (spotify) => spotify.user, { cascade: true })
-  spotify: Spotify[];
+  @OneToMany(() => RiffValleyPlaylist, (playlist) => playlist.user, { cascade: true })
+  riffValleyPlaylists: RiffValleyPlaylist[];
 
   @OneToMany(() => Article, (article) => article.user, { cascade: true })
   articles: Article[];

@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { User } from '../../../auth/entities/user.entity';
-import { SpotifyApiService } from '../../../wordpress/spotify-api.service';
+import { SpotifyPublicApiService } from 'src/spotify-integration';
 import { DiscCatalogService } from '../catalog/disc-catalog.service';
 import { DiscCalendarService } from '../calendar/disc-calendar.service';
 import { DiscEnrichmentService } from '../enrichment/disc-enrichment.service';
@@ -94,7 +94,7 @@ describe('DiscsService baseline', () => {
     };
 
     service = new DiscsService(
-      {} as unknown as SpotifyApiService,
+      {} as unknown as SpotifyPublicApiService,
       {} as any,
       {} as any,
       {} as any,
@@ -144,7 +144,10 @@ describe('DiscsService baseline', () => {
 
   it('delegates all public write operations and returns their results unchanged', async () => {
     const createDto = { name: 'Album' } as any;
-    const createWithArtistDto = { discName: 'Album', artistName: 'Artist' } as any;
+    const createWithArtistDto = {
+      discName: 'Album',
+      artistName: 'Artist',
+    } as any;
     const updateDto = { name: 'Updated album' } as any;
     const createdDisc = { id: 'created-id' };
     const createdWithArtist = { id: 'created-with-artist-id' };
@@ -156,12 +159,18 @@ describe('DiscsService baseline', () => {
     discWriteService.remove.mockResolvedValue(removedDisc);
 
     await expect(service.create(createDto)).resolves.toBe(createdDisc);
-    await expect(service.createWithArtist(createWithArtistDto)).resolves.toBe(createdWithArtist);
-    await expect(service.update('disc-id', updateDto)).resolves.toBe(updatedDisc);
+    await expect(service.createWithArtist(createWithArtistDto)).resolves.toBe(
+      createdWithArtist,
+    );
+    await expect(service.update('disc-id', updateDto)).resolves.toBe(
+      updatedDisc,
+    );
     await expect(service.remove('disc-id')).resolves.toBe(removedDisc);
 
     expect(discWriteService.create).toHaveBeenCalledWith(createDto);
-    expect(discWriteService.createWithArtist).toHaveBeenCalledWith(createWithArtistDto);
+    expect(discWriteService.createWithArtist).toHaveBeenCalledWith(
+      createWithArtistDto,
+    );
     expect(discWriteService.update).toHaveBeenCalledWith('disc-id', updateDto);
     expect(discWriteService.remove).toHaveBeenCalledWith('disc-id');
   });
@@ -174,7 +183,7 @@ describe('DiscsService baseline', () => {
       findOne: jest.fn().mockResolvedValue({ id: 'disc-id', name: 'Album' }),
     };
     service = new DiscsService(
-      {} as unknown as SpotifyApiService,
+      {} as unknown as SpotifyPublicApiService,
       catalog as unknown as DiscCatalogService,
       {} as any,
       {} as any,
@@ -190,8 +199,12 @@ describe('DiscsService baseline', () => {
     catalog.findOne.mockResolvedValue(detail);
     const user = { id: 'user-id' } as User;
 
-    await expect(service.findAll(pagination, user)).resolves.toEqual({ data: ['all'] });
-    await expect(service.findRandom(randomDto, user)).resolves.toEqual(['random']);
+    await expect(service.findAll(pagination, user)).resolves.toEqual({
+      data: ['all'],
+    });
+    await expect(service.findRandom(randomDto, user)).resolves.toEqual([
+      'random',
+    ]);
     await expect(service.findOptions(optionsDto)).resolves.toEqual(['options']);
     await expect(service.findOne(discId)).resolves.toBe(detail);
     expect(catalog.findAll).toHaveBeenCalledWith(pagination, user);
@@ -199,7 +212,6 @@ describe('DiscsService baseline', () => {
     expect(catalog.findOptions).toHaveBeenCalledWith(optionsDto);
     expect(catalog.findOne).toHaveBeenCalledWith(discId);
   });
-
 });
 
 describe('DiscsService enrichment facade', () => {
@@ -219,9 +231,12 @@ describe('DiscsService enrichment facade', () => {
       {} as any,
     );
 
-    await expect(service.findWeeklyWithoutImage(5, 2024, 3)).resolves.toBe(candidates);
-    await expect(service.updateImage('disc-id', 'https://image.test/album.jpg'))
-      .resolves.toBeUndefined();
+    await expect(service.findWeeklyWithoutImage(5, 2024, 3)).resolves.toBe(
+      candidates,
+    );
+    await expect(
+      service.updateImage('disc-id', 'https://image.test/album.jpg'),
+    ).resolves.toBeUndefined();
     expect(enrichment.findWeeklyWithoutImage).toHaveBeenCalledWith(5, 2024, 3);
     expect(enrichment.updateImage).toHaveBeenCalledWith(
       'disc-id',
@@ -229,8 +244,6 @@ describe('DiscsService enrichment facade', () => {
     );
   });
 });
-
-
 
 describe('DiscsService calendar facade', () => {
   it('delegates both calendar methods and returns their results unchanged', async () => {
@@ -255,8 +268,12 @@ describe('DiscsService calendar facade', () => {
     const pagination = { limit: 2, offset: 4 } as any;
     const user = { id: 'user-id' } as User;
 
-    await expect(service.findAllByDate(pagination, user)).resolves.toBe(authenticatedResult);
-    await expect(service.findAllByDatePublic(pagination)).resolves.toBe(publicResult);
+    await expect(service.findAllByDate(pagination, user)).resolves.toBe(
+      authenticatedResult,
+    );
+    await expect(service.findAllByDatePublic(pagination)).resolves.toBe(
+      publicResult,
+    );
     await expect(service.findWeekly(5, 2024, 2)).resolves.toBe(weeklyResult);
     expect(calendar.findAllByDate).toHaveBeenCalledWith(pagination, user);
     expect(calendar.findAllByDatePublic).toHaveBeenCalledWith(pagination);

@@ -18,24 +18,32 @@ import { CreateSyncedPlaylistDto } from './dto/create-synced-playlist.dto';
 import { LinkSpotifyPlaylistDto } from './dto/link-spotify-playlist.dto';
 import { SyncPlaylistArtistDto } from './dto/sync-playlist-artist.dto';
 import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
-import { SpotifyConnection } from './entities/spotify-connection.entity';
-import { TokenCryptoService } from './token-crypto.service';
 import {
-  Spotify,
-  SpotifyStatus,
-  SpotifyType,
-} from 'src/spotify/entities/spotify.entity';
+  SpotifyInvalidGrantError,
+  SpotifyOAuthApiService,
+  SpotifyAccountApiService,
+  SpotifyConnection,
+  SpotifyPlaylistDetails,
+  TokenCryptoService,
+} from 'src/spotify-integration';
+import type {
+  SpotifyOAuthTokenResponse,
+  SpotifyTrack,
+} from 'src/spotify-integration';
+import {
+  RiffValleyPlaylist,
+  RiffValleyPlaylistStatus,
+  RiffValleyPlaylistType,
+} from 'src/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import {
   PlaylistArtistSelectionMode,
   PlaylistArtistSyncStatus,
   PlaylistTrackRecord,
-  SpotifyPlaylistArtist,
-} from './entities/spotify-playlist-artist.entity';
+  RiffValleyPlaylistArtist,
+} from './entities/riff-valley-playlist-artist.entity';
 import { MailService } from 'src/mail/mail.service';
 
-const SPOTIFY_ACCOUNTS_URL = 'https://accounts.spotify.com';
-const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 const SETLIST_API_URL = 'https://api.setlist.fm/rest/1.0';
 const SPOTIFY_SCOPES = [
   'playlist-modify-private',
@@ -46,58 +54,6 @@ const SPOTIFY_SCOPES = [
 const RIFF_VALLEY_CONNECTION_KEY = 'riff-valley';
 const SPOTIFY_REFRESH_TOKEN_LIFETIME_MONTHS = 6;
 const SPOTIFY_REAUTHORIZATION_WARNING_DAYS = 14;
-
-class SpotifyInvalidGrantError extends Error {}
-
-interface SpotifyTokenResponse {
-  access_token: string;
-  token_type: string;
-  scope?: string;
-  expires_in: number;
-  refresh_token?: string;
-}
-
-interface SpotifyProfile {
-  id: string;
-  display_name: string | null;
-}
-
-interface SpotifyTrack {
-  id: string;
-  name: string;
-  uri: string;
-  artists: { id: string; name: string }[];
-  external_urls: { spotify: string };
-  duration_ms?: number;
-  album?: {
-    name: string;
-    images?: SpotifyImage[];
-  };
-}
-
-interface SpotifyImage {
-  url: string;
-  height: number | null;
-  width: number | null;
-}
-
-interface SpotifyPlaylistDetails {
-  id: string;
-  name: string;
-  description: string | null;
-  public: boolean | null;
-  owner: { id: string; display_name: string | null };
-  external_urls: { spotify: string };
-  images?: SpotifyImage[];
-}
-
-interface SpotifyPlaylistItemsPage {
-  items?: Array<{
-    item?: { uri?: string } | null;
-    track?: { uri?: string } | null;
-  }>;
-  next?: string | null;
-}
 
 interface SetlistSong {
   name?: string;
@@ -123,20 +79,20 @@ export class FestivalPlaylistsService {
   constructor(
     @InjectRepository(SpotifyConnection)
     private readonly connectionRepository: Repository<SpotifyConnection>,
-    @InjectRepository(Spotify)
-    private readonly spotifyRepository: Repository<Spotify>,
+    @InjectRepository(RiffValleyPlaylist)
+    private readonly riffValleyPlaylistRepository: Repository<RiffValleyPlaylist>,
     @InjectRepository(Artist)
     private readonly artistRepository: Repository<Artist>,
-    @InjectRepository(SpotifyPlaylistArtist)
-    private readonly playlistArtistRepository: Repository<SpotifyPlaylistArtist>,
+    @InjectRepository(RiffValleyPlaylistArtist)
+    private readonly playlistArtistRepository: Repository<RiffValleyPlaylistArtist>,
     private readonly configService: ConfigService,
     private readonly tokenCrypto: TokenCryptoService,
     private readonly mailService: MailService,
+    private readonly spotifyOAuthApi: SpotifyOAuthApiService,
+    private readonly spotifyAccountApi: SpotifyAccountApiService,
   ) {}
 
   async startSpotifyConnection() {
-    const clientId = this.requiredConfig('SPOTIFY_CLIENT_ID');
-    const redirectUri = this.requiredConfig('SPOTIFY_REDIRECT_URI');
     const state = randomBytes(32).toString('base64url');
 
     let connection = await this.connectionRepository.findOne({
@@ -151,15 +107,12 @@ export class FestivalPlaylistsService {
     connection.oauthStateExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await this.connectionRepository.save(connection);
 
-    const params = new URLSearchParams({
-      client_id: clientId,
-      response_type: 'code',
-      redirect_uri: redirectUri,
-      scope: SPOTIFY_SCOPES.join(' '),
-      state,
-    });
-
-    return { authorizationUrl: `${SPOTIFY_ACCOUNTS_URL}/authorize?${params}` };
+    return {
+      authorizationUrl: this.spotifyOAuthApi.getAuthorizationUrl(
+        SPOTIFY_SCOPES,
+        state,
+      ),
+    };
   }
 
   async completeSpotifyConnection(code: string, state: string) {
@@ -191,11 +144,8 @@ export class FestivalPlaylistsService {
     connection.oauthStateExpiresAt = null;
     await this.connectionRepository.save(connection);
 
-    const token = await this.exchangeAuthorizationCode(code);
-    const profile = await this.spotifyRequest<SpotifyProfile>(
-      '/me',
-      token.access_token,
-    );
+    const token = await this.spotifyOAuthApi.exchangeAuthorizationCode(code);
+    const profile = await this.spotifyAccountApi.getProfile(token.access_token);
 
     connection.spotifyUserId = profile.id;
     connection.displayName = profile.display_name;
@@ -365,33 +315,26 @@ export class FestivalPlaylistsService {
     const description =
       dto.description ??
       'Playlist creada a partir de los repertorios recientes de setlist.fm';
-    const playlist = await this.spotifyRequest<{
-      id: string;
-      name: string;
-      external_urls: { spotify: string };
-    }>('/me/playlists', accessToken, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: dto.name,
-        description,
-        public: dto.public,
-      }),
+    const playlist = await this.spotifyAccountApi.createPlaylist(accessToken, {
+      name: dto.name,
+      description,
+      public: dto.public,
     });
 
-    const spotify = this.spotifyRepository.create({
+    const riffValleyPlaylist = this.riffValleyPlaylistRepository.create({
       name: playlist.name,
       link: playlist.external_urls.spotify,
       spotifyPlaylistId: playlist.id,
       description,
       isPublic: dto.public,
       protectedTrackUris: [],
-      status: SpotifyStatus.IN_PROGRESS,
-      type: SpotifyType.FESTIVAL,
+      status: RiffValleyPlaylistStatus.IN_PROGRESS,
+      type: RiffValleyPlaylistType.FESTIVAL,
       updateDate: new Date(),
     });
-    await this.spotifyRepository.save(spotify);
+    await this.riffValleyPlaylistRepository.save(riffValleyPlaylist);
 
-    return this.getFestivalPlaylist(spotify.id);
+    return this.getFestivalPlaylist(riffValleyPlaylist.id);
   }
 
   async createGenrePlaylist(dto: CreateSyncedPlaylistDto) {
@@ -399,59 +342,55 @@ export class FestivalPlaylistsService {
     const description =
       dto.description ??
       'Playlist de género seleccionada manualmente por Riff Valley';
-    const playlist = await this.spotifyRequest<{
-      id: string;
-      name: string;
-      external_urls: { spotify: string };
-    }>('/me/playlists', accessToken, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: dto.name,
-        description,
-        public: dto.public,
-      }),
+    const playlist = await this.spotifyAccountApi.createPlaylist(accessToken, {
+      name: dto.name,
+      description,
+      public: dto.public,
     });
 
-    const spotify = this.spotifyRepository.create({
+    const riffValleyPlaylist = this.riffValleyPlaylistRepository.create({
       name: playlist.name,
       link: playlist.external_urls.spotify,
       spotifyPlaylistId: playlist.id,
       description,
       isPublic: dto.public,
       protectedTrackUris: [],
-      status: SpotifyStatus.IN_PROGRESS,
-      type: SpotifyType.GENERO,
+      status: RiffValleyPlaylistStatus.IN_PROGRESS,
+      type: RiffValleyPlaylistType.GENERO,
       updateDate: new Date(),
     });
-    await this.spotifyRepository.save(spotify);
+    await this.riffValleyPlaylistRepository.save(riffValleyPlaylist);
 
-    return this.getGenrePlaylist(spotify.id);
+    return this.getGenrePlaylist(riffValleyPlaylist.id);
   }
 
-  async linkExistingFestivalPlaylist(spotifyId: string) {
-    const spotify = await this.spotifyRepository.findOne({
-      where: { id: spotifyId },
+  async linkExistingFestivalPlaylist(riffValleyPlaylistId: string) {
+    const riffValleyPlaylist = await this.riffValleyPlaylistRepository.findOne({
+      where: { id: riffValleyPlaylistId },
       relations: ['user', 'playlistArtists', 'playlistArtists.artist'],
     });
-    if (!spotify) throw new NotFoundException('Playlist not found');
-    if (spotify.type !== SpotifyType.FESTIVAL) {
+    if (!riffValleyPlaylist) throw new NotFoundException('Playlist not found');
+    if (riffValleyPlaylist.type !== RiffValleyPlaylistType.FESTIVAL) {
       throw new BadRequestException(
         'Sólo se pueden vincular playlists de tipo festival',
       );
     }
 
-    const remotePlaylistId = this.spotifyPlaylistIdFromLink(spotify.link);
-    if (spotify.spotifyPlaylistId) {
-      if (spotify.spotifyPlaylistId === remotePlaylistId) return spotify;
+    const remotePlaylistId = this.spotifyPlaylistIdFromLink(
+      riffValleyPlaylist.link,
+    );
+    if (riffValleyPlaylist.spotifyPlaylistId) {
+      if (riffValleyPlaylist.spotifyPlaylistId === remotePlaylistId)
+        return riffValleyPlaylist;
       throw new ConflictException(
         'La playlist local ya está vinculada con otra playlist de Spotify',
       );
     }
 
-    const duplicate = await this.spotifyRepository.findOne({
+    const duplicate = await this.riffValleyPlaylistRepository.findOne({
       where: { spotifyPlaylistId: remotePlaylistId },
     });
-    if (duplicate && duplicate.id !== spotify.id) {
+    if (duplicate && duplicate.id !== riffValleyPlaylist.id) {
       throw new ConflictException(
         'Esa playlist de Spotify ya está vinculada con otro registro local',
       );
@@ -459,7 +398,7 @@ export class FestivalPlaylistsService {
 
     const { remotePlaylist, protectedTrackUris } =
       await this.getOwnedSpotifyPlaylist(remotePlaylistId);
-    await this.spotifyRepository.update(spotify.id, {
+    await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
       name: remotePlaylist.name,
       link: remotePlaylist.external_urls.spotify,
       spotifyPlaylistId: remotePlaylist.id,
@@ -469,12 +408,12 @@ export class FestivalPlaylistsService {
       protectedTrackUris,
       updateDate: new Date(),
     });
-    return this.getFestivalPlaylist(spotify.id);
+    return this.getFestivalPlaylist(riffValleyPlaylist.id);
   }
 
   async createLinkedFestivalPlaylist(dto: LinkSpotifyPlaylistDto) {
     const remotePlaylistId = this.spotifyPlaylistIdFromLink(dto.spotifyUrl);
-    const duplicate = await this.spotifyRepository.findOne({
+    const duplicate = await this.riffValleyPlaylistRepository.findOne({
       where: { spotifyPlaylistId: remotePlaylistId },
     });
     if (duplicate) {
@@ -483,8 +422,8 @@ export class FestivalPlaylistsService {
       );
     }
 
-    const festivalPlaylists = await this.spotifyRepository.find({
-      where: { type: SpotifyType.FESTIVAL },
+    const festivalPlaylists = await this.riffValleyPlaylistRepository.find({
+      where: { type: RiffValleyPlaylistType.FESTIVAL },
     });
     const legacyMatches = festivalPlaylists.filter((playlist) => {
       if (playlist.spotifyPlaylistId || !playlist.link) return false;
@@ -507,7 +446,7 @@ export class FestivalPlaylistsService {
 
     const { remotePlaylist, protectedTrackUris } =
       await this.getOwnedSpotifyPlaylist(remotePlaylistId);
-    const spotify = this.spotifyRepository.create({
+    const riffValleyPlaylist = this.riffValleyPlaylistRepository.create({
       name: remotePlaylist.name,
       link: remotePlaylist.external_urls.spotify,
       spotifyPlaylistId: remotePlaylist.id,
@@ -515,34 +454,37 @@ export class FestivalPlaylistsService {
       isPublic: Boolean(remotePlaylist.public),
       imageUrl: remotePlaylist.images?.[0]?.url ?? null,
       protectedTrackUris,
-      status: SpotifyStatus.IN_PROGRESS,
-      type: SpotifyType.FESTIVAL,
+      status: RiffValleyPlaylistStatus.IN_PROGRESS,
+      type: RiffValleyPlaylistType.FESTIVAL,
       updateDate: new Date(),
     });
-    await this.spotifyRepository.save(spotify);
-    return this.getFestivalPlaylist(spotify.id);
+    await this.riffValleyPlaylistRepository.save(riffValleyPlaylist);
+    return this.getFestivalPlaylist(riffValleyPlaylist.id);
   }
 
-  async linkExistingGenrePlaylist(spotifyId: string) {
-    const spotify = await this.spotifyRepository.findOne({
-      where: { id: spotifyId },
+  async linkExistingGenrePlaylist(riffValleyPlaylistId: string) {
+    const riffValleyPlaylist = await this.riffValleyPlaylistRepository.findOne({
+      where: { id: riffValleyPlaylistId },
       relations: ['user', 'playlistArtists', 'playlistArtists.artist'],
     });
-    if (!spotify) throw new NotFoundException('Playlist not found');
-    this.assertGenrePlaylistType(spotify);
+    if (!riffValleyPlaylist) throw new NotFoundException('Playlist not found');
+    this.assertGenrePlaylistType(riffValleyPlaylist);
 
-    const remotePlaylistId = this.spotifyPlaylistIdFromLink(spotify.link);
-    if (spotify.spotifyPlaylistId) {
-      if (spotify.spotifyPlaylistId === remotePlaylistId) return spotify;
+    const remotePlaylistId = this.spotifyPlaylistIdFromLink(
+      riffValleyPlaylist.link,
+    );
+    if (riffValleyPlaylist.spotifyPlaylistId) {
+      if (riffValleyPlaylist.spotifyPlaylistId === remotePlaylistId)
+        return riffValleyPlaylist;
       throw new ConflictException(
         'La playlist local ya está vinculada con otra playlist de Spotify',
       );
     }
 
-    const duplicate = await this.spotifyRepository.findOne({
+    const duplicate = await this.riffValleyPlaylistRepository.findOne({
       where: { spotifyPlaylistId: remotePlaylistId },
     });
-    if (duplicate && duplicate.id !== spotify.id) {
+    if (duplicate && duplicate.id !== riffValleyPlaylist.id) {
       throw new ConflictException(
         'Esa playlist de Spotify ya está vinculada con otro registro local',
       );
@@ -550,7 +492,7 @@ export class FestivalPlaylistsService {
 
     const { remotePlaylist, protectedTrackUris } =
       await this.getOwnedSpotifyPlaylist(remotePlaylistId);
-    await this.spotifyRepository.update(spotify.id, {
+    await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
       name: remotePlaylist.name,
       link: remotePlaylist.external_urls.spotify,
       spotifyPlaylistId: remotePlaylist.id,
@@ -560,12 +502,12 @@ export class FestivalPlaylistsService {
       protectedTrackUris,
       updateDate: new Date(),
     });
-    return this.getGenrePlaylist(spotify.id);
+    return this.getGenrePlaylist(riffValleyPlaylist.id);
   }
 
   async createLinkedGenrePlaylist(dto: LinkSpotifyPlaylistDto) {
     const remotePlaylistId = this.spotifyPlaylistIdFromLink(dto.spotifyUrl);
-    const duplicate = await this.spotifyRepository.findOne({
+    const duplicate = await this.riffValleyPlaylistRepository.findOne({
       where: { spotifyPlaylistId: remotePlaylistId },
     });
     if (duplicate) {
@@ -574,11 +516,11 @@ export class FestivalPlaylistsService {
       );
     }
 
-    const genrePlaylists = await this.spotifyRepository.find({
+    const genrePlaylists = await this.riffValleyPlaylistRepository.find({
       where: [
-        { type: SpotifyType.GENERO },
-        { type: SpotifyType.ESPECIAL },
-        { type: SpotifyType.OTRAS },
+        { type: RiffValleyPlaylistType.GENERO },
+        { type: RiffValleyPlaylistType.ESPECIAL },
+        { type: RiffValleyPlaylistType.OTRAS },
       ],
     });
     const legacyMatches = genrePlaylists.filter((playlist) => {
@@ -602,7 +544,7 @@ export class FestivalPlaylistsService {
 
     const { remotePlaylist, protectedTrackUris } =
       await this.getOwnedSpotifyPlaylist(remotePlaylistId);
-    const spotify = this.spotifyRepository.create({
+    const riffValleyPlaylist = this.riffValleyPlaylistRepository.create({
       name: remotePlaylist.name,
       link: remotePlaylist.external_urls.spotify,
       spotifyPlaylistId: remotePlaylist.id,
@@ -610,16 +552,16 @@ export class FestivalPlaylistsService {
       isPublic: Boolean(remotePlaylist.public),
       imageUrl: remotePlaylist.images?.[0]?.url ?? null,
       protectedTrackUris,
-      status: SpotifyStatus.IN_PROGRESS,
-      type: SpotifyType.GENERO,
+      status: RiffValleyPlaylistStatus.IN_PROGRESS,
+      type: RiffValleyPlaylistType.GENERO,
       updateDate: new Date(),
     });
-    await this.spotifyRepository.save(spotify);
-    return this.getGenrePlaylist(spotify.id);
+    await this.riffValleyPlaylistRepository.save(riffValleyPlaylist);
+    return this.getGenrePlaylist(riffValleyPlaylist.id);
   }
 
   async updateFestivalPlaylist(
-    spotifyId: string,
+    riffValleyPlaylistId: string,
     dto: UpdateSyncedPlaylistDto,
   ) {
     if (
@@ -632,24 +574,22 @@ export class FestivalPlaylistsService {
       );
     }
 
-    const spotify = await this.getFestivalPlaylist(spotifyId);
+    const riffValleyPlaylist =
+      await this.getFestivalPlaylist(riffValleyPlaylistId);
     const accessToken = await this.getValidAccessToken();
-    await this.spotifyRequest(
-      `/playlists/${spotify.spotifyPlaylistId}`,
+    await this.spotifyAccountApi.updatePlaylist(
       accessToken,
+      riffValleyPlaylist.spotifyPlaylistId,
       {
-        method: 'PUT',
-        body: JSON.stringify({
-          ...(dto.name !== undefined ? { name: dto.name } : {}),
-          ...(dto.description !== undefined
-            ? { description: dto.description }
-            : {}),
-          ...(dto.public !== undefined ? { public: dto.public } : {}),
-        }),
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
+        ...(dto.public !== undefined ? { public: dto.public } : {}),
       },
     );
 
-    await this.spotifyRepository.update(spotify.id, {
+    await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
       ...(dto.name !== undefined ? { name: dto.name } : {}),
       ...(dto.description !== undefined
         ? { description: dto.description }
@@ -657,15 +597,21 @@ export class FestivalPlaylistsService {
       ...(dto.public !== undefined ? { isPublic: dto.public } : {}),
       updateDate: new Date(),
     });
-    return this.getFestivalPlaylist(spotifyId);
+    return this.getFestivalPlaylist(riffValleyPlaylistId);
   }
 
-  async updateGenrePlaylist(spotifyId: string, dto: UpdateSyncedPlaylistDto) {
-    await this.getGenrePlaylist(spotifyId);
-    return this.updateFestivalPlaylist(spotifyId, dto);
+  async updateGenrePlaylist(
+    riffValleyPlaylistId: string,
+    dto: UpdateSyncedPlaylistDto,
+  ) {
+    await this.getGenrePlaylist(riffValleyPlaylistId);
+    return this.updateFestivalPlaylist(riffValleyPlaylistId, dto);
   }
 
-  async updateFestivalPlaylistImage(spotifyId: string, image: Buffer) {
+  async updateFestivalPlaylistImage(
+    riffValleyPlaylistId: string,
+    image: Buffer,
+  ) {
     if (
       image.length < 3 ||
       image[0] !== 0xff ||
@@ -682,62 +628,60 @@ export class FestivalPlaylistsService {
       );
     }
 
-    const spotify = await this.getFestivalPlaylist(spotifyId);
+    const riffValleyPlaylist =
+      await this.getFestivalPlaylist(riffValleyPlaylistId);
     const accessToken = await this.getValidAccessToken(['ugc-image-upload']);
-    await this.spotifyRequest(
-      `/playlists/${spotify.spotifyPlaylistId}/images`,
+    await this.spotifyAccountApi.uploadPlaylistImage(
       accessToken,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'image/jpeg' },
-        body: encodedImage,
-      },
+      riffValleyPlaylist.spotifyPlaylistId,
+      encodedImage,
     );
-    const images = await this.spotifyRequest<SpotifyImage[]>(
-      `/playlists/${spotify.spotifyPlaylistId}/images`,
+    const images = await this.spotifyAccountApi.getPlaylistImages(
       accessToken,
+      riffValleyPlaylist.spotifyPlaylistId,
     );
-    await this.spotifyRepository.update(spotify.id, {
-      imageUrl: images[0]?.url ?? spotify.imageUrl,
+    await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
+      imageUrl: images[0]?.url ?? riffValleyPlaylist.imageUrl,
       updateDate: new Date(),
     });
-    return this.getFestivalPlaylist(spotifyId);
+    return this.getFestivalPlaylist(riffValleyPlaylistId);
   }
 
-  async updateGenrePlaylistImage(spotifyId: string, image: Buffer) {
-    await this.getGenrePlaylist(spotifyId);
-    return this.updateFestivalPlaylistImage(spotifyId, image);
+  async updateGenrePlaylistImage(riffValleyPlaylistId: string, image: Buffer) {
+    await this.getGenrePlaylist(riffValleyPlaylistId);
+    return this.updateFestivalPlaylistImage(riffValleyPlaylistId, image);
   }
 
-  async getFestivalPlaylist(spotifyId: string) {
-    const spotify = await this.spotifyRepository.findOne({
-      where: { id: spotifyId },
+  async getFestivalPlaylist(riffValleyPlaylistId: string) {
+    const riffValleyPlaylist = await this.riffValleyPlaylistRepository.findOne({
+      where: { id: riffValleyPlaylistId },
       relations: ['user', 'playlistArtists', 'playlistArtists.artist'],
     });
-    if (!spotify) throw new NotFoundException('Playlist not found');
-    if (!spotify.spotifyPlaylistId) {
+    if (!riffValleyPlaylist) throw new NotFoundException('Playlist not found');
+    if (!riffValleyPlaylist.spotifyPlaylistId) {
       throw new BadRequestException(
         'La playlist no está vinculada con Spotify',
       );
     }
-    return spotify;
+    return riffValleyPlaylist;
   }
 
-  async getGenrePlaylist(spotifyId: string) {
-    const spotify = await this.getFestivalPlaylist(spotifyId);
-    this.assertGenrePlaylistType(spotify);
-    return spotify;
+  async getGenrePlaylist(riffValleyPlaylistId: string) {
+    const riffValleyPlaylist =
+      await this.getFestivalPlaylist(riffValleyPlaylistId);
+    this.assertGenrePlaylistType(riffValleyPlaylist);
+    return riffValleyPlaylist;
   }
 
-  async addArtist(spotifyId: string, dto: SyncPlaylistArtistDto) {
-    const [spotify, artist] = await Promise.all([
-      this.getFestivalPlaylist(spotifyId),
+  async addArtist(riffValleyPlaylistId: string, dto: SyncPlaylistArtistDto) {
+    const [riffValleyPlaylist, artist] = await Promise.all([
+      this.getFestivalPlaylist(riffValleyPlaylistId),
       this.artistRepository.findOneBy({ id: dto.artistId }),
     ]);
     if (!artist) throw new NotFoundException('Artist not found');
 
     let association = await this.playlistArtistRepository.findOne({
-      where: { spotifyId, artistId: artist.id },
+      where: { riffValleyPlaylistId, artistId: artist.id },
     });
     if (association?.status === PlaylistArtistSyncStatus.SYNCED) {
       throw new ConflictException(
@@ -746,7 +690,7 @@ export class FestivalPlaylistsService {
     }
     if (!association) {
       association = this.playlistArtistRepository.create({
-        spotifyId,
+        riffValleyPlaylistId,
         artistId: artist.id,
         artist,
         status: PlaylistArtistSyncStatus.SYNCING,
@@ -793,11 +737,11 @@ export class FestivalPlaylistsService {
       }
 
       const allAssociations = await this.playlistArtistRepository.find({
-        where: { spotifyId },
+        where: { riffValleyPlaylistId },
       });
       const remoteUris = await this.getSpotifyPlaylistTrackUris(
         accessToken,
-        spotify.spotifyPlaylistId,
+        riffValleyPlaylist.spotifyPlaylistId,
       );
       const existingUris = new Set([
         ...remoteUris,
@@ -809,10 +753,10 @@ export class FestivalPlaylistsService {
         (uri) => !existingUris.has(uri),
       );
       if (urisToAdd.length) {
-        await this.spotifyRequest(
-          `/playlists/${spotify.spotifyPlaylistId}/items`,
+        await this.spotifyAccountApi.addPlaylistItems(
           accessToken,
-          { method: 'POST', body: JSON.stringify({ uris: urisToAdd }) },
+          riffValleyPlaylist.spotifyPlaylistId,
+          urisToAdd,
         );
       }
 
@@ -821,10 +765,10 @@ export class FestivalPlaylistsService {
       association.status = PlaylistArtistSyncStatus.SYNCED;
       association.lastError = null;
       await this.playlistArtistRepository.save(association);
-      await this.spotifyRepository.update(spotify.id, {
+      await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
         updateDate: new Date(),
       });
-      return this.getFestivalPlaylist(spotifyId);
+      return this.getFestivalPlaylist(riffValleyPlaylistId);
     } catch (error) {
       association.status = PlaylistArtistSyncStatus.FAILED;
       association.lastError = this.errorMessage(error);
@@ -834,22 +778,22 @@ export class FestivalPlaylistsService {
   }
 
   async searchGenreArtistTracks(
-    spotifyId: string,
+    riffValleyPlaylistId: string,
     artistId: string,
     query?: string,
   ) {
-    await this.getGenrePlaylist(spotifyId);
+    await this.getGenrePlaylist(riffValleyPlaylistId);
     return this.searchArtistTracks(artistId, query);
   }
 
   async searchFestivalArtistTracks(
-    spotifyId: string,
+    riffValleyPlaylistId: string,
     artistId: string,
     query?: string,
   ) {
-    await this.getFestivalPlaylist(spotifyId);
+    await this.getFestivalPlaylist(riffValleyPlaylistId);
     const association = await this.playlistArtistRepository.findOne({
-      where: { spotifyId, artistId },
+      where: { riffValleyPlaylistId, artistId },
     });
     if (!association) {
       throw new NotFoundException('Artist is not in this playlist');
@@ -870,31 +814,26 @@ export class FestivalPlaylistsService {
     const search = query?.trim()
       ? `track:${query.trim()} artist:${artist.name}`
       : `artist:${artist.name}`;
-    const params = new URLSearchParams({
-      q: search,
-      type: 'track',
-      limit: '20',
-    });
-    const data = await this.spotifyRequest<{
-      tracks?: { items?: SpotifyTrack[] };
-    }>(`/search?${params}`, accessToken);
+    const tracks = await this.spotifyAccountApi.searchTracks(
+      accessToken,
+      search,
+      20,
+    );
 
     return {
       artist: { id: artist.id, name: artist.name },
       query: query?.trim() ?? '',
-      tracks: (data.tracks?.items ?? []).map((track) =>
-        this.toPlaylistTrackRecord(track),
-      ),
+      tracks: tracks.map((track) => this.toPlaylistTrackRecord(track)),
     };
   }
 
   async addGenreArtist(
-    spotifyId: string,
+    riffValleyPlaylistId: string,
     artistId: string,
     spotifyTrackIds: string[],
   ) {
     const existing = await this.playlistArtistRepository.findOne({
-      where: { spotifyId, artistId },
+      where: { riffValleyPlaylistId, artistId },
     });
     if (existing) {
       throw new ConflictException(
@@ -902,7 +841,7 @@ export class FestivalPlaylistsService {
       );
     }
     return this.saveManualArtistTracks(
-      spotifyId,
+      riffValleyPlaylistId,
       artistId,
       spotifyTrackIds,
       'genre',
@@ -910,18 +849,18 @@ export class FestivalPlaylistsService {
   }
 
   async replaceGenreArtistTracks(
-    spotifyId: string,
+    riffValleyPlaylistId: string,
     artistId: string,
     spotifyTrackIds: string[],
   ) {
     const existing = await this.playlistArtistRepository.findOne({
-      where: { spotifyId, artistId },
+      where: { riffValleyPlaylistId, artistId },
     });
     if (!existing) {
       throw new NotFoundException('Artist is not in this playlist');
     }
     return this.saveManualArtistTracks(
-      spotifyId,
+      riffValleyPlaylistId,
       artistId,
       spotifyTrackIds,
       'genre',
@@ -930,12 +869,12 @@ export class FestivalPlaylistsService {
   }
 
   async replaceFailedFestivalArtistTracks(
-    spotifyId: string,
+    riffValleyPlaylistId: string,
     artistId: string,
     spotifyTrackIds: string[],
   ) {
     const existing = await this.playlistArtistRepository.findOne({
-      where: { spotifyId, artistId },
+      where: { riffValleyPlaylistId, artistId },
     });
     if (!existing) {
       throw new NotFoundException('Artist is not in this playlist');
@@ -946,7 +885,7 @@ export class FestivalPlaylistsService {
       );
     }
     return this.saveManualArtistTracks(
-      spotifyId,
+      riffValleyPlaylistId,
       artistId,
       spotifyTrackIds,
       'festival',
@@ -954,22 +893,23 @@ export class FestivalPlaylistsService {
     );
   }
 
-  async removeGenreArtist(spotifyId: string, artistId: string) {
-    await this.getGenrePlaylist(spotifyId);
-    return this.removeArtist(spotifyId, artistId);
+  async removeGenreArtist(riffValleyPlaylistId: string, artistId: string) {
+    await this.getGenrePlaylist(riffValleyPlaylistId);
+    return this.removeArtist(riffValleyPlaylistId, artistId);
   }
 
-  async clearGenrePlaylist(spotifyId: string) {
-    await this.getGenrePlaylist(spotifyId);
-    return this.clearFestivalPlaylist(spotifyId);
+  async clearGenrePlaylist(riffValleyPlaylistId: string) {
+    await this.getGenrePlaylist(riffValleyPlaylistId);
+    return this.clearFestivalPlaylist(riffValleyPlaylistId);
   }
 
-  async shuffleGenrePlaylist(spotifyId: string) {
-    const spotify = await this.getGenrePlaylist(spotifyId);
+  async shuffleGenrePlaylist(riffValleyPlaylistId: string) {
+    const riffValleyPlaylist =
+      await this.getGenrePlaylist(riffValleyPlaylistId);
     const accessToken = await this.getValidAccessToken();
     const originalUris = await this.getSpotifyPlaylistTrackUrisInOrder(
       accessToken,
-      spotify.spotifyPlaylistId,
+      riffValleyPlaylist.spotifyPlaylistId,
     );
     if (originalUris.length < 2) {
       throw new BadRequestException(
@@ -981,41 +921,41 @@ export class FestivalPlaylistsService {
     try {
       await this.replaceSpotifyPlaylistTrackUris(
         accessToken,
-        spotify.spotifyPlaylistId,
+        riffValleyPlaylist.spotifyPlaylistId,
         shuffledUris,
       );
     } catch (error) {
       try {
         await this.replaceSpotifyPlaylistTrackUris(
           accessToken,
-          spotify.spotifyPlaylistId,
+          riffValleyPlaylist.spotifyPlaylistId,
           originalUris,
         );
       } catch (rollbackError) {
         this.logger.error(
-          `No se pudo restaurar el orden de la playlist ${spotify.spotifyPlaylistId}: ${this.errorMessage(rollbackError)}`,
+          `No se pudo restaurar el orden de la playlist ${riffValleyPlaylist.spotifyPlaylistId}: ${this.errorMessage(rollbackError)}`,
         );
       }
       throw error;
     }
 
-    await this.spotifyRepository.update(spotify.id, {
+    await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
       updateDate: new Date(),
     });
-    return this.getGenrePlaylist(spotifyId);
+    return this.getGenrePlaylist(riffValleyPlaylistId);
   }
 
   private async saveManualArtistTracks(
-    spotifyId: string,
+    riffValleyPlaylistId: string,
     artistId: string,
     spotifyTrackIds: string[],
     playlistType: 'festival' | 'genre',
-    current?: SpotifyPlaylistArtist,
+    current?: RiffValleyPlaylistArtist,
   ) {
-    const [spotify, artist] = await Promise.all([
+    const [riffValleyPlaylist, artist] = await Promise.all([
       playlistType === 'genre'
-        ? this.getGenrePlaylist(spotifyId)
-        : this.getFestivalPlaylist(spotifyId),
+        ? this.getGenrePlaylist(riffValleyPlaylistId)
+        : this.getFestivalPlaylist(riffValleyPlaylistId),
       this.artistRepository.findOneBy({ id: artistId }),
     ]);
     if (!artist) throw new NotFoundException('Artist not found');
@@ -1042,7 +982,7 @@ export class FestivalPlaylistsService {
     let association = current;
     if (!association) {
       association = this.playlistArtistRepository.create({
-        spotifyId,
+        riffValleyPlaylistId,
         artistId,
         artist,
         status: PlaylistArtistSyncStatus.SYNCING,
@@ -1060,12 +1000,12 @@ export class FestivalPlaylistsService {
 
     try {
       const accessToken = await this.getValidAccessToken();
-      const params = new URLSearchParams({ ids: spotifyTrackIds.join(',') });
-      const response = await this.spotifyRequest<{
-        tracks?: Array<SpotifyTrack | null>;
-      }>(`/tracks?${params}`, accessToken);
-      const fetchedTracks = (response.tracks ?? []).filter(
-        (track): track is SpotifyTrack => Boolean(track),
+      const response = await this.spotifyAccountApi.getTracks(
+        accessToken,
+        spotifyTrackIds,
+      );
+      const fetchedTracks = response.filter((track): track is SpotifyTrack =>
+        Boolean(track),
       );
       const tracksById = new Map(
         fetchedTracks.map((track) => [track.id, track]),
@@ -1081,7 +1021,7 @@ export class FestivalPlaylistsService {
       );
 
       const allAssociations = await this.playlistArtistRepository.find({
-        where: { spotifyId },
+        where: { riffValleyPlaylistId },
       });
       const otherAssociations = allAssociations.filter(
         (item) => item.id !== association.id,
@@ -1093,7 +1033,7 @@ export class FestivalPlaylistsService {
       );
       const remoteUris = await this.getSpotifyPlaylistTrackUris(
         accessToken,
-        spotify.spotifyPlaylistId,
+        riffValleyPlaylist.spotifyPlaylistId,
       );
       const remoteUriSet = new Set(remoteUris);
       const newUris = new Set(tracks.map((track) => track.uri));
@@ -1104,29 +1044,21 @@ export class FestivalPlaylistsService {
         (uri) =>
           !newUris.has(uri) &&
           !sharedUris.has(uri) &&
-          !(spotify.protectedTrackUris ?? []).includes(uri),
+          !(riffValleyPlaylist.protectedTrackUris ?? []).includes(uri),
       );
 
       if (urisToAdd.length) {
-        await this.spotifyRequest(
-          `/playlists/${spotify.spotifyPlaylistId}/items`,
+        await this.spotifyAccountApi.addPlaylistItems(
           accessToken,
-          {
-            method: 'POST',
-            body: JSON.stringify({ uris: urisToAdd }),
-          },
+          riffValleyPlaylist.spotifyPlaylistId,
+          urisToAdd,
         );
       }
       if (urisToRemove.length) {
-        await this.spotifyRequest(
-          `/playlists/${spotify.spotifyPlaylistId}/items`,
+        await this.spotifyAccountApi.removePlaylistItems(
           accessToken,
-          {
-            method: 'DELETE',
-            body: JSON.stringify({
-              items: urisToRemove.map((uri) => ({ uri })),
-            }),
-          },
+          riffValleyPlaylist.spotifyPlaylistId,
+          urisToRemove,
         );
       }
 
@@ -1142,12 +1074,12 @@ export class FestivalPlaylistsService {
       association.status = PlaylistArtistSyncStatus.SYNCED;
       association.lastError = null;
       await this.playlistArtistRepository.save(association);
-      await this.spotifyRepository.update(spotify.id, {
+      await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
         updateDate: new Date(),
       });
       return playlistType === 'genre'
-        ? this.getGenrePlaylist(spotifyId)
-        : this.getFestivalPlaylist(spotifyId);
+        ? this.getGenrePlaylist(riffValleyPlaylistId)
+        : this.getFestivalPlaylist(riffValleyPlaylistId);
     } catch (error) {
       association.status = PlaylistArtistSyncStatus.FAILED;
       association.lastError = this.errorMessage(error);
@@ -1156,47 +1088,44 @@ export class FestivalPlaylistsService {
     }
   }
 
-  async clearFestivalPlaylist(spotifyId: string) {
-    const spotify = await this.getFestivalPlaylist(spotifyId);
+  async clearFestivalPlaylist(riffValleyPlaylistId: string) {
+    const riffValleyPlaylist =
+      await this.getFestivalPlaylist(riffValleyPlaylistId);
     const accessToken = await this.getValidAccessToken();
     const remoteUris = await this.getSpotifyPlaylistTrackUris(
       accessToken,
-      spotify.spotifyPlaylistId,
+      riffValleyPlaylist.spotifyPlaylistId,
     );
 
     for (let index = 0; index < remoteUris.length; index += 100) {
       const batch = remoteUris.slice(index, index + 100);
-      await this.spotifyRequest(
-        `/playlists/${spotify.spotifyPlaylistId}/items`,
+      await this.spotifyAccountApi.removePlaylistItems(
         accessToken,
-        {
-          method: 'DELETE',
-          body: JSON.stringify({
-            items: batch.map((uri) => ({ uri })),
-          }),
-        },
+        riffValleyPlaylist.spotifyPlaylistId,
+        batch,
       );
     }
 
-    await this.playlistArtistRepository.delete({ spotifyId });
-    await this.spotifyRepository.update(spotify.id, {
+    await this.playlistArtistRepository.delete({ riffValleyPlaylistId });
+    await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
       protectedTrackUris: [],
       updateDate: new Date(),
     });
-    return this.getFestivalPlaylist(spotifyId);
+    return this.getFestivalPlaylist(riffValleyPlaylistId);
   }
 
-  async removeArtist(spotifyId: string, artistId: string) {
-    const spotify = await this.getFestivalPlaylist(spotifyId);
+  async removeArtist(riffValleyPlaylistId: string, artistId: string) {
+    const riffValleyPlaylist =
+      await this.getFestivalPlaylist(riffValleyPlaylistId);
     const association = await this.playlistArtistRepository.findOne({
-      where: { spotifyId, artistId },
+      where: { riffValleyPlaylistId, artistId },
     });
     if (!association)
       throw new NotFoundException('Artist is not in this playlist');
 
     try {
       const others = await this.playlistArtistRepository.find({
-        where: { spotifyId },
+        where: { riffValleyPlaylistId },
       });
       const sharedUris = new Set(
         others
@@ -1209,26 +1138,21 @@ export class FestivalPlaylistsService {
       ].filter(
         (uri) =>
           !sharedUris.has(uri) &&
-          !(spotify.protectedTrackUris ?? []).includes(uri),
+          !(riffValleyPlaylist.protectedTrackUris ?? []).includes(uri),
       );
       if (urisToRemove.length) {
         const accessToken = await this.getValidAccessToken();
-        await this.spotifyRequest(
-          `/playlists/${spotify.spotifyPlaylistId}/items`,
+        await this.spotifyAccountApi.removePlaylistItems(
           accessToken,
-          {
-            method: 'DELETE',
-            body: JSON.stringify({
-              items: urisToRemove.map((uri) => ({ uri })),
-            }),
-          },
+          riffValleyPlaylist.spotifyPlaylistId,
+          urisToRemove,
         );
       }
       await this.playlistArtistRepository.remove(association);
-      await this.spotifyRepository.update(spotify.id, {
+      await this.riffValleyPlaylistRepository.update(riffValleyPlaylist.id, {
         updateDate: new Date(),
       });
-      return this.getFestivalPlaylist(spotifyId);
+      return this.getFestivalPlaylist(riffValleyPlaylistId);
     } catch (error) {
       association.status = PlaylistArtistSyncStatus.FAILED;
       association.lastError = this.errorMessage(error);
@@ -1243,15 +1167,11 @@ export class FestivalPlaylistsService {
     song: string,
   ) {
     const query = `track:${song} artist:${artist}`;
-    const params = new URLSearchParams({
-      q: query,
-      type: 'track',
-      limit: '10',
-    });
-    const data = await this.spotifyRequest<{
-      tracks?: { items?: SpotifyTrack[] };
-    }>(`/search?${params}`, accessToken);
-    const items = data.tracks?.items ?? [];
+    const items = await this.spotifyAccountApi.searchTracks(
+      accessToken,
+      query,
+      10,
+    );
     const normalizedArtist = this.normalize(artist);
     return (
       items.find((track) =>
@@ -1281,11 +1201,15 @@ export class FestivalPlaylistsService {
     };
   }
 
-  private assertGenrePlaylistType(spotify: Spotify): void {
+  private assertGenrePlaylistType(
+    riffValleyPlaylist: RiffValleyPlaylist,
+  ): void {
     if (
-      ![SpotifyType.GENERO, SpotifyType.ESPECIAL, SpotifyType.OTRAS].includes(
-        spotify.type,
-      )
+      ![
+        RiffValleyPlaylistType.GENERO,
+        RiffValleyPlaylistType.ESPECIAL,
+        RiffValleyPlaylistType.OTRAS,
+      ].includes(riffValleyPlaylist.type)
     ) {
       throw new BadRequestException(
         'La playlist no pertenece a la sección de géneros',
@@ -1317,11 +1241,8 @@ export class FestivalPlaylistsService {
   }> {
     const accessToken = await this.getValidAccessToken();
     const [remotePlaylist, profile] = await Promise.all([
-      this.spotifyRequest<SpotifyPlaylistDetails>(
-        `/playlists/${spotifyPlaylistId}`,
-        accessToken,
-      ),
-      this.spotifyRequest<SpotifyProfile>('/me', accessToken),
+      this.spotifyAccountApi.getPlaylist(accessToken, spotifyPlaylistId),
+      this.spotifyAccountApi.getProfile(accessToken),
     ]);
     if (remotePlaylist.owner.id !== profile.id) {
       throw new ForbiddenException(
@@ -1339,48 +1260,22 @@ export class FestivalPlaylistsService {
     accessToken: string,
     spotifyPlaylistId: string,
   ): Promise<string[]> {
-    const uris = new Set<string>();
-    let offset = 0;
-
-    while (true) {
-      const page = await this.spotifyRequest<SpotifyPlaylistItemsPage>(
-        `/playlists/${spotifyPlaylistId}/items?limit=50&offset=${offset}`,
-        accessToken,
-      );
-      const items = page.items ?? [];
-      for (const entry of items) {
-        const uri = entry.item?.uri ?? entry.track?.uri;
-        if (uri) uris.add(uri);
-      }
-      if (!page.next || !items.length) break;
-      offset += items.length;
-    }
-
-    return [...uris];
+    return this.spotifyAccountApi.getPlaylistTrackUris(
+      accessToken,
+      spotifyPlaylistId,
+      true,
+    );
   }
 
   private async getSpotifyPlaylistTrackUrisInOrder(
     accessToken: string,
     spotifyPlaylistId: string,
   ): Promise<string[]> {
-    const uris: string[] = [];
-    let offset = 0;
-
-    while (true) {
-      const page = await this.spotifyRequest<SpotifyPlaylistItemsPage>(
-        `/playlists/${spotifyPlaylistId}/items?limit=50&offset=${offset}`,
-        accessToken,
-      );
-      const items = page.items ?? [];
-      for (const entry of items) {
-        const uri = entry.item?.uri ?? entry.track?.uri;
-        if (uri) uris.push(uri);
-      }
-      if (!page.next || !items.length) break;
-      offset += items.length;
-    }
-
-    return uris;
+    return this.spotifyAccountApi.getPlaylistTrackUris(
+      accessToken,
+      spotifyPlaylistId,
+      false,
+    );
   }
 
   private shuffleTrackUris(originalUris: string[]): string[] {
@@ -1404,25 +1299,11 @@ export class FestivalPlaylistsService {
     spotifyPlaylistId: string,
     uris: string[],
   ): Promise<void> {
-    await this.spotifyRequest(
-      `/playlists/${spotifyPlaylistId}/items`,
+    await this.spotifyAccountApi.replacePlaylistTrackUris(
       accessToken,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ uris: uris.slice(0, 100) }),
-      },
+      spotifyPlaylistId,
+      uris,
     );
-
-    for (let index = 100; index < uris.length; index += 100) {
-      await this.spotifyRequest(
-        `/playlists/${spotifyPlaylistId}/items`,
-        accessToken,
-        {
-          method: 'POST',
-          body: JSON.stringify({ uris: uris.slice(index, index + 100) }),
-        },
-      );
-    }
   }
 
   private async getValidAccessToken(
@@ -1473,9 +1354,9 @@ export class FestivalPlaylistsService {
       return this.tokenCrypto.decrypt(connection.accessToken);
     }
 
-    let refreshed: SpotifyTokenResponse;
+    let refreshed: SpotifyOAuthTokenResponse;
     try {
-      refreshed = await this.refreshAccessToken(
+      refreshed = await this.spotifyOAuthApi.refreshAccessToken(
         this.tokenCrypto.decrypt(connection.refreshToken),
       );
     } catch (error) {
@@ -1499,60 +1380,6 @@ export class FestivalPlaylistsService {
     connection.expiresAt = new Date(Date.now() + refreshed.expires_in * 1000);
     await this.connectionRepository.save(connection);
     return refreshed.access_token;
-  }
-
-  private async exchangeAuthorizationCode(
-    code: string,
-  ): Promise<SpotifyTokenResponse> {
-    return this.spotifyTokenRequest(
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: this.requiredConfig('SPOTIFY_REDIRECT_URI'),
-      }),
-    );
-  }
-
-  private async refreshAccessToken(
-    refreshToken: string,
-  ): Promise<SpotifyTokenResponse> {
-    return this.spotifyTokenRequest(
-      new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-      }),
-    );
-  }
-
-  private async spotifyTokenRequest(
-    body: URLSearchParams,
-  ): Promise<SpotifyTokenResponse> {
-    const credentials = Buffer.from(
-      `${this.requiredConfig('SPOTIFY_CLIENT_ID')}:${this.requiredConfig('SPOTIFY_CLIENT_SECRET')}`,
-    ).toString('base64');
-    const response = await fetch(`${SPOTIFY_ACCOUNTS_URL}/api/token`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body,
-    });
-    const responseBody = (await response.json().catch(() => ({}))) as {
-      error?: string;
-      error_description?: string;
-    } & Partial<SpotifyTokenResponse>;
-    if (!response.ok) {
-      if (responseBody.error === 'invalid_grant') {
-        throw new SpotifyInvalidGrantError(
-          responseBody.error_description || 'Spotify invalid_grant',
-        );
-      }
-      throw new BadGatewayException(
-        `Spotify OAuth respondió con ${response.status}`,
-      );
-    }
-    return responseBody as SpotifyTokenResponse;
   }
 
   private getAuthorizationState(connection: SpotifyConnection | null): {
@@ -1619,31 +1446,6 @@ export class FestivalPlaylistsService {
     ).getUTCDate();
     result.setUTCDate(Math.min(originalDay, lastDayOfTargetMonth));
     return result;
-  }
-
-  private async spotifyRequest<T = unknown>(
-    path: string,
-    accessToken: string,
-    init: RequestInit = {},
-  ): Promise<T> {
-    const response = await fetch(`${SPOTIFY_API_URL}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-        ...init.headers,
-      },
-    });
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new BadGatewayException(
-        `Spotify respondió con ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`,
-      );
-    }
-    const responseBody = await response.text();
-    if (!responseBody) return undefined as T;
-    return JSON.parse(responseBody) as T;
   }
 
   private songsFromSetlist(setlist: Setlist): SetlistSong[] {

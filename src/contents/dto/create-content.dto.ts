@@ -43,7 +43,7 @@ export class CreateContentDto {
 
   @IsOptional()
   @IsUUID()
-  spotifyId?: string;
+  riffValleyPlaylistId?: string;
 
   @IsOptional()
   @IsUUID()
