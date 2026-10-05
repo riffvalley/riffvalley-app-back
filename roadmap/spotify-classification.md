@@ -55,10 +55,11 @@ No se reescribieron migraciones históricas. La migración S.3 de `content_type_
 
 `SpotifyIntegrationModule` agrupa `SpotifyPublicApiService`, `SpotifyClientCredentialsService`, `SpotifyOAuthApiService`, `SpotifyAccountApiService`, `SpotifyConnection`, `TokenCryptoService` y las fachadas externas de artistas/álbumes. La estructura actual separa `api/`, `http/` (con sus DTOs de rutas) y `oauth/`; `SpotifyAlbumGroup` vive con los tipos de la API pública. Los consumers usan `src/spotify-integration/index.ts` para providers exportados, sin importar controllers por esa superficie. Catalog/Discs, Lists, Contents y Festival Playlists dependen de integración; la integración no importa esos módulos. `WordpressModule` solo posee WordPress. Las rutas HTTP y contratos no cambiaron. Los requests directos a `accounts.spotify.com` y `api.spotify.com` quedan dentro de `spotify-integration`; los requests de Bandcamp y setlist.fm siguen con sus flujos actuales. El job de Contents conserva ownership y fallback.
 
-## Trabajo futuro
+## Cierre S.9 — decisiones finales
 
-- **S.4 completada:** migración física reversible y metadata actualizadas; la validación contra PostgreSQL real no estuvo disponible en este entorno.
-- **S.5/S.6/S.7 completadas:** la regresión backend quedó registrada en [spotify.md](spotify.md). S.8/S.9 permanecen pendientes; no ampliar el refactor sin una razón concreta.
+Las decisiones de S.2 sobre conservar el CRUD local bajo `/spotify` y mantener `spotify`/`spotifyId` en los contratos eran provisionales: S.3 las sustituyó por el rename coordinado de rutas, tipos y consumers. S.4 llevó ese rename a la persistencia; S.5/S.6 fijaron `SpotifyIntegrationModule` como única frontera externa; S.7/S.9 verificaron el cierre backend/frontend. La arquitectura final es la descrita en las decisiones aplicadas arriba, no las hipótesis de partida del inventario.
+
+S.1–S.9 están completadas. La regresión final y sus fallos ajenos al área Spotify están registrados en [spotify.md](spotify.md). La metadata y migraciones se verificaron por inspección/tests, pero no contra una instancia PostgreSQL real porque no hay cliente ni servicio local disponible. No quedan tareas abiertas en esta ruta Spotify.
 
 ## Referencias `spotify` justificables
 
