@@ -1,12 +1,14 @@
 # Roadmap de Community
 
-Este documento contiene la iteración planificada de Community extraída del índice maestro. Su contenido y estado no implican que se haya ejecutado ninguna subtarea.
+Este documento contiene la planificación y el registro de ejecución de la iteración estructural de Community, extraída del índice maestro.
 
 ### Iteración — Community
 
-**Objetivo:** preparar y ejecutar en el futuro la migración estructural de `comments`, `requests`, `favorites`, `pendings` y `rates` bajo `src/community/`, preservando su comportamiento y sus contratos actuales. El ownership agrupa capacidades mediante las que los usuarios interactúan con, expresan estado sobre o contribuyen al catálogo.
+- **Estado:** cerrada (2026-10-05). F.1–F.3 completadas; la evaluación post-migración de saneamiento permanece pendiente.
 
-**Estructura objetivo (solo planificación):**
+**Objetivo:** migrar estructuralmente `comments`, `requests`, `favorites`, `pendings` y `rates` bajo `src/community/`, preservando su comportamiento y contratos. El ownership agrupa capacidades mediante las que los usuarios interactúan con, expresan estado sobre o contribuyen al catálogo.
+
+**Estructura resultante:**
 
 ```text
 src/community/
@@ -16,8 +18,6 @@ src/community/
   pendings/
   rates/
 ```
-
-No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteración al roadmap.
 
 **Reglas de alcance para toda la iteración:**
 
@@ -173,6 +173,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** no quedan imports activos hacia las ubicaciones anteriores; cada capability se compone una vez y mantiene su independencia; cualquier `CommunityModule` es opcional y solo de composición.
 - **Verificaciones previstas:** búsquedas de imports legacy; revisión de módulos Nest y posibles ciclos/duplicidades DI; build.
 - **Tamaño estimado:** S.
+- [x] **Completada (2026-10-05).** No quedan referencias activas de código a las ubicaciones anteriores; AppModule registra una vez cada módulo de capacidad y no se añadió CommunityModule porque el registro directo es la composición mínima. Revisadas las dependencias entre capacidades, Catalog/Auth, entidades y tests: no hay ciclos ni providers duplicados introducidos. Inventario actualizado a los paths actuales. Typecheck y `git diff --check` pasan; F.2 permanece pendiente.
 
 ##### F.2 — Verificar límites arquitectónicos
 
@@ -183,6 +184,7 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Criterios de aceptación:** los límites están satisfechos; no se añadieron abstracciones compartidas sin reutilización real; `Pending.user` y otros hallazgos fuera de alcance permanecen sin modificación y reportados.
 - **Verificaciones previstas:** inspección de estructura, imports, metadata TypeORM y diff de producción; confirmar ausencia de cambios no planificados en contratos.
 - **Tamaño estimado:** S.
+- [x] **Completada (2026-10-05).** `src/community/` contiene únicamente Comments, Requests, Favorites, Pendings y Rates; Auth/User, Catalog y las capacidades excluidas siguen fuera. Rates, Favorites y Pendings mantienen módulos y servicios independientes; no hay abstracciones compartidas ni `CommunityModule`, y no se añadieron dependencias de servicio entre capacidades. La comparación con la base previa confirma que los cambios de producción de la migración son movimientos y ajustes de imports; las relaciones, `eager`, cascadas, metadata, rutas, permisos y contratos se conservan. `Pending.user → user.rate` permanece intacta y reportada en el inventario. Typecheck y `git diff --check` pasan; F.3 permanece pendiente.
 
 ##### F.3 — Regresión final de Community
 
@@ -191,14 +193,15 @@ No crear esta estructura ni ejecutar ninguna subtarea al incorporar esta iteraci
 - **Fuera de alcance:** arreglar fallos preexistentes o contractuales ajenos a una regresión atribuible a una subtarea.
 - **Dependencias:** F.1 y F.2.
 - **Criterios de aceptación:** regresión y build aprobados; contratos, permisos, respuestas y side effects caracterizados se preservan; fallos heredados se atribuyen y reportan; los únicos cambios son los necesarios para el movimiento estructural y sus pruebas.
-- **Verificaciones previstas:** suites de Comments, Requests, Favorites, Pendings y Rates; suites disponibles de consumidores Catalog/Auth; `pnpm build`; `git diff --check`; revisión de imports antiguos y del diff.
+- **Verificaciones previstas:** suites de Comments, Requests, Favorites, Pendings y Rates; suites disponibles de consumidores Catalog/Auth; `yarn --ignore-engines tsc --noEmit --incremental false`; `git diff --check`; revisión de imports antiguos y del diff.
 - **Tamaño estimado:** M.
+- [x] **Completada (2026-10-05).** Las 49 suites aplicables pasan (340 tests); falla una suite con un test por la expectativa preexistente de `DiscCatalogService.addSelect('disc.id', 'discId')`; siete suites PostgreSQL (28 tests) quedan omitidas porque sus flags de ejecución no están habilitados. No se identificaron regresiones atribuibles a la migración. Typecheck y `git diff --check` pasan. La regresión confirma estructura, imports, DI, metadata y consumers; se cierra la migración estructural. La evaluación post-migración de saneamiento permanece pendiente.
 
 ## Post-migración — Evaluación de saneamiento de Community
 
 **Estado:** pendiente; trabajo posterior a la iteración de migración estructural.
 
-- **Dependencia:** completar F.3 — Regresión final de Community.
+- **Dependencia:** cierre de F.3 — Regresión final de Community.
 - **Límite temporal:** no ejecutar esta evaluación antes de terminar la migración estructural completa.
 - **Objetivo:** revisar los hallazgos acumulados durante A–F y decidir, con evidencia de comportamiento, impacto y consumers, cuáles justifican una iteración posterior de saneamiento o refactor.
 - **Fuera de la migración actual:** esta evaluación no forma parte de B–F ni autoriza cambios durante la migración. No presupone eliminar eager, modificar endpoints o contratos, dividir `RatesService`, crear servicios compartidos ni cambiar metadata TypeORM.

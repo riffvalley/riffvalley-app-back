@@ -15,7 +15,7 @@ Fotografía del código existente revisado el 2026-10-05 para A.1 de [`roadmap/c
 
 ### Contrato HTTP
 
-Controller: `src/comments/comments.controller.ts`; service: `src/comments/comments.service.ts`.
+Controller: `src/community/comments/comments.controller.ts`; service: `src/community/comments/comments.service.ts`.
 
 | Método y ruta | Acceso | Entrada | Respuesta observable / semántica |
 |---|---|---|---|
@@ -57,7 +57,7 @@ El DTO `CommentResponseDto` no declara `user.image`, aunque el mapper sí lo dev
 
 ### Contrato HTTP
 
-Controller: `src/requests/requests.controller.ts`; service: `src/requests/requests.service.ts`.
+Controller: `src/community/requests/requests.controller.ts`; service: `src/community/requests/requests.service.ts`.
 
 | Método y ruta | Acceso | Entrada | Respuesta observable / semántica |
 |---|---|---|---|
@@ -101,7 +101,7 @@ Controller: `src/requests/requests.controller.ts`; service: `src/requests/reques
 
 ### Contrato HTTP
 
-Controller `src/favorites/favorites.controller.ts`; service `src/favorites/favorites.service.ts`.
+Controller `src/community/favorites/favorites.controller.ts`; service `src/community/favorites/favorites.service.ts`.
 
 | Método y ruta | Acceso | Entrada | Respuesta observable / semántica |
 |---|---|---|---|
@@ -137,7 +137,7 @@ Controller `src/favorites/favorites.controller.ts`; service `src/favorites/favor
 
 ### Contrato HTTP
 
-Controller `src/pendings/pendings.controller.ts`; service `src/pendings/pendings.service.ts`.
+Controller `src/community/pendings/pendings.controller.ts`; service `src/community/pendings/pendings.service.ts`.
 
 | Método y ruta | Acceso | Entrada | Respuesta observable / semántica |
 |---|---|---|---|
@@ -166,14 +166,14 @@ Controller `src/pendings/pendings.controller.ts`; service `src/pendings/pendings
 
 ### Tests actuales
 
-- `src/pendings/pendings.service.spec.ts`: valida campos combinados del listado ante Favorite ausente/uno/múltiples (favoriteId, collection, ausencia de `disc.pendings`/`comments`, joins), y conserva `Disc.pendings` eager en respuesta anidada de create.
+- `src/community/pendings/pendings.service.spec.ts`: valida campos combinados del listado ante Favorite ausente/uno/múltiples (favoriteId, collection, ausencia de `disc.pendings`/`comments`, joins), y conserva `Disc.pendings` eager en respuesta anidada de create.
 - No hay tests localizados para rutas/controller y auth, creación normal/404, filtros/orden/paginación, findOne/delete y propietario; esas zonas carecen de baseline propio observado.
 
 ## Rates
 
 ### Contrato HTTP
 
-Controller `src/rates/rates.controller.ts`; servicios `src/rates/rates.service.ts` y `src/rates/rates-stats.service.ts`.
+Controller `src/community/rates/rates.controller.ts`; servicios `src/community/rates/rates.service.ts` y `src/community/rates/rates-stats.service.ts`.
 
 | Método y ruta | Acceso | Entrada | Respuesta observable / semántica |
 |---|---|---|---|
