@@ -1,4 +1,4 @@
-import { BadGatewayException } from '@nestjs/common';
+import { BadGatewayException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SpotifyApiService } from './spotify-api.service';
 
@@ -597,5 +597,114 @@ describe('SpotifyApiService album operations', () => {
     expect((thrown as BadGatewayException).message).not.toContain(
       'provider-private-error',
     );
+  });
+
+  it('normaliza los álbumes de un artista y solicita solo los campos de catálogo', async () => {
+    queueToken();
+    fetchMock.mockResolvedValueOnce(
+      response({
+        items: [
+          {
+            id: 'album-id',
+            name: 'Primer disco',
+            album_type: 'album',
+            release_date: '2024-05-10',
+            external_urls: { spotify: 'https://open.spotify.com/album/1' },
+            images: [
+              { height: 300, url: 'https://images.spotify.test/cover.jpg' },
+            ],
+            providerOnlyField: 'not returned',
+          },
+        ],
+        total: 99,
+      }),
+    );
+
+    await expect(
+      service.getArtistAlbums('artist-id', ['album', 'single'], 1),
+    ).resolves.toEqual({
+      spotifyId: 'artist-id',
+      items: [
+        {
+          id: 'album-id',
+          name: 'Primer disco',
+          albumType: 'album',
+          releaseDate: '2024-05-10',
+          listenUrl: 'https://open.spotify.com/album/1',
+          coverUrl: 'https://images.spotify.test/cover.jpg',
+        },
+      ],
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://api.spotify.com/v1/artists/artist-id/albums?include_groups=album%2Csingle&market=ES&limit=1',
+    );
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      headers: { Authorization: 'Bearer backend-only-token' },
+    });
+  });
+
+  it('devuelve items vacío cuando el artista no tiene álbumes del grupo solicitado', async () => {
+    queueToken();
+    fetchMock.mockResolvedValueOnce(response({ items: [], total: 0 }));
+
+    await expect(
+      service.getArtistAlbums('artist-id', ['album', 'single'], 1),
+    ).resolves.toEqual({ spotifyId: 'artist-id', items: [] });
+  });
+
+  it('normaliza metadatos opcionales de álbum a null', async () => {
+    queueToken();
+    fetchMock.mockResolvedValueOnce(
+      response({
+        items: [{ id: 'album-id', name: 'Sin extras', album_type: 'single' }],
+      }),
+    );
+
+    await expect(
+      service.getArtistAlbums('artist-id', ['single'], 1),
+    ).resolves.toEqual({
+      spotifyId: 'artist-id',
+      items: [
+        {
+          id: 'album-id',
+          name: 'Sin extras',
+          albumType: 'single',
+          releaseDate: null,
+          listenUrl: null,
+          coverUrl: null,
+        },
+      ],
+    });
+  });
+
+  it('devuelve 404 para un artista inexistente y 502 para errores de Spotify', async () => {
+    queueToken();
+    fetchMock.mockResolvedValueOnce(response({ error: 'not found' }, 404));
+    await expect(
+      service.getArtistAlbums('missing-artist', ['album', 'single'], 1),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    queueToken();
+    fetchMock.mockResolvedValueOnce(
+      response({ error: 'provider-private-error' }, 503),
+    );
+    const thrown = await service
+      .getArtistAlbums('artist-id', ['album', 'single'], 1)
+      .catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(BadGatewayException);
+    expect((thrown as BadGatewayException).getStatus()).toBe(502);
+    expect((thrown as BadGatewayException).message).not.toContain(
+      'provider-private-error',
+    );
+  });
+
+  it('rechaza una respuesta de álbumes incompleta del proveedor con 502', async () => {
+    queueToken();
+    fetchMock.mockResolvedValueOnce(response({ items: [{ id: 'album-id' }] }));
+
+    await expect(
+      service.getArtistAlbums('artist-id', ['album'], 1),
+    ).rejects.toMatchObject({ status: 502 });
   });
 });
