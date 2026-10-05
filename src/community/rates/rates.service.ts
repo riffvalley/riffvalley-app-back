@@ -151,12 +151,6 @@ export class RatesService {
       .leftJoin('disc.artist', 'artist')
       .leftJoin('artist.country', 'country')
       .leftJoin('disc.genre', 'genre')
-      .leftJoin(
-        'favorite',
-        'favorite',
-        'favorite.discId = disc.id AND favorite.userId = :userId',
-        { userId },
-      )
       .where('rate.userId = :userId', { userId });
 
     if (type === 'rate') {

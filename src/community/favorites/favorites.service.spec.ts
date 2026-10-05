@@ -158,6 +158,13 @@ describe('FavoritesService characterization', () => {
     expect(firstQuery.addSelect).toHaveBeenCalledWith(expect.any(Function), 'averageRate');
     expect(firstQuery.addSelect).toHaveBeenCalledWith(expect.any(Function), 'averageCover');
     expect(countQuery.getCount).toHaveBeenCalled();
+    expect(countQuery.leftJoin.mock.calls.map(([relation]) => relation)).toEqual([
+      'favorite.disc',
+      'disc.artist',
+      'artist.country',
+      'disc.genre',
+    ]);
+    expect(countQuery.addSelect).not.toHaveBeenCalled();
   });
 
   it('preserves Favorite relations and the inverse eager Disc.favorites metadata', () => {

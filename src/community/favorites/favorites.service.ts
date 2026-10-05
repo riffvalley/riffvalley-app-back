@@ -214,20 +214,6 @@ export class FavoritesService {
       .leftJoin('disc.artist', 'artist')
       .leftJoin('artist.country', 'country')
       .leftJoin('disc.genre', 'genre')
-      .leftJoin(
-        'rate',
-        'rate',
-        'rate.discId = disc.id AND rate.userId = :userId',
-        { userId },
-      )
-      .addSelect('rate.rate', 'rate_rate')
-      .addSelect('rate.cover', 'rate_cover')
-      .leftJoin(
-        Pending,
-        'pending',
-        'pending.discId = disc.id AND pending.userId = :userId',
-        { userId },
-      )
       .where('favorite.userId = :userId', { userId });
 
     if (startDate && endDate) {

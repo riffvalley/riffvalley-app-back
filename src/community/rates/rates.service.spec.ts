@@ -130,6 +130,12 @@ describe('RatesService characterization', () => {
         },
       }],
     });
+    expect(countBuilder.leftJoin.mock.calls.map(([relation]) => relation)).toEqual([
+      'rate.disc',
+      'disc.artist',
+      'artist.country',
+      'disc.genre',
+    ]);
   });
 
   it('preserves null and zero values in the enriched rate Disc projection', async () => {

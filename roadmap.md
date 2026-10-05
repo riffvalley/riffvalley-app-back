@@ -20,7 +20,7 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 ## Estado de alto nivel
 
 - **Catalog:** C5 declara cerrada la fase de ownership de Catalog (2026-10-04). La planificación detallada de Discs permanece en su documento; su última nota de cierre deja D48 pendiente.
-- **Community:** iteración completa planificada; A.1–F.3 no ejecutadas.
+- **Community:** cerrada (2026-10-05). Migración estructural y saneamiento G.1–G.7 completados; regresión backend y regresión manual frontend completadas sin incidencias. No quedan subtareas pendientes en su roadmap; los desacoplamientos Catalog ↔ Community y Auth → Rate siguen aplazados.
 - **Fase 4 — Lists:** administración de listas, integración WordPress y sincronización/publicación de discos; considerar primero los efectos externos.
 - **Fase 5 — Festival Playlists:** reglas de playlist e integración externa; revisar selección y sincronización de discos y manejo de errores.
 - **Fase 6 — Contents, Articles, News y publicaciones:** workflows editoriales, estados, fechas programadas, versiones y publicación WordPress.
