@@ -8,7 +8,7 @@ import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import * as request from 'supertest';
 import { Artist } from '../src/catalog/artists/entities/artist.entity';
-import { CatalogModule } from '../src/catalog/catalog.module';
+import { CatalogImportModule } from '../src/catalog/import/catalog-import.module';
 import { Country } from '../src/catalog/countries/entities/country.entity';
 import { Disc } from '../src/catalog/discs/entities/disc.entity';
 import { Genre } from '../src/catalog/genres/entities/genre.entity';
@@ -53,7 +53,7 @@ describe('Excel import (e2e)', () => {
     };
 
     const testingModule = Test.createTestingModule({
-      imports: [CatalogModule],
+      imports: [CatalogImportModule],
     })
       .overrideProvider(ConfigService)
       .useValue({ get: jest.fn(() => 'excel-e2e-test-secret') })
