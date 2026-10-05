@@ -8,7 +8,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { UserAccessLog } from './entities/user-access-log.entity';
-import { Rate } from '../rates/entities/rate.entity';
+import { Rate } from '../community/rates/entities/rate.entity';
 import { Repository } from 'typeorm';
 
 import * as bcrypt from 'bcrypt';

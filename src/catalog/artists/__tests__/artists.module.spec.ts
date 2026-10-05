@@ -3,7 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { User } from 'src/auth/entities/user.entity';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
-import { Rate } from 'src/rates/entities/rate.entity';
+import { Rate } from 'src/community/rates/entities/rate.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { NationalRelease } from 'src/national-releases/entities/national-release.entity';
 import { SpotifyPlaylistArtist } from 'src/festival-playlists/entities/spotify-playlist-artist.entity';
