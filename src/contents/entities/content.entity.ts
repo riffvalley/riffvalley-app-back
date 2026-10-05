@@ -1,7 +1,7 @@
 import { User } from 'src/auth/entities/user.entity';
 import { Reunion } from 'src/reunions/entities/reunion.entity';
 import { List } from 'src/lists/entities/list.entity';
-import { Spotify } from 'src/spotify/entities/spotify.entity';
+import { RiffValleyPlaylist } from 'src/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Article } from 'src/articles/entities/article.entity';
 import { Video } from 'src/videos/entities/video.entity';
 import {
@@ -11,12 +11,13 @@ import {
   ManyToOne,
   OneToOne,
   PrimaryGeneratedColumn,
+  RelationId,
 } from 'typeorm';
 
 export enum ContentType {
   ARTICLE = 'article',
   PHOTOS = 'photos',
-  SPOTIFY = 'spotify',
+  RIFF_VALLEY_PLAYLIST = 'riff_valley_playlist',
   RADAR = 'radar',
   BEST = 'best',
   VIDEO = 'video',
@@ -31,6 +32,7 @@ export class Content {
   @Column({
     type: 'enum',
     enum: ContentType,
+    enumName: 'content_type_enum',
   })
   type: ContentType;
 
@@ -63,9 +65,15 @@ export class Content {
   @JoinColumn()
   list?: List;
 
-  @OneToOne(() => Spotify, (spotify) => spotify.content, { nullable: true })
-  @JoinColumn()
-  spotify?: Spotify;
+  @OneToOne(() => RiffValleyPlaylist, (playlist) => playlist.content, { nullable: true })
+  @JoinColumn({
+    name: 'riffValleyPlaylistId',
+    foreignKeyConstraintName: 'FK_content_riff_valley_playlist',
+  })
+  riffValleyPlaylist?: RiffValleyPlaylist;
+
+  @RelationId((content: Content) => content.riffValleyPlaylist)
+  riffValleyPlaylistId?: string;
 
   @OneToOne(() => Article, (article) => article.content, { nullable: true })
   @JoinColumn()

@@ -28,7 +28,7 @@ import { UpdateListDto } from './dto/update-list.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Content } from 'src/contents/entities/content.entity';
 import { WordpressService } from 'src/wordpress/wordpress.service';
-import { SpotifyApiService } from 'src/wordpress/spotify-api.service';
+import { SpotifyPublicApiService } from 'src/spotify-integration';
 
 // Un radar semanal sigue abierto hasta WEEKLY_CLOSE_GRACE_DAYS después de su
 // closeDate (domingo por defecto, es decir, hasta el martes inclusive).
@@ -65,7 +65,7 @@ export class ListsService {
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
     private readonly wordpressService: WordpressService,
-    private readonly spotifyApiService: SpotifyApiService,
+    private readonly spotifyApiService: SpotifyPublicApiService,
   ) {}
 
   async create(createListDto: CreateListDto) {

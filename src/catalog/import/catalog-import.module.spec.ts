@@ -9,9 +9,10 @@ import { Disc } from '../discs/entities/disc.entity';
 import { Genre } from '../genres/entities/genre.entity';
 import { Rate } from '../../community/rates/entities/rate.entity';
 import { NationalRelease } from '../../national-releases/entities/national-release.entity';
-import { SpotifyPlaylistArtist } from '../../festival-playlists/entities/spotify-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from '../../festival-playlists/entities/riff-valley-playlist-artist.entity';
 import { UserAccessLog } from '../../auth/entities/user-access-log.entity';
 import { User } from '../../auth/entities/user.entity';
+import { SpotifyConnection } from '../../spotify-integration';
 import { CatalogImportModule } from './catalog-import.module';
 import { CatalogImportController } from './manual/controller/catalog-import.controller';
 import { CatalogImportService } from './manual/import/catalog-import.service';
@@ -38,7 +39,8 @@ describe('CatalogImportModule dependency injection', () => {
       UserAccessLog,
       Rate,
       NationalRelease,
-      SpotifyPlaylistArtist,
+      RiffValleyPlaylistArtist,
+      SpotifyConnection,
     ];
 
     const testingModule = Test.createTestingModule({
@@ -106,5 +108,4 @@ describe('CatalogImportModule dependency injection', () => {
       moduleRef.get(ExcelWorkbookParser),
     );
   });
-
 });

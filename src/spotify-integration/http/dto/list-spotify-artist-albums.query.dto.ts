@@ -9,19 +9,16 @@ import {
   Max,
   Min,
 } from 'class-validator';
-
-export const SPOTIFY_ALBUM_GROUPS = [
-  'album',
-  'single',
-  'compilation',
-  'appears_on',
-] as const;
-
-export type SpotifyAlbumGroup = (typeof SPOTIFY_ALBUM_GROUPS)[number];
+import {
+  SPOTIFY_ALBUM_GROUPS,
+  SpotifyAlbumGroup,
+} from '../../api/spotify-public-api.types';
 
 export class ListSpotifyArtistAlbumsQueryDto {
   @Transform(({ value }) =>
-    typeof value === 'string' ? value.split(',').map((group) => group.trim()) : value,
+    typeof value === 'string'
+      ? value.split(',').map((group) => group.trim())
+      : value,
   )
   @IsArray()
   @ArrayNotEmpty()

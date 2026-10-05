@@ -4,8 +4,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { SpotifyAlbumGroup } from 'src/spotify/dto/list-spotify-artist-albums.query.dto';
+import { SpotifyAlbumGroup } from './spotify-public-api.types';
+import { SpotifyClientCredentialsService } from './spotify-client-credentials.service';
 
 export interface SpotifyAlbumSummary {
   spotifyId: string;
@@ -76,51 +76,14 @@ export interface SpotifyAlbumPopularTrack {
 }
 
 @Injectable()
-export class SpotifyApiService {
-  private readonly logger = new Logger('SpotifyApiService');
-  private readonly clientId: string;
-  private readonly clientSecret: string;
-  private accessToken: string | null = null;
-  private tokenExpiresAt = 0;
-
-  constructor(private readonly configService: ConfigService) {
-    this.clientId = this.configService.get<string>('SPOTIFY_CLIENT_ID', '');
-    this.clientSecret = this.configService.get<string>(
-      'SPOTIFY_CLIENT_SECRET',
-      '',
-    );
-  }
-
-  private async getAccessToken(): Promise<string> {
-    if (this.accessToken && Date.now() < this.tokenExpiresAt) {
-      return this.accessToken;
-    }
-
-    const credentials = Buffer.from(
-      `${this.clientId}:${this.clientSecret}`,
-    ).toString('base64');
-    const res = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: 'grant_type=client_credentials',
-    });
-
-    if (!res.ok) throw new Error(`Spotify auth failed: ${res.status}`);
-
-    const data: any = await res.json();
-    this.accessToken = data.access_token;
-    this.tokenExpiresAt = Date.now() + (data.expires_in - 60) * 1000;
-    return this.accessToken;
-  }
+export class SpotifyPublicApiService {
+  private readonly logger = new Logger(SpotifyPublicApiService.name);
+  constructor(
+    private readonly clientCredentials: SpotifyClientCredentialsService,
+  ) {}
 
   private async request(path: string): Promise<Response> {
-    const token = await this.getAccessToken();
-    return fetch(`https://api.spotify.com/v1${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    return this.clientCredentials.request(path);
   }
 
   private async get(path: string): Promise<any> {
@@ -268,9 +231,8 @@ export class SpotifyApiService {
               ? album.external_urls.spotify
               : null,
           coverUrl: Array.isArray(album.images)
-            ? (album.images.find(
-                (image: any) => typeof image?.url === 'string',
-              )?.url ?? null)
+            ? (album.images.find((image: any) => typeof image?.url === 'string')
+                ?.url ?? null)
             : null,
         };
       }),

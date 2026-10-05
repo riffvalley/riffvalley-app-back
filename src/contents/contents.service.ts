@@ -14,10 +14,10 @@ import { User } from 'src/auth/entities/user.entity';
 import { Reunion } from 'src/reunions/entities/reunion.entity';
 import { Point } from 'src/points/entities/point.entity';
 import {
-  Spotify,
-  SpotifyStatus,
-  SpotifyType,
-} from 'src/spotify/entities/spotify.entity';
+  RiffValleyPlaylist,
+  RiffValleyPlaylistStatus,
+  RiffValleyPlaylistType,
+} from 'src/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import {
   Article,
   ArticleStatus,
@@ -42,8 +42,8 @@ export class ContentsService {
     private readonly reunionRepo: Repository<Reunion>,
     @InjectRepository(Point)
     private readonly pointRepo: Repository<Point>,
-    @InjectRepository(Spotify)
-    private readonly spotifyRepo: Repository<Spotify>,
+    @InjectRepository(RiffValleyPlaylist)
+    private readonly riffValleyPlaylistRepository: Repository<RiffValleyPlaylist>,
     @InjectRepository(Article)
     private readonly articleRepo: Repository<Article>,
     @InjectRepository(Video)
@@ -91,23 +91,23 @@ export class ContentsService {
       }
     }
 
-    // If spotifyId is provided, fetch the entity to sync initial state (Import state from Entity to Content)
-    if ((rest as any).spotifyId) {
-      const existingSpotify = await this.spotifyRepo.findOne({
-        where: { id: (rest as any).spotifyId },
+    // If riffValleyPlaylistId is provided, fetch the entity to sync initial state (Import state from Entity to Content)
+    if ((rest as any).riffValleyPlaylistId) {
+      const existingRiffValleyPlaylist = await this.riffValleyPlaylistRepository.findOne({
+        where: { id: (rest as any).riffValleyPlaylistId },
       });
-      if (existingSpotify) {
+      if (existingRiffValleyPlaylist) {
         // If already PUBLISHED, sync content date from it
         if (
-          existingSpotify.status === SpotifyStatus.PUBLISHED &&
-          existingSpotify.updateDate
+          existingRiffValleyPlaylist.status === RiffValleyPlaylistStatus.PUBLISHED &&
+          existingRiffValleyPlaylist.updateDate
         ) {
           // Only override if content date wasn't explicitly provided?
           // Or force sync? Usually if linking, we want consistency.
           if (!publicationDate) {
-            (rest as any).publicationDate = existingSpotify.updateDate;
+            (rest as any).publicationDate = existingRiffValleyPlaylist.updateDate;
             createContentDto.publicationDate =
-              existingSpotify.updateDate.toISOString(); // Update DTO for consistency
+              existingRiffValleyPlaylist.updateDate.toISOString(); // Update DTO for consistency
           }
         }
       }
@@ -160,8 +160,8 @@ export class ContentsService {
       listDate: listDate ? new Date(listDate) : undefined,
       author,
       reunionId,
-      spotify: (rest as any).spotifyId
-        ? { id: (rest as any).spotifyId }
+      riffValleyPlaylist: (rest as any).riffValleyPlaylistId
+        ? { id: (rest as any).riffValleyPlaylistId }
         : undefined,
       article: (rest as any).articleId
         ? { id: (rest as any).articleId }
@@ -170,28 +170,28 @@ export class ContentsService {
       ready: createContentDto.publicationDate ? false : rest.ready,
     });
 
-    // Auto-create Spotify entity if type is SPOTIFY and no spotifyId provided
+    // Auto-create RiffValleyPlaylist entity if type is RIFF_VALLEY_PLAYLIST and no riffValleyPlaylistId provided
     if (
-      createContentDto.type === ContentType.SPOTIFY &&
-      !(rest as any).spotifyId
+      createContentDto.type === ContentType.RIFF_VALLEY_PLAYLIST &&
+      !(rest as any).riffValleyPlaylistId
     ) {
       if (!author) {
         throw new BadRequestException(
-          'Cannot auto-create Spotify entity without an assigned author.',
+          'Cannot auto-create RiffValleyPlaylist entity without an assigned author.',
         );
       }
 
-      const spotifyEntity = this.spotifyRepo.create({
+      const riffValleyPlaylistEntity = this.riffValleyPlaylistRepository.create({
         name: rest.name,
-        status: SpotifyStatus.EDITING,
-        type: SpotifyType.GENERO, // Default type, user can change later
+        status: RiffValleyPlaylistStatus.EDITING,
+        type: RiffValleyPlaylistType.GENERO, // Default type, user can change later
         link: '', // Default empty link
         updateDate: new Date(),
         user: author,
       });
-      const savedSpotify = await this.spotifyRepo.save(spotifyEntity);
+      const savedRiffValleyPlaylist = await this.riffValleyPlaylistRepository.save(riffValleyPlaylistEntity);
 
-      content.spotify = savedSpotify;
+      content.riffValleyPlaylist = savedRiffValleyPlaylist;
     }
 
     // Auto-create Article entity if type is ARTICLE and no articleId provided
@@ -303,8 +303,8 @@ export class ContentsService {
         'author',
         'list',
         'list.asignations',
-        'spotify',
-        'spotify.user',
+        'riffValleyPlaylist',
+        'riffValleyPlaylist.user',
         'article',
         'article.user',
         'article.editor',
@@ -322,8 +322,8 @@ export class ContentsService {
       relations: [
         'author',
         'list',
-        'spotify',
-        'spotify.user',
+        'riffValleyPlaylist',
+        'riffValleyPlaylist.user',
         'article',
         'article.user',
         'article.editor',
@@ -518,9 +518,9 @@ export class ContentsService {
       }
     }
 
-    // NOTE: Spotify/Article/Video status is no longer auto-synced here when the
+    // NOTE: RiffValleyPlaylist/Article/Video status is no longer auto-synced here when the
     // Content changes (e.g. publicationDate edits used to silently flip the
-    // linked entity to PUBLISHED). Content and Video/Article/Spotify are fully
+    // linked entity to PUBLISHED). Content and Video/Article/RiffValleyPlaylist are fully
     // independent — see the note in create() above.
 
     // Sync with Reunion (Content.publicationDate -> Reunion.date)
@@ -587,7 +587,7 @@ export class ContentsService {
   async remove(id: string): Promise<void> {
     const content = await this.contentRepo.findOne({
       where: { id },
-      relations: ['list', 'reunion', 'spotify', 'article', 'video'],
+      relations: ['list', 'reunion', 'riffValleyPlaylist', 'article', 'video'],
     });
 
     if (!content) {
@@ -608,8 +608,8 @@ export class ContentsService {
       await this.listsService.removeList(listId);
     }
 
-    // NOTE: The linked Spotify/Article/Video entity is left untouched — its
-    // status is no longer auto-reset on Content removal. Video/Article/Spotify
+    // NOTE: The linked RiffValleyPlaylist/Article/Video entity is left untouched — its
+    // status is no longer auto-reset on Content removal. Video/Article/RiffValleyPlaylist
     // and Content are fully independent now.
   }
 
@@ -632,8 +632,8 @@ export class ContentsService {
       .leftJoinAndSelect('content.author', 'author')
       .leftJoinAndSelect('content.list', 'list')
       .leftJoinAndSelect('list.asignations', 'asignations')
-      .leftJoinAndSelect('content.spotify', 'spotify')
-      .leftJoinAndSelect('spotify.user', 'spotifyUser')
+      .leftJoinAndSelect('content.riffValleyPlaylist', 'riffValleyPlaylist')
+      .leftJoinAndSelect('riffValleyPlaylist.user', 'riffValleyPlaylistUser')
       .leftJoinAndSelect('content.article', 'article')
       .leftJoinAndSelect('article.user', 'articleUser')
       .leftJoinAndSelect('article.editor', 'articleEditor')
@@ -646,9 +646,9 @@ export class ContentsService {
       .getMany();
   }
 
-  async findOneBySpotifyId(spotifyId: string): Promise<Content | null> {
+  async findOneByRiffValleyPlaylistId(riffValleyPlaylistId: string): Promise<Content | null> {
     return this.contentRepo.findOne({
-      where: { spotify: { id: spotifyId } },
+      where: { riffValleyPlaylist: { id: riffValleyPlaylistId } },
     });
   }
 

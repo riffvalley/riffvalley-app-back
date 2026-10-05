@@ -1,4 +1,4 @@
-// src/spotify/dto/list-spotify.query.dto.ts
+// src/riff-valley-playlists/dto/list-riff-valley-playlists.query.dto.ts
 import {
   IsInt,
   IsOptional,
@@ -18,10 +18,10 @@ const ESTADOS = [
   'published',
 ] as const;
 const TIPOS = ['festival', 'especial', 'genero', 'otras'] as const;
-type SpotifyStatus = (typeof ESTADOS)[number];
-type SpotifyType = (typeof TIPOS)[number];
+type RiffValleyPlaylistStatus = (typeof ESTADOS)[number];
+type RiffValleyPlaylistType = (typeof TIPOS)[number];
 
-export class ListSpotifyQueryDto {
+export class ListRiffValleyPlaylistsQueryDto {
   @IsOptional()
   @IsString()
   q?: string;
@@ -31,14 +31,14 @@ export class ListSpotifyQueryDto {
     typeof value === 'string' ? value.toLowerCase() : value,
   )
   @IsIn(ESTADOS as readonly string[])
-  status?: SpotifyStatus;
+  status?: RiffValleyPlaylistStatus;
 
   @IsOptional()
   @Transform(({ value }) =>
     typeof value === 'string' ? value.toLowerCase() : value,
   )
   @IsIn(TIPOS as readonly string[])
-  type?: SpotifyType;
+  type?: RiffValleyPlaylistType;
 
   @IsOptional()
   @Type(() => Number)
