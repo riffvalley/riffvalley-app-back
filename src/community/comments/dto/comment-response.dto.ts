@@ -2,6 +2,7 @@ export class CommentResponseDto {
   id: string;
   comment: string;
   createdAt: Date;
+  editedAt: Date | null;
   parentId: string | null;
 
   // Indicamos si está o no eliminado
@@ -10,6 +11,7 @@ export class CommentResponseDto {
   user: {
     id: string;
     username: string;
+    image: string | null;
   };
 
   disc: {

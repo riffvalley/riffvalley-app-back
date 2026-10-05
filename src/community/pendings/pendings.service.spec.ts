@@ -4,6 +4,7 @@ import { Disc } from '../../catalog/discs/entities/disc.entity';
 import { CreatePendingDto } from './dto/create-pendings.dto';
 import { Pending } from './entities/pending.entity';
 import { PendingsService } from './pendings.service';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 
 describe('PendingsService.findAllByUser favorite state', () => {
   const userId = 'current-user-id';
@@ -188,5 +189,82 @@ describe('PendingsService.create Disc payload', () => {
       where: { id: disc.id },
     });
     expect(pending.disc.pendings).toEqual(pendings);
+  });
+});
+
+describe('PendingsService domain errors', () => {
+  it('returns 404 for a missing Disc, keeps duplicates at 400, and masks unexpected errors as 500', async () => {
+    const user = { id: 'user-id' } as User;
+    const missingDiscService = new PendingsService({
+      manager: { findOne: jest.fn().mockResolvedValue(null) },
+    } as unknown as Repository<Pending>);
+    await expect(missingDiscService.create({ discId: 'missing-disc' } as CreatePendingDto, user))
+      .rejects.toMatchObject({ status: 404 });
+
+    const disc = { id: 'disc-id' } as Disc;
+    const repository: any = {
+      manager: { findOne: jest.fn().mockResolvedValue(disc) },
+      create: jest.fn().mockReturnValue({}),
+      save: jest.fn().mockRejectedValueOnce({ code: '23505', detail: 'duplicate key value' })
+        .mockRejectedValueOnce(new Error('private database details')),
+    };
+    const service = new PendingsService(repository);
+    await expect(service.create({ discId: disc.id } as CreatePendingDto, user))
+      .rejects.toMatchObject({ status: 400 });
+    await expect(service.create({ discId: disc.id } as CreatePendingDto, user))
+      .rejects.toMatchObject({
+        status: 500,
+        response: { message: 'An unexpected error occurred' },
+      });
+  });
+});
+
+describe('PendingsService personal resource access', () => {
+  const owner = { id: 'owner-id' } as User;
+  let repository: any;
+  let service: PendingsService;
+
+  beforeEach(() => {
+    repository = {
+      findOne: jest.fn(),
+      findOneOrFail: jest.fn(),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    service = new PendingsService(repository as unknown as Repository<Pending>);
+  });
+
+  it('allows the owner to read and delete their pending', async () => {
+    const pending = { id: 'pending-id', user: owner } as Pending;
+    repository.findOneOrFail.mockResolvedValue(pending);
+    repository.findOne.mockResolvedValue(pending);
+
+    await expect(service.findOne(pending.id, owner)).resolves.toBe(pending);
+    await expect(service.remove(pending.id, owner)).resolves.toEqual({
+      message: `Pending with id ${pending.id} has been removed`,
+    });
+    expect(repository.delete).toHaveBeenCalledWith({ id: pending.id });
+  });
+
+  it.each([
+    ['read', () => service.findOne('pending-id', { id: 'other-id' } as User)],
+    ['delete', () => service.remove('pending-id', { id: 'other-id' } as User)],
+  ])('returns 403 and does not delete when a non-owner tries to %s', async (_action, action) => {
+    const pending = { id: 'pending-id', user: owner } as Pending;
+    repository.findOneOrFail.mockResolvedValue(pending);
+    repository.findOne.mockResolvedValue(pending);
+
+    await expect(action()).rejects.toBeInstanceOf(ForbiddenException);
+    expect(repository.delete).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['read', () => service.findOne('missing-id', owner)],
+    ['delete', () => service.remove('missing-id', owner)],
+  ])('returns 404 when a pending to %s does not exist', async (_action, action) => {
+    repository.findOneOrFail.mockRejectedValue(new Error('missing'));
+    repository.findOne.mockResolvedValue(null);
+
+    await expect(action()).rejects.toBeInstanceOf(NotFoundException);
+    expect(repository.delete).not.toHaveBeenCalled();
   });
 });

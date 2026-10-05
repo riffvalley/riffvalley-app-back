@@ -1,4 +1,5 @@
 import { getMetadataArgsStorage } from 'typeorm';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { User } from 'src/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Pending } from 'src/community/pendings/entities/pending.entity';
@@ -27,6 +28,30 @@ describe('FavoritesService characterization', () => {
     });
     expect(favoriteRepository.create).toHaveBeenCalledWith({ user, disc });
     expect(favoriteRepository.save).toHaveBeenCalledWith(favorite);
+  });
+
+  it('returns 404 for a missing Disc and preserves existing database error statuses', async () => {
+    const user = { id: 'user-id' } as User;
+    const missingDiscRepository = { manager: { findOne: jest.fn().mockResolvedValue(null) } };
+    const missingDiscService = new FavoritesService(missingDiscRepository as any);
+    await expect(missingDiscService.create({ discId: 'missing-disc' } as CreateFavoriteDto, user))
+      .rejects.toMatchObject({ status: 404 });
+
+    const disc = { id: 'disc-id' } as Disc;
+    const repository = {
+      manager: { findOne: jest.fn().mockResolvedValue(disc) },
+      create: jest.fn().mockReturnValue({}),
+      save: jest.fn().mockRejectedValueOnce({ code: '23505', detail: 'duplicate key value' })
+        .mockRejectedValueOnce(new Error('private database details')),
+    };
+    const service = new FavoritesService(repository as any);
+    await expect(service.create({ discId: disc.id } as CreateFavoriteDto, user))
+      .rejects.toMatchObject({ status: 400 });
+    await expect(service.create({ discId: disc.id } as CreateFavoriteDto, user))
+      .rejects.toMatchObject({
+        status: 500,
+        response: { message: 'An unexpected error occurred' },
+      });
   });
 
   it('returns a representative enriched page and preserves absent interaction fields', async () => {
@@ -157,6 +182,56 @@ describe('FavoritesService characterization', () => {
       relationType: 'one-to-many',
       options: { eager: true },
     });
+  });
+});
+
+describe('FavoritesService personal resource access', () => {
+  const owner = { id: 'owner-id' } as User;
+  let repository: any;
+  let service: FavoritesService;
+
+  beforeEach(() => {
+    repository = {
+      findOne: jest.fn(),
+      findOneOrFail: jest.fn(),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    service = new FavoritesService(repository);
+  });
+
+  it('allows the owner to read and delete their favorite', async () => {
+    const favorite = { id: 'favorite-id', user: owner } as Favorite;
+    repository.findOneOrFail.mockResolvedValue(favorite);
+    repository.findOne.mockResolvedValue(favorite);
+
+    await expect(service.findOne(favorite.id, owner)).resolves.toBe(favorite);
+    await expect(service.remove(favorite.id, owner)).resolves.toEqual({
+      message: `Favorite with id ${favorite.id} has been removed`,
+    });
+    expect(repository.delete).toHaveBeenCalledWith({ id: favorite.id });
+  });
+
+  it.each([
+    ['read', () => service.findOne('favorite-id', { id: 'other-id' } as User)],
+    ['delete', () => service.remove('favorite-id', { id: 'other-id' } as User)],
+  ])('returns 403 and does not delete when a non-owner tries to %s', async (_action, action) => {
+    const favorite = { id: 'favorite-id', user: owner } as Favorite;
+    repository.findOneOrFail.mockResolvedValue(favorite);
+    repository.findOne.mockResolvedValue(favorite);
+
+    await expect(action()).rejects.toBeInstanceOf(ForbiddenException);
+    expect(repository.delete).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['read', () => service.findOne('missing-id', owner)],
+    ['delete', () => service.remove('missing-id', owner)],
+  ])('returns 404 when a favorite to %s does not exist', async (_action, action) => {
+    repository.findOneOrFail.mockRejectedValue(new Error('missing'));
+    repository.findOne.mockResolvedValue(null);
+
+    await expect(action()).rejects.toBeInstanceOf(NotFoundException);
+    expect(repository.delete).not.toHaveBeenCalled();
   });
 });
 

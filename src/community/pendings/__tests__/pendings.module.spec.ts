@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { getMetadataArgsStorage } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { AuthModule } from 'src/auth/auth.module';
 import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
 import { User } from 'src/auth/entities/user.entity';
@@ -75,7 +76,7 @@ describe('PendingsModule characterization', () => {
     }
   });
 
-  it('preserves Pending relation metadata, including the existing user.rate inverse', () => {
+  it('preserves Pending relation metadata and targets User.pending as its inverse', () => {
     const relations = getMetadataArgsStorage().relations;
     const relation = (target: Function, propertyName: string) =>
       relations.find((entry) => entry.target === target && entry.propertyName === propertyName);
@@ -85,7 +86,7 @@ describe('PendingsModule characterization', () => {
       relationType: 'many-to-one',
       options: { eager: true, onDelete: 'CASCADE' },
     });
-    expect((pendingUser as any).inverseSideProperty({ rate: 'rate' })).toBe('rate');
+    expect((pendingUser as any).inverseSideProperty({ pending: 'pending' })).toBe('pending');
 
     const pendingDisc = relation(Pending, 'disc');
     expect(pendingDisc).toMatchObject({
@@ -108,5 +109,30 @@ describe('PendingsModule characterization', () => {
       options: { eager: true },
     });
     expect((discPendings as any).inverseSideProperty({ disc: 'disc' })).toBe('disc');
+  });
+
+  it('resolves Pending.user and User.pending as inverse sides of the same relation', async () => {
+    const dataSource = new DataSource({
+      type: 'postgres',
+      entities: ['src/**/*.entity.ts'],
+    });
+    await (dataSource as any).buildMetadatas();
+
+    const pendingUser = dataSource
+      .getMetadata(Pending)
+      .findRelationWithPropertyPath('user');
+    const userPending = dataSource
+      .getMetadata(User)
+      .findRelationWithPropertyPath('pending');
+
+    expect(pendingUser?.inverseSidePropertyPath).toBe('pending');
+    expect(pendingUser?.inverseRelation).toBe(userPending);
+    expect(userPending?.inverseRelation).toBe(pendingUser);
+    expect(pendingUser?.joinColumns.map((column) => column.databaseName)).toEqual([
+      'userId',
+    ]);
+    expect(pendingUser?.isEager).toBe(true);
+    expect(pendingUser?.onDelete).toBe('CASCADE');
+    expect(userPending?.isCascadeInsert).toBe(true);
   });
 });

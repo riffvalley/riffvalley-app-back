@@ -1,4 +1,5 @@
 import { CommentsService } from './comments.service';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 describe('CommentsService characterization', () => {
   const user = { id: 'user-1', username: 'listener' } as any;
   const disc = { id: 'disc-1', name: 'Album' } as any;
@@ -11,6 +12,7 @@ describe('CommentsService characterization', () => {
       create: jest.fn((values) => ({ id: 'comment-1', ...values })),
       save: jest.fn(async (comment) => comment),
       findOne: jest.fn(),
+      findOneOrFail: jest.fn(),
       findOneByOrFail: jest.fn(),
       preload: jest.fn(),
       delete: jest.fn(),
@@ -37,6 +39,35 @@ describe('CommentsService characterization', () => {
     });
     expect(repository.save).toHaveBeenCalledWith(result);
     expect(result).toMatchObject({ id: 'comment-1', comment: 'Great record', user, disc, parent: null });
+  });
+
+  it('returns 404 when the disc does not exist during creation', async () => {
+    repository.manager.findOne.mockResolvedValue(null);
+
+    await expect(service.create({ comment: 'Great record', discId: 'missing-disc' } as any, user))
+      .rejects.toMatchObject({ status: 404 });
+  });
+
+  it('returns 404 when the parent comment does not exist', async () => {
+    repository.manager.findOne.mockResolvedValue(disc);
+    repository.findOne.mockResolvedValue(null);
+
+    await expect(service.create({ comment: 'Reply', discId: disc.id, parentId: 'missing-parent' } as any, user))
+      .rejects.toMatchObject({ status: 404 });
+  });
+
+  it('keeps duplicate database errors at 400 and masks unexpected errors as 500', async () => {
+    repository.manager.findOne.mockResolvedValue(disc);
+    repository.save.mockRejectedValueOnce({ code: '23505', detail: 'duplicate key value' });
+    await expect(service.create({ comment: 'Duplicate', discId: disc.id } as any, user))
+      .rejects.toMatchObject({ status: 400 });
+
+    repository.save.mockRejectedValueOnce(new Error('private database details'));
+    await expect(service.create({ comment: 'Unexpected', discId: disc.id } as any, user))
+      .rejects.toMatchObject({
+        status: 500,
+        response: { message: 'An unexpected error occurred' },
+      });
   });
 
   it('creates a reply attached to its parent comment', async () => {
@@ -90,17 +121,17 @@ describe('CommentsService characterization', () => {
 
   it('projects a comment, reply, and deleted comment for the disc reader', async () => {
     const normal = {
-      id: 'comment-1', comment: 'Visible', isDeleted: false, createdAt: new Date('2024-01-01'),
+      id: 'comment-1', comment: 'Visible', isDeleted: false, createdAt: new Date('2024-01-01'), editedAt: null,
       parent: null, user: { id: 'user-1', username: 'listener', image: 'avatar.png' },
       disc: { id: disc.id, name: disc.name },
     };
     const reply = {
-      id: 'comment-2', comment: 'Reply', isDeleted: false,
+      id: 'comment-2', comment: 'Reply', isDeleted: false, editedAt: null,
       parent: { id: 'comment-1' }, user: { id: 'user-2', username: 'friend', image: null },
       disc: { id: disc.id, name: disc.name },
     };
     const deleted = {
-      id: 'comment-3', comment: 'Former text', isDeleted: true,
+      id: 'comment-3', comment: 'Former text', isDeleted: true, editedAt: null,
       parent: null, user: { id: 'user-3', username: 'former', image: null },
       disc: { id: disc.id, name: disc.name },
     };
@@ -116,34 +147,39 @@ describe('CommentsService characterization', () => {
     expect(result).toEqual([
       {
         id: 'comment-1', comment: 'Visible', isDeleted: false,
-        createdAt: normal.createdAt, parentId: null,
+        createdAt: normal.createdAt, editedAt: null, parentId: null,
         user: { id: 'user-1', username: 'listener', image: 'avatar.png' },
         disc: { id: disc.id, name: disc.name },
       },
       {
-        id: 'comment-2', comment: 'Reply', isDeleted: false, parentId: 'comment-1',
+        id: 'comment-2', comment: 'Reply', isDeleted: false, editedAt: null, parentId: 'comment-1',
         user: { id: 'user-2', username: 'friend', image: null },
         disc: { id: disc.id, name: disc.name },
       },
       {
-        id: 'comment-3', comment: 'Comentario eliminado', isDeleted: true, parentId: null,
+        id: 'comment-3', comment: 'Comentario eliminado', isDeleted: true, editedAt: null, parentId: null,
         user: { id: 'user-3', username: 'former', image: null },
         disc: { id: disc.id, name: disc.name },
       },
     ]);
   });
 
+  it('returns 404 when reading comments for a missing disc', async () => {
+    repository.manager.findOne.mockResolvedValue(null);
+    await expect(service.findCommentsByDisc('missing-disc')).rejects.toMatchObject({ status: 404 });
+  });
+
   it.each([
     ['with replies', [{ id: 'reply-1' }], { message: 'Comment with id comment-1 has been marked as deleted (soft delete)' }],
     ['without replies', [], { message: 'Comment with id comment-1 has been permanently deleted' }],
   ])('preserves the delete result %s', async (_case, replies, expected) => {
-    repository.findOne.mockResolvedValue({ id: 'comment-1', comment: 'Original', replies });
+    repository.findOne.mockResolvedValue({ id: 'comment-1', comment: 'Original', replies, user });
 
-    const result = await service.remove('comment-1');
+    const result = await service.remove('comment-1', user);
 
     expect(repository.findOne).toHaveBeenCalledWith({
       where: { id: 'comment-1' },
-      relations: ['replies'],
+      relations: ['replies', 'user'],
     });
     expect(result).toEqual(expected);
     if (replies.length) {
@@ -155,5 +191,40 @@ describe('CommentsService characterization', () => {
       expect(repository.delete).toHaveBeenCalledWith('comment-1');
       expect(repository.save).not.toHaveBeenCalled();
     }
+  });
+
+  it('allows the owner to read and edit a comment by id', async () => {
+    const comment = { id: 'comment-1', user };
+    repository.findOneOrFail.mockResolvedValue(comment);
+    repository.findOne.mockResolvedValue(comment);
+    repository.preload.mockResolvedValue(comment);
+
+    await expect(service.findOne(comment.id, user)).resolves.toBe(comment);
+    await expect(service.update(comment.id, { comment: 'Edited' } as any, user)).resolves.toBe(comment);
+    expect(repository.save).toHaveBeenCalledWith(comment);
+  });
+
+  it.each([
+    ['read', () => service.findOne('comment-1', { id: 'other-user' } as any)],
+    ['edit', () => service.update('comment-1', { comment: 'Edited' } as any, { id: 'other-user' } as any)],
+    ['delete', () => service.remove('comment-1', { id: 'other-user' } as any)],
+  ])('returns 403 when a non-owner tries to %s a comment', async (_operation, action) => {
+    repository.findOneOrFail.mockResolvedValue({ id: 'comment-1', user });
+    repository.findOne.mockResolvedValue({ id: 'comment-1', user, replies: [] });
+
+    await expect(action()).rejects.toBeInstanceOf(ForbiddenException);
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.delete).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['read', () => service.findOne('missing', user)],
+    ['edit', () => service.update('missing', { comment: 'Edited' } as any, user)],
+    ['delete', () => service.remove('missing', user)],
+  ])('returns 404 when a comment to %s does not exist', async (_operation, action) => {
+    repository.findOneOrFail.mockRejectedValue(new Error('missing'));
+    repository.findOne.mockResolvedValue(null);
+
+    await expect(action()).rejects.toBeInstanceOf(NotFoundException);
   });
 });

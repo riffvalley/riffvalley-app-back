@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -229,16 +231,31 @@ export class PendingsService {
     };
   }
 
-  async findOne(id: string): Promise<Pending> {
+  async findOne(id: string, user: User): Promise<Pending> {
     try {
-      const pending = await this.pendingRepository.findOneByOrFail({ id });
+      const pending = await this.pendingRepository.findOneOrFail({
+        where: { id },
+        relations: ['user'],
+      });
+      this.assertOwner(pending, user);
       return pending;
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
+      if (error instanceof NotFoundException) throw error;
       throw new NotFoundException(`Pending with id ${id} not found`);
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, user: User) {
+    const pending = await this.pendingRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+    if (!pending) {
+      throw new NotFoundException(`Pending with id ${id} not found`);
+    }
+    this.assertOwner(pending, user);
+
     const result = await this.pendingRepository.delete({ id });
     if (result.affected === 0) {
       throw new NotFoundException(`Pending with id ${id} not found`);
@@ -246,7 +263,16 @@ export class PendingsService {
     return { message: `Pending with id ${id} has been removed` };
   }
 
+  private assertOwner(pending: Pending, user: User) {
+    if (pending.user.id !== user.id) {
+      throw new ForbiddenException('You can only access your own pendings');
+    }
+  }
+
   private handleDbExceptions(error: any) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
     if (error.code === '23505') {
       throw new BadRequestException(error.detail);
     }

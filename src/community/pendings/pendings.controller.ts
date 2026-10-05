@@ -33,14 +33,16 @@ export class PendingsController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.pendingsService.findOne(id);
+  @Auth()
+  findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.pendingsService.findOne(id, user);
   }
 
 
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.pendingsService.remove(id);
+  @Auth()
+  remove(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.pendingsService.remove(id, user);
   }
 
 }

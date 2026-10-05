@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -159,16 +161,32 @@ export class CommentsService {
     };
   }
 
-  async findOne(id: string): Promise<Comment> {
+  async findOne(id: string, user: User): Promise<Comment> {
     try {
-      const comment = await this.commentRepository.findOneByOrFail({ id });
+      const comment = await this.commentRepository.findOneOrFail({
+        where: { id },
+        relations: ['user'],
+      });
+      this.assertOwner(comment, user);
       return comment;
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
+      if (error instanceof NotFoundException) throw error;
       throw new NotFoundException(`Comment with id ${id} not found`);
     }
   }
 
-  async update(id: string, updateCommentDto: UpdateCommentDto) {
+  async update(id: string, updateCommentDto: UpdateCommentDto, user: User) {
+    const existing = await this.commentRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Comment with id ${id} not found`);
+    }
+    this.assertOwner(existing, user);
+
     const comment = await this.commentRepository.preload({
       id,
       ...updateCommentDto,
@@ -186,16 +204,17 @@ export class CommentsService {
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, user: User) {
     // Se buscan las relaciones necesarias, por ejemplo, 'replies'
     const comment = await this.commentRepository.findOne({
       where: { id },
-      relations: ['replies'],
+      relations: ['replies', 'user'],
     });
 
     if (!comment) {
       throw new NotFoundException(`Comment with id ${id} not found`);
     }
+    this.assertOwner(comment, user);
 
     // Verificamos si el comentario tiene respuestas
     if (comment.replies && comment.replies.length > 0) {
@@ -210,6 +229,12 @@ export class CommentsService {
       // No tiene relaciones dependientes, se realiza hard delete
       await this.commentRepository.delete(id);
       return { message: `Comment with id ${id} has been permanently deleted` };
+    }
+  }
+
+  private assertOwner(comment: Comment, user: User) {
+    if (comment.user.id !== user.id) {
+      throw new ForbiddenException('You can only access your own comments');
     }
   }
 
@@ -265,6 +290,9 @@ export class CommentsService {
   }
 
   private handleDbExceptions(error: any) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
     // Ejemplo: error.code === '23505' en Postgres para entradas duplicadas
     if (error.code === '23505') {
       throw new BadRequestException(error.detail);

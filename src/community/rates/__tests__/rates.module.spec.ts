@@ -10,7 +10,8 @@ import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { RatesController } from '../rates.controller';
 import { RatesModule } from '../rates.module';
 import { RatesService } from '../rates.service';
-import { RatesStatsService } from '../rates-stats.service';
+import { RatesStatsService } from '../stats/rates-stats.service';
+import { RatesHistoryService } from '../history/rates-history.service';
 import { Rate } from '../entities/rate.entity';
 
 describe('RatesModule characterization', () => {
@@ -34,9 +35,11 @@ describe('RatesModule characterization', () => {
     expect(moduleRef.get(RatesController)).toBeDefined();
     expect(moduleRef.get(RatesService)).toBeDefined();
     expect(moduleRef.get(RatesStatsService)).toBeDefined();
+    expect(moduleRef.get(RatesHistoryService)).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Rate))).toBe(rateRepository);
     expect((moduleRef.get(RatesService) as any).rateRepository).toBe(rateRepository);
     expect((moduleRef.get(RatesStatsService) as any).rateRepository).toBe(rateRepository);
+    expect((moduleRef.get(RatesHistoryService) as any).rateRepository).toBe(rateRepository);
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
     expect((Reflect.getMetadata(MODULE_METADATA.IMPORTS, RatesModule) as unknown[])).toContain(AuthModule);
   });

@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -269,16 +271,31 @@ export class FavoritesService {
     };
   }
 
-  async findOne(id: string): Promise<Favorite> {
+  async findOne(id: string, user: User): Promise<Favorite> {
     try {
-      const favorite = await this.favoriteRepository.findOneByOrFail({ id });
+      const favorite = await this.favoriteRepository.findOneOrFail({
+        where: { id },
+        relations: ['user'],
+      });
+      this.assertOwner(favorite, user);
       return favorite;
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
+      if (error instanceof NotFoundException) throw error;
       throw new NotFoundException(`Favorite with id ${id} not found`);
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, user: User) {
+    const favorite = await this.favoriteRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+    if (!favorite) {
+      throw new NotFoundException(`Favorite with id ${id} not found`);
+    }
+    this.assertOwner(favorite, user);
+
     const result = await this.favoriteRepository.delete({ id });
     if (result.affected === 0) {
       throw new NotFoundException(`Favorite with id ${id} not found`);
@@ -286,7 +303,16 @@ export class FavoritesService {
     return { message: `Favorite with id ${id} has been removed` };
   }
 
+  private assertOwner(favorite: Favorite, user: User) {
+    if (favorite.user.id !== user.id) {
+      throw new ForbiddenException('You can only access your own favorites');
+    }
+  }
+
   private handleDbExceptions(error: any) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
     // Por ejemplo, error.code === '23505' en PostgreSQL para entradas duplicadas
     if (error.code === '23505') {
       throw new BadRequestException(error.detail);

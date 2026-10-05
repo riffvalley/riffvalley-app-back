@@ -4,7 +4,7 @@ Este documento contiene la planificación y el registro de ejecución de la iter
 
 ### Iteración — Community
 
-- **Estado:** cerrada (2026-10-05). F.1–F.3 completadas; la evaluación post-migración de saneamiento permanece pendiente.
+- **Estado:** migración estructural cerrada (2026-10-05), evaluación post-migración completada y G.1–G.5 completadas; G.6–G.7 siguen pendientes.
 
 **Objetivo:** migrar estructuralmente `comments`, `requests`, `favorites`, `pendings` y `rates` bajo `src/community/`, preservando su comportamiento y contratos. El ownership agrupa capacidades mediante las que los usuarios interactúan con, expresan estado sobre o contribuyen al catálogo.
 
@@ -199,13 +199,172 @@ src/community/
 
 ## Post-migración — Evaluación de saneamiento de Community
 
-**Estado:** pendiente; trabajo posterior a la iteración de migración estructural.
+**Estado:** evaluación completada (2026-10-05); iteración de saneamiento propuesta abajo, aún no implementada.
 
-- **Dependencia:** cierre de F.3 — Regresión final de Community.
-- **Límite temporal:** no ejecutar esta evaluación antes de terminar la migración estructural completa.
-- **Objetivo:** revisar los hallazgos acumulados durante A–F y decidir, con evidencia de comportamiento, impacto y consumers, cuáles justifican una iteración posterior de saneamiento o refactor.
-- **Fuera de la migración actual:** esta evaluación no forma parte de B–F ni autoriza cambios durante la migración. No presupone eliminar eager, modificar endpoints o contratos, dividir `RatesService`, crear servicios compartidos ni cambiar metadata TypeORM.
-- **Backlog inicial a evaluar:** autenticación y autorización, incluidos endpoints por ID actualmente sin `@Auth()`; manejo de errores y casos 404/500; DTOs y formas de respuesta; metadata y relaciones TypeORM, incluido el hallazgo preexistente de `Pending.user`; uso de relaciones eager y payloads cargados desde `Disc`; queries, joins, subqueries y SQL duplicado entre Rates/Favorites/Pendings/Comments; responsabilidades y tamaño de `RatesService`; abstracciones compartidas solo si se demuestra reutilización real; acoplamiento Catalog ↔ Community y dependencia Auth → Rate; oportunidades de reducir coste de consultas sin cambios accidentales de contrato; y otros hallazgos relevantes que aparezcan durante B–F.
-- **Criterio de decisión:** cada opción se evaluará según evidencia, impacto, consumers y dependencias. El backlog no representa decisiones tomadas ni una obligación de cambiar el comportamiento actual.
-- **Resultado esperado:** inventario de deuda y hallazgos aún vigentes tras la migración; prioridad e impacto; clasificación como bug, seguridad, deuda técnica, performance o mejora arquitectónica; dependencias y consumers afectados; propuesta de qué merece una iteración posterior; y, solo si se decide actuar, división de ese trabajo en subtareas pequeñas.
-- **Fuera de alcance de esta evaluación:** diseñar ahora las subtareas de saneamiento o ejecutar cualquiera de los cambios propuestos.
+- **Dependencia satisfecha:** cierre de F.3 — Regresión final de Community.
+- **Objetivo:** corregir primero riesgos de autorización y bugs demostrables; después resolver deuda interna y medir consultas, preservando contratos observables salvo decisión explícita.
+- **Fuentes:** `docs/architecture/community-inventory.md`, caracterizaciones/tests añadidos en B–E, y controllers, servicios, DTOs, entidades y consumidores actuales de Catalog/Auth.
+- **Reglas generales:**
+  - No inferir que una lectura es privada solo porque carezca de `@Auth()`: decidir por ruta tras revisar los datos y consumers. Las mutaciones de datos personales deben autenticar y comprobar ownership.
+  - Fijar el comportamiento relevante antes del cambio; no considerar build/typecheck como caracterización. Preservar contratos salvo decisión documentada.
+  - No retirar `eager` ni colecciones de `Disc` hasta identificar consumers, fijar payload actual y cubrir explícitamente las cargas requeridas. Si un consumer queda sin confirmar, preservar la relación.
+  - Medir SQL con parámetros/datos representativos antes de optimizar o proponer índices. No crear abstracciones compartidas, repositories custom, CQRS, query services o `CommunityModule` sin necesidad y reutilización demostrables.
+  - Registrar, sin corregir, fallos ajenos como `DiscCatalogService → addSelect('disc.id', 'discId')`; no modificar `.impeccable/config.json`.
+
+### Registro de hallazgos y decisiones
+
+| Hallazgo y evidencia | Impacto, consumers y tipo | Prioridad, riesgo y coordinación | Decisión propuesta |
+|---|---|---|---|
+| **Autorización/ownership.** `CommentsController` deja GET/PATCH/DELETE por id y GET por disco sin `@Auth()`; PATCH/DELETE tampoco validan propietario. Favorites y Pendings dejan GET/DELETE por id públicos; `remove(id)` borra solo por ID. Rates deja history por `userId`, rates por disco y GET por id públicos; PATCH/DELETE sí comprueban owner. Requests restringe operaciones administrativas y autentica `my`. | Riesgo de exposición de datos y modificación/borrado ajenos: **seguridad** y potencial **bug**. Consumers: frontend de Comments/Favorites/Pendings/Rates; Catalog proyecta parte del estado personal por separado. | **P0**; riesgo alto al cambiar accesos. Escrituras: backend-only; hacer privadas lecturas hoy públicas puede requerir backend + frontend. | Proteger mutaciones de Comment/Favorite/Pending con autenticación y ownership. Decidir por separado qué GET puede seguir público revisando contenido y consumers; no proteger todo indiscriminadamente. Subtarea propia. |
+| **404→500.** Catches de Comments (`create`, `findCommentsByDisc`), Favorites/Pendings (`create`) y Rates (`create`, `findRatesByDisc`) traducen cualquier error que no sea 23505 a 500, incluso `NotFoundException` de Disc o parent ausente. Los `findOne` por entidad conservan 404; Requests lanza 404 directamente. | Status HTTP incorrecto y diagnóstico oculto: **bug/contrato**. Consumers de endpoints Community y frontend. | **P1**; riesgo medio por status observable; backend-only para restaurar 404, FE coordination si depende del 500 actual. | Preservar excepciones HTTP conocidas y traducir solo errores DB. Characterizar por operación antes del cambio. Subtarea propia. |
+| **Metadata `Pending.user` (resuelto en G.2).** TypeORM resolvía el inverse side de `Pending.user` como `User.rate`, mientras `User.pending` resolvía correctamente a `Pending.user`. PostgreSQL demostró que la persistencia y carga en ambas direcciones funcionaban pese al puntero inverso incoherente; no se hallaron consumers de navegación User → Pending. | Inconsistencia reproducida en metadata real y riesgo para navegación/operaciones ORM que sigan el inverse side; sin fallo observable en las operaciones probadas ni consumer actual: **bug de metadata**. | **P1**; cambio backend-only, acotado a una lambda. | Corregir `Pending.user` para apuntar a `User.pending`. Tests fijan metadata recíproca y persistencia/carga con FK, eager y cascada preservadas. |
+| **DTO y formas reales.** `CommentResponseDto.user` omite `image`, que `findCommentsByDisc` devuelve. Las respuestas de listas incorporan agregados y subobjetos; `Pending.userPending` es un ID mientras otras proyecciones usan formas distintas. Tests Catalog fijan proyecciones; characterization directa de Favorites/Pendings/Rates es parcial. Null/0 también difiere entre mappers. | Deuda de tipado y formas heterogéneas, algunas raras pero **contractuales**; **contrato/deuda técnica**. Consumers: frontend de Comments/listas y Catalog (`userRate`, `favoriteId`, `pendingId`, `commentCount`, agregados). | **P2**; riesgo medio si cambia JSON; al uniformar/quitar campos: backend + frontend. | Alinear DTO Comment con el mapper y fijar formas reales relevantes con tests. No uniformar payloads ni nullabilidad ni cambiar Catalog en esta iteración. |
+| **Eager y colecciones Disc.** `Disc.favorites`, `Disc.pendings`, `Disc.comments` están eager. Disc detail carga User de esas colecciones; Catalog/Home/Calendar también proyectan estados y agregados; tests de Catalog fijan arrays y estado personal. | Posible carga/payload costosos, parcialmente usados: **performance/contrato**. Consumers: Disc Catalog, Home, Calendar, frontend y objetos Disc anidados. | **P2**; riesgo alto al quitar relaciones. Reducir JSON o sustituir arrays exige backend + frontend; optimizar carga interna con JSON idéntico sería backend-only. | Medir cada endpoint y consumer; conservar eager/arrays mientras exista consumer no confirmado. No asumir que eager aplica igual a find y QueryBuilder. Cambio solo con ahorro demostrado y equivalencia. |
+| **`RatesService` (541 líneas).** Contiene create/upsert, listado filtrado/paginado con agregados, findOne, update/delete con ownership, lectura por disco, manejo de errores y history que expande Rate a eventos, ordena/pagina en memoria y ejecuta conteos. `RatesStatsService` (248 líneas) ya contiene stats/insights. `RatesService` lo consume únicamente RatesController; no hay spec completo de su servicio. | Mezcla mutación, proyección y caso de uso history: **deuda técnica/arquitectura**. History lo consumen Dashboard y UserModal; el resto, Routes de Rates. | **P2**; riesgo medio DI/contrato; backend-only manteniendo respuesta. | No dividir automáticamente lectura/escritura ni duplicar Stats. Characterizar y extraer únicamente history si se confirma como límite autónomo; mantener CRUD/listado/lookup juntos inicialmente y revisar cohesión después. Stats permanece separado. |
+| **Queries repetidas/coste.** Favorites y Pendings repiten filtros/paginación y subqueries AVG/COUNT de Rate/Comment; Rates repite agregados y une Pending/Favorite; Comments replica filtros entre consulta y total; Catalog Disc/Home/Calendar/Artists también consulta tablas Community. Contratos y pipelines difieren, no hay service-sharing entre capabilities. | Evidencia estática de repetición, sin baseline de planes/carga: **performance/deuda técnica**. Consumers de Community y Catalog. | **P3**; riesgo alto de reescritura sin medición. Backend-only si equivalencia; frontend si cambia proyección. | Medir primero operaciones usadas/costosas y `EXPLAIN ANALYZE`; optimizar solo cuellos probados. No extraer repositorio/helper/query service por similitud textual: los pipelines y contratos distintos no demuestran abstracción real. |
+| **Acoplamiento Catalog ↔ Community y Auth → Rate.** Catalog usa relaciones/SQL de Rate, Favorite, Pending y Comment; Requests aprueba materializando Artist/Disc vía repositorios Catalog. Auth importa/registra Rate y calcula actividad/historial en `AuthService`; `auth-rate.consumer.spec.ts` fija ese consumer. No hay dependencia inversa de `RatesService`. | Acoplamiento de entidad/esquema, sin evidencia de bloqueo actual: **arquitectura/deuda técnica**. | **P3**; riesgo alto y beneficio no probado; backend-only en teoría, con superficie amplia. | No mover ownership ni introducir facades/ports ahora. Registrar como restricción y reabrir ante una mejora concreta de dominio/coste. No merece subtarea propia de esta iteración. |
+| **Fallo preexistente ajeno:** expectativa/fallo `DiscCatalogService → addSelect('disc.id', 'discId')` registrado durante F.3. | Fuera de Community sin vínculo demostrado. | Excluido. | No corregir ni incorporar a verificaciones salvo que una tarea de Community pruebe relación directa. |
+
+### Nueva iteración — Saneamiento de Community
+
+**Objetivo:** reducir primero riesgos de seguridad y bugs HTTP; resolver metadata si se demuestra incorrecta; fijar contratos reales y extraer solo una responsabilidad clara de Rates. Medir relaciones y SQL antes de cambios de rendimiento. No es una re-arquitectura general.
+
+**Reglas de ejecución:** caracterizar inputs, status, payloads, ownership, relaciones, filtros, orden, null/0 y side effects aplicables. No combinar cambios de autorización con query/eager/metadata. Mantener rutas/respuestas salvo decisión explícita. Mantener `RatesStatsService`; no crear abstracciones por semejanza. Estimaciones XS/S/M; dividir antes de ampliar una subtarea que supere M.
+
+#### Bloque 1 — Seguridad y ownership (P0)
+
+##### G.1 — Caracterizar y cerrar acceso a operaciones Community
+
+- **Estado:** completada (2026-10-05).
+- **Problema/evidencia:** rutas identificadas arriba: escritura de Comment sin auth/owner y borrado Favorite/Pending sin auth/owner; lecturas por ID/history con política no fijada.
+- **Impacto/tipo:** seguridad; usuarios y consumers frontend. Cambiar mutaciones backend-only; hacer privadas lecturas puede requerir FE/backend.
+- **Alcance:** decidir acceso por ruta; exigir autenticación y ownership para mutar/borrar datos personales; conservar acceso anónimo de lectura solo si datos y callers lo justifican. Mantener Requests y Rates update/delete según sus reglas actuales.
+- **Fuera de alcance:** payloads, cambios de Auth, ocultar campos o permisos administrativos de Requests.
+- **Dependencias:** ninguna; caracterización precede a cada cambio.
+- **Criterios de aceptación:** matriz por endpoint; pruebas anon/autenticado, propietario/no propietario; ninguna mutación de recurso ajeno; 401/403/404 fijados; lectura pública conservada donde esté justificada.
+- **Verificaciones:** tests focalizados de guards/controllers/services, búsqueda de rutas y revisión de consumers; pruebas frontend solo si cambia acceso.
+- **Tamaño:** M.
+
+**Decisión por ruta (G.1):**
+
+| Capacidad y ruta | Anónimo | Propietario autenticado | No propietario autenticado | Inexistente |
+|---|---|---|---|---|
+| Comments `POST /`, `GET /` | 401 | 201 creación propia / 200 lista propia | No aplica: se limita al usuario autenticado | Create con Disc/parent inexistente: 404 |
+| Comments `GET /:id`, `PATCH /:id`, `DELETE /:id` | 401 | 200; actualiza o elimina según el comportamiento previo | 403 | 404 |
+| Comments `GET /disc/:discId` | Público; proyección usada por `ComentsModal.vue` | Público | Público | 404 |
+| Favorites `POST /`, `GET /` | 401 | 201 creación propia / 200 lista propia | No aplica: se limita al usuario autenticado | Create con Disc inexistente: 404 |
+| Favorites `GET /:id`, `DELETE /:id` | 401 | 200 | 403 | 404 |
+| Pendings `POST /`, `GET /` | 401 | 201 creación propia / 200 lista propia | No aplica: se limita al usuario autenticado | Create con Disc inexistente: 404 |
+| Pendings `GET /:id`, `DELETE /:id` | 401 | 200 | 403 | 404 |
+| Rates `POST /`, `GET /`, `GET /stats`, `GET /home-insights` | 401 | 201 creación/upsert propia / 200 datos propios | No aplica: se limita al usuario autenticado | Create con Disc inexistente: 404 |
+| Rates `GET /:id`, `PATCH /:id`, `DELETE /:id` | 401 | 200 | 403 | 404 |
+| Rates `GET /disc/:discId` | Público | Público | Público | 404 |
+| Rates `GET /user/:userId/history` | Público; consumer de Dashboard y UserModal | Público | Público | Página vacía para userId sin eventos, según algoritmo actual |
+
+Los listados y POST de Comments/Favorites/Pendings/Rates siguen requiriendo autenticación, limitados al usuario del token cuando son listados. Stats y home-insights de Rates siguen autenticados. No se cambió la autorización existente de PATCH/DELETE Rates ni se tocó Requests.
+
+**Hallazgo de contrato revisado:** los cuatro `GET /:id` devolvían la entidad personal con su relación User eager, incluyendo campos de perfil; no se hallaron consumers frontend para esas rutas. G.1 los limita al propietario: el acceso anónimo queda en 401, el no propietario en 403 y el recurso inexistente en 404. Se preservan las lecturas públicas de comentarios por disco (modal de comentarios), rates por disco (ArtistManagement) e history (Dashboard/UserModal), que tienen consumers identificados y exponen las proyecciones que esos flujos usan.
+
+**Resultado:** mutaciones personales autenticadas y limitadas por owner; los GET por ID también quedan privados por la relación de usuario que exponen. Payloads, DTOs, metadata TypeORM y queries de lectura no se rediseñaron. G.2 permanece pendiente.
+
+#### Bloque 2 — Metadata y bugs (P1)
+
+##### G.2 — Verificar y corregir condicionalmente `Pending.user`
+
+- **Estado:** completada (2026-10-05).
+- **Problema/evidencia:** metadata resuelta de TypeORM vinculaba `Pending.user.inverseRelation` con `User.rate`, no `User.pending`. PostgreSQL confirmó persistencia y carga Pending → User y User → Pending, incluida cascada desde `User.pending`; no se encontró consumer backend de esa navegación.
+- **Impacto/tipo:** bug de metadata demostrado; User/Auth y navegación inversa. Sin consumer backend actual ni fallo de persistencia/carga reproducido; riesgo limitado a metadatos ORM incoherentes; backend-only.
+- **Alcance:** inspeccionar metadata resuelta, navegar/persistir ambas direcciones y buscar consumers; se corrigió solo el inverse side. Preservar FK, eager/cascade y respuestas no relacionadas.
+- **Dependencias:** ninguna técnica; después de G.1 recomendado para aislar diffs.
+- **Criterios de aceptación:** el metadata apunta recíprocamente a `User.pending`/`Pending.user`; persistencia, cascada y carga por ambos lados funcionan; FK, eager, cascade, `onDelete`, payloads y consumers no cambian.
+- **Verificaciones:** metadata resuelta y args, fixtures PostgreSQL con tablas temporales, suites focalizadas Pending/User; typecheck y `git diff --check`.
+- **Tamaño:** S.
+
+**Conclusión de G.2:** el defecto quedó demostrado por la metadata resuelta (`Pending.user.inverseRelation === User.rate`), aunque no se reprodujo un fallo de persistencia o carga en los flujos probados. Se corrigió únicamente la lambda inverse side y las pruebas confirman que la navegación y persistencia siguen funcionando. `User.pending` está tipada como un `Pending` singular pese a ser `OneToMany`; no se cambió esa declaración porque queda fuera de la corrección mínima de metadata de G.2.
+
+#### Bloque 3 — Errores y contratos (P1–P2)
+
+##### G.3 — Preservar 404 de dominio en Community
+
+- **Estado:** completada (2026-10-05).
+- **Problema/evidencia:** los catches DB de Comments/Favorites/Pendings/Rates convierten NotFound en 500 en altas y lecturas por disco; Comments incluye parent inexistente.
+- **Impacto/tipo:** bug/contrato; API y frontend; FE coordination solo si callers dependen del 500.
+- **Alcance:** dejar pasar excepciones HTTP conocidas y traducir errores DB concretos sin filtrar detalles. No tocar Requests.
+- **Dependencias:** compartir la caracterización de G.1 cuando aplique; se puede implementar por capability.
+- **Criterios de aceptación:** Disc/parent inexistente devuelve 404; fallo DB no clasificado conserva 500 seguro; duplicados siguen 400 donde aplica.
+- **Verificaciones:** tests focalizados de status y cuerpo HTTP por operación.
+- **Tamaño:** S.
+
+**Resultado:** los cuatro handlers preservan cualquier `HttpException` y mantienen la traducción de duplicados `23505` a 400 y el 500 genérico para errores inesperados. Tests de servicio caracterizan los 404 por disco/parent, 400 de duplicado, 500 seguro y las operaciones correctas existentes. G.4 queda registrado a continuación.
+
+##### G.4 — Alinear DTO Comment y fijar formas observables
+
+- **Estado:** completada (2026-10-05).
+- **Problema/evidencia:** DTO omite `user.image`; responses directas de Community tienen agregados, subobjetos y nulabilidad heterogénea; cobertura directa incompleta.
+- **Impacto/tipo:** contrato/deuda; Comments, Favorites/Pendings/Rates y Catalog. Rediseñar payload requiere backend+frontend.
+- **Alcance:** documentar y probar estructuras directas consumidas, alinear DTO a mapper; preservar formas, null/0 y campos. No uniformar ni rediseñar Catalog.
+- **Dependencias:** ninguna; referencia para G.5–G.7.
+- **Criterios de aceptación:** DTO refleja JSON actual; tests fijan envelope/relaciones/proyecciones/nulabilidad relevantes; sin cambios de runtime no decididos.
+- **Verificaciones:** specs de mapper/services y revisión de consumers del inventory.
+- **Tamaño:** S.
+
+**Resultado:** `CommentResponseDto` ahora declara `user.image: string | null` y `editedAt: Date | null`, campos emitidos por el mapper (`editedAt` queda en el spread de los campos restantes). La caracterización de Comments fija objeto completo, `parentId` nulo o ID, marca/texto de comentario eliminado, imagen nula o presente, fechas y subobjetos `{id,name}` de Disc. Favorites conserva `userRate` como objeto `{id,rate,cover}`, `userPending` como `{id}`, y `voteCount: null`/`commentCount: 0`/promedios `null` cuando no hay interacciones. Pendings conserva `userPending` como ID, el array filtrado `favorites`, `favoriteId`, `userRate` como objeto o `null`, y sus conversiones actuales de conteos/agregados. Rates conserva `userRate` como objeto, `favoriteId`/`pendingId` como ID o `null`, `voteCount: null` para agregado cero, `commentCount: 0`, promedio numérico `0` frente a promedio ausente `null`, y los campos personales Rate/cover `0`/`null`; también queda fijada la respuesta directa por disco con Users y scores nulos. No cambió lógica runtime ni Catalog y no se uniformaron payloads. G.5 permanece pendiente.
+
+#### Bloque 4 — Cohesión de Rates (P2)
+
+##### G.5 — Caracterizar y extraer history de Rates si es autónomo
+
+- **Problema/evidencia:** 541 líneas; CRUD/upsert, listados/proyecciones, lookup por disco y algoritmo de history. History reconstruye eventos created/updated, los ordena/pagina en memoria y cuenta eventos con consultas adicionales. Stats ya está aislado.
+- **Impacto/tipo:** deuda técnica/arquitectura; solo RatesController usa service; history lo consume Dashboard/UserModal. Backend-only si contrato igual.
+- **Alcance:** caracterizar type/range (incluido rango parcial ignorado), order, páginas por evento, empate/orden, Rate sin Artist; mover history a `RatesHistoryService` con spec adyacente solo si no necesita CRUD/list. No crear fachada innecesaria. Mantener el resto junto inicialmente; reevaluar tamaño/cohesión tras extracción.
+- **Decisión sobre división:** no separar mutaciones/upsert de todas las lecturas: no hay caller alternativo ni un beneficio probado para otra capa; no duplicar `RatesStatsService`. History es el límite más claro por su algoritmo y proyección autónomos.
+- **Dependencias:** characterization antes del movimiento; G.4 fija semántica observable.
+- **Criterios de aceptación:** rutas/JSON idénticos; implementación movida, no copiada; providers/imports correctos; sin cambios SQL/metadata colaterales.
+- **Verificaciones:** pruebas de history y delegación de controller, suite focalizada Rates, typecheck.
+- **Tamaño:** M.
+- [x] **Completada (2026-10-05).** Rates conserva controller, módulo y servicio principal en la raíz; DTOs y entidad quedan en sus categorías existentes; controller/módulo tests están en `__tests__/`; `RatesHistoryService` y su spec adyacente están en `history/`. No se dividió CRUD/lecturas y `RatesStatsService` permanece separado. History quedó caracterizado antes del movimiento: tipos `rate`/`cover`/`both`, rango completo inclusivo (el controller ignora `from`/`to` parciales), orden ASC/DESC por timestamp con empates estables según el orden de entrada y sin desempate explícito, paginación sobre eventos expandidos, conteos separados de eventos creados/editados, Rate sin artista, scores nulos/0 y JSON serializado. Dashboard consume hasta 100 eventos `created` de tipo `rate` para rachas; UserModal consume páginas de 20 eventos `both` y los metadatos de total/página. El algoritmo depende solo del repositorio Rate, por lo que se extrajo sin cambiar queries ni payload; el controller delega directamente y el módulo registra el provider. Cinco suites de Rates (24 tests), typecheck y `git diff --check` pasan. G.6 y G.7 siguen pendientes.
+
+#### Bloque 5 — Carga y consultas (P2–P3)
+
+##### G.6 — Medir colecciones eager y payloads Community de Catalog
+
+- **Problema/evidencia:** colecciones eager de Disc y cargas de User en detalle; Catalog/Home/Calendar proyectan estados; tests fijan algunas respuestas.
+- **Impacto/tipo:** performance/contrato; Disc, Home, Calendar, frontend y objetos anidados. Reducir arrays/JSON requiere backend+frontend; misma respuesta con carga más selectiva sería backend-only.
+- **Alcance:** matriz operación→relación→consumer→payload/tamaño/coste; distinguir eager en find de joins QueryBuilder. Recomendar conservar o alternativa pequeña; no quitar relaciones durante medición.
+- **Dependencias:** G.4; datos representativos.
+- **Criterios de aceptación:** consumidores identificados y coste medido; ahorro justificable; equivalencia de JSON si cambia solo carga; consumers sin confirmar mantienen eager.
+- **Verificaciones:** inspeccionar SQL/cantidad de consultas y JSON por rutas representativas; comparar callers Catalog.
+- **Tamaño:** M.
+
+##### G.7 — Medir duplicación SQL antes de optimizar
+
+- **Problema/evidencia:** subqueries AVG/COUNT repetidas y queries de count/filtros por pares en servicios; Catalog consulta las mismas tablas. Diferencias de filtros/forma y ningún límite de coste medido.
+- **Impacto/tipo:** performance/deuda; listados Community y Catalog. Cambios SQL backend-only si equivalentes; proyecciones diferentes requieren FE/backend.
+- **Alcance:** priorizar endpoints con uso/coste; capturar SQL y parámetros; EXPLAIN ANALYZE antes/después de alternativas candidatas; evaluar costo de escritura/almacenamiento de índices. Mantener filtro/orden/paginación/null/0.
+- **Fuera de alcance:** índices intuitivos, query service genérico, abstracción por parecido o unificar filtros distintos (country UUID/nombre vs UUID).
+- **Dependencias:** G.4 y G.6 para separar coste de query y carga de relaciones.
+- **Criterios de aceptación:** baseline reproducible y decisión por consulta; cambio solo si demuestra mejora sin regresión semántica ni coste injustificado; puede cerrar sin cambio de producción.
+- **Verificaciones:** EXPLAIN ANALYZE representativo antes/después si se cambia SQL; tests focalizados de equivalencia.
+- **Tamaño:** M.
+
+#### Bloque 6 — Desacoplamiento de mayor alcance (P3, aplazado)
+
+Catalog consulta tablas/relaciones Community; Auth consume Rate por repositorio para actividad; Requests escribe Artist/Disc al aprobar. Son dependencias de entidad/esquema ya caracterizadas, no dependencia de servicios bidireccional. No se programa mover ownership, introducir ports/facades ni separar módulos: el beneficio no está demostrado y el riesgo/coste es alto. Reabrir únicamente vinculado a un cambio concreto que produzca menor acoplamiento o coste medible.
+
+#### Dependencias y orden resumido
+
+1. G.1 seguridad (M).
+2. G.2 metadata condicional (S) y G.3 errores HTTP (S).
+3. G.4 DTO/contratos (S).
+4. G.5 history de Rates (M), caracterización antes de extraer.
+5. G.6 eager/payloads (M) y G.7 SQL/performance (M), medir antes de cambios.
+6. Acoplamientos Catalog/Auth quedan documentados, sin subtarea de refactor en esta iteración.
+
+#### Verificación de cierre de saneamiento
+
+- Suites focalizadas de autorización/ownership, status HTTP, contratos, metadata si cambia y Rates history; añadir consumers Catalog/Auth solo donde el cambio los afecte.
+- Si se modifica SQL: comparar filtros, orden, paginación, null/0 y payload; planes representativos antes/después.
+- Typecheck y `git diff --check` para archivos tocados; revisar rutas, guards, metadata, providers, imports y JSON observable.
+- Regresión completa solo si el conjunto de cambios lo justifica. Mantener `DiscCatalogService` fuera de alcance salvo atribución directa.
+
+**Cierre de esta evaluación:** roadmap actualizado; no se implementó saneamiento, no se modificaron producción, tests, metadata o contratos y no se ejecutó regresión.

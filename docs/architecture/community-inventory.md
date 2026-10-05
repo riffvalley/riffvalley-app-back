@@ -1,6 +1,6 @@
-# Community — Inventario previo a migración
+# Community — Inventario de capacidades y consumidores
 
-Fotografía del código existente revisado el 2026-10-05 para A.1 de [`roadmap/community.md`](../../roadmap/community.md). No describe una arquitectura objetivo ni cambia los contratos.
+Inventario iniciado para A.1 de [`roadmap/community.md`](../../roadmap/community.md), con la decisión de acceso actualizada al completar G.1. Las descripciones de payload, consultas y metadata reflejan la revisión del 2026-10-05; la sección de rutas incorpora el cierre de seguridad.
 
 ## Resumen
 
@@ -9,7 +9,7 @@ Fotografía del código existente revisado el 2026-10-05 para A.1 de [`roadmap/c
 - El prefijo global es `/api`. Los paths listados abajo son los paths HTTP completos.
 - `Comment`, `Favorite`, `Pending` y `Rate` se relacionan con `User` y `Disc`. `DiscRequest` se relaciona con `User`, `Genre` y `Country`. `Disc` mantiene las relaciones inversas de las cuatro primeras; `User` mantiene las inversas de las cinco.
 - `Catalog` lee y proyecta Rates/Favorites/Pendings/Comments mediante relaciones, joins, subconsultas y SQL directo. Requests crea entidades de Catalog mediante repositorios TypeORM propios; no se encontró un caller backend de `RequestsService` desde Catalog.
-- El frontend consume las cinco APIs. Varios controllers permiten lecturas y mutaciones por ID sin `@Auth()`; esto se anota como contrato actual.
+- El frontend consume las cinco APIs. G.1 cierra los endpoints personales por ID con autenticación y ownership, conservando públicas las lecturas por disco/history justificadas por sus consumers.
 
 ## Comments
 
@@ -21,10 +21,10 @@ Controller: `src/community/comments/comments.controller.ts`; service: `src/commu
 |---|---|---|---|
 | `POST /api/comments` | `@Auth()`; usuario autenticado, cualquier rol | `CreateCommentDto`: `comment` requerido; `discId` UUID v4; `parentId` UUID v4 opcional; `createdAt` fecha opcional | Devuelve entidad `Comment` guardada, con relaciones asignadas de User, Disc y parent; User es eager. Aunque service lanza 404 si Disc/parent no existe, su catch lo pasa a `handleDbExceptions`, que convierte cualquier error sin código 23505 a 500 genérico; código duplicado se devuelve como 400. |
 | `GET /api/comments` | `@Auth()` | `PaginationDto`; `limit` (default 10), `offset` (0), `query`, `dateRange`, `genre`, `country`, `type` | Página `{ totalItems, totalPages, currentPage, limit, data }`. Solo comentarios del usuario autenticado. `type=comment` filtra texto no nulo; `query` busca disco/artista; fechas filtran por release date; genre/country filtran IDs. Orden: release date DESC, artist name ASC. Cada fila incluye Comment, Disc, Artist y Genre. Aunque `Comment.user` tiene eager metadata, este QueryBuilder no une explícitamente User y TypeORM no aplica eager automáticamente en QueryBuilder. |
-| `GET /api/comments/:id` | Sin `@Auth()` | `id` UUID (ParseUUIDPipe) | Entidad `Comment` o 404; la relación `user` es eager. |
-| `PATCH /api/comments/:id` | Sin `@Auth()` | `id` UUID; `UpdateCommentDto` (PartialType del DTO de creación) | Devuelve Comment guardado o 404; los errores de guardado siguen el manejo anterior. |
-| `DELETE /api/comments/:id` | Sin `@Auth()` | `id` UUID | Si tiene replies, marca `isDeleted=true`, reemplaza texto por `Comentario eliminado` y devuelve un mensaje de soft delete; sin replies lo borra físicamente y devuelve mensaje de borrado permanente. Ausente: 404. |
-| `GET /api/comments/disc/:discId` | Sin `@Auth()` | `discId` sin pipe UUID | Array de proyección: campos restantes de Comment, `isDeleted`, texto (texto fijo si borrado), `parentId`, `user:{id,username,image}` y `disc:{id,name}`. Disc no encontrado produce inicialmente 404 pero el catch del método lo convierte a 500 genérico. |
+| `GET /api/comments/:id` | `@Auth()`; solo propietario | `id` UUID (ParseUUIDPipe) | Entidad `Comment` o 404; el no propietario recibe 403. La relación `user` es eager. |
+| `PATCH /api/comments/:id` | `@Auth()`; solo propietario | `id` UUID; `UpdateCommentDto` (PartialType del DTO de creación) | Devuelve Comment guardado; no propietario 403, ausente 404; los errores de guardado siguen el manejo anterior. |
+| `DELETE /api/comments/:id` | `@Auth()`; solo propietario | `id` UUID | Si tiene replies, marca `isDeleted=true`, reemplaza texto por `Comentario eliminado` y devuelve un mensaje de soft delete; sin replies lo borra físicamente y devuelve mensaje de borrado permanente. No propietario 403; ausente 404. |
+| `GET /api/comments/disc/:discId` | Público, conservado por `ComentsModal.vue` | `discId` sin pipe UUID | Array de proyección: campos restantes de Comment, `isDeleted`, texto (texto fijo si borrado), `parentId`, `user:{id,username,image}` y `disc:{id,name}`. Disc no encontrado produce inicialmente 404 pero el catch del método lo convierte a 500 genérico (G.3). |
 
 El DTO `CommentResponseDto` no declara `user.image`, aunque el mapper sí lo devuelve. `findCommentsByDisc` carga user, parent y disc explícitamente y reduce user/disc al objeto indicado.
 
@@ -50,8 +50,9 @@ El DTO `CommentResponseDto` no declara `user.image`, aunque el mapper sí lo dev
 
 ### Tests actuales
 
-- No hay suite propia `comments/*.spec.ts` encontrada.
-- Catalog tiene cobertura relacionada de payload/detalle y los contadores aparecen en tests de Catalog/Home, pero no se encontró caracterización propia de Comments para permisos de endpoints, DTOs, filtros/paginación, forma de cada respuesta, errores, borrado lógico/físico, replies ni proyección por disco.
+- `comments.controller.spec.ts` fija los endpoints personales autenticados y conserva público GET por disco.
+- `comments.service.spec.ts` caracteriza las proyecciones de lista/disco (incluidos `user.image`, `editedAt`, nullabilidad y `parentId`) y soft/hard delete, y fija owner, 403 no-owner y 404 para GET/PATCH/DELETE por ID. No cubre filtros completos.
+- Catalog tiene cobertura relacionada de payload/detalle y los contadores aparecen en tests de Catalog/Home.
 
 ## Requests
 
@@ -107,8 +108,8 @@ Controller `src/community/favorites/favorites.controller.ts`; service `src/commu
 |---|---|---|---|
 | `GET /api/favorites` | `@Auth()` | `PaginationDto`: limit=10, offset=0, query, dateRange, genre, country y `orderBy` | Página `{totalItems,totalPages,currentPage,limit,data}`. Filtra favorites del usuario actual; busca disco/artista; filtra release date, genre y country (UUID o nombre); orden configurable con allowlist y fallback releaseDate DESC / artist ASC. Cada item incluye Favorite con Disc/Artist/Genre/Country y datos añadidos a `disc`: `userFavorite`, `voteCount`, `commentCount`, `userRate`, `userPending`, `averageRate`, `averageCover`. |
 | `POST /api/favorites` | `@Auth()` | `CreateFavoriteDto`: `discId` UUID v4 | Devuelve entidad Favorite guardada y User/Disc asignados. Aunque service lanza 404 si Disc no existe, el catch lo pasa a `handleDbExceptions`: código duplicado produce 400 y los otros errores, incluido ese NotFound, se traducen a 500 genérico. |
-| `GET /api/favorites/:id` | Sin `@Auth()` | UUID | Entidad Favorite (User eager) o 404. |
-| `DELETE /api/favorites/:id` | Sin `@Auth()` | UUID | Borra por ID sin comprobar propietario; devuelve `{message}`. ID ausente: 404. |
+| `GET /api/favorites/:id` | `@Auth()`; solo propietario | UUID | Entidad Favorite (User eager); no propietario 403, ausente 404. No se halló consumer frontend de esta ruta. |
+| `DELETE /api/favorites/:id` | `@Auth()`; solo propietario | UUID | Borra el Favorite del usuario; devuelve `{message}`. No propietario 403; ausente 404. |
 
 ### Dependencias
 
@@ -130,8 +131,9 @@ Controller `src/community/favorites/favorites.controller.ts`; service `src/commu
 
 ### Tests actuales
 
-- No se encontraron specs propios de Favorites.
-- Los tests de Catalog/Home cubren algunas proyecciones `favoriteId`/personal state. No se encontró characterization propia de CRUD, filtros, orden, page metadata, payload agregado del listado, errores o permisos (incluyendo rutas ID sin auth).
+- `favorites.controller.spec.ts` fija autenticación para list/create/get/delete.
+- `favorites.service.spec.ts` cubre una página enriquecida representativa y create; G.1 añade owner, 403 no-owner y 404 para GET/DELETE por ID.
+- Los tests de Catalog/Home cubren algunas proyecciones `favoriteId`/personal state. Los filtros/orden completos y errores ajenos a ownership siguen sin caracterizar.
 
 ## Pendings
 
@@ -143,8 +145,8 @@ Controller `src/community/pendings/pendings.controller.ts`; service `src/communi
 |---|---|---|---|
 | `POST /api/pendings` | `@Auth()` | `CreatePendingDto`: `discId` UUID v4 | Devuelve Pending guardado con User y Disc asignados; Disc puede incluir `Disc.pendings` eager en el Disc anidado. Aunque service lanza 404 si Disc no existe, el catch lo pasa a `handleDbExceptions`: código duplicado produce 400 y los otros errores, incluido ese NotFound, se traducen a 500 genérico. |
 | `GET /api/pendings` | `@Auth()` | `PaginationDto`: limit=10, offset=0, query, dateRange, genre, country | Página `{totalItems,totalPages,currentPage,limit,data}` del usuario autenticado; búsqueda disco/artista, rango por releaseDate y filtros genre/country (UUID o nombre); orden releaseDate DESC y artist ASC. Disc se amplía con `userPending`, `voteCount`, `commentCount`, `userRate`, `averageRate`, `averageCover`, `favoriteId`; incluye colección `disc.favorites` filtrada al usuario. |
-| `GET /api/pendings/:id` | Sin `@Auth()` | UUID | Entidad Pending (User eager y Disc según metadata inversa eager) o 404. |
-| `DELETE /api/pendings/:id` | Sin `@Auth()` | UUID | Borra por ID sin comprobar propietario; devuelve `{message}`; ID ausente: 404. |
+| `GET /api/pendings/:id` | `@Auth()`; solo propietario | UUID | Entidad Pending (User eager y Disc según metadata inversa eager); no propietario 403, ausente 404. No se halló consumer frontend de esta ruta. |
+| `DELETE /api/pendings/:id` | `@Auth()`; solo propietario | UUID | Borra el Pending del usuario; devuelve `{message}`; no propietario 403, ausente 404. |
 
 ### Dependencias
 
@@ -154,7 +156,7 @@ Controller `src/community/pendings/pendings.controller.ts`; service `src/communi
 
 ### TypeORM
 
-- `Pending.user`: `ManyToOne(User, (user) => user.rate)`, eager, `onDelete: CASCADE`. Esa es exactamente la inversa declarada actualmente; ver hallazgo preexistente al final. `User.pending` apunta por su lado a `pending.user`, `OneToMany`, cascade true.
+- `Pending.user`: `ManyToOne(User, (user) => user.pending)`, eager, `onDelete: CASCADE`. `User.pending` apunta a `pending.user`, `OneToMany`, cascade true. G.2 fijó la metadata resuelta recíproca y probó persistencia/carga en ambas direcciones con PostgreSQL.
 - `Pending.disc`: `ManyToOne(Disc, disc.pendings)`, `onDelete: CASCADE`, no eager en el lado owning.
 - `Disc.pendings`: `OneToMany(Pending, pending.disc)` con `eager: true`.
 - Listado selecciona explícitamente Disc, Artist, Genre, Country y Favorites de usuario mediante QueryBuilder, y hace joins/subqueries a Rate y Comment. Un test existente fija el filtrado de favoritos y la colección eager en create.
@@ -166,8 +168,8 @@ Controller `src/community/pendings/pendings.controller.ts`; service `src/communi
 
 ### Tests actuales
 
-- `src/community/pendings/pendings.service.spec.ts`: valida campos combinados del listado ante Favorite ausente/uno/múltiples (favoriteId, collection, ausencia de `disc.pendings`/`comments`, joins), y conserva `Disc.pendings` eager en respuesta anidada de create.
-- No hay tests localizados para rutas/controller y auth, creación normal/404, filtros/orden/paginación, findOne/delete y propietario; esas zonas carecen de baseline propio observado.
+- `src/community/pendings/pendings.service.spec.ts`: valida campos combinados del listado ante Favorite ausente/uno/múltiples (favoriteId, collection, ausencia de `disc.pendings`/`comments`, joins), y conserva `Disc.pendings` eager en respuesta anidada de create. G.1 añade owner, 403 no-owner y 404 para GET/DELETE por ID.
+- `pendings.controller.spec.ts` fija autenticación para create/list/get/delete. Creación normal/404, filtros/orden/paginación siguen fuera de la cobertura focalizada.
 
 ## Rates
 
@@ -181,9 +183,9 @@ Controller `src/community/rates/rates.controller.ts`; servicios `src/community/r
 | `GET /api/rates` | `@Auth()` | `PaginationDto`: limit=10, offset=0, query/dateRange/genre/type/country/orderBy | Página `{totalItems,totalPages,currentPage,limit,data}` por usuario actual. `type=rate`/`cover` filtra valor no nulo; dateRange aplica releaseDate; query disco/artista; genre; country por UUID o nombre. Orden por allowlist de disco, artista, fecha, score y agregados; default releaseDate DESC / artist ASC. Cada Rate tiene Disc con Artist/Country/Genre y campos agregados/personalizados: `userRate`, `voteCount`, `commentCount`, `averageRate`, `averageCover`, `favoriteId`, `pendingId`. |
 | `GET /api/rates/stats` | `@Auth()` | `year` opcional | Objeto con totalVotes, mean, median, votesByGenre, votesByMonth/weeks, votesByScore (scores 0–10), totalUsers y rank. Año filtra por release year de Disc. |
 | `GET /api/rates/home-insights` | `@Auth()` | Ninguna | `{topArtists,countries}`; hasta siete artistas con promedio/conteo y hasta diez países con count/percentage. |
-| `GET /api/rates/user/:userId/history` | Sin `@Auth()` | `type=rate|cover|both` default both; `order=ASC|DESC` default DESC; limit 20; offset 0; from/to opcionales | Página de eventos de Rate: `{userId,type,order,totalItems,totalPages,currentPage,limit,data}`. Cada evento tiene `rateId`, action created/updated, timestamp, dayLabel, rate, cover, disc `{id,name,artist?}`. La paginación se aplica a eventos. `from` y `to` solo forman rango si ambos están presentes. |
-| `GET /api/rates/disc/:discId` | Sin `@Auth()` | `discId` | Array de Rates del disco con relación User. Disc no encontrado produce inicialmente 404 pero el catch del método lo convierte a 500 genérico. |
-| `GET /api/rates/:id` | Sin `@Auth()` | UUID | Entidad Rate (User y Disc eager) o 404. |
+| `GET /api/rates/user/:userId/history` | Público, conservado por Dashboard y UserModal | `type=rate|cover|both` default both; `order=ASC|DESC` default DESC; limit 20; offset 0; from/to opcionales | Página de eventos de Rate: `{userId,type,order,totalItems,totalPages,currentPage,limit,data}`. Cada evento tiene `rateId`, action created/updated, timestamp, dayLabel, rate, cover, disc `{id,name,artist?}`. La paginación se aplica a eventos. `from` y `to` solo forman rango si ambos están presentes. |
+| `GET /api/rates/disc/:discId` | Público, conservado por ArtistManagement | `discId` | Array de Rates del disco con relación User. Disc no encontrado produce inicialmente 404 pero el catch del método lo convierte a 500 genérico (G.3). |
+| `GET /api/rates/:id` | `@Auth()`; solo propietario | UUID | Entidad Rate (User y Disc eager); no propietario 403, ausente 404. No se halló consumer frontend de esta ruta. |
 | `PATCH /api/rates/:id` | `@Auth()` | UUID y `UpdateRateDto` (PartialType del create) | Solo propietario; devuelve Rate actualizada y fija editedAt. 404 si falta, 403 `You can only edit your own rates`. |
 | `DELETE /api/rates/:id` | `@Auth()` | UUID | Solo propietario; borra y devuelve `{message}`. 404 si falta, 403 `You can only delete your own rates`. |
 
@@ -208,9 +210,10 @@ Controller `src/community/rates/rates.controller.ts`; servicios `src/community/r
 
 ### Tests actuales
 
-- `rates.controller.spec.ts`: metadatos de ruta, orden de `home-insights` antes de `:id`, guards y delegación de usuario.
+- `rates.controller.spec.ts`: metadatos de ruta, orden de `home-insights` antes de `:id`, guards y delegación de usuario; G.1 fija GET por ID autenticado y conserva públicas rates por disco e history.
+- `rates.service.spec.ts`: create/upsert, listado enriquecido (incluidos null/0 en estado personal y agregados), respuesta directa por disco con User y scores nullable, owner y 403 en update/delete; G.1 añade owner, 403 no-owner y 404 para GET por ID. No caracteriza filtros completos, history ni errores generales.
 - `rates-stats.service.spec.ts`: insights vacíos; top artists ordenados, limitados y normalizados; conteos/porcentajes de países; conteo >1000 sin cap de filas.
-- No se encontraron specs de `RatesService`. Los tests de Catalog/Home/Artist cubren partes de agregación y proyecciones consumidoras, pero no create/update/delete, ownership, validación DTO, listados/filtros/orden, history, rates by disc ni todos los errores/respuestas HTTP.
+- Los tests de Catalog/Home/Artist cubren partes de agregación y proyecciones consumidoras; siguen fuera la validación DTO, listados/filtros/orden completos, history y errores generales.
 
 ## Dependencias cruzadas
 
@@ -257,20 +260,20 @@ El repositorio frontend revisado es `../spammusic-front`; los servicios API cons
 - Requests: `src/services/requests/requests.ts`; callers `SuggestPage.vue`, `PetitionsPage.vue`, `SidebarMenu.vue`.
 - Favorites: `src/services/favorites/favorites.ts`; listado en `DiscList.vue`, mutación en `DiscCardComponent.vue`.
 - Pendings: `src/services/pendings/pendings.ts`; listado en `DiscList.vue`, mutaciones en `DiscCardComponent.vue`, calendario normal y calendario baby.
-- Rates: `src/services/rates/rates.ts`; callers en `DiscList.vue`, `DiscCardComponent.vue`, `ArtistManagement.vue`, Dashboard, `UserModal.vue` y `Statistics.vue`.
+- Rates: `src/services/rates/rates.ts`; callers en `DiscList.vue`, `DiscCardComponent.vue`, `ArtistManagement.vue`, Dashboard, `UserModal.vue` y `Statistics.vue`. `DiscCardComponent.vue` usa `/rates/disc/:discId` para recalcular promedios y conteos leyendo `rate`/`cover`; `ArtistManagement.vue` localiza la fila propia por `user.id` y lee `rate`/`cover`. También se usa en cards públicas, así que se conserva anónimo en G.1.
 - El frontend también depende de los campos derivados de Catalog: `userRate`, `favoriteId`, `pendingId`, `commentCount` y agregados de rates. Esos consumers no invocan siempre el endpoint propio de cada capacidad.
 
 ## Hallazgos preexistentes / fuera de alcance
 
-- **Pending.user:** metadata actual exacta: `@ManyToOne(() => User, (user) => user.rate, { eager: true, onDelete: 'CASCADE' })`; la inversa de `User` destinada a Pending se llama `pending`. Se registra como hallazgo preexistente sin investigar ni cambiar metadata.
-- **Acceso por ID sin auth:** Comments deja sin `@Auth()` GET/PATCH/DELETE por id y GET por disco; Favorites y Pendings dejan sin `@Auth()` GET/DELETE por id; Rates deja sin `@Auth()` history por userId, rates por Disc y GET por id. Se documenta literalmente el estado del controller, sin inferir una decisión de autorización.
+- **Pending.user — G.2 completada:** la lambda apuntaba a `User.rate`; metadata resuelta confirmó ese inverse relation incorrecto. PostgreSQL probó persistencia/carga en ambas direcciones y cascada User → Pending; no se detectó fallo observable actual. Se cambió solo la lambda para que apunte a `User.pending`, preservando FK, `eager`, `cascade` y `onDelete`. No hay consumers backend de esa navegación.
+- **Decisión de acceso G.1:** GET/PATCH/DELETE personales por ID de Comments, GET/DELETE de Favorites y Pendings y GET/PATCH/DELETE de Rates requieren autenticación y ownership; los cuatro GET por ID protegen entidades con relación User eager y no tienen consumers frontend detectados. Se mantienen públicos Comments por disco (ComentsModal), Rates por disco (ArtistManagement) e history por usuario (Dashboard/UserModal), revisados como proyecciones públicas usadas por esos flujos. Las mutaciones y lecturas por ID devuelven 403 al no propietario y 404 al recurso inexistente; los guards rechazan al anónimo con 401. |
 - **Eager observable desde Disc:** `Disc.favorites`, `Disc.pendings` y `Disc.comments` son OneToMany eager; detalle de Disc añade User a esas tres colecciones. Consumers Catalog y algunos objetos anidados mantienen arrays observables.
 - **Response DTO Comment incompleto:** `CommentResponseDto.user` declara id/username, mientras el mapper devuelve además image.
 - Las rutas y contratos de `access-requests` quedan fuera de esta fotografía excepto por confirmar que son independientes de Requests.
 
-## Implicaciones para A.2
+## Implicaciones para A.2 (baseline histórico)
 
-Zonas donde no se encontró caracterización propia suficiente y que requieren revisión de cobertura en A.2:
+Las siguientes observaciones registran los huecos detectados para A.2. G.1 ya caracterizó y cerró las rutas personales de Comments/Favorites/Pendings/Rates indicadas arriba; el resto de huecos permanece como baseline histórico y se distribuye entre G.2–G.7:
 
 - Comments: rutas, auth, DTOs/filtros, respuesta de disco frente a lista por usuario, replies, borrado lógico/físico y errores.
 - Requests: permisos y todas las operaciones/transiciones, validación del rechazo, eager payload y side effects/repositorios de aprobación.

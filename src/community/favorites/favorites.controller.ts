@@ -33,12 +33,14 @@ export class FavoritesController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.favoritesService.findOne(id);
+  @Auth()
+  findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.favoritesService.findOne(id, user);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.favoritesService.remove(id);
+  @Auth()
+  remove(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.favoritesService.remove(id, user);
   }
 }

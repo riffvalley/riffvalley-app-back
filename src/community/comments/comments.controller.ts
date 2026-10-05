@@ -34,21 +34,25 @@ export class CommentsController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.commentsService.findOne(id);
+  @Auth()
+  findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.commentsService.findOne(id, user);
   }
 
   @Patch(':id')
+  @Auth()
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateCommentDto: UpdateCommentDto,
+    @GetUser() user: User,
   ) {
-    return this.commentsService.update(id, updateCommentDto);
+    return this.commentsService.update(id, updateCommentDto, user);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.commentsService.remove(id);
+  @Auth()
+  remove(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.commentsService.remove(id, user);
   }
 
   @Get('/disc/:discId')

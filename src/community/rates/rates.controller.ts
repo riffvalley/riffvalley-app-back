@@ -10,7 +10,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { RatesService } from './rates.service';
-import { RatesStatsService } from './rates-stats.service';
+import { RatesStatsService } from './stats/rates-stats.service';
+import { RatesHistoryService } from './history/rates-history.service';
 import { CreateRateDto } from './dto/create-rates.dto';
 import { UpdateRateDto } from './dto/update-rates.dto';
 import { PaginationDto } from '../../common/dtos/pagination.dto';
@@ -22,7 +23,8 @@ import { User } from 'src/auth/entities/user.entity';
 export class RatesController {
   constructor(
     private readonly ratesService: RatesService,
-    private readonly ratesStatsService: RatesStatsService
+    private readonly ratesStatsService: RatesStatsService,
+    private readonly ratesHistoryService: RatesHistoryService,
   ) { }
 
   // ==========================================
@@ -55,7 +57,7 @@ export class RatesController {
     const dateRange =
       from && to ? ([new Date(from), new Date(to)] as [Date, Date]) : undefined;
 
-    return this.ratesService.findUserActionHistoryPaginatedQB(userId, {
+    return this.ratesHistoryService.findUserActionHistoryPaginatedQB(userId, {
       type: (type as any) ?? 'both',
       order: (order as any) ?? 'DESC',
       limit: limit ? parseInt(limit, 10) : 20,
@@ -91,8 +93,9 @@ export class RatesController {
   // ==========================================
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.ratesService.findOne(id);
+  @Auth()
+  findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.ratesService.findOne(id, user);
   }
 
   @Patch(':id')
