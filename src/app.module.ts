@@ -7,32 +7,32 @@ import { CommonModule } from './common/common.module';
 import { I18nConfigModule } from './i18n/i18n.module';
 
 //MODULES
-import { GenresModule } from './genres/genres.module';
-import { CountriesModule } from './countries/countries.module';
-import { ArtistsModule } from './artists/artists.module';
-import { DiscModule } from './discs/discs.module';
-import { ScrapingModule } from './scaping/scraping.module';
+import { ArtistsModule } from './catalog/artists/artists.module';
+import { CountriesModule } from './catalog/countries/countries.module';
+import { DiscModule } from './catalog/discs/discs.module';
+import { GenresModule } from './catalog/genres/genres.module';
+import { CatalogImportModule } from './catalog/import/catalog-import.module';
 import { AuthModule } from './auth/auth.module';
-import { RatesModule } from './rates/rates.module';
+import { RatesModule } from './community/rates/rates.module';
 import { AsignationsModule } from './asignations/asignations.module';
 import { ListsModule } from './lists/list.module';
 import { ReunionsModule } from './reunions/reunions.module';
 import { PointsModule } from './points/points.module';
 import { LinksModule } from './links/links.module';
 import { SeedModule } from './seeds/seed.module';
-import { FavoritesModule } from './favorites/favorites.module';
-import { PendingsModule } from './pendings/pendings.module';
-import { CommentsModule } from './comments/comments.module';
+import { FavoritesModule } from './community/favorites/favorites.module';
+import { PendingsModule } from './community/pendings/pendings.module';
+import { CommentsModule } from './community/comments/comments.module';
 import { VersionsModule } from './versions/versions.module';
-import { SpotifyModule } from './spotify/spotify.module';
+import { SpotifyIntegrationModule } from './spotify-integration/spotify-integration.module';
+import { RiffValleyPlaylistModule } from './riff-valley-playlists/riff-valley-playlist.module';
 import { ContentsModule } from './contents/contents.module';
 import { ArticlesModule } from './articles/articles.module';
 import { VideosModule } from './videos/videos.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { NewsModule } from './news/news.module';
 import { UploadsModule } from './uploads/uploads.module';
-import { ExcelModule } from './excel/excel.module';
-import { RequestsModule } from './requests/requests.module';
+import { RequestsModule } from './community/requests/requests.module';
 import { NationalReleasesModule } from './national-releases/national-releases.module';
 import { LastfmModule } from './lastfm/lastfm.module';
 import { SuggestionsModule } from './suggestions/suggestions.module';
@@ -66,11 +66,11 @@ import { TiktokModule } from './tiktok/tiktok.module';
     CommonModule,
 
     //MODULES
-    GenresModule,
-    CountriesModule,
     ArtistsModule,
+    CountriesModule,
     DiscModule,
-    ScrapingModule,
+    GenresModule,
+    CatalogImportModule,
     AuthModule,
     RatesModule,
     AsignationsModule,
@@ -83,14 +83,14 @@ import { TiktokModule } from './tiktok/tiktok.module';
     PendingsModule,
     CommentsModule,
     VersionsModule,
-    SpotifyModule,
+    SpotifyIntegrationModule,
+    RiffValleyPlaylistModule,
     ContentsModule,
     ArticlesModule,
     VideosModule,
     TelegramModule,
     NewsModule,
     UploadsModule,
-    ExcelModule,
     RequestsModule,
     NationalReleasesModule,
     LastfmModule,

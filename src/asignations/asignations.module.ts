@@ -4,7 +4,7 @@ import { AsignationsController } from './asignations.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Asignation } from './entities/asignations.entity';
 import { AuthModule } from 'src/auth/auth.module';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { List } from 'src/lists/entities/list.entity';
 import { User } from 'src/auth/entities/user.entity';
 import { ListsModule } from 'src/lists/list.module';

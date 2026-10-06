@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { DiscsService } from 'src/discs/discs.service';
+import { DiscsService } from 'src/catalog/discs/discs.service';
 
 const LASTFM_BASE = 'https://ws.audioscrobbler.com/2.0/';
 

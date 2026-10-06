@@ -13,7 +13,7 @@ import { Asignation } from './entities/asignations.entity';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { List } from 'src/lists/entities/list.entity';
 import { User } from 'src/auth/entities/user.entity';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { ListsService } from 'src/lists/list.service';
 import sanitizeHtml = require('sanitize-html');
 

@@ -2,29 +2,28 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from 'src/auth/auth.module';
-import { SpotifyConnection } from './entities/spotify-connection.entity';
 import { FestivalPlaylistsController } from './festival-playlists.controller';
 import { FestivalPlaylistsService } from './festival-playlists.service';
-import { TokenCryptoService } from './token-crypto.service';
-import { SpotifyPlaylistArtist } from './entities/spotify-playlist-artist.entity';
-import { Spotify } from 'src/spotify/entities/spotify.entity';
-import { Artist } from 'src/artists/entities/artist.entity';
+import { RiffValleyPlaylistArtist } from './entities/riff-valley-playlist-artist.entity';
+import { RiffValleyPlaylist } from 'src/riff-valley-playlists/entities/riff-valley-playlist.entity';
+import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { MailModule } from 'src/mail/mail.module';
 import { GenrePlaylistsController } from './genre-playlists.controller';
+import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integration.module';
 
 @Module({
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([
-      SpotifyConnection,
-      SpotifyPlaylistArtist,
-      Spotify,
+      RiffValleyPlaylistArtist,
+      RiffValleyPlaylist,
       Artist,
     ]),
     AuthModule,
     MailModule,
+    SpotifyIntegrationModule,
   ],
   controllers: [FestivalPlaylistsController, GenrePlaylistsController],
-  providers: [FestivalPlaylistsService, TokenCryptoService],
+  providers: [FestivalPlaylistsService],
 })
 export class FestivalPlaylistsModule {}

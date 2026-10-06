@@ -62,7 +62,7 @@ nuevo el OAuth. Nunca se guardan el usuario ni la contraseña de Spotify.
 ```
 
 La operación crea inmediatamente la playlist vacía en Spotify y el registro
-local en `spotify`, incluyendo `spotifyPlaylistId`, URL y fecha. No asigna la
+local en `riff_valley_playlists`, incluyendo `spotifyPlaylistId`, URL y fecha. No asigna la
 playlist al usuario que pulsa el botón.
 
 También se puede crear el registro local a partir de una playlist que ya existe
@@ -74,14 +74,14 @@ Spotify.
 
 Los registros antiguos que ya tengan un enlace de Spotify pero no tengan
 `spotifyPlaylistId` se vinculan con
-`POST /api/festival-playlists/:spotifyId/link`. El backend comprueba que la
+`POST /api/festival-playlists/:riffValleyPlaylistId/link`. El backend comprueba que la
 playlist pertenezca a la cuenta conectada, sincroniza sus metadatos y conserva
 como protegidas todas las pistas que ya existían para que al quitar después un
 artista no se borren accidentalmente.
 
 ### 3. Editar nombre, descripción, visibilidad o portada
 
-`PATCH /api/festival-playlists/:spotifyId` acepta uno o varios campos:
+`PATCH /api/festival-playlists/:riffValleyPlaylistId` acepta uno o varios campos:
 
 ```json
 {
@@ -91,14 +91,14 @@ artista no se borren accidentalmente.
 }
 ```
 
-`PUT /api/festival-playlists/:spotifyId/image` recibe `multipart/form-data` con
+`PUT /api/festival-playlists/:riffValleyPlaylistId/image` recibe `multipart/form-data` con
 la imagen en el campo `image`. Spotify sólo admite JPEG y limita a 256 KB la
 imagen codificada en Base64, por lo que conviene comprimir la portada antes de
 subirla. La URL resultante queda guardada en `imageUrl`.
 
 ### 4. Añadir un artista
 
-`POST /api/festival-playlists/:spotifyId/artists`
+`POST /api/festival-playlists/:riffValleyPlaylistId/artists`
 
 ```json
 {
@@ -109,7 +109,7 @@ subirla. La URL resultante queda guardada en `imageUrl`.
 ```
 
 El backend obtiene las canciones frecuentes, las resuelve en Spotify y las
-añade inmediatamente. En `spotify_playlist_artists` quedan guardados el artista,
+añade inmediatamente. En `riff_valley_playlist_artists` quedan guardados el artista,
 las pistas exactas, los conciertos analizados y el estado de sincronización. Si
 la sincronización falla, el registro permanece con estado `failed` y puede
 reintentarse enviando de nuevo el mismo `POST`.
@@ -119,13 +119,13 @@ no se duplican canciones que ya estuvieran en una playlist vinculada.
 
 ### 5. Consultar o quitar artistas
 
-`GET /api/festival-playlists/:spotifyId` devuelve la playlist con sus artistas,
+`GET /api/festival-playlists/:riffValleyPlaylistId` devuelve la playlist con sus artistas,
 pistas y estados.
 
-`DELETE /api/festival-playlists/:spotifyId/artists/:artistId` elimina sus pistas
+`DELETE /api/festival-playlists/:riffValleyPlaylistId/artists/:artistId` elimina sus pistas
 de Spotify y su relación local. Una pista compartida con otro artista se conserva.
 
-`DELETE /api/festival-playlists/:spotifyId/tracks` vacía por completo la
+`DELETE /api/festival-playlists/:riffValleyPlaylistId/tracks` vacía por completo la
 playlist real de Spotify, incluidas las pistas anteriores a la vinculación. Las
 eliminaciones se envían en lotes de cien y, cuando Spotify termina, se borran
 también todas las asociaciones locales de artistas y la lista de pistas
@@ -140,27 +140,27 @@ pero no borra las playlists creadas en Spotify.
 Las playlists `genero`, `especial` y `otras` reutilizan la misma conexión OAuth,
 pero cada artista guarda exactamente dos canciones elegidas por el usuario. La
 búsqueda se consulta en Spotify al vuelo y la selección final se persiste en
-`spotify_playlist_artists.tracks` con `selection_mode = manual`.
+`riff_valley_playlist_artists.tracks` con `selection_mode = manual`.
 
 - `POST /api/genre-playlists` crea la playlist real y el registro local.
 - `POST /api/genre-playlists/link` vincula una playlist pegando su URL.
-- `POST /api/genre-playlists/:spotifyId/link` vincula un registro local antiguo.
-- `GET /api/genre-playlists/:spotifyId/artists/:artistId/tracks?q=...` busca
+- `POST /api/genre-playlists/:riffValleyPlaylistId/link` vincula un registro local antiguo.
+- `GET /api/genre-playlists/:riffValleyPlaylistId/artists/:artistId/tracks?q=...` busca
   canciones del artista en Spotify.
-- `POST /api/genre-playlists/:spotifyId/artists` recibe `artistId` y dos
+- `POST /api/genre-playlists/:riffValleyPlaylistId/artists` recibe `artistId` y dos
   `spotifyTrackIds` distintos.
-- `PUT /api/genre-playlists/:spotifyId/artists/:artistId/tracks` sustituye las
+- `PUT /api/genre-playlists/:riffValleyPlaylistId/artists/:artistId/tracks` sustituye las
   dos canciones guardadas.
-- `DELETE /api/genre-playlists/:spotifyId/artists/:artistId` elimina el artista
+- `DELETE /api/genre-playlists/:riffValleyPlaylistId/artists/:artistId` elimina el artista
   sin borrar canciones protegidas o compartidas.
-- `DELETE /api/genre-playlists/:spotifyId/tracks` vacía completamente la
+- `DELETE /api/genre-playlists/:riffValleyPlaylistId/tracks` vacía completamente la
   playlist real y sus asociaciones locales.
-- `POST /api/genre-playlists/:spotifyId/shuffle` mezcla el orden de todas las
+- `POST /api/genre-playlists/:riffValleyPlaylistId/shuffle` mezcla el orden de todas las
   canciones reales, incluidas las anteriores a la vinculación.
 
 Los metadatos y la imagen se gestionan con
-`PATCH /api/genre-playlists/:spotifyId` y
-`PUT /api/genre-playlists/:spotifyId/image`.
+`PATCH /api/genre-playlists/:riffValleyPlaylistId` y
+`PUT /api/genre-playlists/:riffValleyPlaylistId/image`.
 
 ## Criterio musical
 

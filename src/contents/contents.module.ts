@@ -5,10 +5,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Content } from './entities/content.entity';
 import { User } from 'src/auth/entities/user.entity';
 import { Reunion } from 'src/reunions/entities/reunion.entity';
-import { Spotify } from 'src/spotify/entities/spotify.entity';
+import { RiffValleyPlaylist } from 'src/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Article } from 'src/articles/entities/article.entity';
 import { Video } from 'src/videos/entities/video.entity';
-import { Disc } from 'src/discs/entities/disc.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { List } from 'src/lists/entities/list.entity';
 
 import { ListsModule } from 'src/lists/list.module';
@@ -17,6 +17,7 @@ import { PointsModule } from 'src/points/points.module';
 import { ContentSchedulerService } from './content-scheduler.service';
 
 import { forwardRef } from '@nestjs/common';
+import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integration.module';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { forwardRef } from '@nestjs/common';
       Content,
       User,
       Reunion,
-      Spotify,
+      RiffValleyPlaylist,
       Article,
       Video,
       Disc,
@@ -32,6 +33,7 @@ import { forwardRef } from '@nestjs/common';
     ]),
     forwardRef(() => ListsModule),
     PointsModule,
+    SpotifyIntegrationModule,
   ],
   controllers: [ContentsController],
   providers: [ContentsService, ContentSchedulerService],

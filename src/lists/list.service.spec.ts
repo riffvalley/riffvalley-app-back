@@ -1,4 +1,5 @@
 import { FindOperator } from 'typeorm';
+import { ListType } from './entities/list.entity';
 import {
   ListsService,
   getMonthlyReferenceStart,
@@ -188,6 +189,101 @@ describe('ListsService monthly lists', () => {
     );
     expect(getMonthlyReferenceStart(new Date(2026, 9, 13))).toEqual(
       new Date(2026, 9, 1),
+    );
+  });
+});
+
+describe('ListsService Spotify publishing', () => {
+  let service: ListsService;
+  let spotifyApiService: { findTrackForAlbum: jest.Mock };
+  let wordpressService: {
+    findPostBySlug: jest.Mock;
+    getOrCreateTag: jest.Mock;
+    createPost: jest.Mock;
+  };
+
+  beforeEach(() => {
+    spotifyApiService = { findTrackForAlbum: jest.fn() };
+    wordpressService = {
+      findPostBySlug: jest.fn().mockResolvedValue(null),
+      getOrCreateTag: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2),
+      createPost: jest.fn().mockResolvedValue({
+        id: 42,
+        link: 'https://riffvalley.test/list',
+      }),
+    };
+  });
+
+  it('prefers a manually selected track and resolves Spotify only as fallback', async () => {
+    service = new ListsService(
+      {} as any,
+      {} as any,
+      wordpressService as any,
+      spotifyApiService as any,
+    );
+    spotifyApiService.findTrackForAlbum.mockResolvedValue('resolved-track');
+
+    await expect(
+      (service as any).resolveSpotifyTrackId({
+        spotifyTrackId: 'manual-track',
+        disc: { artist: { name: 'Banda' }, name: 'Disco' },
+      }),
+    ).resolves.toBe('manual-track');
+    expect(spotifyApiService.findTrackForAlbum).not.toHaveBeenCalled();
+
+    await expect(
+      (service as any).resolveSpotifyTrackId({
+        spotifyTrackId: null,
+        disc: { artist: { name: 'Banda' }, name: 'Disco' },
+      }),
+    ).resolves.toBe('resolved-track');
+    expect(spotifyApiService.findTrackForAlbum).toHaveBeenCalledWith(
+      'Banda',
+      'Disco',
+    );
+  });
+
+  it('publishes the selected track iframe through the WordPress service', async () => {
+    const asignation = {
+      id: 'asignation-id',
+      position: 1,
+      spotifyTrackId: 'manual-track',
+      disc: {
+        id: 'disc-id',
+        name: 'Disco',
+        artist: { name: 'Banda' },
+        image: null,
+      },
+    };
+    const list = {
+      id: 'list-id',
+      type: ListType.MONTH,
+      listDate: new Date('2026-10-01T00:00:00.000Z'),
+      asignations: [asignation],
+    };
+    const listRepository = {
+      findOneByOrFail: jest.fn().mockResolvedValue(list),
+      save: jest.fn().mockResolvedValue(list),
+    };
+    service = new ListsService(
+      listRepository as any,
+      {} as any,
+      wordpressService as any,
+      spotifyApiService as any,
+    );
+
+    await expect(service.generateBestDiscsWordPressPost('list-id')).resolves.toMatchObject({
+      wpPostId: 42,
+      link: 'https://riffvalley.test/list',
+    });
+
+    const [, content] = wordpressService.createPost.mock.calls[0];
+    expect(content).toContain(
+      'https://open.spotify.com/embed/track/manual-track?utm_source=generator',
+    );
+    expect(spotifyApiService.findTrackForAlbum).not.toHaveBeenCalled();
+    expect(listRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ wpPostId: 42 }),
     );
   });
 });

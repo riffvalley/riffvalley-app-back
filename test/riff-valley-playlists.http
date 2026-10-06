@@ -1,0 +1,129 @@
+@baseUrl = http://localhost:3000/api
+@username = tottibero
+@password = Spammusic2025
+
+### =========================================
+# LOGIN
+# =========================================
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### =========================================
+# CREAR PLAYLIST DE RIFF VALLEY (válido)
+# =========================================
+# @name createRiffValleyPlaylist
+POST {{baseUrl}}/riff-valley-playlists
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.access_token}}
+
+{
+  "nombre": "Lo mejor del verano 2025",
+  "estado": "publicada",
+  "enlace": "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
+  "tipo": "especial",
+  "fechaActualizacion": "2025-09-20T12:00:00Z"
+}
+
+### =========================================
+# CREAR OTRA PLAYLIST DE RIFF VALLEY (válido, otro tipo/estado)
+# =========================================
+# @name createRiffValleyPlaylist2
+POST {{baseUrl}}/riff-valley-playlists
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.access_token}}
+
+{
+  "nombre": "Festivales otoño",
+  "estado": "para_publicar",
+  "enlace": "https://open.spotify.com/playlist/0AbCdEfGh123456789",
+  "tipo": "festival",
+  "fechaActualizacion": "2025-09-18T09:30:00Z"
+}
+
+### =========================================
+# LISTAR TODOS
+# =========================================
+GET {{baseUrl}}/riff-valley-playlists
+Authorization: Bearer {{login.response.body.access_token}}
+
+### =========================================
+# OBTENER POR ID (usa el creado)
+# =========================================
+GET {{baseUrl}}/riff-valley-playlists/{{createRiffValleyPlaylist.response.body.id}}
+Authorization: Bearer {{login.response.body.access_token}}
+
+### =========================================
+# ACTUALIZAR (PUT/PATCH) CAMPOS DE UNO
+# =========================================
+PATCH {{baseUrl}}/riff-valley-playlists/{{createRiffValleyPlaylist.response.body.id}}
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.access_token}}
+
+{
+  "nombre": "Lo mejor del verano 2025 (actualizado)",
+  "estado": "actualizada",
+  "fechaActualizacion": "2025-09-21T08:00:00Z"
+}
+
+### =========================================
+# ELIMINAR UNO
+# =========================================
+DELETE {{baseUrl}}/riff-valley-playlists/{{createRiffValleyPlaylist2.response.body.id}}
+Authorization: Bearer {{login.response.body.access_token}}
+
+### =========================================
+# CASOS DE VALIDACIÓN (espera 400)
+# =========================================
+
+# 1) estado inválido
+POST {{baseUrl}}/riff-valley-playlists
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.access_token}}
+
+{
+  "nombre": "Caso inválido - estado",
+  "estado": "publicadisima",
+  "enlace": "https://open.spotify.com/playlist/xyz",
+  "tipo": "genero",
+  "fechaActualizacion": "2025-09-22T10:00:00Z"
+}
+
+### 
+# 2) enlace NO es URL
+POST {{baseUrl}}/riff-valley-playlists
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.access_token}}
+
+{
+  "nombre": "Caso inválido - enlace",
+  "estado": "en_desarrollo",
+  "enlace": "no-es-url",
+  "tipo": "otras",
+  "fechaActualizacion": "2025-09-22T10:00:00Z"
+}
+
+### 
+# 3) fecha no ISO
+POST {{baseUrl}}/riff-valley-playlists
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.access_token}}
+
+{
+  "nombre": "Caso inválido - fecha",
+  "estado": "por_actualizar",
+  "enlace": "https://open.spotify.com/playlist/xyz",
+  "tipo": "especial",
+  "fechaActualizacion": "22/09/2025 10:00" 
+}
+
+### =========================================
+# OBTENER ID INEXISTENTE (espera 404)
+# =========================================
+GET {{baseUrl}}/riff-valley-playlists/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{login.response.body.access_token}}
