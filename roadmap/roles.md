@@ -2,7 +2,7 @@
 
 Este documento conserva el historial de la refactorización y planifica su adaptación al contrato jerárquico aprobado el 2026-10-13. R.1–R.6 se completaron bajo el diseño anterior de varios roles; esas implementaciones necesitan adaptación. R.5c, R.7 y R.8 anteriores no se ejecutaron y quedan reemplazadas por las tareas R.9–R.15 de abajo.
 
-El contrato para la adaptación futura de Vue está en [R.15b — Contrato Auth y roles para frontend](roles-frontend-contract.md). La migración persistente local se completó el 2026-10-13; el backend nuevo no ha iniciado, y las pruebas integradas, el despliegue y la adaptación frontend siguen pendientes.
+El contrato para la adaptación futura de Vue está en [R.15b — Contrato Auth y roles para frontend](roles-frontend-contract.md). La migración persistente local se completó el 2026-10-13; el backend nuevo inicia y responde localmente. Las pruebas integradas frontend/backend, el despliegue y la adaptación frontend siguen pendientes. El preflight de producción en Heroku y la secuencia segura de corte están en [P.1 — Preflight y despliegue de producción](roles-production-deployment.md); producción conserva el esquema legacy y no se ha modificado.
 
 ## Contrato objetivo
 
