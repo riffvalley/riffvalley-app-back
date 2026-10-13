@@ -1,6 +1,6 @@
 # Contrato de roles de usuario — diseño jerárquico aprobado
 
-**Estado:** Actualización documental aprobada el 2026-10-13. Este contrato reemplaza el diseño de múltiples roles definido originalmente por R.2. R.1–R.6 documentan el historial y la implementación del diseño anterior; sus adaptaciones al contrato actual siguen pendientes salvo esta matriz documental.
+**Estado:** Contrato funcional implementado y transición de roles cerrada. Este contrato reemplaza el diseño de múltiples roles definido originalmente por R.2. Los apartados posteriores que dicen “pendiente” conservan decisiones y límites históricos o describen evolutivos que no bloquean el roadmap funcional completado.
 
 Fuentes: [Roadmap de roles](roles.md) y [Inventario R.1](roles-inventory.md).
 
@@ -96,7 +96,9 @@ La tabla conserva por endpoint la allowlist inventariada antes de R.3–R.6 y la
 - Login, registro y respuestas administrativas exponen `role`; el JWT usa el claim singular `role`. La autorización consulta el valor persistido. Tokens con claim anterior `roles` pueden autenticarse por ID y estado durante su vigencia, pero el backend nuevo toma permisos exclusivamente de `users.role`; el frontend se adapta después.
 - Los filtros de `usersRv`, `users/superusers` y `users/role/:role` operan con un valor único canónico; un rol superior incluye implícitamente a usuarios de los niveles inferiores según la jerarquía. R.14e reclasificó sus lecturas HTTP: `usersRv` exige mínimo `riffvalley`; `users/superusers` y `users/role/:role` exigen `superadmin`, por enumerar identidades y emails. `GET /auth/:id` también exige `superadmin` porque la entidad expone preferencias, notas y actividad privada; no se identificó consumidor de perfil público.
 
-## Migración a `users.role`
+## Migración a `users.role` — plan histórico y resultado final
+
+**Resultado:** la migración se aplicó en producción y el postflight está registrado en [P.3.6](roles-production-deployment.md). Los pasos siguientes conservan la planificación previa y no representan tareas pendientes.
 
 La columna de origen documentada es `users.roles text[]`. La migración futura crea `users.role text NOT NULL DEFAULT 'user'` (con restricción que limite el valor a los cuatro nombres canónicos), convierte los datos y solo después retira `roles`. Debe inspeccionar el esquema real, los defaults, la nulabilidad y constraints del entorno antes de preparar SQL definitivo.
 

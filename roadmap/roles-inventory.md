@@ -1,6 +1,6 @@
 # Inventario R.1 — Roles y autorizaciones
 
-**Estado:** R.1 completada (2026-10-13). Este documento es una fotografía histórica del modelo multirol previa a R.6 y a la nueva arquitectura. Conserva la evidencia original; el contrato vigente de rol único y jerarquía está en [roles-contract.md](roles-contract.md). Los conteos de `users.roles` no deben tratarse como preflight actual.
+**Estado:** R.1 completada (2026-10-13). Documento histórico del modelo multirol previo a R.6 y a la nueva arquitectura; sus decisiones pendientes están supersedidas por el contrato vigente y el cierre final. Conserva evidencia original; los conteos de `users.roles` no deben tratarse como estado actual ni como bloqueadores.
 
 ## Alcance y método
 

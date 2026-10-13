@@ -1,6 +1,6 @@
 ---
 name: database-migrations
-description: "Gestiona migraciones PostgreSQL con TypeORM en el backend NestJS de Riff Valley: creación, revisión, preflight, pruebas aisladas, coordinación de Heroku y verificación posterior."
+description: 'Gestiona migraciones PostgreSQL con TypeORM en el backend NestJS de Riff Valley: creación, revisión, preflight, pruebas aisladas, coordinación de Heroku y verificación posterior.'
 ---
 
 # Migraciones PostgreSQL de Riff Valley
@@ -8,6 +8,8 @@ description: "Gestiona migraciones PostgreSQL con TypeORM en el backend NestJS d
 Usa esta skill para trabajar con migraciones TypeORM del backend. Antes de dar comandos, relee la configuración y scripts actuales: los documentos de planificación pueden conservar datos históricos que ya no coinciden con el código.
 
 Lee [project-context.md](references/project-context.md) al iniciar cada tarea para confirmar datasource, scripts, ledger y salvaguardas. Lee [operations-runbook.md](references/operations-runbook.md) para pruebas, consultas de estado, preparación de despliegues, recuperación o cualquier ejecución.
+
+Los comandos manuales del proyecto trabajan con JavaScript compilado: `yarn db:status` consulta pendientes sin crear el ledger, `yarn db:check` falla si hay pendientes y `yarn db:migrate` los aplica. En producción este último exige confirmación del nombre de la base y la lista ordenada exacta. Consulta el runbook para los ejemplos locales y Heroku `spammusic-back`.
 
 ## Reglas que nunca se relajan
 

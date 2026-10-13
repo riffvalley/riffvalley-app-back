@@ -1,6 +1,6 @@
 # R.15b — Contrato de Auth y roles para frontend
 
-**Estado:** Completada documentalmente el 2026-10-13. El contrato describe el código actual del backend y permite iniciar la adaptación frontend. No acredita que la migración de PostgreSQL se haya ejecutado ni que el backend esté desplegado.
+**Estado:** Contrato completado. El frontend fue adaptado y desplegado en Netlify, confirmado manualmente por el usuario. El backend está desplegado en Heroku y PostgreSQL usa el rol singular; véase el [cierre de producción](roles-production-deployment.md). La confirmación manual del despliegue frontend no se presenta como una comprobación independiente de este repositorio.
 
 **Fuentes verificadas:** controllers, DTOs, servicios, entidad y estrategia de Auth actuales; [contrato jerárquico](roles-contract.md); [auditoría actual de endpoints](roles-endpoints-audit.md); [preflight de migración](roles-migration-preflight.md). La tabla completa de 252 handlers permanece en la auditoría y no se duplica aquí.
 
@@ -8,9 +8,10 @@
 
 - **Refactorización funcional del backend:** completada en código y verificada en R.9–R.14; incluye rol singular, jerarquía central y autorización de los 252 handlers auditados.
 - **Preparación de migración (R.15a):** completada para la preparación operativa local. El preflight del entorno destino y la ventana concreta siguen siendo propios de la ejecución.
-- **Migración de PostgreSQL:** pendiente de ejecución en cualquier destino persistente confirmado por este roadmap. No se debe inferir que el esquema desplegado ya tiene `users.role`.
-- **Despliegue del backend:** pendiente; esta documentación no lo presenta como realizado.
-- **Adaptación del frontend:** pendiente. Este documento no modifica `riffvalley-app-front`.
+- **Migración de PostgreSQL:** completada; esquema final `users.role` y postflight de producción documentados en el cierre enlazado.
+- **Despliegue del backend:** completado en Heroku, release `v309`.
+- **Adaptación del frontend:** completada y desplegada en Netlify según confirmación manual del usuario.
+- **Alcance de comprobación:** autenticación básica verificada, incluido el rol recibido en la web. No se ejecutó una prueba completa de permisos con cuentas editoriales y administrativas.
 
 ## Contrato HTTP de Auth
 
@@ -122,36 +123,36 @@ El recuento conserva exactamente la clasificación final publicada por R.14f. La
 
 ## Inventario orientativo para Vue
 
-No se inspeccionó ni modificó el repositorio frontend: la tarea está limitada a `riffvalley-app-back`. Las integraciones conocidas por la auditoría backend y sus referencias verificadas se resumen abajo; el resto requiere inventario de código en `riffvalley-app-front` antes de implementar.
+Este inventario describe lo conocido cuando se redactó el contrato backend, no una auditoría actual del repositorio frontend. El usuario confirma que la adaptación está desplegada en Netlify. No se revisó aquí el código frontend ni se ejecutaron pruebas completas con cuentas editoriales o administrativas.
 
 | Área                               | Trabajo frontend previsto                                                                                            | Evidencia / estado                                                                                                                                                                                     |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Store de autenticación             | Sustituir la lectura/modelo `roles[]` por `role: ValidRole`; evitar usar claims viejos como autorización.            | No inspeccionado en esta tarea; pendiente de inventario Vue.                                                                                                                                           |
-| Estado de sesión                   | Definir cuándo actualizar la copia del rol después de login, cambios administrativos o una nueva autenticación.      | El backend no expone `/me`, refresh ni sesión cookie. Implementación de almacenamiento pendiente de inventario.                                                                                        |
+| Store de autenticación             | Sustituir la lectura/modelo `roles[]` por `role: ValidRole`; evitar usar claims viejos como autorización.            | Adaptación frontend desplegada según confirmación manual; el detalle del código frontend queda fuera de este repositorio.                                                                              |
+| Estado de sesión                   | Definir cuándo actualizar la copia del rol después de login, cambios administrativos o una nueva autenticación.      | La adaptación está desplegada según confirmación manual. El detalle del store no se inspeccionó en este cierre; no bloquea el roadmap funcional.                                                       |
 | Guards del router                  | Resolver rangos de roles singulares y diferenciar login requerido de mínimo editorial/administrativo.                | `ArtistManagement` y Kanban de playlists locales permiten actualmente cualquier sesión autenticada, pero las escrituras backend exigen `riffvalley`; alinear esos guards. Referencia: auditoría R.14f. |
-| Menús y navegación                 | Aplicar los mismos mínimos que los handlers para no mostrar acciones que recibirán `403`.                            | Pendiente de inventario; la visibilidad sigue sin ser seguridad.                                                                                                                                       |
-| Gestión de usuarios                | Cambiar modelos y formularios de multirol a un único rol; usar endpoints administrativos actuales.                   | Contratos descritos arriba; componentes concretos pendientes de inventario.                                                                                                                            |
+| Menús y navegación                 | Aplicar los mismos mínimos que los handlers para no mostrar acciones que recibirán `403`.                            | La comprobación completa queda como observación; la visibilidad sigue sin ser seguridad.                                                                                                               |
+| Gestión de usuarios                | Cambiar modelos y formularios de multirol a un único rol; usar endpoints administrativos actuales.                   | Adaptación frontend desplegada según confirmación manual; no se hizo inventario independiente de componentes en este backend.                                                                          |
 | Selectores editoriales             | Consumir `GET /api/auth/usersRv` como selección de cuentas `riffvalley` y `superadmin`; interpretar `role` singular. | Consumidor confirmado en asignación editorial; respuesta incluye `id, username, email, role, image`.                                                                                                   |
 | Kanban administrativo de versiones | Cambiar listas/filtros a `role: superadmin` y guardar sesión/claims singulares.                                      | `GET /api/auth/users/superusers` se usa en Kanban administrativo de versiones, según R.14e.                                                                                                            |
-| Formularios de administración      | Enviar `role` string al `PATCH /api/auth/superadmin/:id`; retirar `roles[]` y aliases legacy.                        | Rutas y DTO actuales comprobados en backend; pantallas pendientes de inventario Vue.                                                                                                                   |
+| Formularios de administración      | Enviar `role` string al `PATCH /api/auth/superadmin/:id`; retirar `roles[]` y aliases legacy.                        | Rutas y DTO actuales comprobados en backend; frontend reportado como adaptado y desplegado por el usuario.                                                                                             |
 | Tipos, DTOs y servicios HTTP       | Tipar valores canónicos; actualizar request/response de registro, login, perfil y administración; enviar Bearer.     | Backend comprobado. Ubicaciones frontend no inspeccionadas.                                                                                                                                            |
-| Tests                              | Actualizar fixtures, login/store/guards, roles desconocidos, herencia, visibilidad y estados `401`/`403`.            | Pendiente de inventario y ejecución en frontend.                                                                                                                                                       |
+| Tests                              | Actualizar fixtures, login/store/guards, roles desconocidos, herencia, visibilidad y estados `401`/`403`.            | Autenticación básica, incluido el rol recibido en web, confirmada por el usuario. No se ejecutaron pruebas completas con cuentas editoriales y administrativas.                                        |
 
 ## Compatibilidad y secuencia de adopción
 
-El contrato actual de backend usa `role` singular mientras el esquema de PostgreSQL observado localmente por R.15a todavía tiene `users.roles text[]` y no tiene `users.role`. R.12 describe el código refactorizado; R.15a indica que la migración no se ha ejecutado y que los ledgers remotos no están confirmados. No desplegar una instancia que espere `users.role` contra un esquema que conserve solo `users.roles`.
+El contrato actual de backend y PostgreSQL usa `role` singular. El estado final del esquema y su ledger están registrados en [P.3.6](roles-production-deployment.md). Los párrafos que describían `users.roles` en producción son contexto histórico del preflight.
 
-La secuencia de adopción documentada es: completar el preflight y backup del destino; ejecutar el corte operativo de R.15a con backend/escritores detenidos y runner único; validar schema/datos; desplegar el backend singular; y después desplegar/adaptar el frontend para `role`. La ejecución real requiere un destino, artefacto, verificación y ventana propios; R.15b no la inicia.
+La secuencia de adopción documentada fue: preflight y backup; corte manual; validación de esquema/datos; despliegue del backend singular y adaptación frontend. Se ejecutó y cerró en P.3.5/P.3.6. Esta guía se conserva como referencia histórica, no como trabajo pendiente.
 
 Durante un máximo de 8 horas desde su emisión, un JWT previo puede conservar el claim antiguo `roles[]`. La estrategia necesita `id` para recuperar al usuario y actualmente ignora el claim de rol; el guard de nivel lee PostgreSQL. Por tanto, claims antiguos no otorgan privilegios, aunque una cuenta sin usuario existente o inactiva se rechaza. El cliente debe prever que un frontend viejo que lea solo `roles[]` no reconocerá el nuevo contrato y que el backend singular no ofrece compatibilidad dual.
 
 ## Diferencias y límites documentales
 
 - El bullet de roles en el `AGENTS.md` raíz aún enumera `admin`, `superUser`, `user`, `riffValley`; no coincide con el código actual (`ValidRoles` singular). Se conserva aquí la fuente de verdad pedida: código actual y jerarquía aprobada en el roadmap.
-- La parte histórica del inicio de `roles.md` y de `roles-contract.md` todavía describe R.1–R.6 como implementaciones pendientes de adaptación. R.9–R.14 ya registra la refactorización singular y R.15a la preparación operativa; este nuevo documento distingue esos estados sin reescribir el historial.
+- Las tablas orientativas describen la información recopilada en el backend; no constituyen una auditoría independiente del repositorio frontend. El estado final está resumido al inicio y las comprobaciones no ejecutadas permanecen como observaciones.
 - No se encontró ni se presupone `/auth/me`, refresh token, cookie de sesión ni una forma de almacenamiento del token en Vue.
 - Los consumidores `ArtistManagement`, Kanban de playlists, asignación editorial y Kanban de versiones proceden de la auditoría previa; los demás consumidores Vue, archivos, tipos y pruebas requieren una inspección posterior del repositorio frontend.
 
 ## Cierre de R.15b
 
-R.15b queda completada: están documentados el contrato Auth singular, la jerarquía, la fuente real de autorización, las rutas y respuestas relevantes, los consumidores frontend ya identificados, la secuencia de corte y los riesgos de compatibilidad. La adaptación frontend sigue pendiente. La migración PostgreSQL sigue pendiente de ejecución y el despliegue sigue pendiente.
+R.15b queda completada: están documentados el contrato Auth singular, la jerarquía, la fuente real de autorización, las rutas y respuestas relevantes, la secuencia de corte y los riesgos de compatibilidad. El frontend está adaptado y desplegado según confirmación manual del usuario; el cierre de backend/PostgreSQL está documentado en P.3.5/P.3.6. La validación amplia de permisos editoriales y administrativos no se ejecutó y no bloquea el roadmap.

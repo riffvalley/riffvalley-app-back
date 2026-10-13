@@ -1,6 +1,6 @@
 # Preflight y migración de roles — nuevo diseño de rol único
 
-**Estado vigente:** R.13a y R.13b completadas el 2026-10-13 para análisis, implementación y prueba efímera. El 2026-10-13 se ejecutó correctamente la cadena de roles una vez en PostgreSQL local `SpamMusicDB`: `users.role text NOT NULL DEFAULT 'user'`, constraint canónica validada, sin `users.roles`, 198 usuarios, ledger de 91 entradas y snapshots conservados. No se conectó a Heroku ni a producción. El backup inmediato y el preexistente se conservan fuera del repositorio. El contenedor de API antiguo sigue detenido. El backend nuevo del workspace se inició correctamente tras corregir los permisos locales y la inyección de `UserRoleGuard`; `GET /api/countries` respondió HTTP 200. F.5.1 y las pruebas conjuntas con el frontend siguen pendientes.
+**Estado histórico:** R.13a/R.13b y R.15a registran preflights y pruebas locales de 2026-10-13; las notas originales de esta página no describen el estado remoto final. La migración de producción y su postflight se completaron después; el registro autoritativo está en [cierre de despliegue](roles-production-deployment.md). Las menciones antiguas a Heroku sin modificar, release phase o migraciones pendientes son históricas y quedan supersedidas.
 
 ### R.15c — Arranque del backend local (2026-10-13)
 
