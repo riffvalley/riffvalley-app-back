@@ -15,6 +15,7 @@ const dataSource = new DataSource({
   password: String(process.env.DB_PASSWORD),
 
   synchronize: false,
+  migrationsRun: false,
   logging: !isProd,
 
   entities: [isProd ? 'dist/**/*.entity.js' : 'src/**/*.entity.ts'],

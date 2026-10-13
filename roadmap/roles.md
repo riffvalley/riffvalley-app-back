@@ -1,8 +1,10 @@
 # Roadmap de roles de usuario
 
-Este documento conserva el historial de la refactorización y planifica su adaptación al contrato jerárquico aprobado el 2026-10-13. R.1–R.6 se completaron bajo el diseño anterior de varios roles; esas implementaciones necesitan adaptación. R.5c, R.7 y R.8 anteriores no se ejecutaron y quedan reemplazadas por las tareas R.9–R.15 de abajo.
+**Estado final: roadmap funcional de roles completado.** El backend está migrado y desplegado en Heroku; el frontend está adaptado y desplegado en Netlify, confirmado manualmente por el usuario. PostgreSQL usa `users.role`. La comprobación básica de autenticación incluyó verificar el rol recibido en la web. Las pruebas completas de permisos con cuentas editoriales y administrativas no se ejecutaron; quedan como observación de cobertura, no como fase pendiente.
 
-El contrato para la adaptación futura de Vue está en [R.15b — Contrato Auth y roles para frontend](roles-frontend-contract.md). La migración persistente local se completó el 2026-10-13; el backend nuevo inicia y responde localmente. Las pruebas integradas frontend/backend, el despliegue y la adaptación frontend siguen pendientes. El preflight de producción en Heroku y la secuencia segura de corte están en [P.1 — Preflight y despliegue de producción](roles-production-deployment.md); producción conserva el esquema legacy y no se ha modificado.
+Este documento conserva el historial de la refactorización y su adaptación al contrato jerárquico aprobado el 2026-10-13. Las notas anteriores que dicen que el corte remoto, el despliegue o la adaptación frontend están pendientes son fotografías históricas y quedan supersedidas por el cierre final de [producción](roles-production-deployment.md) y de [frontend](roles-frontend-contract.md). R.5c, R.7 y R.8 anteriores quedaron reemplazadas por R.9–R.15.
+
+El contrato y su adopción frontend están documentados en [R.15b](roles-frontend-contract.md). Los resultados finales de producción están en [cierre de despliegue](roles-production-deployment.md). Las menciones posteriores a “pendiente” en las tareas históricas describen su fecha de redacción, no el estado actual.
 
 ## Contrato objetivo
 
@@ -25,9 +27,9 @@ Jerarquía: `user < collaborator < riffvalley < superadmin`. Cada endpoint role-
 - Confirmar el esquema y el registro de migraciones de cada entorno antes de definir la edición in-place o una nueva migración.
 - No modificar frontend en esta ola. Documentar primero el claim singular y el corte de despliegue para su adaptación posterior.
 
-## Pendientes para el corte
+## Comprobaciones del corte completadas
 
-Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar arrays `['user']` escritos por el R.6 actual frente al antiguo `user`; resolver `admin`, desconocidos, arrays vacíos/nulos, duplicados y cuentas sin destino; obtener backup restaurable; acordar el corte coordinado de backend y PostgreSQL; coordinar la caducidad del JWT anterior de 8 h y el despliegue frontend posterior. No queda pendiente una decisión sobre la herencia de `collaborator`: forma parte de la jerarquía aprobada.
+Se confirmó el ledger de producción, la población y el destino de los roles; se obtuvo y conservó el backup `b008`; se coordinó el deploy y la migración, y se verificaron esquema y API. Las tareas abajo conservan sus planes originales, no una lista de trabajo pendiente. Las pruebas completas de permisos con cuentas editoriales y administrativas no se ejecutaron y quedan como observación adicional.
 
 ## R.1 — Inventario de roles y autorizaciones
 
@@ -42,7 +44,7 @@ Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar 
 
 ## R.2 — Contrato y matriz de permisos
 
-- **Estado histórico:** Completada bajo el contrato multirol el 2026-10-13; supersedida por la aprobación del rol único jerárquico. La matriz vigente por nivel mínimo está en [Contrato jerárquico](roles-contract.md); adaptaciones de código pendientes en R.9–R.15.
+- **Estado:** Contrato completado y desplegado conforme al modelo singular. La matriz vigente por nivel mínimo está en [Contrato jerárquico](roles-contract.md); el diseño multirol descrito en esta subtarea es histórico.
 - **Objetivo:** acordar el significado y los permisos de los cuatro roles usando la evidencia de R.1.
 - **Alcance:** elaborar una matriz rol × capacidad/ruta que muestre acceso permitido, denegado o pendiente de decisión para el comportamiento actual y el objetivo; documentar las decisiones funcionales pendientes enumeradas arriba que afecten a usuarios existentes, especialmente el antiguo `user`, `admin` y el nuevo `collaborator`.
 - **Fuera de alcance:** asignar permisos por intuición, crear jerarquías, cambiar autorización o modificar el frontend.
@@ -53,7 +55,7 @@ Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar 
 
 ## R.3 — Modelo y autorización central
 
-- **Estado histórico:** Implementada el 2026-10-13 bajo el modelo de array y coincidencia OR; requiere adaptación a `User.role` singular y evaluación jerárquica en R.10.
+- **Estado:** Completada bajo el contrato singular mediante R.10–R.14; la implementación multirol que describe esta subtarea es histórica.
 - **Objetivo:** introducir los nombres objetivo en la fuente central de roles y en los mecanismos comunes de validación y autorización.
 - **Alcance:** actualizar enum/tipos, validación de roles, decoradores y guards identificados en R.1, de acuerdo con la matriz aprobada en R.2; preservar autenticación, extracción del usuario, emisión/verificación JWT y el arreglo de roles. Caracterizar antes la semántica común de autorización y añadir cobertura focalizada para roles permitidos y denegados.
 - **Fuera de alcance:** asignar permisos de `collaborator` sin decisión; convertir el modelo a rol único; modificar consumidores específicos de módulos que correspondan a R.4; cambiar datos persistidos.
@@ -64,7 +66,7 @@ Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar 
 
 ## R.4 — Autorizaciones de módulos
 
-- **Estado histórico:** Completada (2026-10-13) para allowlists multirol; los seis grupos deben simplificarse a un mínimo requerido en R.11a–R.11f. El acceso heredado de `collaborator` y `superadmin` procede de la nueva jerarquía central.
+- **Estado:** Completada bajo el contrato singular mediante R.11a–R.11f; los resultados de allowlists multirol de esta subtarea son históricos.
 - **Objetivo:** adaptar todos los consumidores específicos del backend a la matriz acordada, por incrementos que puedan revisarse y desplegarse.
 - **Alcance:** reemplazar los nombres legacy en controllers, servicios, consultas, DTOs u otros consumidores localizados por R.1; ajustar las pruebas de cada capacidad y respetar decisiones explícitas de R.2. Aplicar los seis incrementos identificados en R.1; `collaborator` permanece fuera de las allowlists hasta que se decida su alcance por funcionalidad.
 - **Fuera de alcance:** inventar permisos, refactorizar lógica ajena a autorización, cambiar contratos no aprobados o modificar frontend.
@@ -82,8 +84,8 @@ Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar 
 
 ## R.5 — Migración de datos
 
-- **Estado:** Pendiente bajo el contrato actual; R.5a–R.5b solo completaron el preflight y la migración de arrays del diseño anterior. R.5c anterior queda sustituida por R.13–R.15.
-- **Desglose:** R.5a–R.5c. R.5a documenta el esquema y preflight local; R.5b prepara migración y pruebas; R.5c coordina la aplicación en el entorno aprobado. La descomposición no marca R.5 como completada.
+- **Estado:** Completada mediante R.13–R.15. La migración singular se aplicó en PostgreSQL local y producción, con backups y postflight registrados; R.5a–R.5c conservan el plan previo.
+- **Desglose histórico:** R.5a–R.5c conservan el diseño anterior; la ejecución efectiva queda en R.13–R.15 y en el cierre de producción.
 - **Objetivo:** diseñar y aplicar mediante una migración explícita una transición segura de los roles persistidos en PostgreSQL.
 - **Alcance:** usar el esquema documentado por R.1 y ejecutar un preflight de la base objetivo para verificar población y formato reales; definir conversión y reversión según R.2; contemplar roles acumulados, duplicados, valores desconocidos, cuentas con `admin`, nombres antiguos y cuentas sin roles canónicos. Definir el orden de versiones/despliegue para que aplicación, JWT y datos no queden en estados incompatibles.
 - **Fuera de alcance:** asumir que basta con reemplazar cadenas, descartar valores desconocidos, convertir `admin` a `superadmin` sin decisión, o convertir el antiguo `user` en `collaborator` automáticamente.
@@ -91,13 +93,13 @@ Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar 
 - **Criterios de aceptación:** plan documenta precondiciones, respaldo/recuperación, mapeo explícito, comportamiento ante duplicados/desconocidos, validación posterior y reversión; no se pierden roles o privilegios en escenarios ambiguos; la migración coincide con el esquema real y permite un despliegue ordenado; la aplicación puede operar durante cada etapa definida.
 - **Verificaciones:** pruebas de migración con combinaciones representativas y casos límite; comprobar estado previo y posterior, idempotencia según convención local y reversión si resulta viable; revisión del SQL frente al esquema y estrategia de despliegue aprobados. No ejecutar contra producción como parte de la planificación.
 - **Tamaño estimado:** L en conjunto; R.5a S, R.5b M y R.5c M. La base local tiene 190 cuentas `babyUser`, 7 cuentas con el antiguo `user` y varias combinaciones de tres roles con distinto orden. R.5a encontró además que no hay backend dual-read desplegable y que `migrationsRun: true` requiere controlar el corte/runner. El detalle y evidencia local están en [Preflight de migración R.5a](roles-migration-preflight.md).
-  - **R.5a — Preflight de migración (S):** Completada (2026-10-13) para desarrollo local: 198 cuentas; 190 `babyUser`, 7 antiguo `user`, 8 `riffValley`, 5 `superUser`; cero `admin`, desconocidos, duplicados, arrays vacíos/nulos o resultados sin rol canónico derivable. Producción pendiente de su propio preflight. [Informe R.5a](roles-migration-preflight.md).
+  - **R.5a — Preflight de migración (S):** Completada para desarrollo local (2026-10-13) y producción (2026-10-14). Los resultados de producción se resumen en [P.3.5/P.3.6](roles-production-deployment.md); esta nota conserva la fotografía local de 198 cuentas y sus roles legacy. [Informe R.5a](roles-migration-preflight.md).
   - **R.5b — Migración reversible y pruebas (M):** Implementada y probada (2026-10-13), no ejecutada en bases persistentes según el contexto disponible. `MigrateCanonicalUserRoles1791910000000` transforma arrays a arrays, por lo que queda supersedida por la migración de rol único de R.13. Su snapshot y pruebas sirven de referencia, no de implementación final. Detalle histórico: [Preflight e implementación R.5b](roles-migration-preflight.md).
-  - **R.5c — Corte anterior (M):** No ejecutada; sustituida por R.15, que requiere el esquema y la política de clasificación nuevos.
+  - **R.5c — Corte anterior (M):** Sustituida por R.15; el corte efectivo está completado y registrado en P.3.5/P.3.6.
 
 ## R.6 — Registro, login y administración
 
-- **Estado histórico:** Completada (2026-10-13) para el modelo multirol: el registro fija `roles: ['user']`, DTOs/servicios protegen asignaciones y Auth verifica `superadmin`. Las pruebas Auth pasaron 43/43 y el typecheck integrado no reportó errores. Requiere adaptar persistencia, DTOs, respuestas y JWT a `role` singular en R.12; no se considera completada para el nuevo contrato.
+- **Estado:** Completada para el contrato singular en R.12. El estado multirol previo descrito aquí queda como historial.
 - **Objetivo:** verificar que los flujos de alta, login y administración crean, validan, modifican y exponen los roles acordados.
 - **Alcance:** revisar registro/creación de usuarios, actualización administrativa de roles, validaciones y DTOs, login y JWT, respuestas de autenticación, listados/detalles administrativos y las operaciones identificadas por R.1. Ajustar solo lo necesario para cumplir la matriz y el contrato aprobado.
 - **Fuera de alcance:** cambios de producto no relacionados con roles o cambios no aprobados en payloads de autenticación/administración.
@@ -108,7 +110,7 @@ Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar 
 
 ## R.7 — Pruebas y regresión
 
-- **Estado:** Pendiente y replanificada como R.14. La cobertura existente conserva verificaciones válidas, pero debe actualizarse para el rol único y jerarquía.
+- **Estado:** Completada mediante R.14. Como observación, no se ejecutaron pruebas completas de permisos con cuentas editoriales y administrativas.
 - **Objetivo:** demostrar que la matriz y migración se cumplen y que los nombres retirados no conservan comportamiento funcional.
 - **Alcance:** completar cobertura unitaria, integración y de migración para roles permitidos/denegados, ausencia de rol, acumulación de roles, datos límite de migración y administración; revisar todos los usos encontrados por R.1.
 - **Fuera de alcance:** cambios de permisos sin decisión, arreglos ajenos a roles o actualización del repositorio frontend.
@@ -119,7 +121,7 @@ Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar 
 
 ## R.8 — Cierre del backend y contrato para frontend
 
-- **Estado:** Pendiente y replanificada como R.15; debe publicar el claim singular y coordinar el corte de esquema.
+- **Estado:** Completada mediante R.15; backend y PostgreSQL desplegados/migrados, frontend adaptado y desplegado según confirmación manual del usuario.
 - **Objetivo:** cerrar la refactorización backend y dejar al frontend un contrato y una secuencia de adopción inequívocos.
 - **Alcance:** revisar el resultado integral, referencias, rutas protegidas, persistencia, JWT y endpoints administrativos; documentar nombres de roles, claims/respuestas afectados, incompatibilidades y orden recomendado de despliegue backend/frontend; registrar decisiones que requieran coordinación.
 - **Fuera de alcance:** modificar el repositorio frontend, iniciar una migración de contrato no aprobada o añadir endpoints/versiones alternativas.
@@ -130,7 +132,7 @@ Confirmar el estado de `1791910000000` en todos los ledgers TypeORM; clasificar 
 
 ## Nueva ola — adaptación al rol único jerárquico
 
-Los estados R.1–R.8 anteriores se conservan como historial del diseño multirol. Las tareas siguientes son las únicas que cuentan para cerrar el contrato aprobado actualmente. No desplegar una mezcla de la aplicación anterior y el nuevo esquema.
+Los planes detallados de esta ola describen la ejecución histórica. R.9–R.15 están completadas; su evidencia y observaciones se conservan en cada sección. No quedan fases funcionales obligatorias abiertas.
 
 ### R.9 — Contrato y matriz de niveles mínimos
 
@@ -144,7 +146,7 @@ Los estados R.1–R.8 anteriores se conservan como historial del diseño multiro
 
 ### R.10 — Entidad y autorización central de rol único
 
-- **Estado:** Completada en el núcleo de Auth (2026-10-13); integración pendiente de R.11 y R.12.
+- **Estado:** Completada e integrada con R.11 y R.12.
 - **Objetivo:** sustituir el modelo central de arrays por `User.role: ValidRoles` y aplicar la jerarquía una sola vez en Auth.
 - **Alcance:** adaptar entidad/tipos, enum, decoradores, metadatos, `UserRoleGuard`, `JwtPayload` y tests centrales. `@Auth()` mantiene solo autenticación; `@Auth(minimum)` evalúa un único mínimo y admite todos los niveles iguales o superiores. PostgreSQL sigue siendo autoridad y desconocidos deniegan acceso.
 - **Fuera de alcance:** cambiar mínimos de endpoints de dominio (R.11), DTO/operaciones de Auth (R.12), schema/data migration (R.13) o frontend.
@@ -155,7 +157,7 @@ Los estados R.1–R.8 anteriores se conservan como historial del diseño multiro
 
 ### R.11 — Consumidores de módulos por nivel mínimo
 
-- **Estado:** Pendiente.
+- **Estado:** Completada (R.11a–R.11f).
 - **Objetivo:** expresar en controllers cada autorización de dominio como un mínimo único del contrato R.9.
 - **Alcance:** sustituir argumentos de múltiples roles por el mínimo aprobado; conservar `@Auth()` y las rutas públicas; dejar propiedad y reglas de negocio independientes intactas; eliminar comprobaciones de strings de rol en servicios o consultas y centralizarlas en Auth cuando existan.
 - **Dependencias:** R.9 para la matriz; coordinar integración con R.10. Cada incremento puede revisarse por separado, pero no desplegarse antes de tener la jerarquía central y la migración completas.
@@ -182,7 +184,7 @@ Los estados R.1–R.8 anteriores se conservan como historial del diseño multiro
 
 ### R.13 — Preflight de despliegue y migración a `users.role`
 
-- **Estado:** R.13a y R.13b completadas; la cadena se ejecutó el 2026-10-13 únicamente en PostgreSQL local `SpamMusicDB`. El postflight confirmó 198 usuarios, esquema singular, roles canónicos y ambos snapshots de datos más el de esquema. La migración histórica se conserva intacta. No se conectó a producción ni Heroku; los ledgers remotos siguen sin confirmar.
+- **Estado:** Completada. La cadena se ejecutó en local y producción; PostgreSQL conserva 198 usuarios, el esquema singular, 91 entradas de ledger y tres snapshots. La migración histórica se conserva intacta. El detalle remoto está en [P.3.5/P.3.6](roles-production-deployment.md).
 - **Objetivo:** retirar `users.roles text[]` y migrar a un solo valor canónico con verificación y rollback exacto.
 - **Alcance y dependencias:**
   - **R.13a — Preflight de datos y ledger (S):** Completada (2026-10-13) para el entorno local; `public.users` conserva `roles text[]` y el ledger de 89 entradas no incluye `1791910000000`. Se observaron 198 cuentas, seis combinaciones; cero arrays nulos/vacíos/duplicados/desconocidos y cero `['user']` exactos. No se consultaron entornos remotos, por lo que su ledger sigue desconocido. La recomendación conservadora es preservar la migración histórica y añadir una migración posterior; reevaluar in-place solo tras demostrar que no se aplicó en ningún destino. Detalle: [preflight y migración](roles-migration-preflight.md).
@@ -210,11 +212,11 @@ Los estados R.1–R.8 anteriores se conservan como historial del diseño multiro
 
 ### R.15 — Corte seguro y contrato posterior para frontend
 
-- **Estado:** corte de PostgreSQL local completado el 2026-10-13; backend nuevo del workspace iniciado y verificado con un GET público de solo lectura; pruebas conjuntas frontend/backend y despliegues pendientes. No se accedió a entornos remotos.
+- **Estado:** Completada. Backend desplegado en Heroku, frontend adaptado y desplegado en Netlify (confirmación manual del usuario), y PostgreSQL migrado a `users.role`. Evidencias y límites de comprobación en [cierre de producción](roles-production-deployment.md).
 - **Objetivo:** ejecutar el corte de schema con seguridad y entregar el contrato singular al equipo frontend, sin modificar su repositorio.
 - **Alcance:**
-  - **R.15a — Corte local (M):** **Migración y postflight de `SpamMusicDB` completados (2026-10-13).** Se creó un backup custom inmediato y se conservó el backup restaurado previamente. Se detuvo solo el contenedor API antiguo, se aplicaron las dos migraciones con el runner dedicado y se verificaron esquema, constraint, 198 IDs, distribución, ledger y snapshots. El 2026-10-13 se resolvió el arranque: `dist` y los logs activos pertenecían a `nobody`, y `AuthModule` no proporcionaba `UserRoleGuard` a los contextos de módulos; se corrigieron los propietarios y se centralizó/exportó el guard, importando `AuthModule` en los módulos afectados. `start:dev` inicializa Nest y `GET /api/countries` responde HTTP 200. El contenedor API antiguo sigue detenido. La suite focalizada pasa salvo el fallo previo de `versions.controller.spec.ts` por `VersionRepository` ausente en su módulo de prueba. F.5.1 y las pruebas conjuntas frontend/backend siguen pendientes. No hubo despliegue ni acceso a producción/Heroku.
-  - **R.15b — Contrato para frontend (S):** **Completada (2026-10-13).** [Contrato Auth y roles para frontend](roles-frontend-contract.md) documenta peticiones/respuestas verificadas en código, claim singular, jerarquía, autorización por rol persistido, consumidores Vue ya identificados, cambios frontend orientativos, ausencia de `/auth/me`, transición JWT, compatibilidad y secuencia de corte. No se modificó el frontend. El backend compatible inicia localmente y no se ha desplegado.
+  - **R.15a — Corte local (M):** **Migración y postflight de `SpamMusicDB` completados (2026-10-13).** Se creó un backup custom inmediato y se conservó el backup restaurado previamente. Se detuvo solo el contenedor API antiguo, se aplicaron las dos migraciones con el runner dedicado y se verificaron esquema, constraint, 198 IDs, distribución, ledger y snapshots. El 2026-10-13 se resolvió el arranque: `dist` y los logs activos pertenecían a `nobody`, y `AuthModule` no proporcionaba `UserRoleGuard` a los contextos de módulos; se corrigieron los propietarios y se centralizó/exportó el guard, importando `AuthModule` en los módulos afectados. `start:dev` inicializa Nest y `GET /api/countries` responde HTTP 200. La suite focalizada pasó salvo el fallo previo de `versions.controller.spec.ts` por `VersionRepository` ausente en su módulo de prueba. No se ejecutaron pruebas completas de permisos con cuentas editoriales y administrativas; son una observación adicional. El cierre remoto está en P.3.5/P.3.6.
+  - **R.15b — Contrato y adopción frontend (S):** Completada. El contrato describe el claim singular y la jerarquía; el usuario confirmó manualmente que el frontend adaptado está desplegado en Netlify.
 - **Dependencias:** R.13 y R.14, esquema/versión de artefacto probados y autorización operativa específica para el entorno.
 - **Criterios de aceptación:** R.15a deja preparada y revisable la secuencia de preflight, backup/restauración, parada de escritores, runner único, postflight, despliegue compatible y recuperación; registra por separado preparación, migración y despliegue. La ejecución real requiere aprobación y preflight propios del destino. R.15b documenta el contrato singular y orden de despliegue para frontend.
 - **Verificaciones:** ensayo del runner en entorno efímero; checklist verificable de preflight/backup/postflight/rollback; revisar el contrato sin cambiar frontend.
@@ -227,4 +229,4 @@ Los estados R.1–R.8 anteriores se conservan como historial del diseño multiro
 3. Implementar R.10, los incrementos R.11a–R.11f y R.12 en cambios pequeños sobre una única rama de integración. El typecheck/deploy integrado no se considera disponible hasta que todo consumidor use el contrato singular; no introducir adaptadores duales.
 4. Completar R.13b contra la decisión de R.13a y el modelo final de R.10/R.12.
 5. Completar R.14 y exigir regresión/typecheck integrados antes del corte.
-6. R.15a se ejecutó en la base local y el backend nuevo ya arranca; completar las pruebas backend/frontend acordadas (F.5.1 sigue pendiente) y desplegar únicamente después de verificar el backend y comunicar el claim `role`.
+6. El cierre funcional de roles está completado. Las pruebas completas con cuentas editoriales y administrativas quedan como observación adicional y no bloquean el roadmap.

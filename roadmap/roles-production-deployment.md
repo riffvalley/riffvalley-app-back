@@ -1,5 +1,7 @@
 # P.1 — Preflight PostgreSQL de producción y secuencia de corte
 
+> **Cierre final (2026-10-14):** Backend de Riff Valley desplegado en `spammusic-back`, release `v309`; frontend adaptado y desplegado en Netlify según comprobación manual del usuario. PostgreSQL migrado de `users.roles` a `users.role`. Se conservaron 198 usuarios: 190 `user`, 3 `riffvalley`, 5 `superadmin` y 0 `collaborator`. Ledger: 91 migraciones; snapshots presentes: `user_roles_migration_snapshot_1791910000000`, `user_roles_single_snapshot_1791920000000` y `user_roles_single_schema_snapshot_1791920000000`. Backup `b008` conservado. Maintenance quedó desactivado y `web.1` operativo. Se verificaron esquema, conteos/distribución, ledger, snapshots, arranque y endpoints públicos/protegidos. El usuario confirma además una comprobación básica de autenticación, incluido el rol recibido en la web. No se ejecutaron pruebas completas de permisos con cuentas editoriales y administrativas; quedan como observación adicional, no como fase obligatoria. P.1–P.3.2 son fotografías históricas; los resultados posteriores están registrados en P.3.5 y P.3.6.
+
 > **Aclaraciones P.2a/P.2b (2026-10-13):** La lista inicial de P.1 se basó en basenames, no en las identidades TypeORM. P.2b comparó los 90 nombres efectivos del código con el ledger de producción mediante SQL `READ ONLY`: solo están pendientes `MigrateCanonicalUserRoles1791910000000` y `MigrateUsersToSingleRole1791920000`. Las dos identidades históricas ajenas están aplicadas. P.2b también retiró la fase `release` automática del `Procfile` y desactivó `migrationsRun` en el arranque Nest. Véanse las secciones P.2a/P.2b al final. No se desplegó ni se modificó producción.
 
 **Fecha:** 2026-10-13
@@ -471,3 +473,54 @@ Secuencia para una ventana posterior, con verificación independiente entre paso
 ### Decisión P.3.2
 
 Datasource/config vars coinciden con `DATABASE`, `b007` conserva su checksum y el código local preparado mantiene las salvaguardas de P.3.1. Sin embargo, **no iniciar el corte todavía**: Scheduler continúa sin inventario comprobable y los cambios requeridos permanecen sin commit ni publicación, mientras producción sigue ejecutando `v307` de código. El estado de Automatic Deploys es confirmación del usuario, no comprobación independiente de CLI. La rotación de secretos ya registrada en P.2d también sigue pendiente. No se desplegó, no se cambió configuración de Heroku/PostgreSQL ni se ejecutaron migraciones.
+
+## P.3.5 — Backup y despliegue manual en Heroku (2026-10-14)
+
+**Resultado: completada.** Se desplegó en `spammusic-back` el commit exacto `826f7dc363b695a0dd9e0bf2018877003e9bb95e` mediante Heroku Git, sin `--force`. El build terminó correctamente y creó el release `v309`. La aplicación permanece en maintenance (`on`) y sin dynos activos (`web=0`). No se ejecutaron migraciones ni se inició el dyno web.
+
+### Preflight y backup fresco
+
+- `main` local y `origin/main` apuntaban a `826f7dc363b695a0dd9e0bf2018877003e9bb95e`. El commit contiene `Procfile` sin fase `release`, `migrationsRun: false`, `synchronize: false` y el script `migration:roles` dirigido al runner JavaScript compilado.
+- El remoto Heroku existente corresponde a `spammusic-back`; no se modificó `origin` ni la integración GitHub del dashboard.
+- Antes del deploy, Heroku estaba en `v308`; maintenance estaba `on` y no había dynos activos. PostgreSQL `postgresql-lively-94498` estaba disponible.
+- Se revisó la retención de cinco backups (`b003`–`b007`) y se capturó `b008`, completado el 2026-10-13 a las 22:06:50 UTC. Heroku retiró automáticamente `b003`; `b007` se conserva.
+- `b008` se descargó fuera del repositorio en `/home/tottibero/backups/riffvalley-p2c-20261013/spammusic-back-b008-20261014.dump`; tamaño 3,877,559 bytes, modo `0600`. SHA-256: `f12568e8cab2eba66aa50cd48994a3406cfa93269159f2bdff24dee5eb02bf2c`. `pg_restore --list` confirmó las tablas `public.users` y `public.migrations`.
+
+### Cierre del servicio y PostgreSQL
+
+Se confirmó maintenance `on` y cero dynos antes del envío. Tras el deploy y la comprobación del runner, Heroku continuó mostrando maintenance `on` y ningún dyno activo. La consulta de solo lectura a PostgreSQL confirmó 198 usuarios, 89 filas de ledger y la columna legacy `users.roles` (`text[]`); no existe todavía `users.role`. Las migraciones de roles no se ejecutaron.
+
+Por decisión expresa del usuario, no se inventariaron ni suspendieron los trabajos de Heroku Scheduler. Se acepta el riesgo de que un job programado pueda iniciarse durante la ventana; Scheduler no se modificó.
+
+### Deploy y verificación
+
+- Se verificó con `git ls-remote heroku refs/heads/main` que la rama Heroku apunta al SHA completo `826f7dc363b695a0dd9e0bf2018877003e9bb95e`.
+- Se publicó el SHA directamente con `git push heroku 826f7dc363b695a0dd9e0bf2018877003e9bb95e:main`, sin forzar. El build de Heroku 24 completó `yarn build` (`nest build` y copia de assets) y creó `v309`, descrito como `Deploy 826f7dc3`. El build informó que Node 20 está en fin de vida; no impidió el despliegue.
+- Heroku detectó únicamente el tipo de proceso `web` desde el `Procfile`, sin fase `release`; por tanto no hubo comando de migración automático.
+- Un dyno one-off ejecutó solo una comprobación Node de lectura: confirmó el runner compilado `dist/roles-migration/run-roles-migration-chain.js`, ambas migraciones JavaScript y la resolución de `typeorm` y `pg`. No cargó NestJS ni invocó el runner. El one-off terminó correctamente.
+- La verificación final mostró `v309` como release actual, `refs/heads/main` en el SHA autorizado, maintenance `on`, ningún dyno activo y PostgreSQL sin cambios de esquema ni ledger.
+
+P.3.5 queda completada.
+
+## P.3.6 — Migración de roles en PostgreSQL y recuperación del backend (2026-10-14)
+
+**Resultado: completada.** El runner específico finalizó con código `0` y reportó la aplicación de `MigrateCanonicalUserRoles1791910000000` y `MigrateUsersToSingleRole1791920000000`. Se ejecutó una sola vez. El servicio se recuperó y maintenance quedó desactivado tras validar esquema, datos, ledger, snapshots, arranque y endpoints disponibles.
+
+### Preflight inmediato
+
+Antes de ejecutar el runner, la aplicación estaba en `v309`, Heroku Git `main` apuntaba al SHA autorizado `826f7dc363b695a0dd9e0bf2018877003e9bb95e`, maintenance estaba `on`, no había dynos activos y PostgreSQL no mostraba transacciones activas ni sesiones en espera externas. El backup `b008` seguía en estado `Completed`. La base tenía 198 usuarios, `users.roles text[]` y 89 migraciones.
+
+### Resultado de la migración y validación de PostgreSQL
+
+- El runner informó las dos migraciones esperadas. El ledger quedó en 91 entradas e incluye ambas identidades timestamped (`1791910000000` y `1791920000000`).
+- `public.users` conserva 198 filas. Existe `role text NOT NULL DEFAULT user`; ya no existe `roles`.
+- La constraint `CHK_users_role_canonical_1791920000000` limita `role` a `user`, `collaborator`, `riffvalley` y `superadmin`.
+- No se encontraron roles nulos ni inválidos. Distribución: `user` 190, `riffvalley` 3, `superadmin` 5, `collaborator` 0.
+- Están presentes los snapshots `user_roles_migration_snapshot_1791910000000`, `user_roles_single_snapshot_1791920000000` y `user_roles_single_schema_snapshot_1791920000000`.
+- La consulta de postflight fue `READ ONLY` y terminó con `ROLLBACK`; no se hicieron correcciones manuales.
+
+### Arranque, API y recuperación
+
+Se escaló `web` a `1:Basic` manteniendo maintenance. `web.1` quedó `up`; los logs resumidos confirman el inicio de NestJS, sin errores/fatales ni fallos de conexión a PostgreSQL. Tras comprobar la estabilidad se retiró maintenance. Las solicitudes externas devolvieron `200` en `GET /api/versions/public` y `401` en `GET /api/auth/private` sin credenciales, confirmando acceso público y protección de la ruta administrativa. El estado final de Heroku mostró `web.1` `up` en Basic y maintenance `off`.
+
+Durante esta comprobación operativa no se ejecutaron pruebas completas de autorización con cuentas editoriales o superadmin. El usuario confirma por separado que se comprobó la autenticación básica y que la web recibió el rol. No se modificó Scheduler; permanece el riesgo aceptado por el usuario. No se reactivó Automatic Deploys.

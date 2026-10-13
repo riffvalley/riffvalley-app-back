@@ -29,6 +29,9 @@
     "migration:run": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run --dataSource src/data-source.ts",
     "migration:roles": "node dist/roles-migration/run-roles-migration-chain.js",
     "migration:run:prod": "node ./node_modules/typeorm/cli.js migration:run --dataSource dist/data-source.js",
+    "db:status": "node scripts/db-migrations.js status",
+    "db:migrate": "node scripts/db-migrations.js migrate",
+    "db:check": "node scripts/db-migrations.js check",
     "migration:revert": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert --dataSource src/data-source.ts",
     "console": "node dist/standalone"
   },
