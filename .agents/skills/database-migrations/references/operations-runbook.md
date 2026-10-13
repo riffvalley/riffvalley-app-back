@@ -37,6 +37,20 @@ No muestra `DB_NAME`, host, release ni los nombres de cada migración ya aplicad
 
 ## Heroku `spammusic-back`
 
+### Asistente recomendado
+
+Desde una copia local del repositorio, con Heroku CLI autenticada, ejecuta:
+
+    bash scripts/db-migrate-heroku.sh
+
+El script verifica la identidad exacta de `spammusic-back`, consulta el release y usa `heroku run --no-tty --exit-code` para reutilizar los comandos generales. El release remoto debe incluir la salida estable `yarn db:status --json`; el modo de texto del comando conserva su comportamiento habitual. El JSON contiene `stage`, el nombre de base de TypeORM, existencia del ledger y nombres ordenados de pendientes. El asistente detiene el proceso si `stage` no es `prod`, falta el ledger, `DB_NAME` difiere del datasource o la lista incluye la cadena histórica de roles.
+
+Heroku no ofrece salida JSON para `pg:info` ni para `pg:backups:info`. Por eso el script muestra sus informes sin analizarlos: el desarrollador debe confirmar que `Database` coincide exactamente con `DB_NAME`, introducir el ID del backup creado y confirmar que el informe de ese ID indica `Completed` y corresponde al attachment/base esperados. Si no puede verificarlo, cancela. El token de autorización incluye app, base, lista ordenada y la declaración de compatibilidad o ventana coordinada.
+
+El asistente crea el backup solo después de la autorización. Después vuelve a consultar `DB_NAME` y `db:status --json`; si cambió la base, el ledger o cualquier nombre/orden, se detiene antes de `db:migrate`. Ejecuta el runner una sola vez y, si este falla, no reintenta. Tras éxito comprueba `db:status` y `db:check`. Nunca cambia maintenance ni dynos. No lo conectes a release hooks, build ni Automatic Deploys.
+
+### Alternativa manual
+
 Los comandos siguientes se ejecutan desde un one-off dyno del release actual:
 
     heroku run --app spammusic-back -- yarn db:status

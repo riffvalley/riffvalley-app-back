@@ -1,11 +1,42 @@
 const {
   inspectMigrationStatus,
+  printJsonStatus,
   parseConfirmation,
   pendingMigrations,
   ROLE_CHAIN_MIGRATIONS,
 } = require('../../../scripts/db-migrations');
 
 describe('manual migration commands', () => {
+  it('emits stable JSON with the datasource database and ordered pending names', () => {
+    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    printJsonStatus(
+      { options: { database: 'riffvalley_test' } },
+      {
+        ledgerExists: true,
+        ledgerTable: 'migrations',
+        allMigrations: [
+          { name: 'First1700000000000' },
+          { name: 'Second1700000000001' },
+        ],
+        appliedNames: ['First1700000000000'],
+        pending: [{ name: 'Second1700000000001' }],
+      },
+    );
+
+    expect(JSON.parse(log.mock.calls[0][0])).toEqual({
+      formatVersion: 1,
+      stage: null,
+      database: 'riffvalley_test',
+      ledgerExists: true,
+      ledgerTable: 'migrations',
+      compiledMigrations: 2,
+      appliedCount: 1,
+      pending: ['Second1700000000001'],
+    });
+    log.mockRestore();
+  });
+
   it('marks every compiled migration pending when the ledger does not exist without creating it', async () => {
     const calls: string[] = [];
     const dataSource = {

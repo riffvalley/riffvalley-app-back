@@ -41,7 +41,15 @@ yarn db:check
 
 ### Producción en Heroku
 
-El despliegue automático de Heroku nunca ejecuta migraciones. En `spammusic-back`, `db:status` muestra el estado del ledger, cuántas migraciones se cargaron/aplicaron y los nombres exactos de las pendientes en orden; no muestra el nombre de la base. Consúltalo y obtén `DB_NAME` de forma segura:
+El método recomendado es el asistente interactivo, ejecutado desde este repositorio:
+
+```sh
+bash scripts/db-migrate-heroku.sh
+```
+
+Requiere Node 20, Heroku CLI autenticada y un release de `spammusic-back` que incluya `db:status --json`. El script comprueba app y release, muestra el attachment PostgreSQL y la lista ordenada, pide autorización, crea y verifica un backup y ejecuta `db:migrate` una sola vez. Confirma en pantalla que `Database` en `pg:info` coincide con `DB_NAME` y que el backup indica `Completed`. Si no hay pendientes, no ejecuta migraciones. No activa maintenance ni cambia dynos.
+
+Las migraciones siguen siendo independientes del despliegue automático de Heroku. Como alternativa, puedes seguir el procedimiento manual:
 
 ```sh
 heroku run --app spammusic-back -- yarn db:status
