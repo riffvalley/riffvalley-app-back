@@ -16,6 +16,7 @@ import { UpdateDiscDto } from './dto/update-discs.dto';
 import { PaginationDto } from '../../common/dtos/pagination.dto';
 
 import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';
 import { TopStatsQueryDto } from 'src/common/dtos/top-stats-query.dto';
@@ -29,6 +30,7 @@ export class DiscsController {
   constructor(private readonly discsServices: DiscsService) {}
 
   @Post()
+  @Auth(ValidRoles.riffvalley)
   create(@Body() createDiscDto: CreateDiscDto) {
     return this.discsServices.create(createDiscDto);
   }
@@ -115,6 +117,7 @@ export class DiscsController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateDiscDto: UpdateDiscDto,
@@ -123,6 +126,7 @@ export class DiscsController {
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.discsServices.remove(id);
   }

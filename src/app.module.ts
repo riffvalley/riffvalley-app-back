@@ -59,7 +59,7 @@ import { TiktokModule } from './tiktok/tiktok.module';
       password: process.env.DB_PASSWORD,
       autoLoadEntities: true,
       synchronize: false,
-      migrationsRun: true,
+      migrationsRun: false,
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
     I18nConfigModule,

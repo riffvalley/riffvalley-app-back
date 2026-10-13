@@ -9,6 +9,9 @@ import { UpdateGenreDto } from '../dto/update-genre.dto';
 import { PaginationDto } from '../../../common/dtos/pagination.dto';
 import { GenresController } from '../genres.controller';
 import { GenresService } from '../genres.service';
+import { META_MINIMUM_ROLE } from '../../../auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from '../../../auth/guards/user-role/user-role.guard';
+import { ValidRoles } from '../../../auth/interfaces/valid-roles';
 
 describe('GenresController contract characterization', () => {
   const service = {
@@ -37,9 +40,13 @@ describe('GenresController contract characterization', () => {
     expect(Reflect.getMetadata(PATH_METADATA, GenresController)).toBe('genres');
     expect(Reflect.getMetadata(PATH_METADATA, handler('create'))).toBe('/');
     expect(Reflect.getMetadata(METHOD_METADATA, handler('create'))).toBe(1);
-    expect(Reflect.getMetadata('design:paramtypes', GenresController.prototype, 'create')).toEqual([
-      CreateGenreDto,
-    ]);
+    expect(
+      Reflect.getMetadata(
+        'design:paramtypes',
+        GenresController.prototype,
+        'create',
+      ),
+    ).toEqual([CreateGenreDto]);
     await expect(controller.create(dto)).resolves.toBe(response);
     expect(service.create).toHaveBeenCalledWith(dto);
     expect(service.create).toHaveBeenCalledTimes(1);
@@ -47,14 +54,23 @@ describe('GenresController contract characterization', () => {
 
   it('preserves POST /api/genres/bultCreateGenre and its untyped { genres: [...] } body', async () => {
     const body = { genres: [{ name: 'Rock', color: '#123456' }] };
-    const response = { message: '1 genres have been successfully created.', data: body.genres };
+    const response = {
+      message: '1 genres have been successfully created.',
+      data: body.genres,
+    };
     service.bulkCreate.mockResolvedValue(response);
 
-    expect(Reflect.getMetadata(PATH_METADATA, handler('bulkCreate'))).toBe('bultCreateGenre');
+    expect(Reflect.getMetadata(PATH_METADATA, handler('bulkCreate'))).toBe(
+      'bultCreateGenre',
+    );
     expect(Reflect.getMetadata(METHOD_METADATA, handler('bulkCreate'))).toBe(1);
-    expect(Reflect.getMetadata('design:paramtypes', GenresController.prototype, 'bulkCreate')).toEqual([
-      Object,
-    ]);
+    expect(
+      Reflect.getMetadata(
+        'design:paramtypes',
+        GenresController.prototype,
+        'bulkCreate',
+      ),
+    ).toEqual([Object]);
     await expect(controller.bulkCreate(body)).resolves.toBe(response);
     expect(service.bulkCreate).toHaveBeenCalledWith(body);
     expect(service.bulkCreate).toHaveBeenCalledTimes(1);
@@ -73,9 +89,13 @@ describe('GenresController contract characterization', () => {
 
     expect(Reflect.getMetadata(PATH_METADATA, handler('findAll'))).toBe('/');
     expect(Reflect.getMetadata(METHOD_METADATA, handler('findAll'))).toBe(0);
-    expect(Reflect.getMetadata('design:paramtypes', GenresController.prototype, 'findAll')).toEqual([
-      PaginationDto,
-    ]);
+    expect(
+      Reflect.getMetadata(
+        'design:paramtypes',
+        GenresController.prototype,
+        'findAll',
+      ),
+    ).toEqual([PaginationDto]);
     await expect(controller.findAll(query)).resolves.toBe(response);
     expect(service.findAll).toHaveBeenCalledWith(query);
   });
@@ -90,7 +110,11 @@ describe('GenresController contract characterization', () => {
     await expect(controller.findOne(id)).resolves.toBe(response);
     expect(service.findOne).toHaveBeenCalledWith(id);
     await expect(
-      new ParseUUIDPipe().transform('invalid', { type: 'param', metatype: String, data: 'id' }),
+      new ParseUUIDPipe().transform('invalid', {
+        type: 'param',
+        metatype: String,
+        data: 'id',
+      }),
     ).rejects.toMatchObject({ status: 400 });
   });
 
@@ -102,10 +126,13 @@ describe('GenresController contract characterization', () => {
 
     expect(Reflect.getMetadata(PATH_METADATA, handler('update'))).toBe(':id');
     expect(Reflect.getMetadata(METHOD_METADATA, handler('update'))).toBe(4);
-    expect(Reflect.getMetadata('design:paramtypes', GenresController.prototype, 'update')).toEqual([
-      String,
-      UpdateGenreDto,
-    ]);
+    expect(
+      Reflect.getMetadata(
+        'design:paramtypes',
+        GenresController.prototype,
+        'update',
+      ),
+    ).toEqual([String, UpdateGenreDto]);
     await expect(controller.update(id, dto)).resolves.toBe(response);
     expect(service.update).toHaveBeenCalledWith(id, dto);
   });
@@ -121,40 +148,78 @@ describe('GenresController contract characterization', () => {
     expect(service.remove).toHaveBeenCalledWith(id);
   });
 
-  it('has no explicit auth metadata on the controller or any current route', () => {
-    expect(Reflect.getMetadata(GUARDS_METADATA, GenresController)).toBeUndefined();
-    for (const method of ['create', 'bulkCreate', 'findAll', 'findOne', 'update', 'remove'] as const) {
-      expect(Reflect.getMetadata(GUARDS_METADATA, handler(method))).toBeUndefined();
+  it('protects writes at riffvalley while keeping catalog reads public', () => {
+    expect(
+      Reflect.getMetadata(GUARDS_METADATA, GenresController),
+    ).toBeUndefined();
+    for (const method of ['findAll', 'findOne'] as const) {
+      expect(
+        Reflect.getMetadata(GUARDS_METADATA, handler(method)),
+      ).toBeUndefined();
+    }
+    for (const method of [
+      'create',
+      'bulkCreate',
+      'update',
+      'remove',
+    ] as const) {
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler(method))).toContain(
+        UserRoleGuard,
+      );
+      expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler(method))).toBe(
+        ValidRoles.riffvalley,
+      );
     }
   });
 
   it('propagates service errors without wrapping them', async () => {
     const error = new Error('service failure');
     service.update.mockRejectedValue(error);
-    await expect(controller.update('id', {} as UpdateGenreDto)).rejects.toBe(error);
+    await expect(controller.update('id', {} as UpdateGenreDto)).rejects.toBe(
+      error,
+    );
   });
 
   it('confirms CreateGenreDto declares color optional in TypeScript but validates an absent color as required', async () => {
     const dto: CreateGenreDto = { name: 'Rock' };
     expect(dto.color).toBeUndefined();
 
-    const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
+    const pipe = new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
     await expect(
-      pipe.transform({ name: 'Rock' }, { type: 'body', metatype: CreateGenreDto }),
+      pipe.transform(
+        { name: 'Rock' },
+        { type: 'body', metatype: CreateGenreDto },
+      ),
     ).rejects.toMatchObject({
       status: 400,
-      response: expect.objectContaining({ message: expect.arrayContaining([expect.stringContaining('color')]) }),
+      response: expect.objectContaining({
+        message: expect.arrayContaining([expect.stringContaining('color')]),
+      }),
     });
   });
 
   it('confirms PaginationDto transforms query numbers, rejects limit zero, and permits a negative offset', async () => {
-    const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
+    const pipe = new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
     await expect(
-      pipe.transform({ limit: '0', offset: '-5' }, { type: 'query', metatype: PaginationDto }),
+      pipe.transform(
+        { limit: '0', offset: '-5' },
+        { type: 'query', metatype: PaginationDto },
+      ),
     ).rejects.toMatchObject({ status: 400 });
 
     await expect(
-      pipe.transform({ limit: '5', offset: '-5' }, { type: 'query', metatype: PaginationDto }),
+      pipe.transform(
+        { limit: '5', offset: '-5' },
+        { type: 'query', metatype: PaginationDto },
+      ),
     ).resolves.toMatchObject({ limit: 5, offset: -5 });
   });
 });

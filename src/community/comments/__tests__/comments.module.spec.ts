@@ -1,11 +1,16 @@
 import { RequestMethod } from '@nestjs/common';
-import { GUARDS_METADATA, METHOD_METADATA, MODULE_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import {
+  GUARDS_METADATA,
+  METHOD_METADATA,
+  MODULE_METADATA,
+  PATH_METADATA,
+} from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { getMetadataArgsStorage } from 'typeorm';
 import { AuthModule } from 'src/auth/auth.module';
-import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
+import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
 import { User } from 'src/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
@@ -47,12 +52,18 @@ describe('CommentsModule characterization', () => {
     expect(service.commentRepository).toBe(commentRepository);
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
 
-    const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, CommentsModule) as unknown[];
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      CommentsModule,
+    ) as unknown[];
     expect(imports).toContain(AuthModule);
   });
 
   it('preserves route methods, paths, and authentication on create and user list', () => {
-    const controllerPath = Reflect.getMetadata(PATH_METADATA, CommentsController);
+    const controllerPath = Reflect.getMetadata(
+      PATH_METADATA,
+      CommentsController,
+    );
     expect(controllerPath).toBe('comments');
 
     const expectedRoutes = [
@@ -68,15 +79,22 @@ describe('CommentsModule characterization', () => {
       const handler = CommentsController.prototype[method];
       expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(requestMethod);
       expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
-      expect(Boolean(Reflect.getMetadata(GUARDS_METADATA, handler))).toBe(authenticated);
-      if (authenticated) expect(Reflect.getMetadata(META_ROLES, handler)).toEqual([]);
+      expect(Boolean(Reflect.getMetadata(GUARDS_METADATA, handler))).toBe(
+        authenticated,
+      );
+      if (authenticated) {
+        expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
+      }
     }
   });
 
   it('preserves Comment relations and eager metadata', () => {
     const relations = getMetadataArgsStorage().relations;
     const relation = (target: Function, propertyName: string) =>
-      relations.find((entry) => entry.target === target && entry.propertyName === propertyName);
+      relations.find(
+        (entry) =>
+          entry.target === target && entry.propertyName === propertyName,
+      );
 
     expect(relation(Comment, 'user')).toMatchObject({
       relationType: 'many-to-one',
@@ -90,7 +108,9 @@ describe('CommentsModule characterization', () => {
       relationType: 'many-to-one',
       options: { nullable: true, onDelete: 'CASCADE' },
     });
-    expect(relation(Comment, 'replies')).toMatchObject({ relationType: 'one-to-many' });
+    expect(relation(Comment, 'replies')).toMatchObject({
+      relationType: 'one-to-many',
+    });
     expect(relation(Comment, 'disc')?.options.eager).toBeUndefined();
     expect(relation(Comment, 'parent')?.options.eager).toBeUndefined();
     expect(relation(Comment, 'replies')?.options.eager).toBeUndefined();

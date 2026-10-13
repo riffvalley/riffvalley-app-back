@@ -23,7 +23,7 @@ export class TiktokController {
   ) {}
 
   @Post('connect')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   connect() {
     return this.tiktokService.startConnection();
   }
@@ -50,13 +50,13 @@ export class TiktokController {
   }
 
   @Get('connection')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   getConnection() {
     return this.tiktokService.getConnection();
   }
 
   @Delete('connection')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   disconnect() {
     return this.tiktokService.disconnect();
   }

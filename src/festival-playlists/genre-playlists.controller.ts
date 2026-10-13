@@ -27,7 +27,7 @@ import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
 import { FestivalPlaylistsService } from './festival-playlists.service';
 
 @Controller('genre-playlists')
-@Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+@Auth(ValidRoles.riffvalley)
 export class GenrePlaylistsController {
   constructor(
     private readonly festivalPlaylistsService: FestivalPlaylistsService,
@@ -44,12 +44,18 @@ export class GenrePlaylistsController {
   }
 
   @Post(':riffValleyPlaylistId/link')
-  linkExisting(@Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string) {
-    return this.festivalPlaylistsService.linkExistingGenrePlaylist(riffValleyPlaylistId);
+  linkExisting(
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
+  ) {
+    return this.festivalPlaylistsService.linkExistingGenrePlaylist(
+      riffValleyPlaylistId,
+    );
   }
 
   @Get(':riffValleyPlaylistId')
-  getPlaylist(@Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string) {
+  getPlaylist(
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
+  ) {
     return this.festivalPlaylistsService.getGenrePlaylist(riffValleyPlaylistId);
   }
 
@@ -58,7 +64,10 @@ export class GenrePlaylistsController {
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: UpdateSyncedPlaylistDto,
   ) {
-    return this.festivalPlaylistsService.updateGenrePlaylist(riffValleyPlaylistId, dto);
+    return this.festivalPlaylistsService.updateGenrePlaylist(
+      riffValleyPlaylistId,
+      dto,
+    );
   }
 
   @Put(':riffValleyPlaylistId/image')
@@ -130,16 +139,27 @@ export class GenrePlaylistsController {
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
   ) {
-    return this.festivalPlaylistsService.removeGenreArtist(riffValleyPlaylistId, artistId);
+    return this.festivalPlaylistsService.removeGenreArtist(
+      riffValleyPlaylistId,
+      artistId,
+    );
   }
 
   @Delete(':riffValleyPlaylistId/tracks')
-  clear(@Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string) {
-    return this.festivalPlaylistsService.clearGenrePlaylist(riffValleyPlaylistId);
+  clear(
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
+  ) {
+    return this.festivalPlaylistsService.clearGenrePlaylist(
+      riffValleyPlaylistId,
+    );
   }
 
   @Post(':riffValleyPlaylistId/shuffle')
-  shuffle(@Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string) {
-    return this.festivalPlaylistsService.shuffleGenrePlaylist(riffValleyPlaylistId);
+  shuffle(
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
+  ) {
+    return this.festivalPlaylistsService.shuffleGenrePlaylist(
+      riffValleyPlaylistId,
+    );
   }
 }

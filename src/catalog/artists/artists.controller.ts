@@ -21,6 +21,7 @@ export class ArtistsController {
   constructor(private readonly artistsService: ArtistsService) {}
 
   @Post()
+  @Auth(ValidRoles.riffvalley)
   create(@Body() createArtistDto: CreateArtistDto) {
     return this.artistsService.create(createArtistDto);
   }
@@ -63,6 +64,7 @@ export class ArtistsController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateArtistDto: UpdateArtistDto,
@@ -71,13 +73,13 @@ export class ArtistsController {
   }
 
   @Delete('orphans/all')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   removeOrphans() {
     return this.artistsService.removeOrphanArtists();
   }
 
   @Delete(':id')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.artistsService.remove(id);
   }

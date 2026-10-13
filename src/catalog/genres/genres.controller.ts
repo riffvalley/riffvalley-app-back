@@ -13,17 +13,21 @@ import { GenresService } from './genres.service';
 import { CreateGenreDto } from './dto/create-genre.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
 import { PaginationDto } from '../../common/dtos/pagination.dto';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @Controller('genres')
 export class GenresController {
   constructor(private readonly unitsService: GenresService) {}
 
   @Post()
+  @Auth(ValidRoles.riffvalley)
   create(@Body() createGenreDto: CreateGenreDto) {
     return this.unitsService.create(createGenreDto);
   }
 
   @Post('bultCreateGenre')
+  @Auth(ValidRoles.riffvalley)
   bulkCreate(
     @Body() createGenresArray: { genres: { name: string; color: string }[] },
   ) {
@@ -41,6 +45,7 @@ export class GenresController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateGenreDto: UpdateGenreDto,
@@ -49,6 +54,7 @@ export class GenresController {
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.unitsService.remove(id);
   }

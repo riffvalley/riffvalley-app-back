@@ -21,7 +21,7 @@ interface TestUser {
   id: string;
   username: string;
   isActive: boolean;
-  roles: string[];
+  role: ValidRoles;
 }
 
 describe('Excel import (e2e)', () => {
@@ -29,6 +29,8 @@ describe('Excel import (e2e)', () => {
   let moduleRef: TestingModule;
   let validRoleToken: string;
   let invalidRoleToken: string;
+  let collaboratorToken: string;
+  let superadminToken: string;
   const testUsers = new Map<string, TestUser>();
 
   beforeAll(async () => {
@@ -42,7 +44,7 @@ describe('Excel import (e2e)', () => {
       ),
       findOne: jest.fn(({ where }: { where: { id: string } }) => {
         const user = testUsers.get(where.id);
-        return Promise.resolve(user ? { roles: user.roles } : null);
+        return Promise.resolve(user ? { role: user.role } : null);
       }),
     };
     const genreRepository = {
@@ -78,19 +80,30 @@ describe('Excel import (e2e)', () => {
     await app.init();
 
     const jwtService = moduleRef.get(JwtService);
-    const createToken = (username: string, roles: string[]): string => {
+    const createToken = (username: string, role: ValidRoles): string => {
       const user: TestUser = {
         id: randomUUID(),
         username,
         isActive: true,
-        roles,
+        role,
       };
       testUsers.set(user.id, user);
-      return jwtService.sign({ id: user.id, username, roles });
+      return jwtService.sign({ id: user.id, username, role });
     };
 
-    validRoleToken = createToken('excel-e2e-riff-valley', [ValidRoles.riffValley]);
-    invalidRoleToken = createToken('excel-e2e-user', [ValidRoles.user]);
+    validRoleToken = createToken(
+      'excel-e2e-riff-valley',
+      ValidRoles.riffvalley,
+    );
+    invalidRoleToken = createToken('excel-e2e-user', ValidRoles.user);
+    collaboratorToken = createToken(
+      'excel-e2e-collaborator',
+      ValidRoles.collaborator,
+    );
+    superadminToken = createToken(
+      'excel-e2e-superadmin',
+      ValidRoles.superadmin,
+    );
   });
 
   afterAll(async () => {
@@ -108,6 +121,13 @@ describe('Excel import (e2e)', () => {
     await request(app.getHttpServer())
       .get('/api/catalog/import/excel/template')
       .set('Authorization', `Bearer ${invalidRoleToken}`)
+      .expect(403);
+  });
+
+  it('rejects collaborator because the editorial minimum is riffvalley', async () => {
+    await request(app.getHttpServer())
+      .get('/api/catalog/import/excel/template')
+      .set('Authorization', `Bearer ${collaboratorToken}`)
       .expect(403);
   });
 
@@ -135,17 +155,27 @@ describe('Excel import (e2e)', () => {
     expect(response.body.length).toBeGreaterThan(0);
   });
 
+  it('allows superadmin through inheritance from the riffvalley minimum', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/catalog/import/excel/template')
+      .set('Authorization', `Bearer ${superadminToken}`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        res.on('end', () => callback(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+
+    expect(response.body).toBeInstanceOf(Buffer);
+    expect(response.body.length).toBeGreaterThan(0);
+  });
+
   it('imports an authenticated Excel upload from the current multipart route', async () => {
     const workbook = new ExcelJS.Workbook();
-    workbook.addWorksheet('Discos').addRow([
-      'Fecha',
-      'Artista',
-      'Disco',
-      'Género',
-      'País',
-      'Debut',
-      'EP',
-    ]);
+    workbook
+      .addWorksheet('Discos')
+      .addRow(['Fecha', 'Artista', 'Disco', 'Género', 'País', 'Debut', 'EP']);
     const fileBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     await request(app.getHttpServer())

@@ -14,6 +14,7 @@ import { CreateLinkDto } from './dto/create-links.dto';
 import { UpdateLinkDto } from './dto/update-links.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @Controller('links')
 export class LinksController {
@@ -36,6 +37,7 @@ export class LinksController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateLinkDto: UpdateLinkDto,
@@ -44,6 +46,7 @@ export class LinksController {
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.linksService.remove(id);
   }

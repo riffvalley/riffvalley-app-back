@@ -10,7 +10,7 @@ export class TelegramController {
   constructor(private readonly telegramService: TelegramService) {}
 
   @Get('channel-posts')
-  @Auth(ValidRoles.user, ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   getChannelPosts(@Query() query: ChannelPostsQueryDto) {
     return this.telegramService.getChannelPosts(query.channel, query.limit);
   }

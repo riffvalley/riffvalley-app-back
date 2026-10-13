@@ -37,7 +37,7 @@ export class FestivalPlaylistsController {
   ) {}
 
   @Post('spotify/connect')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   connectSpotify() {
     return this.festivalPlaylistsService.startSpotifyConnection();
   }
@@ -68,13 +68,13 @@ export class FestivalPlaylistsController {
   }
 
   @Get('spotify/connection')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   getSpotifyConnection() {
     return this.festivalPlaylistsService.getSpotifyConnection();
   }
 
   @Delete('spotify/connection')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   disconnectSpotify() {
     return this.festivalPlaylistsService.disconnectSpotify();
   }
@@ -90,19 +90,19 @@ export class FestivalPlaylistsController {
   }
 
   @Post()
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   createFestivalPlaylist(@Body() dto: CreateSyncedPlaylistDto) {
     return this.festivalPlaylistsService.createFestivalPlaylist(dto);
   }
 
   @Post('link')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   createLinkedFestivalPlaylist(@Body() dto: LinkSpotifyPlaylistDto) {
     return this.festivalPlaylistsService.createLinkedFestivalPlaylist(dto);
   }
 
   @Post(':riffValleyPlaylistId/link')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   linkExistingFestivalPlaylist(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
@@ -112,16 +112,19 @@ export class FestivalPlaylistsController {
   }
 
   @Patch(':riffValleyPlaylistId')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   updateFestivalPlaylist(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: UpdateSyncedPlaylistDto,
   ) {
-    return this.festivalPlaylistsService.updateFestivalPlaylist(riffValleyPlaylistId, dto);
+    return this.festivalPlaylistsService.updateFestivalPlaylist(
+      riffValleyPlaylistId,
+      dto,
+    );
   }
 
   @Put(':riffValleyPlaylistId/image')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   @UseInterceptors(
     FileInterceptor('image', {
       limits: { fileSize: 256 * 1024 },
@@ -148,13 +151,17 @@ export class FestivalPlaylistsController {
   }
 
   @Get(':riffValleyPlaylistId')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
-  getFestivalPlaylist(@Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string) {
-    return this.festivalPlaylistsService.getFestivalPlaylist(riffValleyPlaylistId);
+  @Auth(ValidRoles.riffvalley)
+  getFestivalPlaylist(
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
+  ) {
+    return this.festivalPlaylistsService.getFestivalPlaylist(
+      riffValleyPlaylistId,
+    );
   }
 
   @Post(':riffValleyPlaylistId/artists')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   addArtist(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: SyncPlaylistArtistDto,
@@ -163,7 +170,7 @@ export class FestivalPlaylistsController {
   }
 
   @Get(':riffValleyPlaylistId/artists/:artistId/tracks')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   searchArtistTracks(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
@@ -177,7 +184,7 @@ export class FestivalPlaylistsController {
   }
 
   @Put(':riffValleyPlaylistId/artists/:artistId/tracks')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   replaceFailedArtistTracks(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
@@ -191,18 +198,25 @@ export class FestivalPlaylistsController {
   }
 
   @Delete(':riffValleyPlaylistId/tracks')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
-  clearFestivalPlaylist(@Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string) {
-    return this.festivalPlaylistsService.clearFestivalPlaylist(riffValleyPlaylistId);
+  @Auth(ValidRoles.riffvalley)
+  clearFestivalPlaylist(
+    @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
+  ) {
+    return this.festivalPlaylistsService.clearFestivalPlaylist(
+      riffValleyPlaylistId,
+    );
   }
 
   @Delete(':riffValleyPlaylistId/artists/:artistId')
-  @Auth(ValidRoles.admin, ValidRoles.superUser, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   removeArtist(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
   ) {
-    return this.festivalPlaylistsService.removeArtist(riffValleyPlaylistId, artistId);
+    return this.festivalPlaylistsService.removeArtist(
+      riffValleyPlaylistId,
+      artistId,
+    );
   }
 
   private frontendRedirectUrl(status: 'connected' | 'error'): string | null {

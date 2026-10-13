@@ -5,7 +5,7 @@ import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { ProcessManualDataDto } from '../dto/process-manual-data.dto';
 
 @Controller('catalog/import')
-@Auth(ValidRoles.admin, ValidRoles.superUser)
+@Auth(ValidRoles.superadmin)
 export class CatalogImportController {
   constructor(private readonly catalogImportService: CatalogImportService) {}
 

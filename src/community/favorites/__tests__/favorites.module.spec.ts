@@ -9,7 +9,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AuthModule } from 'src/auth/auth.module';
-import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
+import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
 import { User } from 'src/auth/entities/user.entity';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
@@ -47,16 +47,23 @@ describe('FavoritesModule characterization', () => {
     expect(moduleRef.get(FavoritesController)).toBeDefined();
     const service = moduleRef.get(FavoritesService) as any;
     expect(service).toBeDefined();
-    expect(moduleRef.get(getRepositoryToken(Favorite))).toBe(favoriteRepository);
+    expect(moduleRef.get(getRepositoryToken(Favorite))).toBe(
+      favoriteRepository,
+    );
     expect(service.favoriteRepository).toBe(favoriteRepository);
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
 
-    const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, FavoritesModule) as unknown[];
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      FavoritesModule,
+    ) as unknown[];
     expect(imports).toContain(AuthModule);
   });
 
   it('preserves route methods, paths and the current authentication decorators', () => {
-    expect(Reflect.getMetadata(PATH_METADATA, FavoritesController)).toBe('favorites');
+    expect(Reflect.getMetadata(PATH_METADATA, FavoritesController)).toBe(
+      'favorites',
+    );
 
     const expectedRoutes = [
       ['findAll', RequestMethod.GET, '/', true],
@@ -69,8 +76,12 @@ describe('FavoritesModule characterization', () => {
       const handler = FavoritesController.prototype[method];
       expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(requestMethod);
       expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
-      expect(Boolean(Reflect.getMetadata(GUARDS_METADATA, handler))).toBe(authenticated);
-      if (authenticated) expect(Reflect.getMetadata(META_ROLES, handler)).toEqual([]);
+      expect(Boolean(Reflect.getMetadata(GUARDS_METADATA, handler))).toBe(
+        authenticated,
+      );
+      if (authenticated) {
+        expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
+      }
     }
   });
 });

@@ -27,6 +27,7 @@
     "migration:create": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js migration:create --dataSource src/data-source.ts",
     "migration:generate": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js migration:generate --dataSource src/data-source.ts",
     "migration:run": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run --dataSource src/data-source.ts",
+    "migration:roles": "node dist/roles-migration/run-roles-migration-chain.js",
     "migration:run:prod": "node ./node_modules/typeorm/cli.js migration:run --dataSource dist/data-source.js",
     "migration:revert": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert --dataSource src/data-source.ts",
     "console": "node dist/standalone"

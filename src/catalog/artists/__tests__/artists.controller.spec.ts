@@ -3,8 +3,10 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { ParseUUIDPipe } from '@nestjs/common';
-import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
+import { ExecutionContext, ParseUUIDPipe } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { PaginationDto } from 'src/common/dtos/pagination.dto';
 import { CreateArtistDto } from '../dto/create-artist.dto';
@@ -39,9 +41,17 @@ describe('ArtistsController contract characterization', () => {
     const response = { id: 'artist-id', ...dto };
     service.create.mockResolvedValue(response);
 
-    expect(Reflect.getMetadata(PATH_METADATA, ArtistsController)).toBe('artists');
+    expect(Reflect.getMetadata(PATH_METADATA, ArtistsController)).toBe(
+      'artists',
+    );
     expect(Reflect.getMetadata(PATH_METADATA, route('create'))).toBe('/');
     expect(Reflect.getMetadata(METHOD_METADATA, route('create'))).toBe(1);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, route('create'))).toBe(
+      ValidRoles.riffvalley,
+    );
+    expect(Reflect.getMetadata(GUARDS_METADATA, route('create'))).toContain(
+      UserRoleGuard,
+    );
     await expect(controller.create(dto)).resolves.toBe(response);
     expect(service.create).toHaveBeenCalledTimes(1);
     expect(service.create).toHaveBeenCalledWith(dto);
@@ -62,22 +72,56 @@ describe('ArtistsController contract characterization', () => {
   it('maps GET /artists/management and applies the current defaults and parsing', async () => {
     const response = { totalItems: 0, data: [] };
     service.findAllForManagement.mockResolvedValue(response);
-    expect(Reflect.getMetadata(PATH_METADATA, route('findAllForManagement'))).toBe('management');
-    expect(Reflect.getMetadata(METHOD_METADATA, route('findAllForManagement'))).toBe(0);
+    expect(
+      Reflect.getMetadata(PATH_METADATA, route('findAllForManagement')),
+    ).toBe('management');
+    expect(
+      Reflect.getMetadata(METHOD_METADATA, route('findAllForManagement')),
+    ).toBe(0);
 
     await expect(controller.findAllForManagement()).resolves.toBe(response);
     expect(service.findAllForManagement).toHaveBeenLastCalledWith(
-      undefined, 15, 0, undefined, undefined,
+      undefined,
+      15,
+      0,
+      undefined,
+      undefined,
     );
-    await controller.findAllForManagement('  Bjo +  ', '7tail', '-2', 'genre-id', 'true');
+    await controller.findAllForManagement(
+      '  Bjo +  ',
+      '7tail',
+      '-2',
+      'genre-id',
+      'true',
+    );
     expect(service.findAllForManagement).toHaveBeenLastCalledWith(
-      '  Bjo +  ', 7, -2, 'genre-id', true,
+      '  Bjo +  ',
+      7,
+      -2,
+      'genre-id',
+      true,
     );
     await controller.findAllForManagement('', '0', '0', '', 'false');
-    expect(service.findAllForManagement).toHaveBeenLastCalledWith('', 0, 0, '', false);
-    await controller.findAllForManagement(undefined, undefined, undefined, undefined, 'TRUE');
     expect(service.findAllForManagement).toHaveBeenLastCalledWith(
-      undefined, 15, 0, undefined, false,
+      '',
+      0,
+      0,
+      '',
+      false,
+    );
+    await controller.findAllForManagement(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'TRUE',
+    );
+    expect(service.findAllForManagement).toHaveBeenLastCalledWith(
+      undefined,
+      15,
+      0,
+      undefined,
+      false,
     );
   });
 
@@ -90,17 +134,25 @@ describe('ArtistsController contract characterization', () => {
     await expect(controller.findOne(id)).resolves.toBe(response);
     expect(service.findOne).toHaveBeenCalledTimes(1);
     expect(service.findOne).toHaveBeenCalledWith(id);
-    await expect(new ParseUUIDPipe().transform('invalid', {
-      type: 'param', metatype: String, data: 'id',
-    })).rejects.toMatchObject({ status: 400 });
+    await expect(
+      new ParseUUIDPipe().transform('invalid', {
+        type: 'param',
+        metatype: String,
+        data: 'id',
+      }),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it('maps GET /artists/:id/details and returns the service payload unchanged', async () => {
     const id = 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783';
     const response = { id, country: null, discs: [], nationalReleases: [] };
     service.findOneWithDetails.mockResolvedValue(response);
-    expect(Reflect.getMetadata(PATH_METADATA, route('findOneWithDetails'))).toBe(':id/details');
-    expect(Reflect.getMetadata(METHOD_METADATA, route('findOneWithDetails'))).toBe(0);
+    expect(
+      Reflect.getMetadata(PATH_METADATA, route('findOneWithDetails')),
+    ).toBe(':id/details');
+    expect(
+      Reflect.getMetadata(METHOD_METADATA, route('findOneWithDetails')),
+    ).toBe(0);
     await expect(controller.findOneWithDetails(id)).resolves.toBe(response);
     expect(service.findOneWithDetails).toHaveBeenCalledTimes(1);
     expect(service.findOneWithDetails).toHaveBeenCalledWith(id);
@@ -109,9 +161,13 @@ describe('ArtistsController contract characterization', () => {
   it('maps GET /artists/search/by-name and forwards the name query', async () => {
     const response = [{ id: 'artist-id', discs: [] }];
     service.findByName.mockResolvedValue(response);
-    expect(Reflect.getMetadata(PATH_METADATA, route('findByName'))).toBe('/search/by-name');
+    expect(Reflect.getMetadata(PATH_METADATA, route('findByName'))).toBe(
+      '/search/by-name',
+    );
     expect(Reflect.getMetadata(METHOD_METADATA, route('findByName'))).toBe(0);
-    await expect(controller.findByName('Artist + Name')).resolves.toBe(response);
+    await expect(controller.findByName('Artist + Name')).resolves.toBe(
+      response,
+    );
     expect(service.findByName).toHaveBeenCalledTimes(1);
     expect(service.findByName).toHaveBeenCalledWith('Artist + Name');
   });
@@ -123,50 +179,85 @@ describe('ArtistsController contract characterization', () => {
     service.update.mockResolvedValue(response);
     expect(Reflect.getMetadata(PATH_METADATA, route('update'))).toBe(':id');
     expect(Reflect.getMetadata(METHOD_METADATA, route('update'))).toBe(4);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, route('update'))).toBe(
+      ValidRoles.riffvalley,
+    );
+    expect(Reflect.getMetadata(GUARDS_METADATA, route('update'))).toContain(
+      UserRoleGuard,
+    );
     await expect(controller.update(id, dto)).resolves.toBe(response);
     expect(service.update).toHaveBeenCalledTimes(1);
     expect(service.update).toHaveBeenCalledWith(id, dto);
   });
 
-  it('maps DELETE /artists/:id and restricts it to admin and riffValley', async () => {
+  it('maps DELETE /artists/:id and restricts it to riffvalley', async () => {
     const id = 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783';
     const response = { affected: 1 };
     service.remove.mockResolvedValue(response);
     const handler = route('remove');
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(':id');
     expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(3);
-    expect(Reflect.getMetadata(META_ROLES, handler)).toEqual([
-      ValidRoles.admin, ValidRoles.riffValley,
-    ]);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
+      ValidRoles.riffvalley,
+    );
     expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toHaveLength(2);
     await expect(controller.remove(id)).resolves.toBe(response);
     expect(service.remove).toHaveBeenCalledTimes(1);
     expect(service.remove).toHaveBeenCalledWith(id);
   });
 
-  it('maps DELETE /artists/orphans/all and restricts it to admin and riffValley', async () => {
+  it('maps DELETE /artists/orphans/all and restricts it to riffvalley', async () => {
     const response = { deleted: 2, artists: ['A', 'B'] };
     service.removeOrphanArtists.mockResolvedValue(response);
     const handler = route('removeOrphans');
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('orphans/all');
     expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(3);
-    expect(Reflect.getMetadata(META_ROLES, handler)).toEqual([
-      ValidRoles.admin, ValidRoles.riffValley,
-    ]);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
+      ValidRoles.riffvalley,
+    );
     expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toHaveLength(2);
     await expect(controller.removeOrphans()).resolves.toBe(response);
     expect(service.removeOrphanArtists).toHaveBeenCalledTimes(1);
     expect(service.removeOrphanArtists).toHaveBeenCalledWith();
   });
 
-  it('leaves every other route without explicit auth metadata and propagates service errors', async () => {
+  it('allows persisted superadmin for artist operations through the riffvalley minimum', async () => {
+    const repository = {
+      findOne: jest.fn().mockResolvedValue({ role: ValidRoles.superadmin }),
+    };
+    const guard = new UserRoleGuard(new Reflector(), repository as never);
+
+    for (const handler of [
+      ArtistsController.prototype.remove,
+      ArtistsController.prototype.removeOrphans,
+    ]) {
+      await expect(
+        guard.canActivate({
+          getClass: () => ArtistsController,
+          getHandler: () => handler,
+          switchToHttp: () => ({
+            getRequest: () => ({ user: { id: 'user-id', username: 'admin' } }),
+          }),
+        } as unknown as ExecutionContext),
+      ).resolves.toBe(true);
+    }
+  });
+
+  it('keeps the remaining read routes public and propagates service errors', async () => {
     const methods = [
-      'create', 'findAll', 'findAllForManagement', 'findOne',
-      'findOneWithDetails', 'findByName', 'update',
+      'findAll',
+      'findAllForManagement',
+      'findOne',
+      'findOneWithDetails',
+      'findByName',
     ] as const;
     for (const method of methods) {
-      expect(Reflect.getMetadata(META_ROLES, route(method))).toBeUndefined();
-      expect(Reflect.getMetadata(GUARDS_METADATA, route(method))).toBeUndefined();
+      expect(
+        Reflect.getMetadata(META_MINIMUM_ROLE, route(method)),
+      ).toBeUndefined();
+      expect(
+        Reflect.getMetadata(GUARDS_METADATA, route(method)),
+      ).toBeUndefined();
     }
     const error = new Error('service failure');
     service.findByName.mockRejectedValue(error);

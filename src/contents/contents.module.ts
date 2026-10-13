@@ -18,6 +18,7 @@ import { ContentSchedulerService } from './content-scheduler.service';
 
 import { forwardRef } from '@nestjs/common';
 import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integration.module';
+import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integr
     forwardRef(() => ListsModule),
     PointsModule,
     SpotifyIntegrationModule,
+    AuthModule,
   ],
   controllers: [ContentsController],
   providers: [ContentsService, ContentSchedulerService],

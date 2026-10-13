@@ -14,6 +14,7 @@ import { CreateAsignationDto } from './dto/create-asignations.dto';
 import { UpdateAsignationDto } from './dto/update-asignations.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @Controller('asignations')
 export class AsignationsController {
@@ -36,6 +37,7 @@ export class AsignationsController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateAsignationDto: UpdateAsignationDto,
@@ -44,6 +46,7 @@ export class AsignationsController {
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.asignationsService.remove(id);
   }

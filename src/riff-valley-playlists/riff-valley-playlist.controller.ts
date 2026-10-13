@@ -15,20 +15,30 @@ import { RiffValleyPlaylistService } from './riff-valley-playlist.service';
 import { CreateRiffValleyPlaylistDto } from './dto/create-riff-valley-playlist.dto';
 import { UpdateRiffValleyPlaylistDto } from './dto/update-riff-valley-playlist.dto';
 import { ListRiffValleyPlaylistsQueryDto } from './dto/list-riff-valley-playlists.query.dto';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 @Controller('riff-valley-playlists')
 export class RiffValleyPlaylistController {
-  constructor(private readonly riffValleyPlaylistService: RiffValleyPlaylistService) {}
+  constructor(
+    private readonly riffValleyPlaylistService: RiffValleyPlaylistService,
+  ) {}
 
   @Get('festivals')
   findFestivals(@Query() query: ListRiffValleyPlaylistsQueryDto) {
-    return this.riffValleyPlaylistService.findAll({ ...query, type: 'festival' });
+    return this.riffValleyPlaylistService.findAll({
+      ...query,
+      type: 'festival',
+    });
   }
 
   @Get('genres')
   findGenres(@Query() query: ListRiffValleyPlaylistsQueryDto) {
-    return this.riffValleyPlaylistService.findAll({ ...query, type: ['genero', 'especial', 'otras'] });
+    return this.riffValleyPlaylistService.findAll({
+      ...query,
+      type: ['genero', 'especial', 'otras'],
+    });
   }
 
   @Get('genres/random')
@@ -37,6 +47,7 @@ export class RiffValleyPlaylistController {
   }
 
   @Post()
+  @Auth(ValidRoles.riffvalley)
   create(@Body() createRiffValleyPlaylistDto: CreateRiffValleyPlaylistDto) {
     return this.riffValleyPlaylistService.create(createRiffValleyPlaylistDto);
   }
@@ -46,8 +57,6 @@ export class RiffValleyPlaylistController {
     return this.riffValleyPlaylistService.findAll(query);
   }
 
-
-
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.riffValleyPlaylistService.findOne(id);
@@ -56,19 +65,27 @@ export class RiffValleyPlaylistController {
   // Manual "create content" button: creates a backlog Content linked to
   // this local playlist item. The playlist and Content stay independent from then on.
   @Post(':id/content')
+  @Auth(ValidRoles.riffvalley)
   createContent(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
-    return this.riffValleyPlaylistService.createContentForRiffValleyPlaylist(id);
+    return this.riffValleyPlaylistService.createContentForRiffValleyPlaylist(
+      id,
+    );
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() updateRiffValleyPlaylistDto: UpdateRiffValleyPlaylistDto,
   ) {
-    return this.riffValleyPlaylistService.update(id, updateRiffValleyPlaylistDto);
+    return this.riffValleyPlaylistService.update(
+      id,
+      updateRiffValleyPlaylistDto,
+    );
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   remove(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.riffValleyPlaylistService.remove(id);
   }
