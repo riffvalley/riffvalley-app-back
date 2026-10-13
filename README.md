@@ -37,19 +37,26 @@ yarn db:migrate
 yarn db:check
 ```
 
-`db:status` lista migraciones aplicadas y pendientes; `db:migrate` aplica las pendientes manualmente; `db:check` falla si falta el ledger o quedan pendientes. Confirma las variables de `.env` antes de conectar.
+`db:status` muestra el ledger, recuentos y nombres de migraciones pendientes en orden; no lista los nombres ya aplicados. `db:migrate` aplica las pendientes manualmente; `db:check` falla si falta el ledger o quedan pendientes. Confirma las variables de `.env` antes de conectar.
 
 ### Producción en Heroku
 
-El despliegue automático de Heroku nunca ejecuta migraciones. En `spammusic-back`, consulta primero las pendientes y prepara un backup antes de modificar la base:
+El despliegue automático de Heroku nunca ejecuta migraciones. En `spammusic-back`, `db:status` muestra el estado del ledger, cuántas migraciones se cargaron/aplicaron y los nombres exactos de las pendientes en orden; no muestra el nombre de la base. Consúltalo y obtén `DB_NAME` de forma segura:
 
 ```sh
 heroku run --app spammusic-back -- yarn db:status
-heroku pg:backups:capture --app spammusic-back
+heroku config:get DB_NAME --app spammusic-back
+heroku pg:info DATABASE --app spammusic-back
+```
+
+Si el ledger no existe, detente y no migres. Si `Pendientes: 0`, no ejecutes `db:migrate`; comprueba con `heroku run --app spammusic-back -- yarn db:check`. Si hay pendientes, crea un backup y confirma que terminó correctamente:
+
+```sh
+heroku pg:backups:capture DATABASE --app spammusic-back
 heroku pg:backups --app spammusic-back
 ```
 
-Verifica la app, base, release, backup completado y lista ordenada de migraciones. La producción requiere ejecución y confirmación manuales; autoriza explícitamente la base y todas las pendientes observadas:
+Comprueba que el attachment de backup es la misma base que usa el datasource; si no puedes verificar la correspondencia con seguridad, detente. Revisa el release con `heroku releases --app spammusic-back` y el backup con `heroku pg:backups:info BACKUP_ID --app spammusic-back`, sustituyendo `BACKUP_ID` por el identificador obtenido. Usa el valor de `DB_NAME` y copia todos los nombres de `db:status`, en el mismo orden, para formar `DB_NAME:Migracion1,Migracion2`. La producción requiere ejecución y confirmación manuales:
 
 ```sh
 heroku run --app spammusic-back -- yarn db:migrate --confirm '<DB_NAME>:<Migracion1,Migracion2>'
