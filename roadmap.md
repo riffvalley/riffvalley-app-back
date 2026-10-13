@@ -17,6 +17,7 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 - [Catalog](roadmap/catalog.md) — ownership de Catalog y planificación de Discs, Artists, Genres, Countries e integración de Catalog.
 - [Community](roadmap/community.md) — Comments, Requests, Favorites, Pendings y Rates como capacidades de interacción y contribución al catálogo.
 - [Spotify](roadmap/spotify.md) — separación del dominio de la playlist de Riff Valley y la integración con la API externa de Spotify.
+- [Integrations](roadmap/integrations.md) — inventario, ownership y migración progresiva de integraciones externas a `src/integrations/`.
 
 ## Estado de alto nivel
 
@@ -25,7 +26,7 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 - **Fase 4 — Lists:** administración de listas, integración WordPress y sincronización/publicación de discos; considerar primero los efectos externos.
 - **Fase 5 — Festival Playlists:** reglas de playlist e integración externa; revisar selección y sincronización de discos y manejo de errores.
 - **Fase 6 — Contents, Articles, News y publicaciones:** workflows editoriales, estados, fechas programadas, versiones y publicación WordPress.
-- **Fase 7 — Integraciones externas:** TikTok, Spotify, Instagram, WordPress, Scaping, Telegram y LastFM; priorizar límites de API, credenciales, reintentos y efectos externos.
+- **Fase 7 — Integraciones externas:** seguir [Integrations](roadmap/integrations.md) para el inventario, la frontera física y la regresión; priorizar límites de API, credenciales, reintentos y efectos externos.
 - **Fase 8 — Versions y Asignations:** workflows, estados, asignaciones y transiciones. Requests figuraba históricamente en esta agrupación; su planificación y ownership actuales están en [Community](roadmap/community.md).
 - **Fase 9 — Auth y módulos restantes:** caracterizar primero el impacto transversal de Auth y ordenar los módulos restantes por uso, duplicación y coste de consultas.
 
