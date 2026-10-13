@@ -13,12 +13,15 @@ import { CountriesService } from './countries.service';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
 import { PaginationDto } from '../../common/dtos/pagination.dto';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @Controller('countries')
 export class CountriesController {
   constructor(private readonly unitsService: CountriesService) {}
 
   @Post()
+  @Auth(ValidRoles.riffvalley)
   create(@Body() createGenreDto: CreateCountryDto) {
     return this.unitsService.create(createGenreDto);
   }
@@ -34,6 +37,7 @@ export class CountriesController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateGenreDto: UpdateCountryDto,
@@ -42,6 +46,7 @@ export class CountriesController {
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.unitsService.remove(id);
   }

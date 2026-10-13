@@ -1,5 +1,7 @@
+import { ValidRoles } from './valid-roles';
+
 export interface JwtPayload {
   username: string;
   id: string;
-  roles: string[];
+  role: ValidRoles;
 }

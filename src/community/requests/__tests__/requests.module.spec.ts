@@ -1,6 +1,10 @@
 import { RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MODULE_METADATA, PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
+import {
+  MODULE_METADATA,
+  PATH_METADATA,
+  METHOD_METADATA,
+} from '@nestjs/common/constants';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
@@ -9,8 +13,8 @@ import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { User } from 'src/auth/entities/user.entity';
-import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
+import { roleMeetsMinimum, ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { DiscRequest } from '../entities/disc-request.entity';
@@ -18,14 +22,49 @@ import { RequestsController } from '../requests.controller';
 import { RequestsModule } from '../requests.module';
 import { RequestsService } from '../requests.service';
 
+jest.mock('src/auth/auth.module', () => {
+  const { Module } = require('@nestjs/common');
+  const { PassportModule } = require('@nestjs/passport');
+  const { TypeOrmModule } = require('@nestjs/typeorm');
+  const { User } = require('src/auth/entities/user.entity');
+  const {
+    UserRoleGuard,
+  } = require('src/auth/guards/user-role/user-role.guard');
+
+  class AuthModule {}
+  Module({
+    imports: [
+      TypeOrmModule.forFeature([User]),
+      PassportModule.register({ defaultStrategy: 'jwt' }),
+    ],
+    providers: [UserRoleGuard],
+    exports: [TypeOrmModule, PassportModule, UserRoleGuard],
+  })(AuthModule);
+
+  return { AuthModule };
+});
+
 describe('RequestsModule', () => {
   let moduleRef: TestingModule;
   let repositories: Map<Function, { entity: Function }>;
 
   beforeAll(async () => {
-    const entities = [DiscRequest, Artist, Disc, Genre, Country, User, UserAccessLog, Rate];
-    repositories = new Map(entities.map((entity) => [entity, { entity }] as const));
-    const testingModule = Test.createTestingModule({ imports: [RequestsModule] })
+    const entities = [
+      DiscRequest,
+      Artist,
+      Disc,
+      Genre,
+      Country,
+      User,
+      UserAccessLog,
+      Rate,
+    ];
+    repositories = new Map(
+      entities.map((entity) => [entity, { entity }] as const),
+    );
+    const testingModule = Test.createTestingModule({
+      imports: [RequestsModule],
+    })
       .overrideProvider(ConfigService)
       .useValue({ get: jest.fn(() => 'requests-module-test-secret') });
 
@@ -43,8 +82,14 @@ describe('RequestsModule', () => {
   });
 
   it('resolves Requests with its controller, service, AuthModule, and Catalog repositories', () => {
-    const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, RequestsModule) as unknown[];
-    const service = moduleRef.get(RequestsService) as unknown as Record<string, unknown>;
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      RequestsModule,
+    ) as unknown[];
+    const service = moduleRef.get(RequestsService) as unknown as Record<
+      string,
+      unknown
+    >;
 
     expect(moduleRef.get(RequestsController)).toBeDefined();
     expect(imports).toContain(AuthModule);
@@ -56,23 +101,39 @@ describe('RequestsModule', () => {
   });
 
   it('preserves route methods and the administrative role boundary', () => {
-    const routes = [
-      ['create', RequestMethod.POST, '/', []],
-      ['findAll', RequestMethod.GET, '/', [ValidRoles.admin, ValidRoles.riffValley]],
-      ['findMine', RequestMethod.GET, 'my', []],
-      ['findOne', RequestMethod.GET, ':id', [ValidRoles.admin, ValidRoles.riffValley]],
-      ['update', RequestMethod.PATCH, ':id', [ValidRoles.admin, ValidRoles.riffValley]],
-      ['approve', RequestMethod.POST, ':id/approve', [ValidRoles.admin, ValidRoles.riffValley]],
-      ['reopen', RequestMethod.POST, ':id/reopen', [ValidRoles.admin, ValidRoles.riffValley]],
-      ['reject', RequestMethod.DELETE, ':id', [ValidRoles.admin, ValidRoles.riffValley]],
-    ] as const;
+    const routes: [
+      keyof typeof RequestsController.prototype,
+      RequestMethod,
+      string,
+      ValidRoles | undefined,
+    ][] = [
+      ['create', RequestMethod.POST, '/', undefined],
+      ['findAll', RequestMethod.GET, '/', ValidRoles.riffvalley],
+      ['findMine', RequestMethod.GET, 'my', undefined],
+      ['findOne', RequestMethod.GET, ':id', ValidRoles.riffvalley],
+      ['update', RequestMethod.PATCH, ':id', ValidRoles.riffvalley],
+      ['approve', RequestMethod.POST, ':id/approve', ValidRoles.riffvalley],
+      ['reopen', RequestMethod.POST, ':id/reopen', ValidRoles.riffvalley],
+      ['reject', RequestMethod.DELETE, ':id', ValidRoles.riffvalley],
+    ];
 
-    expect(Reflect.getMetadata(PATH_METADATA, RequestsController)).toBe('requests');
-    for (const [methodName, method, path, roles] of routes) {
+    expect(Reflect.getMetadata(PATH_METADATA, RequestsController)).toBe(
+      'requests',
+    );
+    for (const [methodName, method, path, minimumRole] of routes) {
       const handler = RequestsController.prototype[methodName];
       expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(method);
       expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
-      expect(Reflect.getMetadata(META_ROLES, handler)).toEqual(roles);
+      expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(minimumRole);
+
+      if (minimumRole) {
+        expect(roleMeetsMinimum(ValidRoles.user, minimumRole)).toBe(false);
+        expect(roleMeetsMinimum(ValidRoles.collaborator, minimumRole)).toBe(
+          false,
+        );
+        expect(roleMeetsMinimum(ValidRoles.riffvalley, minimumRole)).toBe(true);
+        expect(roleMeetsMinimum(ValidRoles.superadmin, minimumRole)).toBe(true);
+      }
     }
   });
 });

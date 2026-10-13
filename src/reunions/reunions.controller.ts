@@ -10,12 +10,15 @@ import {
 } from '@nestjs/common';
 import { ReunionService } from './reunions.service';
 import { CreateReunionDto } from './dto/create-reunion.dto';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @Controller('reunions')
 export class ReunionController {
-  constructor(private readonly reunionService: ReunionService) { }
+  constructor(private readonly reunionService: ReunionService) {}
 
   @Post()
+  @Auth(ValidRoles.riffvalley)
   async create(@Body() createReunionDto: CreateReunionDto) {
     return this.reunionService.createReunion(createReunionDto);
   }
@@ -31,6 +34,7 @@ export class ReunionController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   async update(
     @Param('id') id: string,
     @Body() updateData: Partial<CreateReunionDto>,
@@ -39,6 +43,7 @@ export class ReunionController {
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   async remove(@Param('id') id: string) {
     return this.reunionService.deleteReunion(id);
   }

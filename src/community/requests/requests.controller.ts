@@ -28,7 +28,7 @@ export class RequestsController {
   }
 
   @Get()
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   findAll() {
     return this.requestsService.findAll();
   }
@@ -40,31 +40,34 @@ export class RequestsController {
   }
 
   @Get(':id')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.requestsService.findOne(id);
   }
 
   @Patch(':id')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRequestDto) {
+  @Auth(ValidRoles.riffvalley)
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateRequestDto,
+  ) {
     return this.requestsService.update(id, dto);
   }
 
   @Post(':id/approve')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   approve(@Param('id', ParseUUIDPipe) id: string) {
     return this.requestsService.approve(id);
   }
 
   @Post(':id/reopen')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   reopen(@Param('id', ParseUUIDPipe) id: string) {
     return this.requestsService.reopen(id);
   }
 
   @Delete(':id')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   reject(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('adminNotes') adminNotes: string,

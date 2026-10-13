@@ -1,8 +1,7 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayNotEmpty,
-  IsArray,
   IsBoolean,
+  IsArray,
   IsEmail,
   IsOptional,
   IsString,
@@ -39,12 +38,6 @@ export class CreateUserDto {
   username: string;
 
   @IsOptional()
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsString({ each: true })
-  roles?: string[];
-
-  @IsOptional()
   @IsString()
   image: string;
 
@@ -63,11 +56,4 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   dashboardButtonsEnabled?: boolean;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
-
-  @IsOptional()
-  createdAt?: Date;
 }

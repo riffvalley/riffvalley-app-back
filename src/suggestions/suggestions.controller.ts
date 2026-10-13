@@ -1,7 +1,21 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { SuggestionsService } from './suggestions.service';
 import { CreateSuggestionDto } from './dto/create-suggestion.dto';
-import { UpdateSuggestionDto, RejectSuggestionDto, DoneSuggestionDto } from './dto/update-suggestion.dto';
+import {
+  UpdateSuggestionDto,
+  RejectSuggestionDto,
+  DoneSuggestionDto,
+} from './dto/update-suggestion.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';
@@ -19,7 +33,7 @@ export class SuggestionsController {
   }
 
   @Get()
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   findAll(
     @Query('type') type?: SuggestionType,
     @Query('status') status?: SuggestionStatus,
@@ -38,43 +52,52 @@ export class SuggestionsController {
   }
 
   @Get(':id')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.suggestionsService.findOne(id);
   }
 
   @Patch(':id')
   @Auth()
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSuggestionDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateSuggestionDto,
+  ) {
     return this.suggestionsService.update(id, dto);
   }
 
   @Patch(':id/progress')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   setInProgress(@Param('id', ParseUUIDPipe) id: string) {
     return this.suggestionsService.setInProgress(id);
   }
 
   @Patch(':id/reject')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
-  reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectSuggestionDto) {
+  @Auth(ValidRoles.riffvalley)
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectSuggestionDto,
+  ) {
     return this.suggestionsService.reject(id, dto);
   }
 
   @Patch(':id/done')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
-  markDone(@Param('id', ParseUUIDPipe) id: string, @Body() dto: DoneSuggestionDto) {
+  @Auth(ValidRoles.riffvalley)
+  markDone(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DoneSuggestionDto,
+  ) {
     return this.suggestionsService.markDone(id, dto);
   }
 
   @Patch(':id/read')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   markRead(@Param('id', ParseUUIDPipe) id: string) {
     return this.suggestionsService.markRead(id);
   }
 
   @Delete(':id')
-  @Auth(ValidRoles.admin, ValidRoles.riffValley)
+  @Auth(ValidRoles.riffvalley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.suggestionsService.remove(id);
   }

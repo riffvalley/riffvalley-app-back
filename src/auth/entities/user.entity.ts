@@ -7,6 +7,7 @@ import { RiffValleyPlaylist } from '../../riff-valley-playlists/entities/riff-va
 import { Article } from '../../articles/entities/article.entity';
 import { Video } from '../../videos/entities/video.entity';
 import { DiscRequest } from '../../community/requests/entities/disc-request.entity';
+import { ValidRoles } from '../interfaces/valid-roles';
 import {
   BeforeInsert,
   BeforeUpdate,
@@ -41,11 +42,10 @@ export class User {
   isActive: boolean;
 
   @Column('text', {
-    array: true,
     select: false,
-    default: ['user'],
+    default: ValidRoles.user,
   })
-  roles: string[];
+  role: ValidRoles;
 
   @Column('text', { nullable: true })
   image: string;
@@ -85,7 +85,9 @@ export class User {
   })
   asignations: Asignation[];
 
-  @OneToMany(() => RiffValleyPlaylist, (playlist) => playlist.user, { cascade: true })
+  @OneToMany(() => RiffValleyPlaylist, (playlist) => playlist.user, {
+    cascade: true,
+  })
   riffValleyPlaylists: RiffValleyPlaylist[];
 
   @OneToMany(() => Article, (article) => article.user, { cascade: true })

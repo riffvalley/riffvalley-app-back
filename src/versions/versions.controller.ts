@@ -14,13 +14,16 @@ import { CreateVersionDto } from './dto/create-version.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
 import { CreateVersionItemDto } from './dto/create-version-item.dto';
 import { UpdateVersionItemDto } from './dto/update-version-item.dto';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @Controller('versions')
 export class VersionsController {
-  constructor(private readonly versionsService: VersionsService) { }
+  constructor(private readonly versionsService: VersionsService) {}
 
   // ---- Version CRUD ----
   @Post()
+  @Auth(ValidRoles.superadmin)
   create(@Body() dto: CreateVersionDto) {
     return this.versionsService.create(dto);
   }
@@ -38,11 +41,13 @@ export class VersionsController {
   }
 
   @Post('items')
+  @Auth(ValidRoles.superadmin)
   createIndependentItem(@Body() dto: CreateVersionItemDto) {
     return this.versionsService.createItem(dto);
   }
 
   @Patch('items/:itemId')
+  @Auth(ValidRoles.superadmin)
   updateIndependentItem(
     @Param('itemId') itemId: string,
     @Body() dto: UpdateVersionItemDto,
@@ -51,6 +56,7 @@ export class VersionsController {
   }
 
   @Delete('items/:itemId')
+  @Auth(ValidRoles.superadmin)
   removeIndependentItem(@Param('itemId') itemId: string) {
     return this.versionsService.removeItem(itemId);
   }
@@ -97,11 +103,13 @@ export class VersionsController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.superadmin)
   update(@Param('id') id: string, @Body() dto: UpdateVersionDto) {
     return this.versionsService.update(id, dto);
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.superadmin)
   remove(@Param('id') id: string) {
     return this.versionsService.remove(id);
   }
@@ -113,6 +121,7 @@ export class VersionsController {
   }
 
   @Post(':versionId/items')
+  @Auth(ValidRoles.superadmin)
   createItem(
     @Param('versionId') versionId: string,
     @Body() dto: CreateVersionItemDto,
@@ -121,6 +130,7 @@ export class VersionsController {
   }
 
   @Patch(':versionId/items/:itemId')
+  @Auth(ValidRoles.superadmin)
   updateItem(
     @Param('versionId') versionId: string,
     @Param('itemId') itemId: string,
@@ -130,6 +140,7 @@ export class VersionsController {
   }
 
   @Delete(':versionId/items/:itemId')
+  @Auth(ValidRoles.superadmin)
   removeItem(
     @Param('versionId') versionId: string,
     @Param('itemId') itemId: string,
@@ -138,6 +149,7 @@ export class VersionsController {
   }
 
   @Patch(':id/active')
+  @Auth(ValidRoles.superadmin)
   setActive(@Param('id') id: string, @Body('active') active: boolean) {
     return this.versionsService.setActive(id, active);
   }

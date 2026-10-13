@@ -15,13 +15,16 @@ export class UploadsController {
   constructor(private readonly uploadsService: UploadsService) {}
 
   @Post('image')
-  @Auth(ValidRoles.admin, ValidRoles.superUser)
+  @Auth(ValidRoles.superadmin)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
       fileFilter: (_req, file, cb) => {
         if (!file.mimetype.match(/^image\/(jpeg|png|gif|webp|svg\+xml)$/)) {
-          return cb(new BadRequestException('Only image files are allowed'), false);
+          return cb(
+            new BadRequestException('Only image files are allowed'),
+            false,
+          );
         }
         cb(null, true);
       },

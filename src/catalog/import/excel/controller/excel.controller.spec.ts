@@ -10,8 +10,9 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
 import { Response } from 'express';
-import { META_ROLES } from 'src/auth/decorators/role-protected.decorator';
+import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
 import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
 import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { of } from 'rxjs';
@@ -108,19 +109,46 @@ describe('ExcelController contract characterization', () => {
       ExcelController.prototype.downloadTemplate,
       ExcelController.prototype.uploadTemplate,
     ];
-    const allowedRoles = [
-      ValidRoles.riffValley,
-      ValidRoles.admin,
-      ValidRoles.superUser,
-    ];
-
     for (const handler of handlers) {
-      const guards = Reflect.getMetadata(GUARDS_METADATA, handler) as Function[];
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        handler,
+      ) as Function[];
 
-      expect(Reflect.getMetadata(META_ROLES, handler)).toEqual(allowedRoles);
+      expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
+        ValidRoles.riffvalley,
+      );
       expect(guards).toHaveLength(2);
       expect(guards).toContain(UserRoleGuard);
-      expect(guards.some((guard) => typeof guard.prototype?.canActivate === 'function')).toBe(true);
+      expect(
+        guards.some(
+          (guard) => typeof guard.prototype?.canActivate === 'function',
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('allows a persisted superadmin through the riffvalley minimum on both routes', async () => {
+    const repository = {
+      findOne: jest.fn().mockResolvedValue({ role: ValidRoles.superadmin }),
+    };
+    const guard = new UserRoleGuard(new Reflector(), repository as never);
+
+    for (const handler of [
+      ExcelController.prototype.downloadTemplate,
+      ExcelController.prototype.uploadTemplate,
+    ]) {
+      await expect(
+        guard.canActivate({
+          getClass: () => ExcelController,
+          getHandler: () => handler,
+          switchToHttp: () => ({
+            getRequest: () => ({
+              user: { id: 'user-id', username: 'superadmin' },
+            }),
+          }),
+        } as unknown as ExecutionContext),
+      ).resolves.toBe(true);
     }
   });
 

@@ -17,12 +17,14 @@ import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/auth/entities/user.entity';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @Controller('lists')
 export class ListsController {
   constructor(private readonly listsServices: ListsService) {}
 
   @Post()
+  @Auth(ValidRoles.riffvalley)
   create(@Body() createListDto: CreateListDto) {
     return this.listsServices.create(createListDto);
   }
@@ -106,11 +108,13 @@ export class ListsController {
   }
 
   @Post('weekly/create')
+  @Auth(ValidRoles.riffvalley)
   createWeekly() {
     return this.listsServices.createWeeklyList();
   }
 
   @Post(':id/wp-posts')
+  @Auth(ValidRoles.riffvalley)
   generateWpPosts(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: GenerateWpPostsQueryDto,
@@ -119,6 +123,7 @@ export class ListsController {
   }
 
   @Post(':id/wp-best-post')
+  @Auth(ValidRoles.riffvalley)
   generateWpBestPost(@Param('id', ParseUUIDPipe) id: string) {
     return this.listsServices.generateBestDiscsWordPressPost(id);
   }
@@ -129,6 +134,7 @@ export class ListsController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateListDto: UpdateListDto,
@@ -137,6 +143,7 @@ export class ListsController {
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   removeList(@Param('id', ParseUUIDPipe) id: string) {
     return this.listsServices.removeList(id);
   }

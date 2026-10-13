@@ -1,10 +1,17 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
+import { AdminUpdateUserDto, UpdateUserDto } from './dto/update-user.dto';
+import {
+  isValidRole,
+  roleMeetsMinimum,
+  ValidRoles,
+} from './interfaces/valid-roles';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { UserAccessLog } from './entities/user-access-log.entity';
@@ -28,13 +35,36 @@ export class AuthService {
     @InjectRepository(Rate)
     private readonly rateRepository: Repository<Rate>,
     private readonly jwtService: JwtService,
-  ) { }
+  ) {}
   async create(createUserDto: CreateUserDto) {
+    this.assertAllowedFields(createUserDto, [
+      'email',
+      'password',
+      'username',
+      'image',
+      'dashboardConfig',
+      'mobileDashboardConfig',
+      'dashboardButtonsEnabled',
+    ]);
     try {
-      const { password, ...userData } = createUserDto;
+      const {
+        password,
+        email,
+        username,
+        image,
+        dashboardConfig,
+        mobileDashboardConfig,
+        dashboardButtonsEnabled,
+      } = createUserDto;
 
       const user = this.userRepository.create({
-        ...userData,
+        email,
+        username,
+        image,
+        dashboardConfig,
+        mobileDashboardConfig,
+        dashboardButtonsEnabled,
+        role: ValidRoles.user,
         password: bcrypt.hashSync(password, 10),
       });
 
@@ -47,7 +77,7 @@ export class AuthService {
         token: this.getJwtToken({
           username: user.username,
           id: user.id,
-          roles: user.roles,
+          role: user.role,
         }),
       };
     } catch (e) {
@@ -64,7 +94,7 @@ export class AuthService {
         username: true,
         password: true,
         id: true,
-        roles: true,
+        role: true,
         image: true,
         dashboardConfig: true,
         mobileDashboardConfig: true,
@@ -91,7 +121,7 @@ export class AuthService {
       token: this.getJwtToken({
         username: user.username,
         id: user.id,
-        roles: user.roles,
+        role: user.role,
       }),
     };
   }
@@ -99,7 +129,15 @@ export class AuthService {
   async findAll() {
     try {
       const users = await this.userRepository.find({
-        select: ['id', 'username', 'email', 'roles', 'createdAt', 'notes', 'isActive'],
+        select: [
+          'id',
+          'username',
+          'email',
+          'role',
+          'createdAt',
+          'notes',
+          'isActive',
+        ],
         order: { createdAt: 'DESC' },
       });
 
@@ -117,8 +155,18 @@ export class AuthService {
     try {
       const users = await this.userRepository
         .createQueryBuilder('user')
-        .select(['user.id', 'user.username', 'user.email', 'user.roles', 'user.image'])
-        .where(':role = ANY(user.roles)', { role: 'riffValley' }) // replace 'admin' with your role
+        .select([
+          'user.id',
+          'user.username',
+          'user.email',
+          'user.role',
+          'user.image',
+        ])
+        .where('user.role IN (:...roleValues)', {
+          roleValues: Object.values(ValidRoles).filter((role) =>
+            roleMeetsMinimum(role, ValidRoles.riffvalley),
+          ),
+        })
         .getMany();
 
       // Opcional: si no quieres devolver la contraseña u otros datos sensibles
@@ -132,11 +180,21 @@ export class AuthService {
   }
 
   async findUsersByRole(role: string) {
+    if (!isValidRole(role)) {
+      throw new BadRequestException('Role is not valid');
+    }
+
     try {
       const users = await this.userRepository
         .createQueryBuilder('user')
-        .select(['user.id', 'user.username', 'user.email', 'user.roles', 'user.image'])
-        .where(':role = ANY(user.roles)', { role })
+        .select([
+          'user.id',
+          'user.username',
+          'user.email',
+          'user.role',
+          'user.image',
+        ])
+        .where('user.role = :role', { role })
         .getMany();
 
       return users.map((user) => {
@@ -149,11 +207,17 @@ export class AuthService {
   }
 
   async findSuperUsers() {
-    return this.findUsersByRole('superUser');
+    return this.findUsersByRole(ValidRoles.superadmin);
   }
 
   async findAllAdminStats(paginationDto: PaginationDto) {
-    const { limit = 10, offset = 0, notVotedDays, accessDays, inactiveDays = 7 } = paginationDto;
+    const {
+      limit = 10,
+      offset = 0,
+      notVotedDays,
+      accessDays,
+      inactiveDays = 7,
+    } = paginationDto;
 
     const VOTE_EXPR =
       'MAX(GREATEST(rate."createdAt", COALESCE(rate."editedAt", rate."createdAt")))';
@@ -250,22 +314,29 @@ export class AuthService {
       ORDER BY date DESC
     `);
 
-    const [data, totalItems, lastLoginPerDay, neverAccessed, usersPerDay, lastVotePerDay, inactiveVotersPerDay] =
-      await Promise.all([
-        usersQuery.getRawMany(),
-        totalItemsPromise,
-        lastLoginQuery.getRawMany(),
-        this.userRepository.count({ where: { lastLogin: IsNull() } }),
-        this.userRepository
-          .createQueryBuilder('user')
-          .select('DATE("user"."createdAt")', 'date')
-          .addSelect('COUNT(*)::int', 'count')
-          .groupBy('DATE("user"."createdAt")')
-          .orderBy('date', 'DESC')
-          .getRawMany(),
-        lastVotePerDayQuery,
-        inactiveVotersPerDayQuery,
-      ]);
+    const [
+      data,
+      totalItems,
+      lastLoginPerDay,
+      neverAccessed,
+      usersPerDay,
+      lastVotePerDay,
+      inactiveVotersPerDay,
+    ] = await Promise.all([
+      usersQuery.getRawMany(),
+      totalItemsPromise,
+      lastLoginQuery.getRawMany(),
+      this.userRepository.count({ where: { lastLogin: IsNull() } }),
+      this.userRepository
+        .createQueryBuilder('user')
+        .select('DATE("user"."createdAt")', 'date')
+        .addSelect('COUNT(*)::int', 'count')
+        .groupBy('DATE("user"."createdAt")')
+        .orderBy('date', 'DESC')
+        .getRawMany(),
+      lastVotePerDayQuery,
+      inactiveVotersPerDayQuery,
+    ]);
 
     const totalPages = Math.ceil(totalItems / limit);
     const currentPage = Math.floor(offset / limit) + 1;
@@ -286,7 +357,6 @@ export class AuthService {
     };
   }
 
-
   async findOne(id: string): Promise<User> {
     try {
       const unit = await this.userRepository.findOneByOrFail({ id });
@@ -298,33 +368,52 @@ export class AuthService {
 
   async updateUserSuperAdmin(
     id: string,
-    updateData: Partial<User>,
+    updateData: AdminUpdateUserDto,
+    actor: User,
   ): Promise<User> {
+    this.assertAllowedFields(updateData, [
+      'email',
+      'password',
+      'username',
+      'image',
+      'dashboardConfig',
+      'mobileDashboardConfig',
+      'dashboardButtonsEnabled',
+      'role',
+      'notes',
+      'createdAt',
+    ]);
+    await this.assertSuperadmin(actor.id);
+    this.validateAssignedRole(updateData.role);
     const user = await this.findOne(id);
 
-    if (updateData.password) {
-      updateData.password = bcrypt.hashSync(updateData.password, 10);
-    }
-
-    Object.assign(user, updateData);
+    Object.assign(user, this.adminUpdateFields(updateData));
     return this.userRepository.save(user);
   }
 
-  async updateUser(updateData: Partial<User>, user: User): Promise<User> {
-    if (updateData.password) {
-      updateData.password = bcrypt.hashSync(updateData.password, 10);
-    }
-
-    Object.assign(user, updateData);
+  async updateUser(updateData: UpdateUserDto, actor: User): Promise<User> {
+    this.assertAllowedFields(updateData, [
+      'email',
+      'password',
+      'username',
+      'image',
+      'dashboardConfig',
+      'mobileDashboardConfig',
+      'dashboardButtonsEnabled',
+    ]);
+    const user = await this.findOne(actor.id);
+    Object.assign(user, this.profileUpdateFields(updateData));
     return this.userRepository.save(user);
   }
 
-  async remove(id: string) {
+  async remove(id: string, actor: User) {
+    await this.assertSuperadmin(actor.id);
     const user = await this.findOne(id);
     return this.userRepository.remove(user);
   }
 
-  async setActive(id: string, isActive: boolean): Promise<User> {
+  async setActive(id: string, isActive: boolean, actor: User): Promise<User> {
+    await this.assertSuperadmin(actor.id);
     const user = await this.findOne(id);
     user.isActive = isActive;
     return this.userRepository.save(user);
@@ -359,7 +448,13 @@ export class AuthService {
         where: { user: { id } },
         relations: ['disc'],
         order: { createdAt: 'DESC' },
-        select: { id: true, rate: true, cover: true, createdAt: true, editedAt: true },
+        select: {
+          id: true,
+          rate: true,
+          cover: true,
+          createdAt: true,
+          editedAt: true,
+        },
       }),
       this.userAccessLogRepository.find({
         where: { userId: id },
@@ -374,6 +469,71 @@ export class AuthService {
   private getJwtToken(payload: JwtPayload) {
     const token = this.jwtService.sign(payload);
     return token;
+  }
+
+  private profileUpdateFields(
+    updateData: UpdateUserDto | AdminUpdateUserDto,
+  ): Partial<User> {
+    const fields: Partial<User> = {};
+    const allowedFields: (keyof UpdateUserDto)[] = [
+      'email',
+      'password',
+      'username',
+      'image',
+      'dashboardConfig',
+      'mobileDashboardConfig',
+      'dashboardButtonsEnabled',
+    ];
+
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        (fields as any)[field] = updateData[field];
+      }
+    }
+
+    if (fields.password) fields.password = bcrypt.hashSync(fields.password, 10);
+    return fields;
+  }
+
+  private adminUpdateFields(updateData: AdminUpdateUserDto): Partial<User> {
+    const fields = this.profileUpdateFields(updateData);
+    if (updateData.role !== undefined) fields.role = updateData.role;
+    if (updateData.notes !== undefined) fields.notes = updateData.notes;
+    if (updateData.createdAt !== undefined)
+      fields.createdAt = new Date(updateData.createdAt);
+    return fields;
+  }
+
+  private validateAssignedRole(role: unknown) {
+    if (role !== undefined && !isValidRole(role)) {
+      throw new BadRequestException('Role is not valid');
+    }
+  }
+
+  private assertAllowedFields(
+    value: object,
+    allowedFields: readonly string[],
+  ): void {
+    const disallowedFields = Object.keys(value).filter(
+      (field) => !allowedFields.includes(field),
+    );
+
+    if (disallowedFields.length > 0) {
+      throw new BadRequestException(
+        `Fields are not allowed: ${disallowedFields.join(', ')}`,
+      );
+    }
+  }
+
+  private async assertSuperadmin(actorId: string): Promise<void> {
+    const actor = await this.userRepository.findOne({
+      where: { id: actorId },
+      select: { id: true, role: true, isActive: true },
+    });
+
+    if (!actor?.isActive || actor.role !== ValidRoles.superadmin) {
+      throw new ForbiddenException('Only superadmin can manage users');
+    }
   }
 
   private handleDBerrors(error: any) {

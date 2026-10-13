@@ -21,7 +21,7 @@ export class NewsController {
   constructor(private readonly newsService: NewsService) {}
 
   @Post()
-  @Auth(ValidRoles.admin, ValidRoles.superUser)
+  @Auth(ValidRoles.superadmin)
   create(@Body() createNewsDto: CreateNewsDto) {
     return this.newsService.create(createNewsDto);
   }
@@ -55,7 +55,7 @@ export class NewsController {
   }
 
   @Patch(':id')
-  @Auth(ValidRoles.admin, ValidRoles.superUser)
+  @Auth(ValidRoles.superadmin)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateNewsDto: UpdateNewsDto,
@@ -64,7 +64,7 @@ export class NewsController {
   }
 
   @Delete(':id')
-  @Auth(ValidRoles.admin, ValidRoles.superUser)
+  @Auth(ValidRoles.superadmin)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.newsService.remove(id);
   }

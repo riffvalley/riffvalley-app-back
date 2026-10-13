@@ -21,7 +21,7 @@ export class LastfmController {
   }
 
   @Post('fill-images')
-  @Auth(ValidRoles.admin, ValidRoles.superUser)
+  @Auth(ValidRoles.superadmin)
   fillWeeklyImages(@Query() dto: WeeklyImagesQueryDto) {
     return this.lastfmService.fillWeeklyImages(dto.month, dto.year, dto.week);
   }

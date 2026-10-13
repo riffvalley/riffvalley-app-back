@@ -10,12 +10,15 @@ import {
 } from '@nestjs/common';
 import { PointService } from './points.service';
 import { CreatePointDto } from './dto/create-points.dto';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 
 @Controller('points')
 export class PointController {
   constructor(private readonly pointService: PointService) {}
 
   @Post()
+  @Auth(ValidRoles.riffvalley)
   async create(@Body() createPointDto: CreatePointDto) {
     return this.pointService.createPoint(createPointDto);
   }
@@ -31,6 +34,7 @@ export class PointController {
   }
 
   @Patch(':id')
+  @Auth(ValidRoles.riffvalley)
   async update(
     @Param('id') id: string,
     @Body() updateData: Partial<CreatePointDto>,
@@ -39,6 +43,7 @@ export class PointController {
   }
 
   @Delete(':id')
+  @Auth(ValidRoles.riffvalley)
   async remove(@Param('id') id: string) {
     return this.pointService.deletePoint(id);
   }

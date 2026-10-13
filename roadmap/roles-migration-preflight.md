@@ -1,6 +1,14 @@
 # Preflight y migración de roles — nuevo diseño de rol único
 
-**Estado vigente:** R.13a y R.13b completadas el 2026-10-13 para análisis, implementación y prueba en PostgreSQL efímero. R.15a completada como preparación operativa documental el 2026-10-13. La migración histórica R.5b permanece intacta. `scripts/run-roles-migration-chain.ts` resuelve su compatibilidad con TypeORM 0.3.26 en un runner explícito y acotado. La base local conserva `users.roles text[]`; ninguna de las migraciones de roles está registrada allí. No se ejecutó ninguna migración persistente ni se consultó producción u otro entorno remoto. La preparación no significa que la migración se haya ejecutado ni que se haya desplegado el backend nuevo.
+**Estado vigente:** R.13a y R.13b completadas el 2026-10-13 para análisis, implementación y prueba efímera. El 2026-10-13 se ejecutó correctamente la cadena de roles una vez en PostgreSQL local `SpamMusicDB`: `users.role text NOT NULL DEFAULT 'user'`, constraint canónica validada, sin `users.roles`, 198 usuarios, ledger de 91 entradas y snapshots conservados. No se conectó a Heroku ni a producción. El backup inmediato y el preexistente se conservan fuera del repositorio. El contenedor de API antiguo sigue detenido. El backend nuevo del workspace se inició correctamente tras corregir los permisos locales y la inyección de `UserRoleGuard`; `GET /api/countries` respondió HTTP 200. F.5.1 y las pruebas conjuntas con el frontend siguen pendientes.
+
+### R.15c — Arranque del backend local (2026-10-13)
+
+- **Permisos:** Node se ejecuta como `tottibero` (UID 1000), mientras `dist` y los archivos activos `combined-2026-10-13.log` y `error-2026-10-13.log` pertenecían a `nobody:nogroup` (UID 65534), coherente con artefactos creados desde el contenedor anterior. Se cambió el propietario del árbol `dist` y de esos dos logs a `tottibero:tottibero`, conservando contenido y modos; no se borraron archivos ni se amplió el acceso con `777`.
+- **Inyección:** `AuthModule` era propietario del repositorio TypeORM de `User`, pero no registraba ni exportaba `UserRoleGuard`. Al usar `@Auth()`, Nest instancia el guard en el contexto del módulo del controlador. Se registró una única instancia de clase como provider en `AuthModule` y se exportó; los módulos protegidos que no importaban AuthModule ahora lo importan: Countries, Genres, Articles, Videos, Riff Valley Playlists, Reunions, Contents, Versions y Points. No se duplicó el guard ni se cambió la jerarquía.
+- **Resultado:** `yarn --ignore-engines tsc --noEmit` pasa. `yarn --ignore-engines start:dev` compiló sin errores, Nest inicializó todos los módulos y el servidor escuchó en el puerto 3000; `GET http://127.0.0.1:3000/api/countries` devolvió HTTP 200. No se ejecutó el runner de migraciones ni se accedió a rutas de escritura. La primera prueba de conexión dentro del sandbox falló con `connect EPERM`; el arranque y la petición se repitieron con acceso de red local autorizado.
+- **Pruebas:** 7 de 8 suites focalizadas pasan (197 tests); falla `src/versions/versions.controller.spec.ts` porque su `RootTestModule` no proporciona `VersionRepository` al construir `VersionsService`. Es el fallo previo ya documentado en R.14c/R.14f y no se modificó en esta tarea. Prettier y `git diff --check` pasan en los cambios de esta tarea.
+- El backend nuevo queda iniciado y la API antigua continúa detenida. No se usaron credenciales reales. La verificación de Docker no fue accesible desde el usuario local por permisos de `/var/run/docker.sock`; el proceso local de Nest anterior no estaba presente antes del arranque. F.5.1 no se declara completada: falta ejecutar las pruebas conjuntas acordadas con el frontend.
 
 ## R.13a — Preflight del entorno local (2026-10-13)
 
@@ -94,9 +102,9 @@ Estos resultados describen solo esta base local. No sustituyen una comprobación
 - `src/app.module.ts` conserva `migrationsRun: true`, pero el `TypeOrmModule.forRoot` actual no registra migraciones. El datasource CLI sí las registra. Con la configuración inspeccionada, el arranque Nest no ejecuta esta cadena; el runner dedicado es quien la carga. No arrancar instancias mientras se migra y verificar el artefacto/configuración exactos del despliegue antes de reabrir tráfico para evitar que una configuración posterior registre migraciones y compita.
 - El código contiene tareas programadas Nest (`@Cron` en Contents, Festival Playlists, TikTok e Instagram). Se detienen al detener todas las instancias Nest. No se encontró un runner independiente de esta cadena de roles; la existencia o configuración de schedulers externos, workers y procesos operativos del entorno objetivo no puede confirmarse desde este repositorio local y debe revisarse durante su preflight.
 
-#### Procedimiento concreto para un corte futuro
+#### Procedimiento para otros entornos
 
-Este procedimiento queda preparado, pero **no se ejecuta como parte de R.15a**. Requiere un entorno objetivo identificado, una ventana aprobada y acceso operativo específico.
+La secuencia se ejecutó únicamente contra `SpamMusicDB` local el 2026-10-13. Para cualquier otro entorno requiere identificación del destino, ventana aprobada y acceso operativo específico; no repetirla contra la base local ya migrada.
 
 1. **Preflight inmediato del destino:** fijar y registrar host, base, versión del artefacto y timestamp; abortar si no es el destino aprobado. Consultar en modo solo lectura esquema de `users`, ledger, presencia y contenido de ambos snapshots, distribución agregada de roles y bloqueos. Exigir el estado previo esperado (`roles` presente, `role` ausente), ledger coherente con una de las rutas admitidas y cero filas ambiguas. Si `1791910000000` ya aparece, comprobar snapshot histórico y procedencia de `['user']`; si aparece `1791920000000`, no repetir el corte: validar snapshots y esquema final.
 2. **Backup restaurable:** crear un backup PostgreSQL consistente en formato custom (`pg_dump -Fc`) con retención y permisos del entorno. Calcular checksum, comprobar que `pg_restore --list` puede leerlo y restaurarlo en una base aislada de ensayo. Comparar allí esquema, número de usuarios y consultas agregadas de roles con el origen registrado. No considerar suficiente el snapshot de la migración como sustituto del backup integral.
@@ -112,7 +120,95 @@ Este procedimiento queda preparado, pero **no se ejecuta como parte de R.15a**. 
 - **`up()` completado, backend nuevo aún sin tráfico:** mantener cerrado el sistema. El runner `yarn migration:roles` solo aplica hacia delante y no existe un runner dedicado de rollback. `down()` está implementado y probado para restaurar arrays, schema, default, nulabilidad, comentario, constraints e índices; aborta si detecta cambios posteriores. No usar `yarn migration:revert` a ciegas: es genérico y puede revertir una migración distinta si el ledger del destino contiene una posterior. Antes de un corte real, ensayar en una base aislada un rollback que verifique el nombre/timestamp exacto y revierta únicamente esta cadena en orden inverso. Si ese rollback no está disponible, no abrir tráfico: restaurar el backup probado en una base recuperada y validar antes de apuntar servicios a ella.
 - **Ya se reabrieron escrituras:** detener de nuevo todos los escritores y preservar evidencia. El rollback automático se niega deliberadamente si hubo altas, bajas o cambios de rol; no forzarlo. Decidir entre rollback manual revisado y restauración del backup considerando las escrituras posteriores, y validar el estado restaurado antes de reactivar el backend antiguo.
 
-**Estado de R.15a:** preparación documental y comprobación local completadas. **Migración ejecutada: no. Despliegue realizado: no.** Bloqueos para un corte real: falta el preflight y backup restaurable del destino aprobado, la reconciliación manual de ledger contra esquema, el ensayo del rollback dirigido, la revisión de schedulers/procesos externos y la ventana operativa coordinada. No se accedió a producción ni a otros entornos remotos.
+**Estado previo al corte de R.15a:** preparación documental y comprobación local completadas; en ese momento no se había ejecutado la migración. El resultado de la ejecución local del 2026-10-13 se registra en la sección «Ejecución del corte local». No se accedió a producción ni a otros entornos remotos.
+
+### Verificación operativa local adicional (2026-10-13)
+
+Se repitieron las consultas sobre `SpamMusicDB` desde `.env` con `STAGE=dev`, `DB_HOST=localhost`, puerto `5432`; `transaction_read_only=on` y `ROLLBACK`. PostgreSQL respondió como versión `17.10`, con 198 usuarios y 89 filas en `migrations`. `users.roles` sigue siendo `text[] NOT NULL DEFAULT '{user}'::text[]`, `users.role` no existe y `1791910000000`/`1791920000000` no aparecen en el ledger. Los seis conteos agregados siguen siendo: `babyUser` 190; `riffValley` 1; `riffValley,user,superUser` 1; `user,riffValley` 2; `user,riffValley,superUser` 2; `user,superUser,riffValley` 2. Sin nulos, arrays vacíos o desconocidos ni `admin`/`['user']` aislado.
+
+**Descubrimiento del runner verificado:** `src/data-source.ts` mantiene el glob general `src/migrations/*.ts`, que incluye tres `*.spec.ts` de ese directorio. El punto de entrada de `scripts/run-roles-migration-chain.ts` lo reemplaza, solo para este runner y antes de inicializar, por rutas a archivos con formato de migración timestampada. TypeORM inicializó correctamente y descubrió 90 migraciones; no cargó las tres pruebas. El ledger de `SpamMusicDB` contiene 89 entradas, ninguna de roles. Las únicas migraciones fuente pendientes son `MigrateCanonicalUserRoles1791910000000` y `MigrateUsersToSingleRole1791920000000`; no hay migraciones ajenas pendientes. Se observó también una entrada aplicada sin archivo fuente: `UpdateListStatusEnum1766066905027`; no está pendiente, queda fuera de este cambio y no se alteró. La comprobación usó `MigrationExecutor.getAllMigrations()` y `getExecutedMigrations()` dentro de `BEGIN READ ONLY`, confirmó `transaction_read_only=on` y terminó con `ROLLBACK`; no llamó a `executePendingMigrations()`.
+
+Durante la primera inicialización de diagnóstico, el driver de TypeORM también envió `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"` antes de abrir la transacción de lectura. Una consulta posterior confirmó que la extensión existe y que siguen siendo 198 usuarios/89 filas de ledger, pero no hay evidencia previa que permita demostrar si el comando fue un no-op. No se quitó la extensión. En la verificación repetida se desactivó `installExtensions` antes de inicializar para evitar ese DDL. No hubo cambios observados en usuarios ni en el ledger.
+
+**Backup completo y restauración de ensayo (2026-10-13):** el host no tiene `pg_dump`, `pg_restore` ni `psql` en el `PATH`; el contenedor `spammusicdb` dispone de esas herramientas, además de `createdb` y `dropdb`, versión 17.10, igual que el servidor. Antes del dump se comprobó que `SpamMusicDB` ocupaba 24 MB y que `/tmp` tenía espacio suficiente. El dump custom se creó en `/tmp/SpamMusicDB-pre-roles-20261013.dump` (3.859.232 bytes, modo `0600`, SHA-256 `36243aafc81098153c051df73d7b5a3e1ed8a4881a838ee780d95eb17731c2e7`). `pg_restore --list` lo leyó correctamente e incluyó definición y datos de `users` y `migrations`. `pg_restore --exit-on-error` restauró todo sin errores en `SpamMusicDB_restorecheck_20261013`, una base nueva distinta de la original. La comparación dio 198 usuarios, las mismas seis agrupaciones de roles, las mismas 13 columnas de `users`, 89 migraciones con el mismo fingerprint `6a8dffae953ae84b8049b7198b9f080a`, cero migraciones objetivo aplicadas, y 41 claves foráneas validadas; no había IDs nulos ni roles nulos/vacíos. La base temporal se eliminó tras completar las comprobaciones. El archivo de backup se conserva fuera del repositorio. El dump corresponde a la base `SpamMusicDB`; no es un backup de roles/globales del clúster.
+
+```bash
+# Se ejecutó desde la raíz del repositorio. El archivo se conserva fuera del repo.
+BACKUP=/tmp/SpamMusicDB-pre-roles-20261013.dump
+umask 077
+test ! -e "$BACKUP"
+docker exec spammusicdb pg_dump -w -U postgres -Fc -d SpamMusicDB > "$BACKUP"
+test -s "$BACKUP"
+chmod 600 "$BACKUP"
+sha256sum "$BACKUP"
+set -o pipefail
+docker exec -i spammusicdb pg_restore --list < "$BACKUP" \
+  | rg 'TABLE (DATA )?public (users|migrations) |SEQUENCE|SCHEMA - public|DATABASE '
+
+# Ensayo ejecutado en una base aislada; pg_restore terminó con código 0.
+RESTORE_DB=SpamMusicDB_restorecheck_20261013
+docker exec spammusicdb createdb -U postgres "$RESTORE_DB"
+docker exec -i spammusicdb pg_restore --exit-on-error -U postgres -d "$RESTORE_DB" < "$BACKUP"
+docker exec spammusicdb psql -X -U postgres -d "$RESTORE_DB" -v ON_ERROR_STOP=1 -P pager=off -c \
+  "BEGIN READ ONLY; SELECT count(*) AS users, count(*) FILTER (WHERE id IS NULL) AS null_user_ids, count(*) FILTER (WHERE roles IS NULL OR cardinality(roles)=0) AS empty_or_null_roles FROM users; SELECT roles::text, count(*) FROM users GROUP BY roles ORDER BY roles::text; SELECT column_name, data_type, udt_name, is_nullable, column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='users' ORDER BY ordinal_position; SELECT count(*) AS ledger_rows, min(timestamp), max(timestamp), md5(string_agg(timestamp::text || ':' || name, ',' ORDER BY timestamp, name)) AS ledger_fingerprint FROM migrations; SELECT name, count(*) AS applied FROM migrations WHERE name IN ('1791910000000-MigrateCanonicalUserRoles','1791920000000-MigrateUsersToSingleRole') GROUP BY name ORDER BY name; SELECT count(*) FILTER (WHERE contype='f') AS foreign_keys, count(*) FILTER (WHERE NOT convalidated) AS unvalidated_constraints FROM pg_constraint WHERE connamespace='public'::regnamespace; ROLLBACK;"
+```
+
+Para repetir la comparación sin exponer campos personales, consultar únicamente conteos/agregados de usuarios, la firma de columnas, el fingerprint del ledger y restricciones. La validación de esta prueba confirmó 198 filas, sin IDs nulos ni roles nulos/vacíos, `roles text[] NOT NULL DEFAULT '{user}'::text[]`, ausencia de `role`, 89 entradas de ledger, 41 claves foráneas validadas y ninguna migración de roles objetivo aplicada.
+
+**Recuperación durante un corte futuro:** usar el backup conservado solo tras decidir el rollback, detener todos los escritores y confirmar que el destino es exactamente `SpamMusicDB`. Los siguientes comandos reemplazan esa base y sus cambios posteriores; no se ejecutaron en esta prueba. Mantener el backup intacto y revisar antes el checksum registrado:
+
+```bash
+BACKUP=/tmp/SpamMusicDB-pre-roles-20261013.dump
+sha256sum "$BACKUP"
+# Tras detener y comprobar todas las conexiones/escritores:
+docker exec spammusicdb dropdb -U postgres SpamMusicDB
+docker exec spammusicdb createdb -U postgres SpamMusicDB
+docker exec -i spammusicdb pg_restore --exit-on-error -U postgres -d SpamMusicDB < "$BACKUP"
+docker exec spammusicdb psql -X -U postgres -d SpamMusicDB -v ON_ERROR_STOP=1 -P pager=off -c \
+  "BEGIN READ ONLY; SELECT count(*) AS users FROM users; SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name IN ('roles','role') ORDER BY column_name; SELECT count(*) AS ledger_rows, md5(string_agg(timestamp::text || ':' || name, ',' ORDER BY timestamp, name)) AS ledger_fingerprint FROM migrations; ROLLBACK;"
+```
+
+**Procesos del corte:** Docker mostró `spammusic-back-app-1` ejecutando `npm run start:dev`/Nest `--watch`, con `DB_HOST=db`, `DB_NAME=SpamMusicDB`. Las etiquetas del contenedor conservan una ruta anterior de checkout; el Compose real está ahora en `/home/tottibero/workspaces/riffvalley/riffvalley-app-back/docker-compose.yml`, y `docker compose -p spammusic-back -f <ruta-actual> ps --all app` reconoce ese contenedor. No había sesiones en `pg_stat_activity` en el instante de consulta y no apareció un contenedor separado de workers de SpamMusic. `back-app-1` apunta a `comunidad_bdsm_back`, no a `SpamMusicDB`. El usuario no tiene crontab y los timers de systemd observados son de mantenimiento del sistema, sin jobs de la aplicación. El contenedor de API activo puede aceptar escrituras y debe detenerse aunque no tuviera una sesión abierta en el instante de consulta. Desde este workspace, los comandos para detener y comprobar el contenedor real son:
+
+```bash
+docker compose -p spammusic-back -f /home/tottibero/workspaces/riffvalley/riffvalley-app-back/docker-compose.yml stop app
+docker compose -p spammusic-back -f /home/tottibero/workspaces/riffvalley/riffvalley-app-back/docker-compose.yml ps app
+docker exec spammusicdb psql -U postgres -d SpamMusicDB -X -v ON_ERROR_STOP=1 -c \
+  "SELECT pid, application_name, client_addr, state, backend_type FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid();"
+```
+
+La lista debe quedar sin sesiones del backend/escritores; revisar aparte cualquier scheduler externo del equipo. Antes de ejecutar, completar y probar la restauración del backup. Con esa condición cumplida, ejecutar una sola vez `yarn --ignore-engines migration:roles` (el host usa Node 22.23.1 frente a `engines.node=20.x`). No usar `migration:run` ni iniciar la aplicación para aplicar esta cadena.
+
+**Comandos de postflight utilizados y resultado:**
+
+```bash
+docker exec spammusicdb psql -U postgres -d SpamMusicDB -X -v ON_ERROR_STOP=1 -c \
+  "SELECT name, count(*) FROM public.migrations WHERE name IN ('MigrateCanonicalUserRoles1791910000000','MigrateUsersToSingleRole1791920000') GROUP BY name ORDER BY name;"
+docker exec spammusicdb psql -U postgres -d SpamMusicDB -X -v ON_ERROR_STOP=1 -c \
+  "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name IN ('roles','role') ORDER BY column_name;"
+docker exec spammusicdb psql -U postgres -d SpamMusicDB -X -v ON_ERROR_STOP=1 -c \
+  "SELECT role, count(*) FROM public.users GROUP BY role ORDER BY role;"
+docker exec spammusicdb psql -U postgres -d SpamMusicDB -X -v ON_ERROR_STOP=1 -c \
+  "SELECT to_regclass('public.user_roles_migration_snapshot_1791910000000') AS legacy_snapshot, to_regclass('public.user_roles_single_snapshot_1791920000000') AS data_snapshot, to_regclass('public.user_roles_single_schema_snapshot_1791920000000') AS schema_snapshot, count(*) AS users FROM public.users;"
+```
+
+El resultado observado fue 198 usuarios, `users.role text NOT NULL DEFAULT 'user'`, ausencia de `users.roles`, ambas migraciones registradas una vez, snapshots presentes y conteos `user=190`, `riffvalley=3`, `superadmin=5` (sin `collaborator`). El contenedor antiguo monta otro checkout y permanece detenido. El backend compatible de este workspace no pudo arrancar; los errores y el estado de las pruebas aparecen en «Ejecución del corte local».
+
+**Ejecución del corte local (2026-10-13):** el preflight confirmó `STAGE=dev`, `DB_HOST=localhost`, `DB_PORT=5432`, `DB_NAME=SpamMusicDB`, PostgreSQL 17.10, 198 usuarios, `users.roles text[] NOT NULL DEFAULT '{user}'::text[]`, ausencia de `users.role` y 89 filas en el ledger. TypeORM descubrió 90 migraciones sin cargar specs; las únicas pendientes eran `MigrateCanonicalUserRoles1791910000000` y `MigrateUsersToSingleRole1791920000`. El ledger incluía una migración histórica aplicada sin fuente (`UpdateListStatusEnum1766066905027`), ya documentada y no pendiente. No había otra migración pendiente ni sesiones activas.
+
+Antes de detener la API se generó `/tmp/SpamMusicDB-roles-cut-20261013-221108.dump`, custom, 3.859.232 bytes, modo `0600`, SHA-256 `a03fa9631509426059aefe7d10ad7eca3e43a3fee4319e7f9db4744f1a88ec24`. `pg_restore --list` reconoció las definiciones y los datos de `users` y `migrations`. Se conservó también `/tmp/SpamMusicDB-pre-roles-20261013.dump`.
+
+Se verificó que `spammusic-back-app-1` era el servicio `app` del proyecto Compose `spammusic-back`, con `DB_HOST=db` y `DB_NAME=SpamMusicDB`; se detuvo con el Compose actual. PostgreSQL no se detuvo ni se eliminó ningún contenedor o volumen. Después de parar la API no había sesiones restantes, transacciones o escrituras activas en `SpamMusicDB`. La revisión previa documentada no encontró cron de usuario ni workers independientes de SpamMusic; los timers del sistema observados eran de mantenimiento. Las tareas Nest se detuvieron con la API.
+
+El guard de datasource volvió a confirmar el destino local y se ejecutó una sola vez `yarn --ignore-engines migration:roles`. Terminó con código 0 e informó ambas migraciones aplicadas: `MigrateCanonicalUserRoles1791910000000` y `MigrateUsersToSingleRole1791920000`.
+
+Postflight de solo lectura: 198 usuarios, cero IDs/roles nulos y cero roles no canónicos; distribución `user=190`, `riffvalley=3`, `superadmin=5`, `collaborator=0`. `users.role` es `text NOT NULL DEFAULT 'user'`, la constraint `CHK_users_role_canonical_1791920000000` acepta exactamente los cuatro roles canónicos y está validada; `users.roles` no existe. El ledger tiene 91 entradas y cada migración objetivo aparece una vez. Los snapshots histórico, de roles y de esquema existen (198, 198 y 1 filas). El snapshot singular coincide con los 198 IDs y roles finales de `users` (cero diferencias). El SQL de ambas migraciones limita sus escrituras a `users`, `migrations` y esos snapshots; no se observaron sesiones posteriores activas.
+
+**Backend posterior:** `yarn --ignore-engines start:dev` no logró arrancar porque Nest no puede limpiar `dist/access-requests` y `copy-i18n` no puede crear `dist/src` (`EACCES`). Un intento de arranque directo de `src/main.ts` superó la inicialización inicial, pero Winston no pudo abrir `logs/error-2026-10-13.log` (`EACCES`). Sin cambiar permisos ni archivos, se repitió con los transports de archivo desactivados solo en memoria; Nest llegó a cargar módulos y falló porque `CountriesModule` no puede resolver `UserRepository` requerido por `UserRoleGuard`. No quedó un backend nuevo escuchando; el contenedor antiguo sigue detenido. No se realizó ninguna petición de login ni se usaron credenciales reales. La validación HTTP de Auth y F.5.1 están bloqueadas hasta resolver esos problemas en una tarea autorizada.
+
+**Decisión:** la migración local quedó aplicada y el postflight de PostgreSQL pasa. El estado operativo del backend es bloqueante para las pruebas conjuntas; no se cambió código funcional, permisos, frontend ni infraestructura para corregirlo. No hubo despliegue ni conexión remota.
+
+**Verificación de código:** las pruebas focalizadas con Yarn pasaron (25 pruebas); los 19 casos PostgreSQL de `1791920000000` quedaron omitidos porque `ROLE_MIGRATION_TEST_URL` no estaba definido, para evitar escrituras en bases persistentes. El test unitario nuevo cubre el filtro de nombres y las dos migraciones de roles descubiertas. Pasaron el typecheck integrado, el typecheck directo del runner, Prettier y `git diff --check`.
 
 ### Configuración y ejecución de migraciones
 
