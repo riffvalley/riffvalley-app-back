@@ -4,8 +4,8 @@ import {
   PATH_METADATA,
 } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { FavoritesController } from './favorites.controller';
 
 describe('FavoritesController access policy', () => {

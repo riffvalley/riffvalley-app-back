@@ -12,9 +12,9 @@ import {
 import { GenresService } from './genres.service';
 import { CreateGenreDto } from './dto/create-genre.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
-import { Auth } from 'src/auth/decorators/auth.decorator';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { Auth } from 'src/identity/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
 @Controller('genres')
 export class GenresController {

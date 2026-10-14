@@ -5,10 +5,10 @@ import {
 } from '@nestjs/common/constants';
 import { ExecutionContext, ParseUUIDPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
-import { PaginationDto } from 'src/common/dtos/pagination.dto';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { CreateArtistDto } from '../dto/create-artist.dto';
 import { UpdateArtistDto } from '../dto/update-artist.dto';
 import { ArtistsController } from '../artists.controller';

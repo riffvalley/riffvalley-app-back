@@ -7,7 +7,7 @@ import { getMetadataArgsStorage, Repository } from 'typeorm';
 import { Country } from './entities/country.entity';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { CountriesService } from './countries.service';
 import { Artist } from '../artists/entities/artist.entity';
 

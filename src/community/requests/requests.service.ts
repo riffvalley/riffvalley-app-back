@@ -9,11 +9,12 @@ import { Repository } from 'typeorm';
 import { DiscRequest, RequestStatus } from './entities/disc-request.entity';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
-import { User } from '../../auth/entities/user.entity';
+import { User } from '../../identity/auth/entities/user.entity';
 import { Artist } from '../../catalog/artists/entities/artist.entity';
 import { Disc } from '../../catalog/discs/entities/disc.entity';
 import { Genre } from '../../catalog/genres/entities/genre.entity';
 import { Country } from '../../catalog/countries/entities/country.entity';
+import { normalizeForSearch } from '../../catalog/artists/helpers/normalize-for-search';
 
 @Injectable()
 export class RequestsService {
@@ -63,7 +64,9 @@ export class RequestsService {
     const request = await this.findOne(id);
 
     if (request.status === RequestStatus.APPROVED) {
-      throw new BadRequestException('No se pueden modificar peticiones ya aprobadas');
+      throw new BadRequestException(
+        'No se pueden modificar peticiones ya aprobadas',
+      );
     }
 
     const { genreId, countryId, ...rest } = dto;
@@ -88,14 +91,15 @@ export class RequestsService {
     }
 
     // Buscar o crear artista
+    const normalizedArtistName = normalizeForSearch(request.artistName);
     let artist = await this.artistRepo.findOne({
-      where: { nameNormalized: request.artistName.toLowerCase() },
+      where: { nameNormalized: normalizedArtistName },
     });
 
     if (!artist) {
       artist = this.artistRepo.create({
         name: request.artistName,
-        nameNormalized: request.artistName.toLowerCase(),
+        nameNormalized: normalizedArtistName,
         ...(request.country ? { countryId: request.country.id } : {}),
       });
       await this.artistRepo.save(artist);
@@ -134,7 +138,9 @@ export class RequestsService {
     const request = await this.findOne(id);
 
     if (request.status === RequestStatus.APPROVED) {
-      throw new BadRequestException('No se puede reabrir una petición ya aprobada');
+      throw new BadRequestException(
+        'No se puede reabrir una petición ya aprobada',
+      );
     }
 
     if (request.status === RequestStatus.PENDING) {

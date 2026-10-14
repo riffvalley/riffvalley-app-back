@@ -5,14 +5,17 @@ import {
   MODULE_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
-import { roleMeetsMinimum, ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import {
+  roleMeetsMinimum,
+  ValidRoles,
+} from 'src/identity/auth/interfaces/valid-roles';
 import { TelegramController } from './telegram.controller';
 import { TelegramIntegrationModule } from './telegram-integration.module';
 import { TelegramService } from './telegram.service';
-import { NewsModule } from 'src/news/news.module';
-import { AuthModule } from 'src/auth/auth.module';
+import { NewsModule } from 'src/product/news/news.module';
+import { AuthModule } from 'src/identity/auth/auth.module';
 
 describe('TelegramController authorization metadata', () => {
   it('restricts channel-posts to riffvalley and inherited superadmin access', () => {

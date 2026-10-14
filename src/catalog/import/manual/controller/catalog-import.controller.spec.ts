@@ -3,8 +3,8 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { CatalogImportService } from '../import/catalog-import.service';
 import { CatalogImportController } from './catalog-import.controller';
 

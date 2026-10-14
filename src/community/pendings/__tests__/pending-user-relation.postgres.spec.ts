@@ -1,5 +1,5 @@
 import { DataSource } from 'typeorm';
-import { User } from 'src/auth/entities/user.entity';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Pending } from '../entities/pending.entity';
 

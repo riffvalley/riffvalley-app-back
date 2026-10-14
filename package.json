@@ -10,9 +10,9 @@
   },
   "scripts": {
     "build": "nest build",
-    "postbuild": "copyfiles -u 1 src/i18n/*.json dist/src/i18n",
+    "postbuild": "copyfiles -u 2 src/platform/i18n/*.json dist/platform",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "copy-i18n": "copyfiles -u 1 src/i18n/*.json dist/src/i18n",
+    "copy-i18n": "copyfiles -u 2 src/platform/i18n/*.json dist/platform",
     "start": "node dist/main",
     "start:dev": "concurrently \"nest start --watch\" \"npm run copy-i18n -- -w\"",
     "start:debug": "nest start --debug --watch",

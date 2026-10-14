@@ -89,8 +89,8 @@ Optimize and measure SQL before introducing caching. Do not add indexes by intui
 
 ### Authentication & Authorization
 - JWT-based auth via `@nestjs/passport` with 24h token expiry
-- Use `@Auth()` decorator from `src/auth/decorators/auth.decorator.ts` to protect routes
-- Valid roles: `admin`, `superUser`, `user`, `riffValley` (from `src/auth/interfaces/valid-roles.ts`)
+- Use `@Auth()` decorator from `src/identity/auth/decorators/auth.decorator.ts` to protect routes
+- Valid roles: `admin`, `superUser`, `user`, `riffValley` (from `src/identity/auth/interfaces/valid-roles.ts`)
 - Get current user with `@GetUser()` decorator
 
 ### Key Patterns

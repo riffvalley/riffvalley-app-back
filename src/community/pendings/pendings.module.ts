@@ -3,7 +3,7 @@ import { PendingsService } from './pendings.service';
 import { PendingsController } from './pendings.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Pending } from './entities/pending.entity';
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from 'src/identity/auth/auth.module';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 
 @Module({

@@ -3,7 +3,7 @@ import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
-import { User } from 'src/auth/entities/user.entity';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { DiscRequest, RequestStatus } from './entities/disc-request.entity';
 import { RequestsService } from './requests.service';
@@ -13,11 +13,18 @@ describe('RequestsService characterization', () => {
     const relations = getMetadataArgsStorage().relations.filter(
       (relation) => relation.target === DiscRequest,
     );
-    const userRelation = relations.find((relation) => relation.propertyName === 'user');
-    const genreRelation = relations.find((relation) => relation.propertyName === 'genre');
-    const countryRelation = relations.find((relation) => relation.propertyName === 'country');
+    const userRelation = relations.find(
+      (relation) => relation.propertyName === 'user',
+    );
+    const genreRelation = relations.find(
+      (relation) => relation.propertyName === 'genre',
+    );
+    const countryRelation = relations.find(
+      (relation) => relation.propertyName === 'country',
+    );
     const inverseRequests = getMetadataArgsStorage().relations.find(
-      (relation) => relation.target === User && relation.propertyName === 'requests',
+      (relation) =>
+        relation.target === User && relation.propertyName === 'requests',
     );
     const eagerPayload = {
       id: 'request-id',
@@ -28,9 +35,18 @@ describe('RequestsService characterization', () => {
     const requestRepo = {
       find: jest.fn().mockResolvedValue([eagerPayload]),
     };
-    const service = new RequestsService(requestRepo as any, {} as any, {} as any, {} as any, {} as any);
+    const service = new RequestsService(
+      requestRepo as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
 
-    expect(userRelation).toMatchObject({ relationType: 'many-to-one', options: { eager: true } });
+    expect(userRelation).toMatchObject({
+      relationType: 'many-to-one',
+      options: { eager: true },
+    });
     expect(genreRelation).toMatchObject({
       relationType: 'many-to-one',
       options: { eager: true, nullable: true },
@@ -41,8 +57,12 @@ describe('RequestsService characterization', () => {
     });
     expect(inverseRequests?.relationType).toBe('one-to-many');
     await expect(service.findAll()).resolves.toEqual([eagerPayload]);
-    expect(requestRepo.find).toHaveBeenCalledWith({ order: { createdAt: 'DESC' } });
-    await expect(service.findByUser({ id: 'user-id' } as User)).resolves.toEqual([eagerPayload]);
+    expect(requestRepo.find).toHaveBeenCalledWith({
+      order: { createdAt: 'DESC' },
+    });
+    await expect(
+      service.findByUser({ id: 'user-id' } as User),
+    ).resolves.toEqual([eagerPayload]);
     expect(requestRepo.find).toHaveBeenLastCalledWith({
       where: { user: { id: 'user-id' } },
       order: { createdAt: 'DESC' },
@@ -62,7 +82,13 @@ describe('RequestsService characterization', () => {
       create: jest.fn().mockReturnValue(request),
       save: jest.fn().mockResolvedValue(request),
     };
-    const service = new RequestsService(requestRepo as any, {} as any, {} as any, {} as any, {} as any);
+    const service = new RequestsService(
+      requestRepo as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
 
     await expect(service.create(dto, user)).resolves.toBe(request);
     expect(requestRepo.create).toHaveBeenCalledWith({
@@ -137,8 +163,119 @@ describe('RequestsService characterization', () => {
     expect(request.status).toBe(RequestStatus.APPROVED);
     expect(requestRepo.save).toHaveBeenCalledWith(request);
 
-    await expect(service.approve(request.id)).rejects.toThrow('Esta petición ya fue procesada');
+    await expect(service.approve(request.id)).rejects.toThrow(
+      'Esta petición ya fue procesada',
+    );
     expect(artistRepo.findOne).toHaveBeenCalledTimes(1);
     expect(discRepo.save).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['Björk', 'bjork'],
+    ['Band + Co', 'band co'],
+    ['The  Band', 'the band'],
+    ['  Björk  +  Co  ', 'bjork co'],
+  ])(
+    'reuses an existing Artist when %j normalizes to %j',
+    async (artistName, nameNormalized) => {
+      const request = {
+        id: 'request-id',
+        artistName,
+        discName: 'Requested Record',
+        status: RequestStatus.PENDING,
+        genre: { id: 'genre-id' },
+      } as DiscRequest;
+      const existingArtist = {
+        id: 'existing-artist-id',
+        name: 'Visible Artist Name',
+        nameNormalized,
+      } as Artist;
+      const requestRepo = {
+        findOneBy: jest.fn().mockResolvedValue(request),
+        save: jest.fn().mockImplementation(async (saved) => saved),
+      };
+      const artistRepo = {
+        findOne: jest.fn().mockResolvedValue(existingArtist),
+        create: jest.fn(),
+        save: jest.fn(),
+      };
+      const disc = { id: 'disc-id', artist: existingArtist } as Disc;
+      const discRepo = {
+        create: jest.fn().mockReturnValue(disc),
+        save: jest.fn().mockResolvedValue(disc),
+      };
+      const service = new RequestsService(
+        requestRepo as any,
+        artistRepo as any,
+        discRepo as any,
+        {} as any,
+        {} as any,
+      );
+
+      await expect(service.approve(request.id)).resolves.toBe(disc);
+
+      expect(artistRepo.findOne).toHaveBeenCalledWith({
+        where: { nameNormalized },
+      });
+      expect(artistRepo.create).not.toHaveBeenCalled();
+      expect(artistRepo.save).not.toHaveBeenCalled();
+      expect(discRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ artist: existingArtist }),
+      );
+      expect(request.status).toBe(RequestStatus.APPROVED);
+      expect(requestRepo.save).toHaveBeenCalledWith(request);
+    },
+  );
+
+  it('creates a missing Artist with the normalized key and preserves its visible name and relations', async () => {
+    const artistName = '  Björk  +  Co  ';
+    const request = {
+      id: 'request-id',
+      artistName,
+      discName: 'Requested Record',
+      status: RequestStatus.PENDING,
+      country: { id: 'country-id' },
+      genre: { id: 'genre-id' },
+    } as DiscRequest;
+    const artist = { id: 'artist-id', name: artistName } as Artist;
+    const disc = { id: 'disc-id', artist } as Disc;
+    const requestRepo = {
+      findOneBy: jest.fn().mockResolvedValue(request),
+      save: jest.fn().mockImplementation(async (saved) => saved),
+    };
+    const artistRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockReturnValue(artist),
+      save: jest.fn().mockResolvedValue(artist),
+    };
+    const discRepo = {
+      create: jest.fn().mockReturnValue(disc),
+      save: jest.fn().mockResolvedValue(disc),
+    };
+    const service = new RequestsService(
+      requestRepo as any,
+      artistRepo as any,
+      discRepo as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(service.approve(request.id)).resolves.toBe(disc);
+
+    expect(artistRepo.findOne).toHaveBeenCalledWith({
+      where: { nameNormalized: 'bjork co' },
+    });
+    expect(artistRepo.create).toHaveBeenCalledWith({
+      name: artistName,
+      nameNormalized: 'bjork co',
+      countryId: request.country.id,
+    });
+    expect(artistRepo.save).toHaveBeenCalledWith(artist);
+    expect(discRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ artist, genre: request.genre }),
+    );
+    expect(discRepo.save).toHaveBeenCalledWith(disc);
+    expect(request.status).toBe(RequestStatus.APPROVED);
+    expect(requestRepo.save).toHaveBeenCalledWith(request);
   });
 });

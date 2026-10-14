@@ -3,7 +3,7 @@ import { RatesService } from './rates.service';
 import { RatesController } from './rates.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Rate } from './entities/rate.entity';
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from 'src/identity/auth/auth.module';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { RatesStatsService } from './stats/rates-stats.service';
 import { RatesHistoryService } from './history/rates-history.service';

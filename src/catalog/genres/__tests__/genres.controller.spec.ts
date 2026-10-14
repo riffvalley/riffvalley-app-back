@@ -6,12 +6,12 @@ import {
 import { ParseUUIDPipe, ValidationPipe } from '@nestjs/common';
 import { CreateGenreDto } from '../dto/create-genre.dto';
 import { UpdateGenreDto } from '../dto/update-genre.dto';
-import { PaginationDto } from '../../../common/dtos/pagination.dto';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { GenresController } from '../genres.controller';
 import { GenresService } from '../genres.service';
-import { META_MINIMUM_ROLE } from '../../../auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from '../../../auth/guards/user-role/user-role.guard';
-import { ValidRoles } from '../../../auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from '../../../identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
+import { ValidRoles } from '../../../identity/auth/interfaces/valid-roles';
 
 describe('GenresController contract characterization', () => {
   const service = {

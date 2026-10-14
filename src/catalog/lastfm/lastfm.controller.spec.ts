@@ -4,9 +4,9 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
-import { roleMeetsMinimum, ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import { roleMeetsMinimum, ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { LastfmController } from './lastfm.controller';
 
 describe('LastfmController authorization metadata', () => {

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Artist } from '../entities/artist.entity';
 import { Disc } from '../../discs/entities/disc.entity';
-import { NationalRelease } from '../../../national-releases/entities/national-release.entity';
+import { NationalRelease } from '../../../editorial/national-releases/entities/national-release.entity';
 
 @Injectable()
 export class ArtistDetailsService {

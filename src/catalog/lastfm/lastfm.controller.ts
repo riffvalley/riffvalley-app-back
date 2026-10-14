@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Query } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
-import { Auth } from 'src/auth/decorators/auth.decorator';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { Auth } from 'src/identity/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { LastfmService } from './lastfm.service';
 
 class WeeklyImagesQueryDto {

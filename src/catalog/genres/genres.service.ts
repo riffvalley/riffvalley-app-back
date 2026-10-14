@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 import { Genre } from './entities/genre.entity';
 import { CreateGenreDto } from './dto/create-genre.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 
 @Injectable()
 export class GenresService {

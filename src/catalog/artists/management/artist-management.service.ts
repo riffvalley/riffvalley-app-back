@@ -4,8 +4,8 @@ import { Repository } from 'typeorm';
 import { normalizeForSearch } from '../helpers/normalize-for-search';
 import { Artist } from '../entities/artist.entity';
 import { Disc } from '../../discs/entities/disc.entity';
-import { NationalRelease } from '../../../national-releases/entities/national-release.entity';
-import { RiffValleyPlaylistArtist } from '../../../festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { NationalRelease } from '../../../editorial/national-releases/entities/national-release.entity';
+import { RiffValleyPlaylistArtist } from '../../../editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
 import { ArtistOrphansService } from '../orphans/artist-orphans.service';
 
 @Injectable()
@@ -91,46 +91,47 @@ export class ArtistManagementService {
     const artistIds = artists.map((artist) => artist.id);
     const artistNames = artists.map((artist) => artist.name);
 
-    const [discsRaw, nationalReleases, playlistAssociations] = await Promise.all([
-      this.discRepository
-        .createQueryBuilder('disc')
-        .leftJoinAndSelect('disc.genre', 'genre')
-        .leftJoinAndSelect('disc.artist', 'discArtist')
-        .addSelect(
-          (sub) =>
-            sub
-              .select('COUNT(rate.id)', 'rateCount')
-              .from('rate', 'rate')
-              .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
-          'rateCount',
-        )
-        .addSelect(
-          (sub) =>
-            sub
-              .select('AVG(rate.rate)', 'averageRate')
-              .from('rate', 'rate')
-              .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
-          'averageRate',
-        )
-        .where('discArtist.id IN (:...artistIds)', { artistIds })
-        .orderBy('disc.releaseDate', 'DESC')
-        .getRawAndEntities(),
+    const [discsRaw, nationalReleases, playlistAssociations] =
+      await Promise.all([
+        this.discRepository
+          .createQueryBuilder('disc')
+          .leftJoinAndSelect('disc.genre', 'genre')
+          .leftJoinAndSelect('disc.artist', 'discArtist')
+          .addSelect(
+            (sub) =>
+              sub
+                .select('COUNT(rate.id)', 'rateCount')
+                .from('rate', 'rate')
+                .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+            'rateCount',
+          )
+          .addSelect(
+            (sub) =>
+              sub
+                .select('AVG(rate.rate)', 'averageRate')
+                .from('rate', 'rate')
+                .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+            'averageRate',
+          )
+          .where('discArtist.id IN (:...artistIds)', { artistIds })
+          .orderBy('disc.releaseDate', 'DESC')
+          .getRawAndEntities(),
 
-      this.nationalReleaseRepository
-        .createQueryBuilder('nr')
-        .where('LOWER(nr.artistName) IN (:...names)', {
-          names: artistNames.map((name) => name.toLowerCase()),
-        })
-        .orderBy('nr.releaseDay', 'DESC')
-        .getMany(),
+        this.nationalReleaseRepository
+          .createQueryBuilder('nr')
+          .where('LOWER(nr.artistName) IN (:...names)', {
+            names: artistNames.map((name) => name.toLowerCase()),
+          })
+          .orderBy('nr.releaseDay', 'DESC')
+          .getMany(),
 
-      this.playlistArtistRepository
-        .createQueryBuilder('association')
-        .innerJoinAndSelect('association.riffValleyPlaylist', 'playlist')
-        .where('association.artistId IN (:...artistIds)', { artistIds })
-        .orderBy('playlist.name', 'ASC')
-        .getMany(),
-    ]);
+        this.playlistArtistRepository
+          .createQueryBuilder('association')
+          .innerJoinAndSelect('association.riffValleyPlaylist', 'playlist')
+          .where('association.artistId IN (:...artistIds)', { artistIds })
+          .orderBy('playlist.name', 'ASC')
+          .getMany(),
+      ]);
 
     const discsByArtist = new Map<string, any[]>();
     discsRaw.entities.forEach((disc, index) => {

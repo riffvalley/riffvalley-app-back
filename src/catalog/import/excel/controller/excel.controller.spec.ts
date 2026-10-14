@@ -12,9 +12,9 @@ import {
 } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { Response } from 'express';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { of } from 'rxjs';
 import { ExcelImportService } from '../import/excel-import.service';
 import { ExcelTemplateService } from '../template/excel-template.service';

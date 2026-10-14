@@ -8,10 +8,10 @@ import { Country } from '../countries/entities/country.entity';
 import { Disc } from '../discs/entities/disc.entity';
 import { Genre } from '../genres/entities/genre.entity';
 import { Rate } from '../../community/rates/entities/rate.entity';
-import { NationalRelease } from '../../national-releases/entities/national-release.entity';
-import { RiffValleyPlaylistArtist } from '../../festival-playlists/entities/riff-valley-playlist-artist.entity';
-import { UserAccessLog } from '../../auth/entities/user-access-log.entity';
-import { User } from '../../auth/entities/user.entity';
+import { NationalRelease } from '../../editorial/national-releases/entities/national-release.entity';
+import { RiffValleyPlaylistArtist } from '../../editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { UserAccessLog } from '../../identity/auth/entities/user-access-log.entity';
+import { User } from '../../identity/auth/entities/user.entity';
 import { SpotifyConnection } from '../../integrations/spotify-integration';
 import { CatalogImportModule } from './catalog-import.module';
 import { CatalogImportController } from './manual/controller/catalog-import.controller';
@@ -50,9 +50,7 @@ describe('CatalogImportModule dependency injection', () => {
       .useValue({ get: jest.fn(() => 'catalog-import-module-test-secret') });
 
     for (const entity of repositoryEntities) {
-      testingModule
-        .overrideProvider(getRepositoryToken(entity))
-        .useValue({});
+      testingModule.overrideProvider(getRepositoryToken(entity)).useValue({});
     }
 
     moduleRef = await testingModule.compile();
@@ -80,7 +78,9 @@ describe('CatalogImportModule dependency injection', () => {
   });
 
   it('wires each import controller and service to its providers', () => {
-    const manualController = moduleRef.get(CatalogImportController) as unknown as {
+    const manualController = moduleRef.get(
+      CatalogImportController,
+    ) as unknown as {
       catalogImportService: CatalogImportService;
     };
     const manualService = moduleRef.get(CatalogImportService) as unknown as {
@@ -100,7 +100,9 @@ describe('CatalogImportModule dependency injection', () => {
     expect(manualService.manualImportLogger).toBe(
       moduleRef.get(ManualImportLogger),
     );
-    expect(excelController.excelService).toBe(moduleRef.get(ExcelImportService));
+    expect(excelController.excelService).toBe(
+      moduleRef.get(ExcelImportService),
+    );
     expect(excelController.excelTemplateService).toBe(
       moduleRef.get(ExcelTemplateService),
     );

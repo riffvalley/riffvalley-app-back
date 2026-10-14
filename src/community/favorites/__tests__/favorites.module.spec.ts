@@ -8,10 +8,10 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { AuthModule } from 'src/auth/auth.module';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { User } from 'src/auth/entities/user.entity';
-import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
+import { AuthModule } from 'src/identity/auth/auth.module';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { Favorite } from '../entities/favorite.entity';

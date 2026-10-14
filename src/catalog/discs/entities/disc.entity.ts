@@ -8,7 +8,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Asignation } from '../../../asignations/entities/asignations.entity';
+import { Asignation } from '../../../editorial/asignations/entities/asignations.entity';
 import { Favorite } from '../../../community/favorites/entities/favorite.entity';
 import { Pending } from '../../../community/pendings/entities/pending.entity';
 import { Comment } from '../../../community/comments/entities/comment.entity';

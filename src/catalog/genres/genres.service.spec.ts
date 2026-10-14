@@ -7,7 +7,7 @@ import { Genre } from './entities/genre.entity';
 import { GenresService } from './genres.service';
 import { CreateGenreDto } from './dto/create-genre.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 
 describe('GenresService current behavior', () => {
   let service: GenresService;

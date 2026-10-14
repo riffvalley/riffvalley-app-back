@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
-import { User } from '../../../auth/entities/user.entity';
+import { User } from '../../../identity/auth/entities/user.entity';
 import { Disc } from '../entities/disc.entity';
 import { DiscCatalogService } from './disc-catalog.service';
 

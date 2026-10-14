@@ -7,12 +7,12 @@ import {
 import { ParseUUIDPipe, RequestMethod } from '@nestjs/common';
 import { CreateCountryDto } from '../dto/create-country.dto';
 import { UpdateCountryDto } from '../dto/update-country.dto';
-import { PaginationDto } from '../../../common/dtos/pagination.dto';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { CountriesController } from '../countries.controller';
 import { CountriesService } from '../countries.service';
-import { META_MINIMUM_ROLE } from '../../../auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from '../../../auth/guards/user-role/user-role.guard';
-import { ValidRoles } from '../../../auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from '../../../identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
+import { ValidRoles } from '../../../identity/auth/interfaces/valid-roles';
 
 describe('CountriesController contract characterization', () => {
   const service = {

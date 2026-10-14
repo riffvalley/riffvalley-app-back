@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../../../auth/entities/user.entity';
-import { PaginationDto } from '../../../common/dtos/pagination.dto';
+import { User } from '../../../identity/auth/entities/user.entity';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { Disc } from '../entities/disc.entity';
 import { loadHomeGlobalStats } from './loaders/home-global-stats';
 import { loadHomeDiscTotals } from './loaders/home-totals';
