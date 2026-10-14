@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { ContentSchedulerService } from './content-scheduler.service';
-import { SpotifyClientCredentialsService } from 'src/spotify-integration/api/spotify-client-credentials.service';
+import { SpotifyClientCredentialsService } from 'src/integrations/spotify-integration/api/spotify-client-credentials.service';
 
 describe('ContentSchedulerService Spotify transport characterization', () => {
   const originalFetch = global.fetch;

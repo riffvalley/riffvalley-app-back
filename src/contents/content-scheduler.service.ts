@@ -7,7 +7,7 @@ import { ContentsService } from './contents.service';
 import { ContentType } from './entities/content.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import * as cheerio from 'cheerio';
-import { SpotifyClientCredentialsService } from 'src/spotify-integration';
+import { SpotifyClientCredentialsService } from 'src/integrations/spotify-integration';
 
 @Injectable()
 export class ContentSchedulerService {
@@ -82,8 +82,8 @@ export class ContentSchedulerService {
           this.logger.log(`Spotify Search URL: ${url}`);
           const data = await this.spotifyClient.searchAlbumsByRawQuery(query);
 
-          if (data.albums?.items?.length > 0) {
-            const album = data.albums.items[0];
+          if (data!.albums?.items?.length > 0) {
+            const album = data!.albums.items[0];
             disc.link = album.external_urls.spotify;
             disc.image = album.images?.[0]?.url || null;
             disc.verified = true;
@@ -125,8 +125,8 @@ export class ContentSchedulerService {
               const looseData =
                 await this.spotifyClient.searchAlbumsByRawQuery(looseQuery);
 
-              if (looseData.albums?.items?.length > 0) {
-                const album = looseData.albums.items[0];
+              if (looseData!.albums?.items?.length > 0) {
+                const album = looseData!.albums.items[0];
                 const artistMatch = album.artists.some(
                   (artist) =>
                     this.normalizeString(artist.name).toLowerCase() ===

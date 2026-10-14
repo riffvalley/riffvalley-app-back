@@ -7,9 +7,9 @@ import { FestivalPlaylistsService } from './festival-playlists.service';
 import { RiffValleyPlaylistArtist } from './entities/riff-valley-playlist-artist.entity';
 import { RiffValleyPlaylist } from 'src/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
-import { MailModule } from 'src/mail/mail.module';
+import { MailModule } from 'src/communications/mail/mail.module';
 import { GenrePlaylistsController } from './genre-playlists.controller';
-import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integration.module';
+import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 
 @Module({
   imports: [

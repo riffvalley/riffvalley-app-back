@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../auth/entities/user.entity';
-import { MailService } from '../mail/mail.service';
+import { MailService } from '../communications/mail/mail.service';
 import { CreateAccessRequestDto } from './dto/create-access-request.dto';
 
 @Injectable()

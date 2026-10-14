@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { User } from '../../../auth/entities/user.entity';
-import { SpotifyPublicApiService } from 'src/spotify-integration';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
 import { DiscCatalogService } from '../catalog/disc-catalog.service';
 import { DiscCalendarService } from '../calendar/disc-calendar.service';
 import { DiscEnrichmentService } from '../enrichment/disc-enrichment.service';

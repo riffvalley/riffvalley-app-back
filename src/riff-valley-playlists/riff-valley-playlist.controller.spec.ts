@@ -5,9 +5,9 @@ import {
 } from '@nestjs/common/constants';
 import { RiffValleyPlaylistController } from './riff-valley-playlist.controller';
 import { RiffValleyPlaylistModule } from './riff-valley-playlist.module';
-import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integration.module';
-import { SpotifyArtistsController } from 'src/spotify-integration/http/spotify-artists.controller';
-import { SpotifyAlbumsController } from 'src/spotify-integration/http/spotify-albums.controller';
+import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
+import { SpotifyArtistsController } from 'src/integrations/spotify-integration/http/spotify-artists.controller';
+import { SpotifyAlbumsController } from 'src/integrations/spotify-integration/http/spotify-albums.controller';
 
 describe('RiffValleyPlaylist HTTP ownership', () => {
   it('owns the new local resource route and CRUD endpoints', () => {

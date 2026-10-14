@@ -12,7 +12,7 @@ import { NationalRelease } from '../../national-releases/entities/national-relea
 import { RiffValleyPlaylistArtist } from '../../festival-playlists/entities/riff-valley-playlist-artist.entity';
 import { UserAccessLog } from '../../auth/entities/user-access-log.entity';
 import { User } from '../../auth/entities/user.entity';
-import { SpotifyConnection } from '../../spotify-integration';
+import { SpotifyConnection } from '../../integrations/spotify-integration';
 import { CatalogImportModule } from './catalog-import.module';
 import { CatalogImportController } from './manual/controller/catalog-import.controller';
 import { CatalogImportService } from './manual/import/catalog-import.service';

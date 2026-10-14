@@ -25,9 +25,7 @@ function matches(where: any, row: Row): boolean {
         case 'lessThan':
           return value !== null && value < op.value;
         case 'between':
-          return (
-            value !== null && value >= op.value[0] && value <= op.value[1]
-          );
+          return value !== null && value >= op.value[0] && value <= op.value[1];
         default:
           throw new Error(`Operador no soportado: ${op.type}`);
       }
@@ -195,7 +193,10 @@ describe('ListsService monthly lists', () => {
 
 describe('ListsService Spotify publishing', () => {
   let service: ListsService;
-  let spotifyApiService: { findTrackForAlbum: jest.Mock };
+  let spotifyApiService: {
+    getAlbumTracks: jest.Mock;
+    getArtistSingles: jest.Mock;
+  };
   let wordpressService: {
     findPostBySlug: jest.Mock;
     getOrCreateTag: jest.Mock;
@@ -203,10 +204,16 @@ describe('ListsService Spotify publishing', () => {
   };
 
   beforeEach(() => {
-    spotifyApiService = { findTrackForAlbum: jest.fn() };
+    spotifyApiService = {
+      getAlbumTracks: jest.fn().mockResolvedValue([]),
+      getArtistSingles: jest.fn().mockResolvedValue([]),
+    };
     wordpressService = {
       findPostBySlug: jest.fn().mockResolvedValue(null),
-      getOrCreateTag: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2),
+      getOrCreateTag: jest
+        .fn()
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2),
       createPost: jest.fn().mockResolvedValue({
         id: 42,
         link: 'https://riffvalley.test/list',
@@ -214,33 +221,125 @@ describe('ListsService Spotify publishing', () => {
     };
   });
 
-  it('prefers a manually selected track and resolves Spotify only as fallback', async () => {
+  it('prioritizes the manually selected track without querying Spotify', async () => {
     service = new ListsService(
       {} as any,
       {} as any,
       wordpressService as any,
       spotifyApiService as any,
     );
-    spotifyApiService.findTrackForAlbum.mockResolvedValue('resolved-track');
-
     await expect(
       (service as any).resolveSpotifyTrackId({
         spotifyTrackId: 'manual-track',
         disc: { artist: { name: 'Banda' }, name: 'Disco' },
       }),
     ).resolves.toBe('manual-track');
-    expect(spotifyApiService.findTrackForAlbum).not.toHaveBeenCalled();
+    expect(spotifyApiService.getAlbumTracks).not.toHaveBeenCalled();
+    expect(spotifyApiService.getArtistSingles).not.toHaveBeenCalled();
+  });
+
+  it('selects the first album track matching a single without case sensitivity', async () => {
+    service = new ListsService(
+      {} as any,
+      {} as any,
+      wordpressService as any,
+      spotifyApiService as any,
+    );
+    spotifyApiService.getAlbumTracks.mockResolvedValue([
+      { id: 'track-first-match', name: 'anthem', trackNumber: 1 },
+      { id: 'track-second-match', name: 'ANTHEM', trackNumber: 2 },
+      { id: 'track-third', name: 'Otra', trackNumber: 3 },
+    ]);
+    spotifyApiService.getArtistSingles.mockResolvedValue(['Anthem']);
 
     await expect(
       (service as any).resolveSpotifyTrackId({
         spotifyTrackId: null,
         disc: { artist: { name: 'Banda' }, name: 'Disco' },
       }),
-    ).resolves.toBe('resolved-track');
-    expect(spotifyApiService.findTrackForAlbum).toHaveBeenCalledWith(
+    ).resolves.toBe('track-first-match');
+    expect(spotifyApiService.getAlbumTracks).toHaveBeenCalledWith(
       'Banda',
       'Disco',
     );
+    expect(spotifyApiService.getArtistSingles).toHaveBeenCalledWith('Banda');
+  });
+
+  it('falls back to the third track, or the last when fewer than three exist', async () => {
+    service = new ListsService(
+      {} as any,
+      {} as any,
+      wordpressService as any,
+      spotifyApiService as any,
+    );
+    spotifyApiService.getAlbumTracks.mockResolvedValueOnce([
+      { id: 'track-1', name: 'Uno', trackNumber: 1 },
+      { id: 'track-2', name: 'Dos', trackNumber: 2 },
+      { id: 'track-3', name: 'Tres', trackNumber: 3 },
+      { id: 'track-4', name: 'Cuatro', trackNumber: 4 },
+    ]);
+    spotifyApiService.getArtistSingles.mockResolvedValueOnce([]);
+
+    await expect(
+      (service as any).resolveSpotifyTrackId({
+        spotifyTrackId: null,
+        disc: { artist: { name: 'Banda' }, name: 'Disco' },
+      }),
+    ).resolves.toBe('track-3');
+
+    spotifyApiService.getAlbumTracks.mockResolvedValueOnce([
+      { id: 'track-1', name: 'Uno', trackNumber: 1 },
+      { id: 'track-2', name: 'Dos', trackNumber: 2 },
+    ]);
+    spotifyApiService.getArtistSingles.mockResolvedValueOnce(['Otro']);
+    await expect(
+      (service as any).resolveSpotifyTrackId({
+        spotifyTrackId: null,
+        disc: { artist: { name: 'Banda' }, name: 'Disco' },
+      }),
+    ).resolves.toBe('track-2');
+  });
+
+  it('returns null without single lookup for an empty album or when provider lookup throws', async () => {
+    service = new ListsService(
+      {} as any,
+      {} as any,
+      wordpressService as any,
+      spotifyApiService as any,
+    );
+
+    await expect(
+      (service as any).resolveSpotifyTrackId({
+        spotifyTrackId: null,
+        disc: { artist: { name: 'Banda' }, name: 'Sin pistas' },
+      }),
+    ).resolves.toBeNull();
+    expect(spotifyApiService.getArtistSingles).not.toHaveBeenCalled();
+
+    spotifyApiService.getAlbumTracks.mockRejectedValueOnce(
+      new Error('network down'),
+    );
+    await expect(
+      (service as any).resolveSpotifyTrackId({
+        spotifyTrackId: null,
+        disc: { artist: { name: 'Banda' }, name: 'Disco' },
+      }),
+    ).resolves.toBeNull();
+
+    spotifyApiService.getAlbumTracks.mockResolvedValueOnce([
+      { id: 'track-1', name: 'Uno', trackNumber: 1 },
+      { id: 'track-2', name: 'Dos', trackNumber: 2 },
+      { id: 'track-3', name: 'Tres', trackNumber: 3 },
+    ]);
+    spotifyApiService.getArtistSingles.mockRejectedValueOnce(
+      new Error('provider unavailable'),
+    );
+    await expect(
+      (service as any).resolveSpotifyTrackId({
+        spotifyTrackId: null,
+        disc: { artist: { name: 'Banda' }, name: 'Disco' },
+      }),
+    ).resolves.toBeNull();
   });
 
   it('publishes the selected track iframe through the WordPress service', async () => {
@@ -272,7 +371,9 @@ describe('ListsService Spotify publishing', () => {
       spotifyApiService as any,
     );
 
-    await expect(service.generateBestDiscsWordPressPost('list-id')).resolves.toMatchObject({
+    await expect(
+      service.generateBestDiscsWordPressPost('list-id'),
+    ).resolves.toMatchObject({
       wpPostId: 42,
       link: 'https://riffvalley.test/list',
     });
@@ -281,9 +382,90 @@ describe('ListsService Spotify publishing', () => {
     expect(content).toContain(
       'https://open.spotify.com/embed/track/manual-track?utm_source=generator',
     );
-    expect(spotifyApiService.findTrackForAlbum).not.toHaveBeenCalled();
+    expect(spotifyApiService.getAlbumTracks).not.toHaveBeenCalled();
+    expect(spotifyApiService.getArtistSingles).not.toHaveBeenCalled();
     expect(listRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ wpPostId: 42 }),
     );
+  });
+
+  it('publishes the automatically selected track through the same WordPress content path', async () => {
+    const asignation = {
+      id: 'asignation-id',
+      position: 1,
+      spotifyTrackId: null,
+      disc: {
+        id: 'disc-id',
+        name: 'Disco',
+        artist: { name: 'Banda' },
+        image: null,
+      },
+    };
+    const list = {
+      id: 'list-id',
+      type: ListType.MONTH,
+      listDate: new Date('2026-10-01T00:00:00.000Z'),
+      asignations: [asignation],
+    };
+    const listRepository = {
+      findOneByOrFail: jest.fn().mockResolvedValue(list),
+      save: jest.fn().mockResolvedValue(list),
+    };
+    service = new ListsService(
+      listRepository as any,
+      {} as any,
+      wordpressService as any,
+      spotifyApiService as any,
+    );
+    spotifyApiService.getAlbumTracks.mockResolvedValue([
+      { id: 'track-one', name: 'Uno', trackNumber: 1 },
+      { id: 'auto-track', name: 'Single del álbum', trackNumber: 2 },
+      { id: 'track-three', name: 'Tres', trackNumber: 3 },
+    ]);
+    spotifyApiService.getArtistSingles.mockResolvedValue(['Single del álbum']);
+
+    await service.generateBestDiscsWordPressPost('list-id');
+
+    const [, content] = wordpressService.createPost.mock.calls[0];
+    expect(content).toContain(
+      'https://open.spotify.com/embed/track/auto-track?utm_source=generator',
+    );
+    expect(spotifyApiService.getAlbumTracks).toHaveBeenCalledWith(
+      'Banda',
+      'Disco',
+    );
+    expect(spotifyApiService.getArtistSingles).toHaveBeenCalledWith('Banda');
+  });
+});
+
+describe('ListsService WordPress errors', () => {
+  it('propagates authenticated WordPress errors during post lookup', async () => {
+    const error = new Error('WordPress API error: 401');
+    const list = {
+      id: 'list-id',
+      type: ListType.MONTH,
+      listDate: new Date('2026-10-01T00:00:00.000Z'),
+      asignations: [
+        {
+          position: 1,
+          disc: { id: 'disc-id', name: 'Disco', artist: { name: 'Banda' } },
+        },
+      ],
+    };
+    const wordpressService = {
+      findPostBySlug: jest.fn().mockRejectedValue(error),
+      createPost: jest.fn(),
+    };
+    const service = new ListsService(
+      { findOneByOrFail: jest.fn().mockResolvedValue(list) } as any,
+      {} as any,
+      wordpressService as any,
+      {} as any,
+    );
+
+    await expect(
+      service.generateBestDiscsWordPressPost('list-id'),
+    ).rejects.toBe(error);
+    expect(wordpressService.createPost).not.toHaveBeenCalled();
   });
 });

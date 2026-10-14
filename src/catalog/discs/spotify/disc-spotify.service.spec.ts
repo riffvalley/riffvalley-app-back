@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
-import { SpotifyPublicApiService } from 'src/spotify-integration';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
 import { Disc } from '../entities/disc.entity';
 import { DiscSpotifyService } from './disc-spotify.service';
 

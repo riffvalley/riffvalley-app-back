@@ -24,22 +24,22 @@ import { FavoritesModule } from './community/favorites/favorites.module';
 import { PendingsModule } from './community/pendings/pendings.module';
 import { CommentsModule } from './community/comments/comments.module';
 import { VersionsModule } from './versions/versions.module';
-import { SpotifyIntegrationModule } from './spotify-integration/spotify-integration.module';
+import { SpotifyIntegrationModule } from './integrations/spotify-integration/spotify-integration.module';
 import { RiffValleyPlaylistModule } from './riff-valley-playlists/riff-valley-playlist.module';
 import { ContentsModule } from './contents/contents.module';
 import { ArticlesModule } from './articles/articles.module';
 import { VideosModule } from './videos/videos.module';
-import { TelegramModule } from './telegram/telegram.module';
+import { TelegramIntegrationModule } from './integrations/telegram-integration/telegram-integration.module';
 import { NewsModule } from './news/news.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { RequestsModule } from './community/requests/requests.module';
 import { NationalReleasesModule } from './national-releases/national-releases.module';
-import { LastfmModule } from './lastfm/lastfm.module';
+import { LastfmModule } from './catalog/lastfm/lastfm.module';
 import { SuggestionsModule } from './suggestions/suggestions.module';
 import { AccessRequestsModule } from './access-requests/access-requests.module';
-import { InstagramModule } from './instagram/instagram.module';
+import { InstagramIntegrationModule } from './integrations/instagram-integration/instagram-integration.module';
 import { FestivalPlaylistsModule } from './festival-playlists/festival-playlists.module';
-import { TiktokModule } from './tiktok/tiktok.module';
+import { TiktokIntegrationModule } from './integrations/tiktok-integration/tiktok-integration.module';
 
 @Module({
   imports: [
@@ -88,7 +88,7 @@ import { TiktokModule } from './tiktok/tiktok.module';
     ContentsModule,
     ArticlesModule,
     VideosModule,
-    TelegramModule,
+    TelegramIntegrationModule,
     NewsModule,
     UploadsModule,
     RequestsModule,
@@ -96,9 +96,9 @@ import { TiktokModule } from './tiktok/tiktok.module';
     LastfmModule,
     SuggestionsModule,
     AccessRequestsModule,
-    InstagramModule,
+    InstagramIntegrationModule,
     FestivalPlaylistsModule,
-    TiktokModule,
+    TiktokIntegrationModule,
   ],
 })
 export class AppModule {}

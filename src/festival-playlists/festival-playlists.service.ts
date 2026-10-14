@@ -25,11 +25,11 @@ import {
   SpotifyConnection,
   SpotifyPlaylistDetails,
   TokenCryptoService,
-} from 'src/spotify-integration';
+} from 'src/integrations/spotify-integration';
 import type {
   SpotifyOAuthTokenResponse,
   SpotifyTrack,
-} from 'src/spotify-integration';
+} from 'src/integrations/spotify-integration';
 import {
   RiffValleyPlaylist,
   RiffValleyPlaylistStatus,
@@ -42,7 +42,7 @@ import {
   PlaylistTrackRecord,
   RiffValleyPlaylistArtist,
 } from './entities/riff-valley-playlist-artist.entity';
-import { MailService } from 'src/mail/mail.service';
+import { MailService } from 'src/communications/mail/mail.service';
 
 const SETLIST_API_URL = 'https://api.setlist.fm/rest/1.0';
 const SPOTIFY_SCOPES = [
