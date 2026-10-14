@@ -7,8 +7,7 @@ import { Artist } from '../artists/entities/artist.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { AuthModule } from 'src/auth/auth.module';
-import { WordpressModule } from 'src/wordpress/wordpress.module';
-import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integration.module';
+import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';
 import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
@@ -30,7 +29,6 @@ import { DiscHomeService } from './home/disc-home.service';
   imports: [
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
     AuthModule,
-    WordpressModule,
     SpotifyIntegrationModule,
   ],
   exports: [DiscsService],

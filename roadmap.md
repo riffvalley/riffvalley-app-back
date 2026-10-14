@@ -18,6 +18,8 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 - [Community](roadmap/community.md) — Comments, Requests, Favorites, Pendings y Rates como capacidades de interacción y contribución al catálogo.
 - [Roles](roadmap/roles.md) — inventario, contrato de permisos, adaptación progresiva y migración de roles de usuario.
 - [Spotify](roadmap/spotify.md) — separación del dominio de la playlist de Riff Valley y la integración con la API externa de Spotify.
+- [Integrations](roadmap/integrations.md) — agrupación e inventario progresivo de integraciones externas bajo `src/integrations/`.
+- [Integrations Cleanup](roadmap/integrations-cleanup.md) — auditoría interna y saneamiento progresivo de las ocho integraciones.
 
 ## Estado de alto nivel
 
@@ -27,7 +29,8 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 - **Fase 4 — Lists:** administración de listas, integración WordPress y sincronización/publicación de discos; considerar primero los efectos externos.
 - **Fase 5 — Festival Playlists:** reglas de playlist e integración externa; revisar selección y sincronización de discos y manejo de errores.
 - **Fase 6 — Contents, Articles, News y publicaciones:** workflows editoriales, estados, fechas programadas, versiones y publicación WordPress.
-- **Fase 7 — Integraciones externas:** TikTok, Spotify, Instagram, WordPress, Scaping, Telegram y LastFM; priorizar límites de API, credenciales, reintentos y efectos externos.
+- **Fase 7 — Integraciones externas:** completada (2026-10-14); I.0–I.8 cerradas. Véase [Integrations](roadmap/integrations.md) para la evidencia y las limitaciones de regresión.
+- **Integrations Cleanup:** completada (2026-10-14); IC-0–IC-8 cerradas. Véase [Integrations Cleanup](roadmap/integrations-cleanup.md) para la evidencia y los hallazgos conservados fuera de alcance.
 - **Fase 8 — Versions y Asignations:** workflows, estados, asignaciones y transiciones. Requests figuraba históricamente en esta agrupación; su planificación y ownership actuales están en [Community](roadmap/community.md).
 - **Fase 9 — Auth y módulos restantes:** caracterizar primero el impacto transversal de Auth y ordenar los módulos restantes por uso, duplicación y coste de consultas.
 

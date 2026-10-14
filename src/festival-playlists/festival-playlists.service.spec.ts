@@ -171,7 +171,7 @@ describe('FestivalPlaylistsService', () => {
       .mockReturnValue(queryBuilder);
     connectionRepository.save = jest.fn();
     const { SpotifyInvalidGrantError } = await import(
-      'src/spotify-integration/oauth/spotify-oauth-api.service'
+      'src/integrations/spotify-integration/oauth/spotify-oauth-api.service'
     );
     spotifyOAuthApi.refreshAccessToken.mockRejectedValue(
       new SpotifyInvalidGrantError('invalid_grant'),

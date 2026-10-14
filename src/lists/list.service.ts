@@ -27,8 +27,8 @@ import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
 import { Content } from 'src/contents/entities/content.entity';
-import { WordpressService } from 'src/wordpress/wordpress.service';
-import { SpotifyPublicApiService } from 'src/spotify-integration';
+import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
 
 // Un radar semanal sigue abierto hasta WEEKLY_CLOSE_GRACE_DAYS después de su
 // closeDate (domingo por defecto, es decir, hasta el martes inclusive).
@@ -1597,16 +1597,34 @@ export class ListsService {
     return `${content.slice(0, boundary.start)}${newBlock}${content.slice(boundary.end)}`;
   }
 
-  // Si el disco tiene una canción elegida a mano (spotifyTrackId), se usa
-  // tal cual sin gastar llamadas a la API de Spotify; si no, cae en la
-  // selección automática de siempre.
-  private resolveSpotifyTrackId(a: any): Promise<string | null> {
-    if (a.spotifyTrackId) return Promise.resolve(a.spotifyTrackId);
+  // La selección manual tiene prioridad. La automática compara singles con
+  // el tracklist y conserva el fallback histórico al tercer/último track.
+  private async resolveSpotifyTrackId(a: any): Promise<string | null> {
+    if (a.spotifyTrackId) return a.spotifyTrackId;
 
-    return this.spotifyApiService.findTrackForAlbum(
-      a.disc?.artist?.name ?? '',
-      a.disc?.name ?? '',
-    );
+    const artistName = a.disc?.artist?.name ?? '';
+    const albumName = a.disc?.name ?? '';
+
+    try {
+      const albumTracks = await this.spotifyApiService.getAlbumTracks(
+        artistName,
+        albumName,
+      );
+      if (!albumTracks.length) return null;
+
+      const singleNames = (
+        await this.spotifyApiService.getArtistSingles(artistName)
+      ).map((name) => name.toLowerCase());
+      const matchedTrack = albumTracks.find((track) =>
+        singleNames.includes(track.name.toLowerCase()),
+      );
+      if (matchedTrack) return matchedTrack.id;
+
+      return (albumTracks[2] ?? albumTracks[albumTracks.length - 1]).id;
+    } catch (error) {
+      this.logger.error(`findTrackForAlbum failed: ${error.message}`);
+      return null;
+    }
   }
 
   private async resolveAuthors(

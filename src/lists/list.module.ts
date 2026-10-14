@@ -5,8 +5,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { List } from './entities/list.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { Content } from 'src/contents/entities/content.entity';
-import { WordpressModule } from 'src/wordpress/wordpress.module';
-import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integration.module';
+import { WordpressIntegrationModule } from 'src/integrations/wordpress-integration/wordpress-integration.module';
+import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 
 @Module({
   controllers: [ListsController],
@@ -14,7 +14,7 @@ import { SpotifyIntegrationModule } from 'src/spotify-integration/spotify-integr
   imports: [
     TypeOrmModule.forFeature([List, Content]),
     AuthModule,
-    WordpressModule,
+    WordpressIntegrationModule,
     SpotifyIntegrationModule,
   ],
   exports: [ListsService],

@@ -11,7 +11,9 @@ import { News, NewsStatus } from './entities/news.entity';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { PaginationDto } from '../common/dtos/pagination.dto';
-import { TelegramService } from '../telegram/telegram.service';
+import { TelegramService } from 'src/integrations/telegram-integration/telegram.service';
+import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
+import { WpPublicPost } from 'src/integrations/wordpress-integration/wordpress.types';
 
 export interface FeedPost {
   id: string;
@@ -27,13 +29,14 @@ export interface FeedPost {
 @Injectable()
 export class NewsService {
   private readonly logger = new Logger('NewsService');
-  private wpCache: { data: any[]; timestamp: number } | null = null;
+  private wpCache: { data: WpPublicPost[]; timestamp: number } | null = null;
   private readonly WP_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
   constructor(
     @InjectRepository(News)
     private readonly newsRepository: Repository<News>,
     private readonly telegramService: TelegramService,
+    private readonly wordpressService: WordpressService,
   ) {}
 
   async create(createNewsDto: CreateNewsDto) {
@@ -146,8 +149,7 @@ export class NewsService {
     const wpFeed: FeedPost[] = wpPosts.slice(0, wpLimit).map((post, i) => {
       let image: string | null = null;
       try {
-        image =
-          post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
+        image = post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
       } catch {
         image = null;
       }
@@ -182,7 +184,11 @@ export class NewsService {
     return { posts };
   }
 
-  async getSourceFeed(filters: { source?: string; type?: string; limit?: number }): Promise<{ posts: FeedPost[] }> {
+  async getSourceFeed(filters: {
+    source?: string;
+    type?: string;
+    limit?: number;
+  }): Promise<{ posts: FeedPost[] }> {
     const { source, type, limit = 6 } = filters;
 
     if (source === 'app') {
@@ -213,7 +219,8 @@ export class NewsService {
         posts: wpPosts.slice(0, limit).map((post, i) => {
           let image: string | null = null;
           try {
-            image = post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
+            image =
+              post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
           } catch {
             image = null;
           }
@@ -232,7 +239,10 @@ export class NewsService {
     }
 
     if (source === 'telegram') {
-      const tgPosts = await this.telegramService.getChannelPosts('conciertosrockmetal', limit);
+      const tgPosts = await this.telegramService.getChannelPosts(
+        'conciertosrockmetal',
+        limit,
+      );
       return {
         posts: tgPosts.slice(0, limit).map((post, i) => ({
           id: `tg-${i}`,
@@ -250,22 +260,17 @@ export class NewsService {
     return { posts: [] };
   }
 
-  private async fetchWordPressPosts(): Promise<any[]> {
-    if (this.wpCache && Date.now() - this.wpCache.timestamp < this.WP_CACHE_TTL) {
+  private async fetchWordPressPosts(): Promise<WpPublicPost[]> {
+    if (
+      this.wpCache &&
+      Date.now() - this.wpCache.timestamp < this.WP_CACHE_TTL
+    ) {
       return this.wpCache.data;
     }
 
     try {
-      const response = await fetch(
-        'https://riffvalley.es/wp-json/wp/v2/posts?_embed&per_page=6',
-      );
-
-      if (!response.ok) {
-        this.logger.error(`Failed to fetch WordPress posts: ${response.status}`);
-        return [];
-      }
-
-      const data = await response.json();
+      const data = await this.wordpressService.getPublicPosts();
+      if (data === null) return [];
       this.wpCache = { data, timestamp: Date.now() };
       return data;
     } catch (error) {
