@@ -1,11 +1,30 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { JwtModule, JwtService } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import * as request from 'supertest';
+import { User } from 'src/auth/entities/user.entity';
+import { JwtStrategy } from 'src/auth/strategies/jwt.strategy';
+import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
+import { ValidRoles } from 'src/auth/interfaces/valid-roles';
 import { RiffValleyPlaylistController } from './riff-valley-playlist.controller';
 import { RiffValleyPlaylistService } from './riff-valley-playlist.service';
 
 describe('RiffValleyPlaylist Nest HTTP routes', () => {
   let app;
   let moduleRef: TestingModule;
+  let accessToken: string;
+  const testUser = {
+    id: '83f59390-5ca1-4331-90c2-3b54ca17e123',
+    username: 'riff-valley-test',
+    isActive: true,
+    role: ValidRoles.riffvalley,
+  };
+  const userRepository = {
+    findOneBy: jest.fn(),
+    findOne: jest.fn(),
+  };
   const service = {
     findAll: jest.fn(),
     findRandomGenrePlaylist: jest.fn(),
@@ -18,10 +37,31 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    userRepository.findOneBy.mockResolvedValue(testUser);
+    userRepository.findOne.mockResolvedValue({ role: testUser.role });
     moduleRef = await Test.createTestingModule({
       controllers: [RiffValleyPlaylistController],
-      providers: [{ provide: RiffValleyPlaylistService, useValue: service }],
+      imports: [
+        PassportModule.register({ defaultStrategy: 'jwt' }),
+        JwtModule.register({ secret: 'riff-valley-routes-test-secret' }),
+      ],
+      providers: [
+        { provide: RiffValleyPlaylistService, useValue: service },
+        { provide: getRepositoryToken(User), useValue: userRepository },
+        {
+          provide: ConfigService,
+          useValue: { get: () => 'riff-valley-routes-test-secret' },
+        },
+        JwtStrategy,
+        UserRoleGuard,
+      ],
     }).compile();
+    const jwtService = moduleRef.get(JwtService);
+    accessToken = await jwtService.signAsync({
+      id: testUser.id,
+      username: testUser.username,
+      role: testUser.role,
+    });
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     await app.init();
@@ -79,6 +119,7 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
 
     await request(app.getHttpServer())
       .post('/api/riff-valley-playlists')
+      .set('Authorization', `Bearer ${accessToken}`)
       .send(createDto)
       .expect(201, { id, ...createDto });
     expect(service.create).toHaveBeenCalledWith(createDto);
@@ -90,17 +131,20 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
 
     await request(app.getHttpServer())
       .patch(`/api/riff-valley-playlists/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({ name: 'Updated' })
       .expect(200, { id, name: 'Updated' });
     expect(service.update).toHaveBeenCalledWith(id, { name: 'Updated' });
 
     await request(app.getHttpServer())
       .delete(`/api/riff-valley-playlists/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .expect(200, { message: 'removed' });
     expect(service.remove).toHaveBeenCalledWith(id);
 
     await request(app.getHttpServer())
       .post(`/api/riff-valley-playlists/${id}/content`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .expect(201, { id: 'content-id', riffValleyPlaylistId: id });
     expect(service.createContentForRiffValleyPlaylist).toHaveBeenCalledWith(id);
   });
