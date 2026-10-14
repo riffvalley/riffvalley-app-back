@@ -70,17 +70,39 @@ function printStatus(status) {
   for (const migration of status.pending) console.log(`  - ${migration.name}`);
 }
 
+function printJsonStatus(dataSource, status) {
+  console.log(
+    JSON.stringify({
+      formatVersion: 1,
+      stage: process.env.STAGE || null,
+      database: dataSource.options.database,
+      ledgerExists: status.ledgerExists,
+      ledgerTable: status.ledgerTable,
+      compiledMigrations: status.allMigrations.length,
+      appliedCount: status.appliedNames.length,
+      pending: status.pending.map((migration) => migration.name),
+    }),
+  );
+}
+
 async function run(command, args = process.argv.slice(3)) {
   if (args.includes('--help') || args.includes('-h')) {
     console.log(
-      'Uso: yarn db:status | yarn db:check | yarn db:migrate [--confirm <DB_NAME>:<Migracion1,Migracion2>]',
+      'Uso: yarn db:status [--json] | yarn db:check | yarn db:migrate [--confirm <DB_NAME>:<Migracion1,Migracion2>]',
     );
     return;
   }
   if (!['status', 'check', 'migrate'].includes(command)) {
     throw new Error(
-      'Uso: yarn db:status | yarn db:check | yarn db:migrate [--confirm <base>:<Migracion1,Migracion2>]',
+      'Uso: yarn db:status [--json] | yarn db:check | yarn db:migrate [--confirm <base>:<Migracion1,Migracion2>]',
     );
+  }
+  const jsonStatus = args.includes('--json');
+  if (jsonStatus && command !== 'status') {
+    throw new Error('--json solo está disponible para db:status.');
+  }
+  if (args.filter((arg) => arg === '--json').length > 1) {
+    throw new Error('--json solo puede indicarse una vez.');
   }
 
   const compiledDataSourcePath = path.resolve(
@@ -125,9 +147,12 @@ async function run(command, args = process.argv.slice(3)) {
     await dataSource.initialize();
     initialized = true;
     let status = await inspectMigrationStatus(dataSource);
+    if (command === 'status') {
+      if (jsonStatus) printJsonStatus(dataSource, status);
+      else printStatus(status);
+      return;
+    }
     printStatus(status);
-
-    if (command === 'status') return;
     if (command === 'check') {
       if (!status.ledgerExists || status.pending.length) {
         throw new Error(
@@ -197,6 +222,7 @@ if (require.main === module) {
 
 module.exports = {
   inspectMigrationStatus,
+  printJsonStatus,
   parseConfirmation,
   pendingMigrations,
   ROLE_CHAIN_MIGRATIONS,
