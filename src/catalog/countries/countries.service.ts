@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityNotFoundError, Repository } from 'typeorm';
 import { Country } from './entities/country.entity';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
@@ -56,7 +56,11 @@ export class CountriesService {
       const unit = await this.unitRepository.findOneByOrFail({ id });
       return unit;
     } catch (error) {
-      throw new NotFoundException(`Country with id ${id} not found`);
+      if (error instanceof EntityNotFoundError) {
+        throw new NotFoundException(`Country with id ${id} not found`);
+      }
+
+      throw error;
     }
   }
 

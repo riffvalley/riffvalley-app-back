@@ -12,7 +12,7 @@ import {
 import { CountriesService } from './countries.service';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { CountriesQueryDto } from './dto/countries-query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
@@ -27,8 +27,8 @@ export class CountriesController {
   }
 
   @Get()
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.unitsService.findAll(paginationDto);
+  findAll(@Query() countriesQueryDto: CountriesQueryDto) {
+    return this.unitsService.findAll(countriesQueryDto);
   }
 
   @Get(':id')

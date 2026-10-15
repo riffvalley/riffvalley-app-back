@@ -7,7 +7,7 @@ import {
 import { ParseUUIDPipe, RequestMethod } from '@nestjs/common';
 import { CreateCountryDto } from '../dto/create-country.dto';
 import { UpdateCountryDto } from '../dto/update-country.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { CountriesQueryDto } from '../dto/countries-query.dto';
 import { CountriesController } from '../countries.controller';
 import { CountriesService } from '../countries.service';
 import { META_MINIMUM_ROLE } from '../../../identity/auth/decorators/role-protected.decorator';
@@ -68,8 +68,8 @@ describe('CountriesController contract characterization', () => {
     expect(service.create).toHaveBeenCalledTimes(1);
   });
 
-  it('maps GET /api/countries to findAll with PaginationDto and returns the complete pagination envelope', async () => {
-    const query = { limit: 5, offset: 10 } as PaginationDto;
+  it('maps GET /api/countries to findAll with CountriesQueryDto and returns the complete pagination envelope', async () => {
+    const query = { limit: 5, offset: 10 } as CountriesQueryDto;
     const response = {
       totalItems: 11,
       totalPages: 3,
@@ -89,7 +89,7 @@ describe('CountriesController contract characterization', () => {
         CountriesController.prototype,
         'findAll',
       ),
-    ).toEqual([PaginationDto]);
+    ).toEqual([CountriesQueryDto]);
     expect(routeArgs('findAll')).toMatchObject({
       '4:0': { index: 0, data: undefined },
     });
@@ -218,7 +218,7 @@ describe('CountriesController contract characterization', () => {
       const error = new Error('service failure');
       const call = {
         create: () => controller.create({ name: 'Spain' } as CreateCountryDto),
-        findAll: () => controller.findAll({} as PaginationDto),
+        findAll: () => controller.findAll({} as CountriesQueryDto),
         findOne: () => controller.findOne('country-id'),
         update: () => controller.update('country-id', { name: 'Spain' }),
         remove: () => controller.remove('country-id'),

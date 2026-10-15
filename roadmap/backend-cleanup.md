@@ -56,7 +56,7 @@ La secuencia se ampliará después de cada dominio; no constituye una orden para
 
 | Orden | Dominio                   | Módulos previstos                                                                                                                 | Estado                              |
 | ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists completado; resto pendiente |
+| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists y Countries completados; resto pendiente |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                           |
 | 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Pendiente                           |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                           |
@@ -72,7 +72,7 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado**. S
 | Dominio                   | Módulo              | Estado     |
 | ------------------------- | ------------------- | ---------- |
 | Catalog                   | Artists             | completado |
-| Catalog                   | Countries           | pendiente  |
+| Catalog                   | Countries           | completado |
 | Catalog                   | Genres              | pendiente  |
 | Catalog                   | Discs               | pendiente  |
 | Catalog                   | CatalogImport       | pendiente  |
@@ -337,6 +337,81 @@ Estas tareas quedan pendientes; ninguna se ejecutó en BC-0.
 - **Acoplamiento de Management a Editorial:** usa repositorios de NationalRelease y PlaylistArtist para construir una vista de gestión. La operación agregada es coherente con el endpoint y no hay un ciclo Nest observado ni evidencia suficiente de que un servicio puente reduciría complejidad. Se conserva y se reevalúa si cambia el ownership o aparecen más consumers.
 - **Normalizadores de Disc Write y Catalog Import:** hay implementaciones distintas además de Requests. ART-F1 documenta la divergencia, pero BC-ART-1 se acota a Requests; una política canónica para todos los writers necesita revisar semánticas de import y datos existentes antes de abrir una tarea separada.
 - **Errores legacy de escritura/búsqueda y delete result:** los tests actuales caracterizan respuestas genéricas de DB (`ayuda`), traducción de error PostgreSQL `23505` y `DeleteResult` sin 404. No se cambia ni se eleva a tarea en esta auditoría sin un problema de consumidor demostrado.
+
+## Auditoría 2 — Catalog / Countries
+
+**Estado:** completado; BC-COU-1 y BC-COU-2 completadas.
+**Base observada:** rama actual y checkout limpio, 2026-10-15. No había cambios locales que separar de la base observada.
+**Alcance leído:** implementación completa de `src/catalog/countries/` (controller, service, module, DTOs, entity y specs); DTO compartido de paginación y configuración del `ValidationPipe`; composición en `AppModule`; consumers directos conocidos en Artists, Discs/Calendar, Catalog Overview, Catalog Import manual/Excel, Community Requests y Seeds. Se consultaron las pruebas pertinentes sin ejecutarlas ni modificarlas. No se auditaron esos otros módulos ni el frontend.
+
+### Inventario y contratos
+
+- `CountriesController` expone `POST /api/countries`, `GET /api/countries`, `GET /api/countries/:id`, `PATCH /api/countries/:id` y `DELETE /api/countries/:id`. Lecturas públicas; escrituras protegidas por `@Auth(ValidRoles.riffvalley)`. Los IDs de detalle, actualización y borrado usan `ParseUUIDPipe`.
+- `POST` usa `CreateCountryDto` (`name` string, 1–50 caracteres). `PATCH` usa `PartialType(CreateCountryDto)`, por lo que acepta nombre omitido/vacío; ambos rechazan `isoCode` como propiedad no permitida con el ValidationPipe global (`whitelist` y `forbidNonWhitelisted`). Aunque la entidad incluye `isoCode`, la API de Countries no permite crear/editar ese campo. No hay evidencia en esta auditoría de que esa sea una necesidad funcional, por lo que no se abre tarea.
+- `GET /countries` pasa `CountriesQueryDto` (extensión de `PaginationDto`) a `findAndCount({ take, skip })` y retorna `{ totalItems, totalPages, currentPage, limit, data }`, sin orden explícito. El parámetro `offset` se valida como entero seguro no negativo y, si se omite, conserva el default de servicio 0.
+- `CountriesService` implementa CRUD en una única responsabilidad coherente. La persistencia de create/update traduce Postgres `23505` a 400 y errores restantes a 500 genérico. `findOne` usa `findOneByOrFail` y BC-COU-1 traduce solo `EntityNotFoundError` a 404, propagando los demás errores al manejo interno de Nest. `remove` devuelve `DeleteResult` sin traducir cero filas ni errores de FK.
+- `Country` tiene `id` UUID, `name` varchar(255), `isoCode` nullable varchar(50) y colección inversa `artist` `OneToMany` con `cascade: true`. `Artist.country` es nullable `ManyToOne` eager y el FK de Artist hace referencia a Country. No se observó una relación directa Country–Disc: los filtros por país se resuelven a través de Artist.
+- Consumers/repo access observados: Artists usa Country como relación de artista; Disc Calendar consulta países asociados a discos y selecciona explícitamente `id`, `name`, `isoCode`; Catalog Overview lista todos los países por nombre; import manual busca país predeterminado/seleccionado y Excel carga la lista para lookup/template; Community Requests guarda o asigna Country a solicitudes; Seeds inserta países ausentes. No se halló consumer directo Country en Editorial en la búsqueda acotada. Los endpoints de Countries devuelven entidades. En la auditoría inicial no se revisó el frontend; la compatibilidad del endpoint paginado se verificó posteriormente en BC-COU-2.
+- No hay queries complejas, SQL manual, agregaciones ni responsabilidades mezcladas en Countries. No se encontró duplicación interna que justifique extracción; las consultas de listas en Overview/Calendar tienen filtros/payloads propios y no son duplicación de comportamiento de este endpoint.
+
+### Pruebas existentes y límites
+
+- `countries.controller.spec.ts` fija rutas, métodos, DTOs, pipes UUID, permisos, passthrough de respuestas y propagación de errores.
+- `countries.service.spec.ts` cubre creación/actualización y DTOs, éxito y errores de escritura, paginación, validación del query por `ValidationPipe`, 404 y propagación de fallos inesperados en `findOne`, borrado sin coincidencia, propagación de FK y metadata de relación con Artist. También conserva una prueba de servicio directo con `limit=0` que documenta `totalPages: Infinity` y `currentPage: NaN`; no caracteriza aceptación HTTP de ese valor y no forma parte de BC-COU-2.
+- `domain-mutation-authorization.spec.ts` incluye Countries en la verificación de autorización de mutaciones. Tests de consumers consultados cubren usos de Country en Disc, imports, Requests, Overview y Rates, pero no se ejecutaron durante esta auditoría.
+
+### Hallazgos
+
+#### COU-F1 — Errores de repositorio en `findOne` se reportan como Country inexistente
+
+- **Ubicación:** `src/catalog/countries/countries.service.ts:54-60`; caracterización en `src/catalog/countries/countries.service.spec.ts:164-178`.
+- **Evidencia comprobada:** el `try/catch` cubre `findOneByOrFail` y transforma cualquier error en `NotFoundException`. La prueba pasa `Error('database offline')` y espera el mismo 404 que para entidad ausente.
+- **Problema/consecuencia:** una caída o error de conexión hace que `GET /countries/:id` afirme que el recurso no existe, ocultando el fallo operativo y dando una señal incorrecta a consumidores y diagnósticos.
+- **Categoría / prioridad / tamaño:** bug funcional; media; S.
+- **Propuesta:** distinguir entidad ausente (`EntityNotFoundError` o consulta nullable seguida de 404) de fallos de infraestructura; conservar el 404 y mensaje actuales para IDs inexistentes y permitir que un fallo operativo llegue al manejo 500 del framework, o mapearlo explícitamente a 500 genérico.
+- **Dependencias y riesgos:** solo `CountriesService` y su spec. Cambia el status observable ante errores de DB, no el contrato de éxito o ausencia. No requiere esquema ni consumidor coordinado.
+- **Hecho frente a hipótesis:** la conversión indiscriminada está probada; que haya ocurrido una caída real no se comprobó.
+
+#### COU-F2 — `offset` de Countries no tiene validación efectiva
+
+- **Ubicación:** `src/platform/common/dtos/pagination.dto.ts:22-24`; uso en `src/catalog/countries/countries.controller.ts:29-32` y `src/catalog/countries/countries.service.ts:34-43`.
+- **Evidencia comprobada:** `PaginationDto.offset` tiene `@Type(() => Number)` pero carece de `@IsNumber` y `@Min(0)`. El ValidationPipe global sí transforma y valida DTOs; el servicio pasa el valor resultante directamente como `skip` y lo usa en la división de página. El spec actual verifica offsets válidos y casos directos, pero no valida query strings negativos, no numéricos o fraccionarios mediante el DTO.
+- **Problema/consecuencia:** la API no establece que `offset` sea un entero no negativo. Valores negativos o fraccionarios pueden llegar a la query; texto no numérico se transforma a `NaN` sin una regla del DTO que lo rechace. El comportamiento concreto de TypeORM/driver para estos inputs no se ejecutó, pero la aceptación por validadores puede confirmarse al implementar.
+- **Categoría / prioridad / tamaño:** bug funcional; media; S.
+- **Propuesta:** validar `offset` como número entero no negativo para el endpoint de Countries. Preferir DTO específico de Countries si no se ha caracterizado el impacto de corregir `PaginationDto`, que es compartido por otros endpoints fuera del alcance de esta auditoría.
+- **Dependencias y riesgos:** modificación del controller/DTO y pruebas de pipe/service; evitar un cambio amplio del DTO compartido sin auditar los demás consumidores. Las entradas inválidas pasarían a 400; solicitudes válidas y defaults (`limit=10`, `offset=0`) deben conservarse.
+- **Hecho frente a hipótesis:** carencia de validadores y paso directo demostrados; respuesta TypeORM a cada valor inválido no medida.
+
+### Tareas propuestas
+
+#### BC-COU-1 — Separar Country inexistente de fallo de persistencia en `findOne` (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** `findOne` convierte `EntityNotFoundError` al 404 existente y relanza sin modificación otros errores del repositorio; NestJS los trata como error interno con respuesta genérica.
+- **Alcance completado:** conservar 404 y mensaje para Country inexistente; no convertir fallos operativos del repositorio en 404; actualizar las pruebas de caracterización.
+- **Exclusiones:** sin cambios en CRUD restante, borrado/FK, payloads exitosos, autorización o esquema.
+- **Dependencias:** COU-F1; ninguna tarea externa.
+- **Casos y resultados:** país existente devuelve la misma instancia de Country (contrato previo conservado); `EntityNotFoundError` produce `NotFoundException` 404 con el mensaje vigente; error inesperado del repositorio se rechaza con la misma instancia de error, sin exponer su detalle en una respuesta HTTP normal de Nest.
+- **Verificaciones:** `yarn --ignore-engines test --runInBand src/catalog/countries/countries.service.spec.ts src/catalog/countries/__tests__/countries.controller.spec.ts` — 2 suites, 26 tests aprobados; `yarn --ignore-engines build` aprobado; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json` aprobado; Prettier ejecutado sobre los dos archivos TypeScript modificados; `git diff --check` aprobado. Sin acceso a PostgreSQL ni servicios externos.
+
+#### BC-COU-2 — Validar `offset` en `GET /countries` (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** `CountriesQueryDto` hereda los demás parámetros existentes y valida `offset` como entero seguro no negativo; entradas inválidas reciben 400.
+- **Compatibilidad frontend (2026-10-15):** se revisó el frontend en la rama `chore/refactor-integration-dev` (AGENTS.md no encontrado en el frontend ni en los directorios padre comprobados). El único caller de `getCountries` para `GET /countries` es `ArtistManagement.vue`, que invoca `getCountries(250, 0)` al montar; `src/services/countries/countries.ts` declara `offset: number` y serializa `{ limit: 500, offset }` mediante Axios. El offset entregado es el entero `0`; no hay omisión, cadena vacía, decimal, negativo ni texto dinámico en este flujo. Los listados de países para formularios consultados usan el agregado `/catalog`; la función `/countries/all` no tiene caller en `src`. No se encontró incompatibilidad. Se conservó el `.aws` sin seguimiento del frontend.
+- **Alcance completado:** aceptar solo offset entero seguro no negativo en el endpoint; mantener default cero y compatibilidad de valores válidos; validar con el ValidationPipe global y simulación de servicio/repositorio.
+- **Exclusiones:** cambiar limit u otros campos de PaginationDto, endurecer paginación de otros módulos, modificar orden/shape de resultados o introducir límites de negocio no establecidos.
+- **Dependencias:** COU-F2. Antes de cambiar el DTO compartido, revisar su impacto; se recomienda un DTO dedicado para mantener acotada la tarea.
+- **Criterios de aceptación:** query ausente, cero y entero seguro positivo mantienen el comportamiento actual; negativos, fracciones, sufijos, vacío, espacios, notación exponencial/signada y enteros fuera de rango seguro reciben 400 antes de acceder al repositorio; envelope y limit se conservan.
+- **Casos y resultados:** ValidationPipe aprueba offset omitido, `0`, `17` y `Number.MAX_SAFE_INTEGER`; rechaza `-1`, `1.5`, `2tail`, vacío, whitespace, `1e2`, `+2`, `Number.MAX_SAFE_INTEGER + 1` y un entero decimal muy grande; prueba de servicio confirma `skip: 17` con limit default 10.
+- **Verificaciones:** `yarn --ignore-engines test --runInBand src/catalog/countries/countries.service.spec.ts src/catalog/countries/__tests__/countries.controller.spec.ts` — 2 suites, 36 tests aprobados; `yarn --ignore-engines build` aprobado; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json` aprobado; Prettier ejecutado sobre controller, DTO y specs propios de Countries; `git diff --check` aprobado. Sin PostgreSQL ni servicios externos.
+
+### Hallazgos no convertidos en tareas
+
+- **Cascade Country → Artist:** metadata `cascade: true` está comprobada, pero los consumers encontrados usan Countries para lookup/lista y los DTOs de escritura no aceptan la colección `artist`. No se observó un save de Country con Artists relacionados ni una consecuencia efectiva; no se propone cambiar la relación ni abrir tarea especulativa.
+- **`isoCode` no escribible desde Countries:** el campo aparece en entidad y respuestas, pero no en Create/Update DTOs. No se identificó consumer o flujo que necesite modificarlo. Dejarlo fuera hasta contar con requisito concreto.
+- **Borrado y errores FK:** `remove` retorna `DeleteResult` con `affected: 0` para ID inexistente y deja propagar fallo de FK; ambos comportamientos están fijados por las pruebas. Sin decisión de contrato o evidencia de consumidor perjudicado, no se cambia ni se crea tarea.
+- **Sin cleanup arquitectónico adicional:** service, controller y módulo tienen una responsabilidad clara; no se justifica dividir Countries, crear loaders/helpers ni centralizar consultas de consumidores con shapes diferentes.
+
+**Verificaciones de BC-COU-0:** lectura estática del módulo, `PaginationDto`, configuración global del ValidationPipe, composición y consumidores directos identificados; lectura de suites existentes, sin ejecución; estado del roadmap actualizado; `git diff --check`. No se modificó producción, tests ni fixtures. No se ejecutaron tests, migraciones, seeds ni servicios externos.
 
 ## Hallazgos históricos pendientes de clasificación futura
 
