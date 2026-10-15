@@ -54,16 +54,16 @@ Un módulo queda **completado** solo después de cerrar todas las tareas aprobad
 
 La secuencia se ampliará después de cada dominio; no constituye una orden para auditar todos los módulos ahora. Los 40 módulos funcionales identificados por Backend Architecture aparecen aquí como pendientes, excepto Artists, cuya auditoría se registra abajo. AppModule y archivos de arranque no se consideran módulos funcionales.
 
-| Orden | Dominio                   | Módulos previstos                                                                                                                 | Estado                              |
-| ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries, Genres, CatalogImport y LastfmCatalog completados; Discs y CatalogOverview pendientes |
-| 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                           |
-| 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Pendiente                           |
-| 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                           |
-| 5     | Identity                  | Auth, AccessRequests                                                                                                              | Pendiente                           |
-| 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                            | Pendiente                           |
-| 7     | Platform / Infrastructure | I18n, Seeds, Uploads                                                                                                              | Pendiente                           |
-| 8     | Communications            | Mail                                                                                                                              | Pendiente                           |
+| Orden | Dominio                   | Módulos previstos                                                                                                                 | Estado                                                                                                   |
+| ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries, Genres, CatalogImport, CatalogOverview y LastfmCatalog completados; Discs en cleanup |
+| 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                                                                                                |
+| 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Pendiente                                                                                                |
+| 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                                                                                                |
+| 5     | Identity                  | Auth, AccessRequests                                                                                                              | Pendiente                                                                                                |
+| 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                            | Pendiente                                                                                                |
+| 7     | Platform / Infrastructure | I18n, Seeds, Uploads                                                                                                              | Pendiente                                                                                                |
+| 8     | Communications            | Mail                                                                                                                              | Pendiente                                                                                                |
 
 ### Estado detallado por módulo
 
@@ -74,9 +74,9 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado**. S
 | Catalog                   | Artists             | completado |
 | Catalog                   | Countries           | completado |
 | Catalog                   | Genres              | completado |
-| Catalog                   | Discs               | pendiente  |
+| Catalog                   | Discs               | en cleanup |
 | Catalog                   | CatalogImport       | completado |
-| Catalog                   | CatalogOverview     | pendiente  |
+| Catalog                   | CatalogOverview     | completado |
 | Catalog                   | LastfmCatalog       | completado |
 | Community                 | Comments            | pendiente  |
 | Community                 | Favorites           | pendiente  |
@@ -910,7 +910,218 @@ La adaptación frontend se realiza después de completar los cambios backend y s
 - La validación de shape de respuestas, HTTP/red/JSON y tipado del payload opcional de artista pertenecen a Lastfm Integration y quedan expresamente fuera de BC-LFM-0.
 - No se justifica extraer servicios/helpers ni mover código: la responsabilidad de Catalog es pequeña y coherente y las dependencias respetan los límites actuales.
 
-**Verificaciones de BC-LFM-0:** revisión estática completa de `src/catalog/lastfm/`, composición, consumers directos conocidos, operaciones de Discs usadas, referencias de configuración y specs existentes; lectura limitada de la dependencia Lastfm Integration; coherencia del roadmap; `git diff --check`. En BC-LFM-0 no se modificó producción, tests ni fixtures ni se ejecutaron tests/E2E, PostgreSQL o servicios externos. **Cierre de BC-LFM-1:** implementación y verificaciones registradas arriba; LFM-F1 resuelto y sin tareas Lastfm Catalog pendientes. Discs y CatalogOverview permanecen pendientes; Lastfm Integration conserva su estado pendiente para auditoría propia.
+**Verificaciones de BC-LFM-0:** revisión estática completa de `src/catalog/lastfm/`, composición, consumers directos conocidos, operaciones de Discs usadas, referencias de configuración y specs existentes; lectura limitada de la dependencia Lastfm Integration; coherencia del roadmap; `git diff --check`. En BC-LFM-0 no se modificó producción, tests ni fixtures ni se ejecutaron tests/E2E, PostgreSQL o servicios externos. **Cierre de BC-LFM-1:** implementación y verificaciones registradas arriba; LFM-F1 resuelto y sin tareas Lastfm Catalog pendientes. En el cierre histórico de BC-LFM-0, Discs y CatalogOverview aún estaban pendientes; CatalogOverview se completó después y Discs queda auditado en BC-DIS-0. Lastfm Integration conserva su estado pendiente para auditoría propia.
+
+## Auditoría 6 — Catalog / CatalogOverview
+
+**Estado:** completado (2026-10-15); BC-OVR-0 y BC-OVR-1 completadas; OVR-F1 resuelto.
+**Base observada:** rama `refactor/editorial`, 2026-10-15. El registro previo de BC-OVR-0 se conserva; BC-OVR-1 se completó en el frontend y sus verificaciones pasaron.
+**Alcance leído:** implementación completa de `src/catalog/overview/`, composición en `AppModule` y `main.ts`, entidades de Genre/Country, contratos y dependencias pertinentes de Genres/Countries; búsqueda estática de consumers backend y frontend; spec de CatalogOverview y suites de módulos dependientes pertinentes. Se revisaron consumers del frontend en el checkout vecino, sin modificarlo. No se ejecutaron tests ni se contactó PostgreSQL o servicios externos.
+
+### Inventario, arquitectura y contratos
+
+- `CommonModule` registra `CatalogController` y `TypeOrmModule.forFeature([Genre, Country])`; `AppModule` importa el módulo. No hay servicio ni DTO propios. No se encontraron otros imports de `CatalogController` o `CommonModule` en producción.
+- `GET /api/catalog` es la única ruta de Overview, pública y sin parámetros. Consulta ambos repositorios en paralelo con `find({ order: { name: 'ASC' } })` y devuelve `{ genres, countries }`. No proyecta ni transforma las entidades; devuelve sus campos escalares (Genre: `id`, `name`, `color`; Country: `id`, `name`, `isoCode`). Las relaciones inversas `Genre.disc` y `Country.artist` no son eager y no se cargan en esta consulta.
+- Las llamadas de repositorio son lecturas de dos catálogos independientes. No se encontró lógica de dominio duplicada: CRUD y validación siguen en Genres/Countries y Overview únicamente compone sus resultados. El módulo consulta repositorios directamente, pero no importa sus módulos ni servicios; no hay ciclo Nest ni dependencia circular observada. La frontera evita acoplar un endpoint agregado al paginado individual de los dos recursos.
+- El contrato fija orden ascendente de base de datos por `name`; el spec confirma las opciones exactas y la respuesta directa. Si ambas consultas no encuentran datos se devuelven dos arrays vacíos. Si cualquiera rechaza, `Promise.all` rechaza la petición completa y Nest trata el error; no hay traducción específica. No recibe entrada que requiera validación.
+- Consumers backend directos del agregado no encontrados fuera del controller y su spec. Los consumidores frontend centralizan la petición en `src/services/catalog/catalog.ts` y `useCatalogStore` (`App.vue` inicia la carga; el store evita repetirla tras `loaded`). Las vistas identificadas consumen ese store en DiscCalendar, DiscList, DiscListError, HomePage, ImportPage, SuggestPage, PetitionsPage, DiscCalendarBaby y GenrePlaylistManager. Otros consumidores encontrados usan `/genres` o `/countries` directamente y no dependen de Overview.
+- El spec existente comprueba metadata de ruta y método, ausencia de guards, shape, opciones de orden, resultado vacío e inyección Nest de ambos repositorios. No caracteriza fallos de una de las consultas por separado ni el comportamiento cuando solo uno de los catálogos está vacío. El flujo de código demuestra el rechazo agregado y el retorno independiente de arrays vacíos; no se encontró impacto práctico que justifique ampliar la suite durante esta auditoría.
+
+### Hallazgos
+
+### Contract finding
+
+**Current behavior:** `GET /api/catalog` serializa directamente Genre y Country; el backend permite `null` en `Genre.color` y `Country.isoCode`, mientras el cliente frontend los tipa como `string`.
+
+**Problem:** el tipo del cliente afirma una garantía que la entidad/API no ofrece. No se confirmó que haya registros actuales con esos valores nulos ni un fallo runtime.
+
+**Impact:** frontend-only.
+
+**Options:**
+
+1. Preservar compatibilidad, dejando las declaraciones TypeScript actuales.
+2. Refactorizar internamente el backend, sin resolver la discrepancia del cliente.
+3. Cambiar el contrato HTTP para hacer esos campos no nulos o normalizarlos, lo que alteraría datos/respuestas.
+4. Coordinar un refactor backend/frontend, si se decide cambiar la nulabilidad efectiva del API.
+
+**Recommendation:** conservar el contrato y ajustar solo los tipos frontend a nullable; es la opción de menor alcance y refleja el esquema existente. BC-OVR-1 completó ese cambio.
+
+**Blocks the current task:** No; CatalogOverview puede quedar auditado sin cambiar su comportamiento.
+
+#### OVR-F1 — Tipos frontend no reflejan la nulabilidad de los campos del agregado (resuelto)
+
+- **Ubicación:** `src/catalog/genres/entities/genre.entity.ts:12-13`, `src/catalog/countries/entities/country.entity.ts:11-12`; tipos del consumidor en `../riffvalley-app-front/src/services/catalog/catalog.ts:1-12`.
+- **Evidencia comprobada:** Genre declara `color` como columna nullable y Country declara `isoCode` como columna nullable. La interfaz frontend `Genre` y `Country` del servicio de `/catalog` los declara como `string`, sin `null`. El controller devuelve directamente las entidades, por lo que no normaliza ni excluye dichos nulls. No se consultó la base de datos y no se afirma que existan actualmente filas con esos valores nulos.
+- **Consecuencia:** el consumidor TypeScript describe una respuesta más estricta que la permitida por el backend. Si una fila contiene `null`, el frontend compila suponiendo un string; futuras operaciones sin comprobación podrían fallar o manejar mal ese valor. No se identificó un fallo runtime actual atribuible a este contrato.
+- **Categoría / prioridad / tamaño:** contrato; baja; S.
+- **Propuesta:** alinear los tipos de `Genre.color` y `Country.isoCode` del servicio agregado a `string | null` y atender los errores de tipos resultantes en sus callsites; mantener intacta la respuesta HTTP y sus campos.
+- **Dependencias y riesgos:** tarea frontend independiente; requiere revisar sus consumidores del store y ejecutar typecheck/tests frontend. No cambia datos, campos ni semántica backend. No requiere coordinación de despliegue porque solo corrige tipos estáticos.
+- **Hecho frente a hipótesis:** nulabilidad de entidades, shape sin transformación e interfaces no nullable son hechos del código. La presencia de null en datos operativos y un fallo runtime son posibilidades no verificadas.
+
+### Tareas propuestas
+
+#### BC-OVR-1 — Alinear nulabilidad de los tipos frontend de `/catalog` (S, prioridad baja)
+
+- [x] **Completada en frontend (2026-10-15).** Se alinearon los tipos de `Genre.color` y `Country.isoCode` con la nulabilidad que permite el backend; las verificaciones frontend pasaron.
+- **Alcance realizado:** tipos de `Genre.color` y `Country.isoCode` declarados como nullable y callsites adaptados donde fue necesario; se mantuvieron el payload y comportamiento de `/api/catalog`.
+- **Exclusiones:** no cambiar entidades, validadores, datos, consultas, shape HTTP ni consumidores backend; no normalizar null a cadena vacía.
+- **Dependencias:** OVR-F1; checkout del frontend `riffvalley-app-front`.
+- **Criterios de aceptación:** tipos del cliente reflejan las columnas nullable; callsites manejan `null` donde haga falta; una respuesta compatible con el contrato del backend no requiere assertions no-null.
+- **Verificaciones:** typecheck y pruebas frontend pertinentes, sin cambiar la respuesta backend.
+
+### Hallazgos no convertidos en tareas
+
+- No se propone extraer un servicio para dos consultas simples ni mover lógica de Genres/Countries. No hay acoplamiento circular, transformación duplicada ni query repetida dentro del caso de uso.
+- La interfaz frontend ordena de nuevo por `localeCompare` los arrays ya ordenados por `name ASC` por la base de datos. No se demostró que esto cause trabajo relevante o un comportamiento incorrecto; no se convierte en tarea de optimización.
+- El error de una consulta hace fallar toda la composición por `Promise.all`. Esa atomicidad del agregado es coherente con que ambas listas forman una única respuesta; no se encontró requisito para respuestas parciales.
+
+**Verificaciones de BC-OVR-0/1:** BC-OVR-0 se verificó mediante revisión estática de controller, módulo, entidades, composición, consumers y tests existentes sin ejecución. BC-OVR-1 se realizó en frontend y sus verificaciones pasaron (detalle registrado por la tarea frontend). No se modificaron producción, tests, fixtures ni frontend durante BC-OVR-0 en este checkout. Sin PostgreSQL, migraciones ni servicios externos. OVR-F1 queda resuelto y CatalogOverview completado.
+
+## Auditoría 7 — Catalog / Discs
+
+**Estado:** completado (2026-10-15); BC-DIS-0, BC-DIS-1, BC-DIS-2, BC-DIS-3 y BC-DIS-4 completadas.
+**Base observada:** rama `refactor/editorial`, 2026-10-15. Al inicio había una modificación local previa de este roadmap con el registro de CatalogOverview; se conservó y se sincronizó BC-OVR-1 según el resultado frontend indicado por el usuario. No se encontraron modificaciones locales en producción o pruebas.
+**Alcance leído:** composición Nest y `src/catalog/discs/` completo (controller, módulo, fachada, entidad, servicios, DTOs, helpers, pruebas unitarias, pruebas de integración PostgreSQL existentes y baseline `D0-baseline.md`); validación global; entidades y consumers directos pertinentes en Catalog Import, Community y Editorial; llamada inversa desde Lastfm Catalog; integración Spotify. Se leyeron las pruebas pertinentes sin ejecutarlas. No se consultó frontend, base de datos, Heroku ni servicios externos.
+
+### Inventario, arquitectura y contratos
+
+- `DiscModule` registra `DiscsController`, la fachada `DiscsService`, `DiscCatalogService`, `DiscCalendarService`, `DiscHomeService`, `DiscWriteService`, `DiscEnrichmentService` y `DiscSpotifyService`. Registra `Disc`, `Artist`, `Genre` y `Country` con TypeORM, importa `AuthModule` y `SpotifyIntegrationModule`, y exporta solo `DiscsService`. `AppModule` compone `DiscModule`; TypeORM usa `autoLoadEntities`, `synchronize: false` y `migrationsRun: false`.
+- La fachada delega lecturas de catálogo, calendario, estadísticas Home, escrituras, Spotify y enriquecimiento. Mantiene dos llamadas directas a `SpotifyPublicApiService`: resolver álbum (y traducir resultado vacío a 404) y obtener detalles. No hay repositorios ni consultas duplicadas en la fachada. Los servicios extraídos tienen una responsabilidad reconocible y no hay motivo para volver a dividirlos por tamaño.
+- `DiscCatalogService` resuelve detalle, listado con filtros/agregados, selección aleatoria y opciones de filtros. `DiscCalendarService` sirve calendario autenticado/público, filtros públicos y grupos semanales. `DiscHomeService` compone ranking, estadísticas y loaders SQL. `DiscWriteService` crea/actualiza/elimina y puede resolver/crear Artist. `DiscEnrichmentService` encuentra discos sin imagen y actualiza imagen para Lastfm Catalog. `DiscSpotifyService` valida existencia del Disc y consulta tracks. Los helpers mapean filas SQL, estado personal, opciones, orden aleatorio y rangos semanales.
+- No se observa ciclo de módulos Nest: `DiscModule` importa Auth y Spotify; `LastfmModule` importa Disc y consume su fachada, sin import inverso desde Disc. Hay acoplamiento de entidades entre Catalog y Community (Rate, Favorite, Pending, Comment) y Editorial (Asignation, NationalRelease y ContentScheduler); estos módulos inyectan directamente `Repository<Disc>` o el manager. También hay relación desde Genre. Catalog Import Manual/Excel inyecta Disc y Artist para importación. Otros consumers encontrados: Community Rates, Favorites, Pendings, Comments y Requests; Editorial National Releases, Asignations y ContentScheduler; Lastfm Catalog consume únicamente los métodos de enriquecimiento de la fachada. La frontera actual comparte entidad/repositorio, no servicios Nest de esos dominios.
+- Los `ManyToOne` a Artist/Genre y `OneToMany` a Favorite/Pending/Comment son eager en `Disc`; Artist carga Country eager. Rates y Asignations no son eager. Los query builders definen las relaciones necesarias de forma explícita; en cambio `findOne` devuelve una entidad con el detalle de todas las colecciones y sus usuarios. Esa respuesta es observable y el consumidor frontend no se confirmó en esta revisión.
+- Contratos actuales bajo prefijo `/api`: `POST /discs` requiere `riffvalley`; `POST /discs/with-artist` requiere cualquier usuario autenticado; `PATCH` y `DELETE /discs/:id` requieren `riffvalley`. Lecturas de listado, random, options, calendario autenticado y home requieren autenticación; calendario público, weekly, detalle, endpoints Spotify y filtros públicos no tienen `@Auth`. Los IDs de Disc usan `ParseUUIDPipe` en detalle, tracks, update y delete. Se observó que `src/catalog/discs/__tests__/D0-baseline.md` describe como públicas varias escrituras que el controller actual protege; la auditoría usa el código actual y no actualiza ese baseline fuera del alcance de edición.
+- El controller acepta DTOs tipados por `ValidationPipe` global (`transform`, conversión implícita, whitelist y rechazo de propiedades desconocidas). Weekly, random, options y resolución Spotify tienen DTOs dedicados; listados usan `PaginationDto`. Errores conocidos: detalle/Spotify tracks y update ausentes traducen a 404; remove comprueba `affected`; `resolveSpotifyAlbum` devuelve 404 cuando no hay match. Los errores técnicos de queries se propagan al manejador Nest. `orderBy` valida el campo en el servicio, pero la dirección es un cast TypeScript y se entrega a TypeORM; no se observó una prueba de entrada inválida. No se eleva a tarea porque no se acreditó impacto de consumidor ni contrato de error concreto.
+- La paginación principal usa `take/skip` en SQL y `getCount`; random selecciona IDs con `ORDER BY RANDOM()` y limita antes de hidratar, conservando el orden aleatorio al mapear. Calendario pagina en SQL, cuenta con `getManyAndCount` y consulta NationalRelease para los IDs de la página. Home está limitado a 20 resultados y ejecuta loaders independientes para totales, top usuarios, distribución y estadísticas globales. No se encontró paginación principal en memoria, ni evidencia de N+1 en los servicios revisados. Las llamadas Last.fm por candidato pertenecen a la coordinación de Lastfm Catalog, no a una consulta repetida de Discs.
+- Hay query builders TypeORM en Catalog, Calendar, Options, Spotify tracks y Enrichment; Home y la carga de NationalRelease del calendario usan SQL parametrizada mediante `Repository.query`/`EntityManager.query`. Write usa repositorios `create/save/preload/delete`; no usa `EntityManager.transaction`.
+- Cobertura existente: controller/fachada; Catalog (listado, filtros, count, raw mapping, random, options y detalle); Calendar (autenticado, público, filtros, weekly y helpers); Home (respuesta, mappers/loaders y siete suites PostgreSQL opt-in); Write; Enrichment; Spotify; DTOs; y helpers puros. Los tests caracterizan payloads, casos vacíos, filtros, orden de random, errores 404, y estados nulos/cero. Las pruebas PostgreSQL de ranking caracterizan deliberadamente fanout de relaciones, no un resultado corregido. Huecos relevantes para los hallazgos aparecen en las tareas siguientes. No se ejecutaron pruebas.
+
+### Hallazgos
+
+#### DIS-F1 — `POST /discs` no aplica los IDs de Artist y Genre al crear (resuelto en BC-DIS-1)
+
+- **Ubicación:** `src/catalog/discs/write/disc-write.service.ts:29-36`; DTO `src/catalog/discs/dto/create-discs.dto.ts:34-40`; entidad `src/catalog/discs/entities/disc.entity.ts:51-55`; comparación con el mapeo explícito de `update` en `src/catalog/discs/write/disc-write.service.ts:57-76`.
+- **Evidencia (hecho):** antes de BC-DIS-1, el DTO aceptaba `artistId` y `genreId`, pero `create` pasaba el DTO directamente a `Repository.create`. La entidad solo declara las relaciones `artist` y `genre`, no propiedades escalares `artistId`/`genreId`; el transformador `PlainObjectToNewEntityTransformer` de TypeORM copia columnas y propiedades de relación descritas en metadata, por lo que ignora esos dos nombres. En `update` sí se convierten explícitamente a `{ id }` para las relaciones. El spec previo de create usaba un mock que reflejaba el DTO completo y no verificaba con metadata real las relaciones guardadas. BC-DIS-1 lo corrigió y añadió la comprobación de metadata real descrita abajo.
+- **Consecuencia:** una petición válida que incluya IDs puede crear el Disc sin las asociaciones solicitadas. No se afirma que haya ocurrido en producción.
+- **Categoría / prioridad / tamaño:** bug funcional; alta; S.
+- **Corrección aplicada:** mapear IDs presentes a las relaciones `{ id: artistId }` y `{ id: genreId }`, preservar campos escalares y el contrato de respuesta, y caracterizar create con relaciones ausentes/presentes.
+- **Dependencias y riesgos:** no se añadieron consultas de existencia; la FK valida al persistir. No se cambió validación ni la forma HTTP.
+- **Hecho frente a hipótesis:** el descuadre metadata/DTO y que el transformer omite propiedades desconocidas son hechos; pérdida de relación en una ejecución de DB real no fue reproducida en esta auditoría.
+
+#### DIS-F2 — El ranking Home duplica discos e infla los conteos al unir estados personales (resuelto en BC-DIS-2)
+
+- **Ubicación:** `src/catalog/discs/home/disc-home.service.ts:68-80,85-90`; caracterizaciones `src/catalog/discs/home/__tests__/home-ranking.postgres.spec.ts:271-299` y `src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts:224-260`.
+- **Evidencia (hecho):** la consulta agrega ratings y a la vez une Favorite/Pending del usuario. Agrupa por `f.id`, creando una fila por Favorite duplicado; sin agrupar por Pending, varias filas Pending multiplican las filas de Rate antes de `COUNT` y la fórmula de `weightedScore`. Las pruebas PostgreSQL insertan relaciones repetidas y esperan dos resultados para un Disc con dos Favorites y `voteCount=4` cuando una fila adicional Pending duplica dos ratings a cuatro. Las entidades no declaran unique compuesto Disc+User.
+- **Consecuencia:** la respuesta de `GET /api/discs/homeDiscs` puede repetir un mismo álbum y presentar voteCount/weightedScore incorrectos cuando hay estados duplicados; el `LIMIT 20` puede ocupar cupos con repeticiones.
+- **Categoría / prioridad / tamaño:** bug funcional; media; S.
+- **Corrección aplicada:** quitar los JOIN de Favorite/Pending de la consulta que agrega Rate y agrupar una sola vez por Disc. Las subconsultas personales `LIMIT 1` conservan el shape y, ante Favorites duplicados, seleccionan uno de sus IDs conforme a la semántica ya existente. Se añadió `d.id ASC` para que el límite de 20 tenga un desempate estable.
+- **Agregados:** `voteCount` sigue contando registros Rate con `rate` no nulo; `averageRate`, `averageCover` y `weightedScore` usan las filas Rate reales, sin que la cardinalidad de Favorite/Pending las replique.
+- **Dependencias y riesgos:** no se añade restricción de esquema ni migración. El ID elegido entre Favorites duplicados sigue siendo indeterminado por el `LIMIT 1` existente. Los fixtures muestran la semántica de la query, pero no la frecuencia de duplicados en los datos operativos.
+- **Hecho frente a hipótesis:** el fanout y sus resultados están comprobados en specs PostgreSQL existentes; la ocurrencia en producción no está confirmada.
+
+#### DIS-F3 — El DTO de creación deja pasar fechas inválidas y flags sin validar (resuelto en BC-DIS-3)
+
+- **Ubicación:** `src/catalog/discs/dto/create-discs.dto.ts:42-52`; caracterización explícita `src/catalog/discs/dto/create-discs.dto.spec.ts:71-80`; configuración de transformación en `src/main.ts:36-42`.
+- **Evidencia (hecho):** en `CreateDiscDto`, `releaseDate` solo tenía `@IsOptional`, y `ep`, `debut` y `featured` no declaraban validador de tipo. El `ValidationPipe` global convierte implícitamente strings a `Date` y booleanos; una fecha inválida llegaba como `Invalid Date` aceptada y una cadena como `"false"` se convertía a `true`. `CreateDiscWithArtistDto` usa otro DTO: `@IsDateString()` no activaba validación ISO estricta y sus flags booleanos también sufrían conversión implícita.
+- **Consecuencia:** la ruta autenticada `POST /api/discs` acepta una fecha inválida hasta persistencia, donde puede generar un error de base de datos en vez de un 400 de validación; los flags no tienen validación explícita de booleano. `UpdateDiscDto` hereda la misma metadata incompleta mediante `PartialType`.
+- **Categoría / prioridad / tamaño:** bug funcional; media; S.
+- **Corrección aplicada:** validar la fecha `Date` transformada y marcar como inválida una fecha ISO con día imposible antes de que la conversión de JavaScript la normalice; usar `@IsDateString({ strict: true })` en la creación con artista. Validar los tres flags con `@IsBoolean()` y recuperar el valor crudo del body antes de validar, evitando que la conversión implícita acepte strings o números.
+- **Opcionalidad:** `@IsOptional()` conserva la omisión y `null` admitidos previamente; `UpdateDiscDto` sigue siendo parcial por `PartialType`.
+- **Hecho frente a hipótesis:** la aceptación de `Invalid Date`, la ausencia de validadores y la conversión implícita son hechos del pipeline y sus pruebas; el error concreto de persistencia no se provocó.
+- **Hecho frente a hipótesis:** aceptación validada de `Invalid Date` y ausencia de decorators de flags son hechos; un error concreto de persistencia no se provocó.
+
+#### DIS-F4 — `createWithArtist` podía dejar un Artist persistido sin Disc (resuelto en BC-DIS-4)
+
+- **Ubicación:** `src/catalog/discs/write/disc-write.service.ts:39-54,93-132`; pruebas de mapping/resolución en `src/catalog/discs/write/disc-write.service.spec.ts:452-751`.
+- **Evidencia (hecho):** si no existe Artist coincidente, `resolveArtist` lo guarda antes de construir y guardar el Disc. Las operaciones usan repositorios separados sin manager transaccional; las pruebas cubren resolución y mapping exitosos, no el fallo de `discRepository.save` después de persistir un Artist nuevo.
+- **Consecuencia:** si falla el segundo guardado, la operación HTTP falla pero el Artist creado en el primero permanece sin el álbum que motivó la operación. No afecta el caso de reutilizar un Artist existente.
+- **Categoría / prioridad / tamaño:** bug funcional (atomicidad); media; S.
+- **Corrección aplicada:** `createWithArtist` realiza la resolución/creación de Artist y el guardado de Disc dentro de `discRepository.manager.transaction`; ambos repositorios se obtienen del `EntityManager` de la transacción. El error se propaga para que TypeORM revierta ambas escrituras.
+- **Resultado:** si el Artist ya existe, se reutiliza sin guardarlo ni alterarlo; si es nuevo y falla el Disc, se revierte el Artist. Se mantienen búsqueda case-insensitive, normalización, desambiguación por `countryId`, datos opcionales y contrato HTTP.
+- **Verificación y límite:** pruebas focalizadas cubren éxito con Artist existente/nuevo, fallos de Artist, Disc y transacción, rollback y procedencia del manager. PostgreSQL no estaba escuchando en `localhost:5432`; la prueba comprueba el límite transaccional mediante estado aislado simulado, no mediante INSERT/ROLLBACK real del driver.
+- **Hecho frente a hipótesis:** el flujo transaccional y sus errores se cubren en pruebas; no se reprodujo el rollback contra PostgreSQL en esta sesión.
+
+### Contract finding — DIS-F5
+
+**Current behavior:** `GET /api/discs/:id` devuelve la entidad con Artist/Country, Genre y colecciones completas de Favorites, Pendings y Comments, incluidas sus relaciones eager con User. `findOne` solicita explícitamente estas relaciones; el spec caracteriza el payload y usuarios de cada item.
+
+**Problem:** el tamaño de la respuesta y el trabajo de carga crecen con esas colecciones. No se confirmó en este checkout qué datos necesita el frontend ni si usa los usuarios y campos completos.
+
+**Impact:** backend + frontend.
+
+**Options:**
+
+1. Preservar compatibilidad hasta identificar a todos los consumidores.
+2. Refactorizar internamente la carga solo después de fijar el payload equivalente y cargar explícitamente las relaciones necesarias.
+3. Cambiar el contrato a proyecciones pequeñas (por ejemplo, IDs, estados del usuario y contador de comentarios) si las colecciones completas no tienen consumer.
+4. Coordinar backend/frontend si el detalle deja de exponer colecciones o usuarios.
+
+**Recommendation:** preservar ahora la respuesta. El baseline D0 y las decisiones históricas D39–D44 de `roadmap/catalog.md` ya registran esta superficie como observable; no crear una tarea duplicada sin clasificar el consumer frontend. Una alternativa más pequeña puede requerir frontend.
+
+**Blocks the current task:** No; se documenta el límite sin retirar eager relations.
+
+### Tareas propuestas (ordenadas por prioridad y dependencias)
+
+#### BC-DIS-1 — Mapear Artist/Genre IDs en la creación simple (S, prioridad alta)
+
+- **Shape de respuesta:** después de guardar, elimina del objeto retornado las propiedades `artist` y `genre`; conserva así el JSON de create previo, que no exponía esas relaciones.
+- [x] **Completada (2026-10-15).** `create` convierte los IDs opcionales a referencias `{ id }` antes de `Repository.create`, sin consultas de lookup ni cambios en DTO, permisos o respuesta.
+- **Hallazgo:** DIS-F1.
+- **Alcance realizado:** separa `artistId` y `genreId` del resto del DTO, pasa a TypeORM únicamente propiedades de Disc y construye `artist: { id }` / `genre: { id }` para los IDs presentes. Conserva los campos opcionales, omisión/null de relaciones y respuesta del servicio. El controller mantiene ruta, permiso y delegación sin cambios.
+- **Referencias inexistentes:** no se consulta previamente Artist/Genre. La FK de TypeORM valida al guardar; una violación PostgreSQL `23503` sigue el manejador actual de error técnico y se responde con HTTP 500 genérico. No se añadió una nueva política de errores.
+- **Exclusiones:** cambios a existencia de referencias, normalización, permisos, validación adicional y contrato HTTP.
+- **Criterios de aceptación:** se omiten relaciones no suministradas; cada ID suministrado se persiste en su relación correspondiente; errores de FK conservan el manejo HTTP vigente; la prueba no usa exclusivamente un mock que acepta cualquier propiedad.
+- **Verificaciones realizadas:** `yarn --ignore-engines test --runInBand src/catalog/discs/write/disc-write.service.spec.ts src/catalog/discs/dto/create-discs.dto.spec.ts src/catalog/discs/__tests__/discs.controller.spec.ts src/catalog/discs/__tests__/discs.service.spec.ts` — 4 suites, 52 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; Prettier check de los tres archivos TypeScript modificados; `git diff --check`.
+- **Cobertura TypeORM y límite:** una prueba construye metadata TypeORM real (`DataSource.buildMetadatas`, sin inicializar conexión), usa `Repository<Disc>.create` real y comprueba las join columns `artistId`/`genreId`, sus referencias a `id` y los valores que TypeORM extrae para ambas FK. `save` se simula para no acceder a PostgreSQL; una violación FK 23503 se caracteriza con error simulado. No se hizo INSERT real ni se verificaron restricciones contra una base de datos.
+- **Dependencias y riesgos:** sin dependencia previa. La prueba de metadata comprueba que las propiedades de relación alimentan las columnas FK aunque la respuesta conserve el shape previo sin esas propiedades.
+
+#### BC-DIS-2 — Corregir agregación y cardinalidad de Home (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** Se eliminaron los JOIN de estado personal de la consulta agregada, dejando el estado en sus subconsultas `LIMIT 1`, y se fijó `d.id ASC` como desempate estable.
+- **Hallazgo:** DIS-F2.
+- **Alcance realizado:** cada Disc produce una fila; `voteCount`, `averageRate`, `averageCover` y `weightedScore` no dependen de cuántos Favorites o Pendings tenga el usuario. Las subconsultas personales conservan los campos y seleccionan como máximo un estado. No se modifican datos, entidades ni esquema.
+- **Duplicados de Favorite:** la tabla y el test PostgreSQL permiten duplicados Disc+User. Si existen varios para el usuario actual, se conserva uno mediante el `LIMIT 1` ya usado por la consulta; no se deduplican ni modifican registros. Su ID concreto sigue sin orden garantizado.
+- **Orden:** se conserva `weightedScore DESC` y se añade `d.id ASC` como desempate reproducible para el límite de 20.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/catalog/discs/home src/catalog/discs/__tests__/discs.service.spec.ts src/catalog/discs/__tests__/discs.controller.spec.ts src/catalog/discs/calendar/disc-calendar.service.spec.ts` — 13 suites y 102 tests aprobados; 7 suites PostgreSQL opt-in omitidas (27 tests). `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; Prettier check sobre los archivos modificados; `git diff --check`.
+- **Límite PostgreSQL:** las suites usan tablas temporales en una conexión local configurada como `localhost:5432/SpamMusicDB`, pero PostgreSQL no estaba escuchando; no se ejecutaron contra producción ni se pudo validar la consulta real en esta sesión.
+- **Verificación adicional:** una ejecución que incluía `disc-catalog.service.spec.ts` tuvo un fallo fuera de alcance y de atribución no determinada: la expectativa de `addSelect('disc.id', 'discId')` no coincide con las llamadas observadas. No se modificó esa consulta ni su prueba.
+- **Dependencias y riesgos:** ninguna técnica; BC-DIS-3 está completada y BC-DIS-4 sigue pendiente.
+
+#### BC-DIS-3 — Validar campos opcionales del DTO de creación/actualización (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** Se validan las dos rutas de creación de Disc y la actualización parcial.
+- **Hallazgo:** DIS-F3.
+- **Alcance realizado:** `CreateDiscDto` y `UpdateDiscDto` validan `releaseDate`, `ep`, `debut` y `featured`; `CreateDiscWithArtistDto` valida su `releaseDate`, `ep` y `debut`. Sin cambios en rutas, permisos, servicio de escritura, defaults, entidad ni esquema.
+- **Exclusiones:** cambios a valores por defecto, nulabilidad de esquema, otras reglas de Disc y cambios a DTOs de calendario.
+- **Reglas aplicadas:** el DTO simple mantiene las conversiones de fecha actuales y comprueba que las fechas ISO con día calendario imposible no se normalicen; `@IsDate()` rechaza `Invalid Date`. La ruta con artista requiere fecha ISO8601 estricta. `ep`, `debut` y `featured` aceptan booleanos reales; strings y números se rechazan aun con conversión implícita global. En ambos DTOs se mantiene la opcionalidad anterior, incluido `null`.
+- **Actualización:** `PartialType` conserva todos los campos opcionales; los specs pasan por el `ValidationPipe` configurado como en `main.ts`. Pruebas de controller confirman HTTP 400 antes de invocar métodos de escritura.
+- **Verificaciones ejecutadas:** suites focalizadas de DTO, controller y escritura — 7 suites, 73 tests aprobados (incluyen los casos de ausencia y `null`); `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; Prettier en los archivos modificados; `git diff --check`.
+- **Verificación amplia:** `yarn --ignore-engines test --runInBand src/catalog/discs` obtuvo 26 suites aprobadas, 267 tests aprobados y 7 suites/27 tests omitidos; fallaron `disc-catalog.service.spec.ts` (expectativa de `addSelect` no coincidente) y `discs.spotify-http-contract.spec.ts` (el entorno impide escuchar en `0.0.0.0`). No se modificaron esas pruebas ni áreas; su atribución no se determinó.
+- **Compatibilidad observada:** el frontend envía `YYYY-MM-DD` en `/discs/with-artist`; la actualización de fecha envía un `Date` que JSON serializa como timestamp ISO. Los dos formatos pasan; los flags de los formularios son booleanos JSON. No se cambió el frontend.
+- **Dependencias y riesgos:** los cuerpos inválidos ahora reciben HTTP 400 antes de persistir; se conserva la semántica de ausencia/null. BC-DIS-4 está completada.
+
+#### BC-DIS-4 — Hacer atómica la creación compuesta de Artist y Disc (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** La resolución/creación de Artist y el guardado de Disc comparten el manager de una transacción TypeORM.
+- **Hallazgo:** DIS-F4.
+- **Alcance:** compartir manager transaccional al resolver/crear Artist y guardar Disc; garantizar rollback de Artist nuevo si falla la persistencia del Disc.
+- **Exclusiones:** importar masivo, cambiar resolución de duplicados, alterar errores HTTP, limpieza de Artists existentes y migraciones.
+- **Criterios de aceptación:** Artist nuevo + Disc se confirman juntos; fallo al guardar Disc revierte Artist nuevo; Artist preexistente no se modifica ni elimina por el fallo; el error original se propaga; ambos repositorios pertenecen a la transacción.
+- **Implementación:** `discRepository.manager.transaction` envuelve el flujo completo. `Artist` y `Disc` se buscan/guardan con repositorios obtenidos de su `EntityManager`; el lookup case-insensitive, normalización y desambiguación por `countryId` se conservan. Los fallos se propagan sin capturarse como éxito.
+- **Cobertura:** éxito reutilizando Artist y creando Artist; fallo al guardar Artist; fallo al guardar Disc con rollback del Artist nuevo y conservación del existente; error transaccional propagado; verificación de que ambas escrituras usan repositorios del manager transaccional. El controller sigue caracterizando ruta `POST /discs/with-artist`, autenticación y delegación sin cambios.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/catalog/discs/write/disc-write.service.spec.ts src/catalog/discs/__tests__/discs.service.spec.ts src/catalog/discs/__tests__/discs.controller.spec.ts src/catalog/artists` — 14 suites, 120 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; Prettier sobre `disc-write.service.ts` y `disc-write.service.spec.ts`; `git diff --check`.
+- **Límite de integración:** PostgreSQL no estaba disponible en `localhost:5432`; no se hizo prueba de integración real ni se contactó producción. El rollback se comprueba con un manager transaccional aislado que descarta el estado staged cuando falla el callback. Se conserva la limitación PostgreSQL de BC-DIS-2: las suites opt-in del ranking (7 suites/27 tests) quedaron omitidas porque el servidor local no estaba escuchando.
+- **Dependencias y riesgos:** no se modifican entidades, esquema, endpoints ni consumidores. Discs queda completado. Con esta auditoría quedan cerrados los siete módulos de Catalog (Artists, Countries, Genres, CatalogImport, LastfmCatalog, CatalogOverview y Discs), por lo que el dominio Catalog queda completado.
+
+### Hallazgos no convertidos en tareas
+
+- El contrato eager de detalle queda abierto en DIS-F5; el frontend no está presente en este checkout y no se debe retirar una relación observable sin clasificar sus consumidores. El tema ya figura en el baseline de Discs y en D39–D44 del roadmap de Catalog, por lo que no se crea una segunda tarea contractual.
+- `PaginationDto.offset` no valida entero ni no-negatividad y permite filtros/textos que solo tienen sentido en otros módulos; `orderBy` solo restringe el nombre de columna dentro de DiscCatalog y delega la dirección a TypeORM. Se documenta como limitación de DTO compartido, sin tarea en esta auditoría: endurecerlo puede afectar otros controllers y no se verificó un fallo de consumer en Discs.
+- Las ordenaciones por releaseDate/Artist no añaden un ID como último desempate. No hay evidencia de que el consumidor exija orden total estable, así que no se propone tarea.
+- No se midió SQL ni se propuso caché/índices. Las consultas relevantes están paginadas o limitadas en SQL; cualquier candidato adicional requeriría planes y datos representativos.
+- Los errores de `findOneOrFail` se traducen todos a 404, incluidos errores distintos a “no encontrado”; la consulta no distingue errores de infraestructura. No se observó un caso concreto que justifique cambiar ese contrato ahora.
+
+**Verificaciones de BC-DIS-0:** revisión estática de módulo, controller, servicios, DTOs, entidad, helpers, consultas, composición, consumers directos y specs; contraste de la configuración de ValidationPipe y del transformer instalado de TypeORM para DIS-F1; revisión de coherencia de estados y tareas del roadmap; `git diff --check -- roadmap/backend-cleanup.md`. En ese cierre de auditoría no se modificó producción, pruebas, fixtures, entidades ni migraciones y no se ejecutaron pruebas/typecheck/build, PostgreSQL, migraciones, Heroku ni servicios externos. Las implementaciones posteriores se registran en sus tareas.
 
 ## Hallazgos históricos pendientes de clasificación futura
 
