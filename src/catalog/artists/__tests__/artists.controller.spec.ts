@@ -3,12 +3,17 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { ExecutionContext, ParseUUIDPipe } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ParseUUIDPipe,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { ArtistManagementQueryDto } from '../dto/artist-management-query.dto';
 import { CreateArtistDto } from '../dto/create-artist.dto';
 import { UpdateArtistDto } from '../dto/update-artist.dto';
 import { ArtistsController } from '../artists.controller';
@@ -69,7 +74,7 @@ describe('ArtistsController contract characterization', () => {
     expect(service.findAll).toHaveBeenCalledWith(query);
   });
 
-  it('maps GET /artists/management and applies the current defaults and parsing', async () => {
+  it('maps GET /artists/management, validates the query DTO, and keeps valid defaults', async () => {
     const response = { totalItems: 0, data: [] };
     service.findAllForManagement.mockResolvedValue(response);
     expect(
@@ -78,8 +83,36 @@ describe('ArtistsController contract characterization', () => {
     expect(
       Reflect.getMetadata(METHOD_METADATA, route('findAllForManagement')),
     ).toBe(0);
+    expect(
+      Reflect.getMetadata(
+        'design:paramtypes',
+        ArtistsController.prototype,
+        'findAllForManagement',
+      ),
+    ).toEqual([ArtistManagementQueryDto]);
+    expect(
+      Reflect.getMetadata(GUARDS_METADATA, route('findAllForManagement')),
+    ).toBeUndefined();
+    expect(
+      Reflect.getMetadata(META_MINIMUM_ROLE, route('findAllForManagement')),
+    ).toBeUndefined();
 
-    await expect(controller.findAllForManagement()).resolves.toBe(response);
+    const validationPipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    });
+    const transformQuery = (value: object) =>
+      validationPipe.transform(value, {
+        type: 'query',
+        metatype: ArtistManagementQueryDto,
+      });
+
+    const omittedQuery = (await transformQuery({})) as ArtistManagementQueryDto;
+    await expect(controller.findAllForManagement(omittedQuery)).resolves.toBe(
+      response,
+    );
     expect(service.findAllForManagement).toHaveBeenLastCalledWith(
       undefined,
       15,
@@ -87,41 +120,44 @@ describe('ArtistsController contract characterization', () => {
       undefined,
       undefined,
     );
-    await controller.findAllForManagement(
-      '  Bjo +  ',
-      '7tail',
-      '-2',
-      'genre-id',
-      'true',
-    );
+
+    const validQuery = (await transformQuery({
+      query: '  Bjo +  ',
+      limit: '007',
+      offset: '2',
+      genreId: 'genre-id',
+      needsReview: 'true',
+    })) as ArtistManagementQueryDto;
+    await controller.findAllForManagement(validQuery);
     expect(service.findAllForManagement).toHaveBeenLastCalledWith(
       '  Bjo +  ',
       7,
-      -2,
+      2,
       'genre-id',
       true,
     );
-    await controller.findAllForManagement('', '0', '0', '', 'false');
-    expect(service.findAllForManagement).toHaveBeenLastCalledWith(
-      '',
-      0,
-      0,
-      '',
-      false,
-    );
-    await controller.findAllForManagement(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'TRUE',
-    );
+
+    const falseReviewQuery = (await transformQuery({
+      limit: '1',
+      offset: '0',
+      needsReview: 'false',
+    })) as ArtistManagementQueryDto;
+    await controller.findAllForManagement(falseReviewQuery);
     expect(service.findAllForManagement).toHaveBeenLastCalledWith(
       undefined,
-      15,
+      1,
       0,
       undefined,
       false,
+    );
+
+    const callCountBeforeInvalidQuery =
+      service.findAllForManagement.mock.calls.length;
+    await expect(transformQuery({ limit: '7tail' })).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(service.findAllForManagement).toHaveBeenCalledTimes(
+      callCountBeforeInvalidQuery,
     );
   });
 

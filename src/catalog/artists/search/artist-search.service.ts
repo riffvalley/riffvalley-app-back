@@ -9,6 +9,11 @@ import { Repository } from 'typeorm';
 import { Artist } from '../entities/artist.entity';
 import { Disc } from '../../discs/entities/disc.entity';
 import { normalizeForSearch } from '../helpers/normalize-for-search';
+import {
+  ArtistDiscProjection,
+  DiscRateProjectionRaw,
+  mapDiscProjection,
+} from '../helpers/map-disc-projection';
 
 @Injectable()
 export class ArtistSearchService {
@@ -62,34 +67,16 @@ export class ArtistSearchService {
         )
         .where('discArtist.id IN (:...artistIds)', { artistIds })
         .orderBy('disc.releaseDate', 'DESC')
-        .getRawAndEntities();
+        .getRawAndEntities<DiscRateProjectionRaw>();
 
-      const discsByArtist = new Map<string, any[]>();
+      const discsByArtist = new Map<string, ArtistDiscProjection[]>();
       discsRaw.entities.forEach((disc, index) => {
         const artistId = disc.artist?.id;
         if (!artistId) return;
         if (!discsByArtist.has(artistId)) discsByArtist.set(artistId, []);
-        discsByArtist.get(artistId).push({
-          id: disc.id,
-          name: disc.name,
-          releaseDate: disc.releaseDate,
-          ep: disc.ep,
-          debut: disc.debut,
-          image: disc.image,
-          link: disc.link,
-          genre: disc.genre
-            ? {
-                id: disc.genre.id,
-                name: disc.genre.name,
-                color: disc.genre.color,
-              }
-            : null,
-          rateCount: parseInt(discsRaw.raw[index].rateCount, 10) || 0,
-          averageRate:
-            discsRaw.raw[index].averageRate != null
-              ? parseFloat(discsRaw.raw[index].averageRate)
-              : null,
-        });
+        discsByArtist
+          .get(artistId)
+          .push(mapDiscProjection(disc, discsRaw.raw[index]));
       });
 
       return artists.map((artist) => ({
