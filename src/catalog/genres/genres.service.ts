@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityNotFoundError, Repository } from 'typeorm';
 import { Genre } from './entities/genre.entity';
 import { CreateGenreDto } from './dto/create-genre.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
@@ -86,7 +86,11 @@ export class GenresService {
       const unit = await this.unitRepository.findOneByOrFail({ id });
       return unit;
     } catch (error) {
-      throw new NotFoundException(`Genre with id ${id} not found`);
+      if (error instanceof EntityNotFoundError) {
+        throw new NotFoundException(`Genre with id ${id} not found`);
+      }
+
+      throw error;
     }
   }
 

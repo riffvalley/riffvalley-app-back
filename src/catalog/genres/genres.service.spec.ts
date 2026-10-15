@@ -2,7 +2,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { EntityNotFoundError, Repository } from 'typeorm';
 import { Genre } from './entities/genre.entity';
 import { GenresService } from './genres.service';
 import { CreateGenreDto } from './dto/create-genre.dto';
@@ -204,18 +204,20 @@ describe('GenresService current behavior', () => {
       expect(repository.findOneByOrFail).toHaveBeenCalledWith({ id: genre.id });
     });
 
-    it('maps an absent ID to the current NotFoundException and message', async () => {
-      repository.findOneByOrFail.mockRejectedValue(new Error('Entity not found'));
+    it('maps EntityNotFoundError to the current NotFoundException and message', async () => {
+      repository.findOneByOrFail.mockRejectedValue(
+        new EntityNotFoundError(Genre, { id: 'missing-id' }),
+      );
       await expect(service.findOne('missing-id')).rejects.toEqual(
         new NotFoundException('Genre with id missing-id not found'),
       );
     });
 
-    it('also maps unrelated repository failures to the same 404', async () => {
-      repository.findOneByOrFail.mockRejectedValue(new Error('database offline'));
-      await expect(service.findOne('genre-id')).rejects.toEqual(
-        new NotFoundException('Genre with id genre-id not found'),
-      );
+    it('propagates unexpected repository failures unchanged', async () => {
+      const repositoryError = new Error('database offline');
+      repository.findOneByOrFail.mockRejectedValue(repositoryError);
+
+      await expect(service.findOne('genre-id')).rejects.toBe(repositoryError);
     });
   });
 

@@ -56,7 +56,7 @@ La secuencia se ampliará después de cada dominio; no constituye una orden para
 
 | Orden | Dominio                   | Módulos previstos                                                                                                                 | Estado                              |
 | ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists y Countries completados; resto pendiente |
+| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries y Genres completados; resto pendiente |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                           |
 | 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Pendiente                           |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                           |
@@ -73,7 +73,7 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado**. S
 | ------------------------- | ------------------- | ---------- |
 | Catalog                   | Artists             | completado |
 | Catalog                   | Countries           | completado |
-| Catalog                   | Genres              | pendiente  |
+| Catalog                   | Genres              | completado |
 | Catalog                   | Discs               | pendiente  |
 | Catalog                   | CatalogImport       | pendiente  |
 | Catalog                   | CatalogOverview     | pendiente  |
@@ -412,6 +412,174 @@ Estas tareas quedan pendientes; ninguna se ejecutó en BC-0.
 - **Sin cleanup arquitectónico adicional:** service, controller y módulo tienen una responsabilidad clara; no se justifica dividir Countries, crear loaders/helpers ni centralizar consultas de consumidores con shapes diferentes.
 
 **Verificaciones de BC-COU-0:** lectura estática del módulo, `PaginationDto`, configuración global del ValidationPipe, composición y consumidores directos identificados; lectura de suites existentes, sin ejecución; estado del roadmap actualizado; `git diff --check`. No se modificó producción, tests ni fixtures. No se ejecutaron tests, migraciones, seeds ni servicios externos.
+
+## Auditoría 3 — Catalog / Genres
+
+**Estado:** completado; BC-GEN-1, BC-GEN-2 y BC-GEN-3 completadas.
+**Base observada:** rama `refactor/editorial`, 2026-10-15. El checkout estaba limpio al iniciar esta auditoría; el único cambio de esta tarea es este registro de roadmap.
+**Alcance leído:** implementación completa de `src/catalog/genres/` (controller, service, módulo, DTOs, entidad y specs); configuración global de validación, `PaginationDto` y composición en `AppModule`; consumers directos encontrados en Catalog/Discs, Catalog/Overview, Catalog/Import, Community/Requests, Editorial/National Releases y Seeds; tipos de Artist que incluyen Genre. Se buscaron usos en Product, Integrations, scripts, configuración y plugin WordPress. Se consultaron tests pertinentes sin ejecutarlos ni modificarlos. No se inspeccionó frontend ni se auditaron los módulos consumidores completos.
+
+### Inventario y contratos
+
+- `GenresController` expone `POST /api/genres`, `POST /api/genres/bultCreateGenre`, `GET /api/genres`, `GET /api/genres/:id`, `PATCH /api/genres/:id` y `DELETE /api/genres/:id`. Lecturas públicas; escrituras protegidas con `@Auth(ValidRoles.riffvalley)`. Los endpoints por ID aplican `ParseUUIDPipe`.
+- `POST` usa `CreateGenreDto`; `PATCH` usa `PartialType(CreateGenreDto)`. `name` y `color` se validan como strings de 1–50 caracteres cuando están presentes. Aunque `color` está declarado opcional en TypeScript y es nullable en entidad, la ausencia falla en validación HTTP. El spec de controller caracteriza expresamente esa diferencia. El endpoint batch recibe un objeto TypeScript inline, no DTO; el ValidationPipe global no valida su estructura interna. El servicio comprueba únicamente que `genres` sea array, mapea `name` y `color` sin validar los elementos y guarda la lista.
+- `GET /genres` recibe `PaginationDto`, ordena por `name ASC` y devuelve `{ totalItems, totalPages, currentPage, limit, data }`, con defaults de servicio `limit=10`, `offset=0`. `limit` tiene `@IsPositive()` pero no regla entera/segura; `offset` solo se transforma a Number y no tiene validadores. Ambos valores llegan al repositorio como `take`/`skip` y se usan en aritmética del envelope.
+- `GenresService` concentra CRUD y batch, una responsabilidad coherente. `create`, `bulkCreate` y la persistencia de `update` mapean `23505` a 400 y otros errores a 500 genérico. `findOne` convierte cualquier rechazo de `findOneByOrFail` a 404. `update` da 404 si `preload` devuelve ausencia; `remove` devuelve `DeleteResult` directamente, incluso con `affected=0`.
+- `Genre` tiene UUID, `name` varchar(50), `color` varchar nullable y relación inversa `OneToMany` a `Disc`; no tiene parent/children ni otra estructura jerárquica. `Disc.genre` es la relación propietaria `ManyToOne` y eager. No se halló consumidor que solicite o arme árboles/jerarquías.
+- Consumers directos: `Disc` guarda Genre; Disc Write asigna género; Calendar obtiene opciones de géneros de discos; Home, filtros de comunidad, Favorites, Pendings, Comments y Rates filtran por `disc.genreId`/relación. Catalog Overview lista todos los géneros por nombre. Import manual/Excel y la plantilla consultan géneros para lookup o exportación. Community Requests modela `genre` como relación eager y asigna referencias por ID; su repositorio está registrado/injectado aunque el servicio no lo consulta para resolver la relación. National Releases carga/proyecta `disc.genre`; Asignations/Links conservan campos textuales de género independientes, con fragmentos comentados de resolución de Genre. Seeds crea géneros. Los tipos de Artist proyectan Genre desde Disc.
+- No se encontró consumo de la entidad/repository Genre en Product o Integrations; los géneros de Spotify son strings externos, no la entidad Catalog. En el árbol de scripts/config no aparecen referencias operativas salvo un comentario en `restore_heroku_to_local.sh` con la ruta de API; `test/excel.e2e-spec.ts` y el plugin WordPress muestran consumo indirecto de datos de género, no dependencia del módulo Nest.
+- No se observó SQL manual, múltiples responsabilidades ni duplicación interna que justifique extracción. Las queries de Genre en Overview, Calendar, imports y consumidores tienen proyecciones/propósitos distintos. Las lecturas que devuelven entidades exponen `color`; no se propone alterar el payload ni la relación eager.
+
+### Pruebas existentes y límites
+
+- `genres.controller.spec.ts` caracteriza rutas/métodos, DTOs, UUID pipe, permisos, passthrough, propagación de errores, color ausente requerido por validación y casos del `PaginationDto`. Verifica que `limit=0` falla y que `offset=-5` se acepta con `limit=5`.
+- `genres.service.spec.ts` cubre CRUD, orden/paginación/defaults, manejo de errores de escritura, ausencia de género, batch vacío y `DeleteResult` con cero afectados. También fija que el service acepta `limit=0` y valores negativos directos, y que `findOne` traduce un error `database offline` a 404. Para batch solo cubre el rechazo si `genres` no es array y no valida campos de cada elemento.
+- `domain-mutation-authorization.spec.ts` incluye mutaciones de Genres. Tests de consumidores pertinentes encontrados en Disc Calendar, Catalog Overview, Imports y Requests; se leyeron como contexto donde fue necesario, sin ejecutar ninguna suite.
+- No se verificó el frontend ni el JSON real contra una base de datos. Los hallazgos de respuesta HTTP se basan en validadores/flujo de código y caracterización existente; no se hicieron llamadas de red ni SQL.
+
+### Hallazgos
+
+#### GEN-F1 — `findOne` informa fallo de repositorio como recurso inexistente
+
+- **Ubicación:** `src/catalog/genres/genres.service.ts:84-90`; caracterización en `src/catalog/genres/genres.service.spec.ts:207-219`.
+- **Evidencia comprobada:** el `catch` envuelve `findOneByOrFail` sin discriminar el tipo de excepción y siempre crea `NotFoundException`. El spec pasa `Error('database offline')` y espera el mismo 404 que para el ID ausente.
+- **Consecuencia:** un fallo de conexión o persistencia se presenta como Genre inexistente, con status semánticamente incorrecto y señal operativa engañosa para callers y monitoreo.
+- **Categoría / prioridad / tamaño:** bug funcional; media; S.
+- **Propuesta:** distinguir `EntityNotFoundError` (404 existente) de errores inesperados (propagar para 500 genérico de Nest), siguiendo el criterio ya aplicado en Countries. Actualizar caracterización para ausencia y fallo inesperado.
+- **Dependencias y riesgos:** `GenresService` y su spec. Cambia el status HTTP solo para errores de infraestructura; antes de implementar, identificar consumers frontend de `GET /genres/:id` y confirmar que no dependen del 404 ante indisponibilidad.
+- **Hecho frente a hipótesis:** la traducción indiscriminada está probada por implementación y test; que haya ocurrido una caída real no se comprobó.
+
+#### GEN-F2 — El endpoint batch no valida los elementos del payload
+
+- **Ubicación:** `src/catalog/genres/genres.controller.ts:29-34`; `src/catalog/genres/genres.service.ts:34-48`; contraste con `CreateGenreDto` en `src/catalog/genres/dto/create-genre.dto.ts:3-12`.
+- **Evidencia comprobada:** el body batch está anotado como objeto literal y su spec confirma `design:paramtypes` igual a `Object`; el ValidationPipe no valida `genres[]`. En el service, solo se comprueba `Array.isArray`; cada elemento se lee sin validación y se copia a `repository.create`. El spec verifica que `{ name: 'No color' }` pasa a `create/save` con `color: undefined`.
+- **Consecuencia:** entradas con tipo o forma inválida pueden alcanzar TypeORM; errores de restricciones de base de datos se convierten en 500 genérico salvo que sean unique violations. Los límites/tipos de los campos tampoco quedan alineados con el endpoint individual.
+- **Categoría / prioridad / tamaño:** calidad con error funcional de validación; media; S.
+- **Propuesta:** crear DTO batch dedicado y validar que el body sea objeto con array de elementos que cumplan reglas de Genre; reutilizar reglas concretas de nombre/color si la semántica del batch debe coincidir con `CreateGenreDto`. Mantener la ruta, la respuesta y el orden de entrada.
+- **Dependencias y riesgos:** controller, DTO y specs existentes. La respuesta para payloads inválidos pasa a 400 antes de persistir, frente a errores actuales que pueden acabar en 500. Revisar consumers frontend/integraciones del endpoint y payloads usados antes de implementar; no cambiar la grafía legacy de ruta dentro de esta tarea.
+- **Hecho frente a hipótesis:** ausencia de validación y paso de campo ausente demostrados; el status final para cada payload malformado depende de la restricción de PostgreSQL correspondiente y no se verificó con DB.
+
+#### GEN-F3 — La paginación acepta offsets inválidos y no garantiza enteros
+
+- **Ubicación:** `src/platform/common/dtos/pagination.dto.ts:16-24`; uso en `src/catalog/genres/genres.controller.ts:37-40` y `src/catalog/genres/genres.service.ts:61-80`; caracterización en `src/catalog/genres/__tests__/genres.controller.spec.ts:205-224` y `src/catalog/genres/genres.service.spec.ts:164-195`.
+- **Evidencia comprobada:** `offset` solo aplica `@Type(() => Number)`; no tiene `@IsInt`, `@Min(0)` ni chequeo de número finito. El spec del controller confirma que `offset=-5` pasa el ValidationPipe. `findAll` pasa `offset` a `skip` y deriva `currentPage` de `offset/limit`; los tests de service muestran envelopes `Infinity`/`NaN` con `limit=0` y resultados incoherentes con parámetros negativos directos.
+- **Consecuencia:** query strings negativos, fraccionarios o no numéricos pueden superar la validación de offset y llegar al repositorio; se pueden producir paginación incoherente o errores de consulta. El efecto exacto para cada valor en PostgreSQL/TypeORM no se comprobó.
+- **Categoría / prioridad / tamaño:** bug funcional; media; S.
+- **Propuesta:** introducir `GenresQueryDto` que valide limit como entero positivo y offset como entero no negativo finito, preservando defaults y envelope. No endurecer `PaginationDto` global sin auditar sus otros consumidores.
+- **Dependencias y riesgos:** tarea limitada al endpoint Genres, sus controller/service/specs; valores inválidos pasarían a 400. El frontend del endpoint `GET /genres` debe localizarse antes de implementación para confirmar serialización y usos de valores omitidos/negativos. Cambios al DTO compartido podrían afectar módulos fuera de este alcance y quedan excluidos.
+- **Hecho frente a hipótesis:** reglas ausentes, aceptación de offset negativo y aritmética no válida con parámetros directos están probadas; el error concreto del driver no se midió.
+
+#### GEN-F4 — `color` opcional en tipos pero requerido en el DTO HTTP
+
+- **Ubicación:** `src/catalog/genres/dto/create-genre.dto.ts:9-12`; entidad `src/catalog/genres/entities/genre.entity.ts:12-13`; caracterización en `src/catalog/genres/__tests__/genres.controller.spec.ts:183-203`.
+- **Evidencia comprobada:** `color?: string` y columna nullable, pero los decoradores `IsString`, `MinLength` y `MaxLength` no incluyen `IsOptional`; el spec confirma que `{ name: 'Rock' }` recibe 400 en validación.
+- **Consecuencia:** la semántica disponible en TypeScript y esquema no coincide con la validación HTTP. No se ha demostrado que un consumidor real necesite crear géneros sin color, por lo que no se puede determinar si el comportamiento correcto es exigirlo o admitir ausencia.
+- **Categoría / prioridad / tamaño:** calidad; baja; XS para decisión/caracterización, sin tarea de implementación propuesta.
+- **Propuesta:** decidir si color es obligatorio para altas públicas; alinear tipo, validadores y criterio de batch en una tarea futura solo cuando los consumers o requisito confirmen la semántica. No cambiar ahora.
+- **Dependencias y riesgos:** contrato de creación y consumers frontend/integración, no revisados en BC-GEN-0.
+- **Hecho frente a hipótesis:** discrepancia comprobada; impacto funcional en consumers es hipótesis no confirmada.
+
+### Contract findings
+
+#### GEN-F1 — Errores de `GET /genres/:id`
+
+**Current behavior:** `findOne` devuelve 404 tanto para Genre ausente como para cualquier error del repositorio.
+
+**Problem:** fallos operativos se presentan como ausencia de recurso.
+
+**Impact:** backend + frontend; los consumers concretos del detalle no se revisaron en esta auditoría.
+
+**Options:** (1) preservar el 404 actual; (2) corregir internamente la distinción; (3) definir un error HTTP específico; (4) coordinar cambios si el frontend depende del status incorrecto.
+
+**Recommendation:** opción 2, conservando el 404 para ausencia y propagando errores inesperados como 500 genérico; verificar consumers antes de implementar.
+
+**Blocks the current task:** No; la auditoría solo registra evidencia.
+
+#### GEN-F2 — Validación de `POST /genres/bultCreateGenre`
+
+**Current behavior:** el endpoint acepta un body no validado por DTO y el service valida solamente que `genres` sea array.
+
+**Problem:** elementos inválidos llegan al repositorio y su respuesta de error depende del fallo de persistencia.
+
+**Impact:** backend + frontend/integraciones.
+
+**Options:** (1) preservar validación laxa; (2) añadir validación interna equivalente a las reglas de Genre; (3) cambiar el contrato de error de entradas inválidas a 400; (4) coordinar con consumidores del batch.
+
+**Recommendation:** opción 2 con status 400 definido para entrada inválida y payload válido/respuesta actual preservados; inventariar consumers antes de implementación.
+
+**Blocks the current task:** No; identificar consumers frontend es precondición para ejecutar BC-GEN-2.
+
+#### GEN-F3 — Query params de `GET /genres`
+
+**Current behavior:** el endpoint usa `PaginationDto`, cuyo `offset` no valida enteros ni rango y permite valores negativos.
+
+**Problem:** parámetros inválidos alcanzan el QueryBuilder/repository y la aritmética de páginas puede dejar de ser coherente.
+
+**Impact:** backend + frontend.
+
+**Options:** (1) conservar la aceptación actual; (2) validar localmente con DTO específico; (3) cambiar el comportamiento HTTP de entradas inválidas a 400; (4) coordinar si algún consumer serializa valores no estándar.
+
+**Recommendation:** opciones 2 y 3, conservando defaults, valores válidos y response; no modificar `PaginationDto` compartido sin auditoría de sus consumers.
+
+**Blocks the current task:** No; localizar consumers del endpoint es requisito previo a BC-GEN-3.
+
+### Tareas propuestas
+
+Las siguientes tareas quedan pendientes; BC-GEN-0 no implementó ninguna.
+
+#### BC-GEN-1 — Distinguir Genre inexistente de error de repositorio (S, prioridad media)
+
+- [x] **Completada.** El servicio conserva 404 solo para `EntityNotFoundError` y propaga otros errores sin envolverlos. El spec de servicio caracteriza entidad existente, `EntityNotFoundError` y fallo inesperado.
+- **Objetivo:** mantener el 404 para un ID inexistente y no traducir fallos inesperados del repositorio a 404.
+- **Hallazgo:** GEN-F1.
+- **Alcance:** corregir `GenresService.findOne`; actualizar su spec para entidad ausente y error inesperado; preservar payload de éxito y mensaje actual de 404.
+- **Exclusiones:** cambios en escritura, delete, rutas, esquema o payload exitoso; no adaptar frontend sin evidencia de dependencia.
+- **Dependencias:** antes de cambiar status para errores inesperados, localizar consumers frontend del detalle y comprobar cómo manejan 404/500.
+- **Criterios de aceptación:** entidad encontrada conserva respuesta; `EntityNotFoundError` conserva 404/mensaje; otro error del repository se propaga para respuesta 500 genérica; sin exposición del detalle operativo.
+- **Verificaciones:** tests focalizados de `GenresService` y controller si corresponde; build/typecheck; `git diff --check`; sin DB/servicios externos.
+- **Verificaciones realizadas:** `yarn --ignore-engines test --runInBand src/catalog/genres/genres.service.spec.ts src/catalog/genres/__tests__/genres.controller.spec.ts` — 2 suites y 31 tests aprobados; `yarn --ignore-engines build` aprobado; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json` aprobado; Prettier aprobado para `genres.service.ts`. `prettier --check` sobre `genres.service.spec.ts` falla por formato preexistente y no atribuible a BC-GEN-1; el mismo fallo se reproduce al comprobar el archivo de `HEAD`. No se reformateó el spec. `git diff --check` aprobado.
+- **Consumers:** revisión de solo lectura del frontend adyacente; se encontraron usos de los listados `/genres` y `/genres/all`, pero no llamadas a `/genres/:id` en `src`. No se modificó el frontend.
+- **Tamaño:** S.
+
+#### BC-GEN-2 — Validar elementos del alta batch (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** El body batch usa un DTO con validación anidada y transforma cada elemento a `CreateGenreDto`; el servicio conserva su lógica de persistencia y su response.
+- **Objetivo:** rechazar con 400 bodies batch que no cumplan la estructura/reglas de entrada de Genre.
+- **Hallazgo:** GEN-F2.
+- **Alcance:** DTO batch validado por el ValidationPipe y reglas por elemento; preservar ruta legacy, orden de creación, forma de respuesta y persistencia batch.
+- **Exclusiones:** renombrar ruta, cambiar respuesta de éxito, cambiar unicidad/datos/esquema o resolver GEN-F4 sin decisión de semántica.
+- **Compatibilidad:** búsqueda en `riffvalley-app-front/src` no encontró llamadas a `POST /api/genres/bultCreateGenre`; los servicios de Genres solo llaman `GET /genres` y `GET /genres/all`. Tampoco se hallaron callers internos de `bulkCreate`; los formularios de escritura frontend revisados usan el catálogo de lectura. No se modificó el frontend. En la forma estática original del endpoint, cada elemento tenía `name` y `color` requeridos.
+- **Reglas preservadas:** `CreateGenreDto` exige runtime `name` y `color` como strings de 1–50 caracteres. `color` es opcional solo en la declaración TypeScript; la ausencia falla en el ValidationPipe individual, por lo que el batch también la rechaza. No hay propiedades marcadas `@IsOptional()` en `CreateGenreDto`; no existe un campo opcional válido que pueda cubrirse sin alterar la regla aprobada. La ausencia de `color` queda probada como 400 y GEN-F4 permanece fuera de alcance. Los arrays vacíos siguen siendo válidos y conservan el resultado `{ message: '0 genres have been successfully created.', data: [] }`.
+- **Criterios de aceptación:** `genres` ausente/no array y elementos con nombre/color ausentes, nulos, vacíos o con shape incorrecto reciben 400 antes de invocar el servicio; entradas válidas conservan orden y `{ message, data }`; el array vacío conserva comportamiento actual.
+- **Pruebas añadidas:** el spec de controller usa el `ValidationPipe` con `transform`, `whitelist`, `forbidNonWhitelisted` e `enableImplicitConversion`, igual que el pipe global. Cubre batch válido, elemento válido junto a inválido, varios elementos inválidos, campos requeridos ausentes, tipos inválidos, array vacío y passthrough de response. No se accede a PostgreSQL.
+- **Verificaciones:** `yarn --ignore-engines test --runInBand src/catalog/genres/genres.service.spec.ts src/catalog/genres/__tests__/genres.controller.spec.ts` — 2 suites, 40 tests aprobados; `yarn --ignore-engines build` y `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json` aprobados. Prettier pasó en DTO, controller y specs de controller. `git diff --check` aprobado; sin DB ni servicios externos.
+- **Tamaño:** S.
+
+#### BC-GEN-3 — Validar paginación de `GET /genres` sin afectar DTO compartido (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** `GET /genres` usa `GenresQueryDto`, que conserva los filtros reconocidos de `PaginationDto` y valida `limit`/`offset` como enteros seguros antes de llamar al servicio.
+- **Objetivo:** aceptar solo `limit` entero positivo y `offset` entero no negativo, evitando valores no finitos o fraccionarios.
+- **Hallazgo:** GEN-F3.
+- **Alcance:** DTO query específico de Genres; conservar `limit=10`, `offset=0`, sort ascendente y envelope actuales.
+- **Exclusiones:** cambios globales a `PaginationDto`, límites máximos nuevos, reordenación, filtros o paginación de otros módulos.
+- **Compatibilidad:** revisión de `riffvalley-app-front/src` encontró tres llamadas: `getGenres(150, 0)` en ArtistManagement y DiscByDate y `getGenres(200, 0)` en CreateDiscForm. El servicio construye parámetros numéricos `limit`/`offset`; los consumidores usan enteros positivos y offset cero. No se encontraron callers internos del listado aparte del controller. Las llamadas conservan el contrato válido. El DTO extiende `PaginationDto` para conservar los parámetros reconocidos; no se modificó el frontend.
+- **Reglas implementadas:** `limit` entero seguro mayor que cero; `offset` entero seguro no negativo. Se rechazan strings vacíos, negativos, decimales, sufijos, valores no numéricos y enteros fuera del rango seguro. Los parámetros omitidos se mantienen `undefined` para conservar los defaults del servicio `10/0`; valores válidos y filtros reconocidos mantienen el resultado y envelope actuales.
+- **Criterios de aceptación:** ausencia y valores enteros válidos conservan resultados; cero/negativo para limit, offset negativo, decimal, no numérico, vacío y fuera de rango seguro reciben 400 antes de invocar repository; envelope de válidos no cambia.
+- **Pruebas:** el spec del controller ejecuta el `ValidationPipe` con las opciones globales y cubre parámetros omitidos, valores válidos y límite seguro máximo, query/filtros reconocidos, y entradas inválidas para ambos parámetros; los specs del servicio caracterizan defaults, query TypeORM y envelope con repositorio simulado.
+- **Verificaciones:** tests del ValidationPipe/controller y service; build/typecheck; `git diff --check`; sin DB/servicios externos.
+- **Verificaciones realizadas:** `yarn --ignore-engines test --runInBand src/catalog/genres/genres.service.spec.ts src/catalog/genres/__tests__/genres.controller.spec.ts` — 2 suites, 53 tests aprobados; `yarn --ignore-engines build` aprobado; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json` aprobado; `yarn --ignore-engines prettier --check src/catalog/genres/dto/genres-query.dto.ts src/catalog/genres/genres.controller.ts src/catalog/genres/__tests__/genres.controller.spec.ts` aprobado; `git diff --check` aprobado. Sin PostgreSQL ni servicios externos.
+- **Tamaño:** S.
+
+### Hallazgos sin tarea
+
+- **GEN-F4 / color:** discrepancia real entre tipo/esquema y validación, pero sin requisito o consumer confirmado que permita escoger semántica. Se mantiene la conducta actual y no se propone cambiar contrato por inferencia.
+- **Jerarquías:** la entidad y consumers encontrados modelan Genre como catálogo plano enlazado a Disc; no se hallaron consumers que requieran árbol. No se propone esquema ni abstracción jerárquica.
+- **Relación eager Disc.genre:** forma parte de respuestas de Disc y es consumida/proyectada por varios usos de Catalog y Editorial. No se modifica ni se abre tarea sin medir coste y caracterizar consumers frontend.
+- **DeleteResult con `affected=0`:** comportamiento fijado por tests, sin evidencia de consumidor perjudicado; no se cambia ni se convierte en tarea.
+- **Asignations/Links y género textual:** los campos libres son distintos del Genre estructurado de Disc, aunque haya fragmentos comentados de resolución. No hay evidencia suficiente para unificarlos ni para atribuirlo a Genres.
+- **Sin cleanup arquitectónico:** CRUD, módulo, relación e inventario no justifican dividir el service, extraer helpers ni centralizar queries de consumidores.
+
+**Verificaciones de BC-GEN-0:** revisión estática del módulo, DTO compartido, composición y consumers directos conocidos; lectura de suites existentes sin ejecución; coherencia del estado del roadmap; `git diff --check`. No se modificó producción, tests ni fixtures. No se ejecutaron tests, migraciones, seeds, servicios externos ni queries a PostgreSQL. Discs, CatalogImport, CatalogOverview y demás módulos consumidores permanecen pendientes de auditoría.
 
 ## Hallazgos históricos pendientes de clasificación futura
 
