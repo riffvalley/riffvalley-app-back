@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Disc } from './entities/disc.entity';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
 import { OptionsQueryDto } from './dto/options-query.dto';
 import { CreateDiscDto } from './dto/create-discs.dto';
 import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
-import { User } from 'src/auth/entities/user.entity';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';

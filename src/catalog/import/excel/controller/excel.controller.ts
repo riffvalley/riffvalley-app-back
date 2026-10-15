@@ -10,10 +10,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
-import { Auth } from 'src/auth/decorators/auth.decorator';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { Auth } from 'src/identity/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { ExcelImportService } from '../import/excel-import.service';
 import { ExcelTemplateService } from '../template/excel-template.service';
+import { InvalidExcelWorkbookError } from '../parser/excel-workbook.parser';
 
 @Controller('catalog/import/excel')
 export class ExcelController {
@@ -63,17 +64,36 @@ export class ExcelController {
     if (!file) {
       throw new BadRequestException('No se ha proporcionado ningún archivo');
     }
+    if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+      throw new BadRequestException(
+        'El archivo no contiene un workbook Excel válido.',
+      );
+    }
 
     this.logger.log(
       `Archivo recibido: ${file.originalname} (${file.size} bytes)`,
     );
 
-    const result = await this.excelService.importDiscs(file.buffer);
-
-    this.logger.log(
-      `Importación completada: ${result.created} creados, ${result.errors.length} errores`,
+    const result = await this.excelService
+      .importDiscs(file.buffer)
+      .catch((error: unknown) => {
+        if (error instanceof InvalidExcelWorkbookError) {
+          throw new BadRequestException(error.message);
+        }
+        throw error;
+      });
+    const counts = result.results.reduce(
+      (totals, item) => {
+        totals[item.status] += 1;
+        return totals;
+      },
+      { imported: 0, duplicate: 0, failed: 0 },
     );
 
-    return result;
+    this.logger.log(
+      `Importación completada: ${counts.imported} importados, ${counts.duplicate} duplicados, ${counts.failed} fallidos`,
+    );
+
+    return { data: result };
   }
 }

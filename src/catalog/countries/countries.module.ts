@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CountriesController } from './countries.controller';
 import { Country } from './entities/country.entity';
 import { CountriesService } from './countries.service';
-import { AuthModule } from '../../auth/auth.module';
+import { AuthModule } from '../../identity/auth/auth.module';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Country]), AuthModule],

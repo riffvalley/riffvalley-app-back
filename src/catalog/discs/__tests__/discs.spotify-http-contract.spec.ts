@@ -1,7 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
 

@@ -1,25 +1,26 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import {
+  Allow,
+  IsArray,
+  IsNotEmpty,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 
 export class AlbumItemDto {
-  @IsString()
-  @IsNotEmpty()
-  line: string;
+  @Allow()
+  line?: string;
 
-  @IsUUID()
-  @IsOptional()
+  @Allow()
   genreId?: string;
 
-  @IsUUID()
-  @IsOptional()
+  @Allow()
   countryId?: string;
 
-  @IsBoolean()
-  @IsOptional()
+  @Allow()
   ep?: boolean;
 
-  @IsBoolean()
-  @IsOptional()
+  @Allow()
   debut?: boolean;
 }
 

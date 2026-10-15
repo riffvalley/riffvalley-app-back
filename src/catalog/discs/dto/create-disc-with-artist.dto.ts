@@ -1,4 +1,14 @@
-import { IsBoolean, IsDateString, IsOptional, IsString, IsUrl, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsBoolean,
+  IsDateString,
+  IsOptional,
+  IsString,
+  IsUrl,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateDiscWithArtistDto {
   // Disc fields
@@ -16,14 +26,16 @@ export class CreateDiscWithArtistDto {
   @IsOptional()
   genreId?: string;
 
-  @IsDateString()
+  @IsDateString({ strict: true })
   @IsOptional()
   releaseDate?: string;
 
+  @Transform(({ obj }) => obj?.ep)
   @IsBoolean()
   @IsOptional()
   ep?: boolean;
 
+  @Transform(({ obj }) => obj?.debut)
   @IsBoolean()
   @IsOptional()
   debut?: boolean;

@@ -1,6 +1,7 @@
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MODULE_METADATA } from '@nestjs/common/constants';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as fs from 'fs';
 import { Artist } from '../artists/entities/artist.entity';
@@ -8,10 +9,10 @@ import { Country } from '../countries/entities/country.entity';
 import { Disc } from '../discs/entities/disc.entity';
 import { Genre } from '../genres/entities/genre.entity';
 import { Rate } from '../../community/rates/entities/rate.entity';
-import { NationalRelease } from '../../national-releases/entities/national-release.entity';
-import { RiffValleyPlaylistArtist } from '../../festival-playlists/entities/riff-valley-playlist-artist.entity';
-import { UserAccessLog } from '../../auth/entities/user-access-log.entity';
-import { User } from '../../auth/entities/user.entity';
+import { NationalRelease } from '../../editorial/national-releases/entities/national-release.entity';
+import { RiffValleyPlaylistArtist } from '../../editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { UserAccessLog } from '../../identity/auth/entities/user-access-log.entity';
+import { User } from '../../identity/auth/entities/user.entity';
 import { SpotifyConnection } from '../../integrations/spotify-integration';
 import { CatalogImportModule } from './catalog-import.module';
 import { CatalogImportController } from './manual/controller/catalog-import.controller';
@@ -21,6 +22,13 @@ import { ExcelController } from './excel/controller/excel.controller';
 import { ExcelImportService } from './excel/import/excel-import.service';
 import { ExcelWorkbookParser } from './excel/parser/excel-workbook.parser';
 import { ExcelTemplateService } from './excel/template/excel-template.service';
+
+@Global()
+@Module({
+  providers: [{ provide: getDataSourceToken(), useValue: {} }],
+  exports: [getDataSourceToken()],
+})
+class MockDataSourceModule {}
 
 describe('CatalogImportModule dependency injection', () => {
   let moduleRef: TestingModule;
@@ -44,15 +52,13 @@ describe('CatalogImportModule dependency injection', () => {
     ];
 
     const testingModule = Test.createTestingModule({
-      imports: [CatalogImportModule],
+      imports: [MockDataSourceModule, CatalogImportModule],
     })
       .overrideProvider(ConfigService)
       .useValue({ get: jest.fn(() => 'catalog-import-module-test-secret') });
 
     for (const entity of repositoryEntities) {
-      testingModule
-        .overrideProvider(getRepositoryToken(entity))
-        .useValue({});
+      testingModule.overrideProvider(getRepositoryToken(entity)).useValue({});
     }
 
     moduleRef = await testingModule.compile();
@@ -80,7 +86,9 @@ describe('CatalogImportModule dependency injection', () => {
   });
 
   it('wires each import controller and service to its providers', () => {
-    const manualController = moduleRef.get(CatalogImportController) as unknown as {
+    const manualController = moduleRef.get(
+      CatalogImportController,
+    ) as unknown as {
       catalogImportService: CatalogImportService;
     };
     const manualService = moduleRef.get(CatalogImportService) as unknown as {
@@ -100,7 +108,9 @@ describe('CatalogImportModule dependency injection', () => {
     expect(manualService.manualImportLogger).toBe(
       moduleRef.get(ManualImportLogger),
     );
-    expect(excelController.excelService).toBe(moduleRef.get(ExcelImportService));
+    expect(excelController.excelService).toBe(
+      moduleRef.get(ExcelImportService),
+    );
     expect(excelController.excelTemplateService).toBe(
       moduleRef.get(ExcelTemplateService),
     );

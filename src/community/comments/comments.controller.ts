@@ -12,10 +12,10 @@ import {
 import { CommentsService } from './comments.service';
 import { CreateCommentDto } from './dto/create-comments.dto';
 import { UpdateCommentDto } from './dto/update-comments.dto';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
-import { Auth } from 'src/auth/decorators/auth.decorator';
-import { GetUser } from 'src/auth/decorators/get-user.decorator';
-import { User } from 'src/auth/entities/user.entity';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { Auth } from 'src/identity/auth/decorators/auth.decorator';
+import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
+import { User } from 'src/identity/auth/entities/user.entity';
 
 @Controller('comments')
 export class CommentsController {

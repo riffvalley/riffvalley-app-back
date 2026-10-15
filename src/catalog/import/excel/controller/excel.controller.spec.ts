@@ -2,21 +2,24 @@ import {
   BadRequestException,
   CallHandler,
   ExecutionContext,
+  InternalServerErrorException,
   RequestMethod,
 } from '@nestjs/common';
 import {
   GUARDS_METADATA,
+  HTTP_CODE_METADATA,
   INTERCEPTORS_METADATA,
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { Response } from 'express';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { of } from 'rxjs';
 import { ExcelImportService } from '../import/excel-import.service';
+import { InvalidExcelWorkbookError } from '../parser/excel-workbook.parser';
 import { ExcelTemplateService } from '../template/excel-template.service';
 import { ExcelController } from './excel.controller';
 
@@ -80,6 +83,9 @@ describe('ExcelController contract characterization', () => {
     expect(Reflect.getMetadata(METHOD_METADATA, uploadHandler)).toBe(
       RequestMethod.POST,
     );
+    expect(
+      Reflect.getMetadata(HTTP_CODE_METADATA, uploadHandler),
+    ).toBeUndefined();
     expect(interceptors).toHaveLength(1);
 
     const request = {};
@@ -197,19 +203,30 @@ describe('ExcelController contract characterization', () => {
     expect(response.set).not.toHaveBeenCalled();
   });
 
-  it('delegates the uploaded buffer and returns the import result unchanged', async () => {
+  it('delegates the uploaded buffer and returns the common data.results contract', async () => {
     const file = {
       originalname: 'albums.xlsx',
       size: 12,
       buffer: Buffer.from('uploaded-xlsx'),
     } as Express.Multer.File;
     const result = {
-      created: 2,
-      errors: [{ row: 4, disc: 'Album', artist: 'Artist', error: 'invalid' }],
+      results: [
+        {
+          inputIndex: 0,
+          source: { kind: 'excel', sheet: 'Discos', rowNumber: 4 },
+          status: 'failed',
+          reasonCode: 'INVALID_INPUT',
+          artistName: 'Artist',
+          discName: 'Album',
+          message: 'El campo "Artista" es obligatorio.',
+        },
+      ],
     };
     excelService.importDiscs.mockResolvedValue(result);
 
-    await expect(controller.uploadTemplate(file)).resolves.toBe(result);
+    await expect(controller.uploadTemplate(file)).resolves.toEqual({
+      data: result,
+    });
     expect(excelService.importDiscs).toHaveBeenCalledWith(file.buffer);
     expect(excelService.importDiscs).toHaveBeenCalledTimes(1);
     expect(excelTemplateService.generateTemplate).not.toHaveBeenCalled();
@@ -230,16 +247,54 @@ describe('ExcelController contract characterization', () => {
     expect(excelService.importDiscs).not.toHaveBeenCalled();
   });
 
-  it('propagates an import service error unchanged', async () => {
+  it('rejects an empty uploaded file as a Bad Request without invoking the service', async () => {
+    const file = {
+      originalname: 'empty.xlsx',
+      size: 0,
+      buffer: Buffer.alloc(0),
+    } as Express.Multer.File;
+    const error = await controller
+      .uploadTemplate(file)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect((error as BadRequestException).getStatus()).toBe(400);
+    expect((error as BadRequestException).getResponse()).toMatchObject({
+      message: 'El archivo no contiene un workbook Excel válido.',
+    });
+    expect(excelService.importDiscs).not.toHaveBeenCalled();
+  });
+
+  it('maps a recognized invalid workbook to a safe Bad Request response', async () => {
+    const file = {
+      originalname: 'corrupt.xlsx',
+      size: 12,
+      buffer: Buffer.from('PK\u0003\u0004corrupt'),
+    } as Express.Multer.File;
+    excelService.importDiscs.mockRejectedValue(new InvalidExcelWorkbookError());
+    const error = await controller
+      .uploadTemplate(file)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect((error as BadRequestException).getStatus()).toBe(400);
+    expect((error as BadRequestException).getResponse()).toMatchObject({
+      message: 'El archivo no contiene un workbook Excel válido.',
+    });
+  });
+
+  it('preserves unexpected import exceptions as server errors', async () => {
     const file = {
       originalname: 'albums.xlsx',
       size: 12,
       buffer: Buffer.from('uploaded-xlsx'),
     } as Express.Multer.File;
-    const error = new Error('import failed');
+    const error = new InternalServerErrorException('Unexpected parser failure');
     excelService.importDiscs.mockRejectedValue(error);
 
     await expect(controller.uploadTemplate(file)).rejects.toBe(error);
+    expect(error.getStatus()).toBe(500);
+    expect(error).not.toBeInstanceOf(BadRequestException);
     expect(excelService.importDiscs).toHaveBeenCalledWith(file.buffer);
   });
 });

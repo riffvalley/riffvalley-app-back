@@ -42,7 +42,7 @@ async function bootstrap() {
     }),
   );
 
-  // import { SeedService } from './seeds/seed.service';
+  // import { SeedService } from './platform/seeds/seed.service';
   // const seedService = app.get(SeedService);
   // await seedService.createSeed(); // Ejecuta el seed
 

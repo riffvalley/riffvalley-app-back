@@ -1,24 +1,26 @@
 import 'reflect-metadata';
-import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
+import { ValidationPipe } from '@nestjs/common';
 import { CreateDiscDto } from './create-discs.dto';
 
 describe('CreateDiscDto', () => {
-  const transformAndValidate = async (payload: object) => {
-    const dto = plainToInstance(CreateDiscDto, payload, {
-      enableImplicitConversion: true,
+  const validationPipe = new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    transformOptions: { enableImplicitConversion: true },
+  });
+
+  const transformAndValidate = (payload: object) =>
+    validationPipe.transform(payload, {
+      type: 'body',
+      metatype: CreateDiscDto,
     });
-    const errors = await validate(dto, {
-      whitelist: true,
-      forbidNonWhitelisted: true,
-    });
-    return { dto, errors };
-  };
 
   it('accepts the minimal valid payload and adds no DTO defaults', async () => {
-    const { dto, errors } = await transformAndValidate({ name: 'Album' });
+    const dto = (await transformAndValidate({
+      name: 'Album',
+    })) as CreateDiscDto;
 
-    expect(errors).toEqual([]);
     expect(dto).toMatchObject({ name: 'Album' });
     expect(dto.verified).toBeUndefined();
     expect(dto.ep).toBeUndefined();
@@ -28,7 +30,7 @@ describe('CreateDiscDto', () => {
   });
 
   it('accepts every declared DTO field and converts the optional release date', async () => {
-    const { dto, errors } = await transformAndValidate({
+    const dto = (await transformAndValidate({
       name: 'Album',
       description: 'Description',
       image: 'https://images.test/album.jpg',
@@ -41,9 +43,8 @@ describe('CreateDiscDto', () => {
       debut: true,
       featured: true,
       pinned: true,
-    });
+    })) as CreateDiscDto;
 
-    expect(errors).toEqual([]);
     expect(dto).toMatchObject({
       name: 'Album',
       description: 'Description',
@@ -61,21 +62,79 @@ describe('CreateDiscDto', () => {
   });
 
   it('rejects a missing name and properties outside the DTO', async () => {
-    const { errors } = await transformAndValidate({ name: '', unexpected: true });
-
-    expect(errors.map(({ property }) => property)).toEqual(
-      expect.arrayContaining(['name', 'unexpected']),
-    );
+    await expect(
+      transformAndValidate({ name: '', unexpected: true }),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
-  it('currently accepts an invalid optional release date after implicit conversion', async () => {
-    const { dto, errors } = await transformAndValidate({
-      name: 'Album',
-      releaseDate: 'not-a-date',
-    });
+  it.each([
+    ['an impossible day', '2026-02-31'],
+    ['a nonexistent month', '2026-13-01'],
+    ['an invalid date string', 'not-a-date'],
+  ])('rejects %s', async (_caseName, releaseDate) => {
+    await expect(
+      transformAndValidate({ name: 'Album', releaseDate }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
 
-    expect(errors).toEqual([]);
-    expect(dto.releaseDate).toBeInstanceOf(Date);
-    expect(Number.isNaN(dto.releaseDate?.getTime())).toBe(true);
+  it('accepts valid leap day and rejects an invalid leap day', async () => {
+    const valid = (await transformAndValidate({
+      name: 'Album',
+      releaseDate: '2024-02-29',
+    })) as CreateDiscDto;
+    expect(valid.releaseDate).toEqual(new Date('2024-02-29T00:00:00.000Z'));
+
+    await expect(
+      transformAndValidate({ name: 'Album', releaseDate: '2025-02-29' }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('rejects Invalid Date and keeps absent and null dates optional', async () => {
+    await expect(
+      transformAndValidate({ name: 'Album', releaseDate: new Date(NaN) }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    const absent = (await transformAndValidate({
+      name: 'Album',
+    })) as CreateDiscDto;
+    const nullable = (await transformAndValidate({
+      name: 'Album',
+      releaseDate: null,
+    })) as CreateDiscDto;
+    expect(absent.releaseDate).toBeUndefined();
+    expect(nullable.releaseDate).toBeNull();
+  });
+
+  it('accepts a valid ISO timestamp and nullable optional flags', async () => {
+    const dto = (await transformAndValidate({
+      name: 'Album',
+      releaseDate: '2024-03-10T12:30:00.000Z',
+      ep: null,
+      debut: null,
+      featured: null,
+    })) as CreateDiscDto;
+
+    expect(dto.releaseDate).toEqual(new Date('2024-03-10T12:30:00.000Z'));
+    expect(dto.ep).toBeNull();
+    expect(dto.debut).toBeNull();
+    expect(dto.featured).toBeNull();
+  });
+
+  it('accepts boolean flags and rejects strings and numbers without coercion', async () => {
+    const dto = (await transformAndValidate({
+      name: 'Album',
+      ep: true,
+      debut: false,
+      featured: true,
+    })) as CreateDiscDto;
+    expect(dto).toMatchObject({ ep: true, debut: false, featured: true });
+
+    for (const invalidValue of ['false', 'true', 0, 1]) {
+      for (const flag of ['ep', 'debut', 'featured']) {
+        await expect(
+          transformAndValidate({ name: 'Album', [flag]: invalidValue }),
+        ).rejects.toMatchObject({ status: 400 });
+      }
+    }
   });
 });

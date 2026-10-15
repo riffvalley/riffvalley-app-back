@@ -11,15 +11,15 @@ import { CreateFavoriteDto } from './dto/create-favorites.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Favorite } from './entities/favorite.entity';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
-import { User } from 'src/auth/entities/user.entity';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 // Importamos la entidad Pending para poder hacer el join
 import { Pending } from 'src/community/pendings/entities/pending.entity';
 import {
   applyOrder,
   parseOrdersRaw,
-} from 'src/common/helpers/apply-order.helper';
+} from 'src/platform/common/helpers/apply-order.helper';
 
 @Injectable()
 export class FavoritesService {

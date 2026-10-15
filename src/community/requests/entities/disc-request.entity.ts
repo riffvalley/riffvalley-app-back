@@ -5,7 +5,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from '../../../auth/entities/user.entity';
+import { User } from '../../../identity/auth/entities/user.entity';
 import { Genre } from '../../../catalog/genres/entities/genre.entity';
 import { Country } from '../../../catalog/countries/entities/country.entity';
 

@@ -4,9 +4,32 @@ import { Repository } from 'typeorm';
 import { normalizeForSearch } from '../helpers/normalize-for-search';
 import { Artist } from '../entities/artist.entity';
 import { Disc } from '../../discs/entities/disc.entity';
-import { NationalRelease } from '../../../national-releases/entities/national-release.entity';
-import { RiffValleyPlaylistArtist } from '../../../festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { NationalRelease } from '../../../editorial/national-releases/entities/national-release.entity';
+import { RiffValleyPlaylistArtist } from '../../../editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { RiffValleyPlaylist } from '../../../editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { ArtistOrphansService } from '../orphans/artist-orphans.service';
+import {
+  ArtistDiscProjection,
+  DiscRateProjectionRaw,
+  mapDiscProjection,
+} from '../helpers/map-disc-projection';
+
+type ManagementNationalReleaseProjection = Pick<
+  NationalRelease,
+  | 'id'
+  | 'discName'
+  | 'discType'
+  | 'genre'
+  | 'releaseDay'
+  | 'approved'
+  | 'link'
+  | 'discId'
+>;
+
+type ManagementPlaylistProjection = Pick<
+  RiffValleyPlaylist,
+  'id' | 'name' | 'link' | 'type' | 'imageUrl'
+>;
 
 @Injectable()
 export class ArtistManagementService {
@@ -79,11 +102,11 @@ export class ArtistManagementService {
 
     if (artists.length === 0) {
       return {
-        totalItems: 0,
-        totalPages: 0,
-        currentPage: 1,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: Math.floor(offset / limit) + 1,
         limit,
-        orphanCount: 0,
+        orphanCount,
         data: [],
       };
     }
@@ -91,76 +114,62 @@ export class ArtistManagementService {
     const artistIds = artists.map((artist) => artist.id);
     const artistNames = artists.map((artist) => artist.name);
 
-    const [discsRaw, nationalReleases, playlistAssociations] = await Promise.all([
-      this.discRepository
-        .createQueryBuilder('disc')
-        .leftJoinAndSelect('disc.genre', 'genre')
-        .leftJoinAndSelect('disc.artist', 'discArtist')
-        .addSelect(
-          (sub) =>
-            sub
-              .select('COUNT(rate.id)', 'rateCount')
-              .from('rate', 'rate')
-              .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
-          'rateCount',
-        )
-        .addSelect(
-          (sub) =>
-            sub
-              .select('AVG(rate.rate)', 'averageRate')
-              .from('rate', 'rate')
-              .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
-          'averageRate',
-        )
-        .where('discArtist.id IN (:...artistIds)', { artistIds })
-        .orderBy('disc.releaseDate', 'DESC')
-        .getRawAndEntities(),
+    const [discsRaw, nationalReleases, playlistAssociations] =
+      await Promise.all([
+        this.discRepository
+          .createQueryBuilder('disc')
+          .leftJoinAndSelect('disc.genre', 'genre')
+          .leftJoinAndSelect('disc.artist', 'discArtist')
+          .addSelect(
+            (sub) =>
+              sub
+                .select('COUNT(rate.id)', 'rateCount')
+                .from('rate', 'rate')
+                .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+            'rateCount',
+          )
+          .addSelect(
+            (sub) =>
+              sub
+                .select('AVG(rate.rate)', 'averageRate')
+                .from('rate', 'rate')
+                .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+            'averageRate',
+          )
+          .where('discArtist.id IN (:...artistIds)', { artistIds })
+          .orderBy('disc.releaseDate', 'DESC')
+          .getRawAndEntities<DiscRateProjectionRaw>(),
 
-      this.nationalReleaseRepository
-        .createQueryBuilder('nr')
-        .where('LOWER(nr.artistName) IN (:...names)', {
-          names: artistNames.map((name) => name.toLowerCase()),
-        })
-        .orderBy('nr.releaseDay', 'DESC')
-        .getMany(),
+        this.nationalReleaseRepository
+          .createQueryBuilder('nr')
+          .where('LOWER(nr.artistName) IN (:...names)', {
+            names: artistNames.map((name) => name.toLowerCase()),
+          })
+          .orderBy('nr.releaseDay', 'DESC')
+          .getMany(),
 
-      this.playlistArtistRepository
-        .createQueryBuilder('association')
-        .innerJoinAndSelect('association.riffValleyPlaylist', 'playlist')
-        .where('association.artistId IN (:...artistIds)', { artistIds })
-        .orderBy('playlist.name', 'ASC')
-        .getMany(),
-    ]);
+        this.playlistArtistRepository
+          .createQueryBuilder('association')
+          .innerJoinAndSelect('association.riffValleyPlaylist', 'playlist')
+          .where('association.artistId IN (:...artistIds)', { artistIds })
+          .orderBy('playlist.name', 'ASC')
+          .getMany(),
+      ]);
 
-    const discsByArtist = new Map<string, any[]>();
+    const discsByArtist = new Map<string, ArtistDiscProjection[]>();
     discsRaw.entities.forEach((disc, index) => {
       const artistId = disc.artist?.id;
       if (!artistId) return;
       if (!discsByArtist.has(artistId)) discsByArtist.set(artistId, []);
-      discsByArtist.get(artistId).push({
-        id: disc.id,
-        name: disc.name,
-        releaseDate: disc.releaseDate,
-        ep: disc.ep,
-        debut: disc.debut,
-        image: disc.image,
-        link: disc.link,
-        genre: disc.genre
-          ? {
-              id: disc.genre.id,
-              name: disc.genre.name,
-              color: disc.genre.color,
-            }
-          : null,
-        rateCount: parseInt(discsRaw.raw[index].rateCount, 10) || 0,
-        averageRate:
-          discsRaw.raw[index].averageRate != null
-            ? parseFloat(discsRaw.raw[index].averageRate)
-            : null,
-      });
+      discsByArtist
+        .get(artistId)
+        .push(mapDiscProjection(disc, discsRaw.raw[index]));
     });
 
-    const releasesByArtistName = new Map<string, any[]>();
+    const releasesByArtistName = new Map<
+      string,
+      ManagementNationalReleaseProjection[]
+    >();
     nationalReleases.forEach((release) => {
       const key = release.artistName.toLowerCase();
       if (!releasesByArtistName.has(key)) releasesByArtistName.set(key, []);
@@ -176,7 +185,7 @@ export class ArtistManagementService {
       });
     });
 
-    const playlistsByArtist = new Map<string, any[]>();
+    const playlistsByArtist = new Map<string, ManagementPlaylistProjection[]>();
     playlistAssociations.forEach((association) => {
       if (!playlistsByArtist.has(association.artistId)) {
         playlistsByArtist.set(association.artistId, []);

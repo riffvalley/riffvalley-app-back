@@ -6,7 +6,7 @@ import { Disc } from './entities/disc.entity';
 import { Artist } from '../artists/entities/artist.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from 'src/identity/auth/auth.module';
 import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';

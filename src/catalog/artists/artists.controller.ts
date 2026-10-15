@@ -12,9 +12,10 @@ import {
 import { ArtistsService } from './artists.service';
 import { CreateArtistDto } from './dto/create-artist.dto';
 import { UpdateArtistDto } from './dto/update-artist.dto';
-import { PaginationDto } from 'src/common/dtos/pagination.dto';
-import { Auth } from 'src/auth/decorators/auth.decorator';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { ArtistManagementQueryDto } from './dto/artist-management-query.dto';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { Auth } from 'src/identity/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
 @Controller('artists')
 export class ArtistsController {
@@ -32,19 +33,15 @@ export class ArtistsController {
   }
 
   @Get('management')
-  findAllForManagement(
-    @Query('query') query?: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('genreId') genreId?: string,
-    @Query('needsReview') needsReview?: string,
-  ) {
+  findAllForManagement(@Query() managementQuery: ArtistManagementQueryDto) {
     return this.artistsService.findAllForManagement(
-      query,
-      limit ? parseInt(limit, 10) : 15,
-      offset ? parseInt(offset, 10) : 0,
-      genreId,
-      needsReview !== undefined ? needsReview === 'true' : undefined,
+      managementQuery.query,
+      managementQuery.limit !== undefined ? Number(managementQuery.limit) : 15,
+      managementQuery.offset !== undefined ? Number(managementQuery.offset) : 0,
+      managementQuery.genreId,
+      managementQuery.needsReview !== undefined
+        ? managementQuery.needsReview === 'true'
+        : undefined,
     );
   }
 

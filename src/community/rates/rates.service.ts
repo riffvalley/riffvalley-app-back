@@ -12,14 +12,14 @@ import { UpdateRateDto } from './dto/update-rates.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Rate } from './entities/rate.entity';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
-import { User } from 'src/auth/entities/user.entity';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Pending } from 'src/community/pendings/entities/pending.entity';
 import {
   applyOrder,
   parseOrdersRaw,
-} from 'src/common/helpers/apply-order.helper';
+} from 'src/platform/common/helpers/apply-order.helper';
 
 @Injectable()
 export class RatesService {

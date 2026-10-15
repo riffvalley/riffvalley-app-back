@@ -1,4 +1,4 @@
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from 'src/identity/auth/auth.module';
 import { DiscModule } from 'src/catalog/discs/discs.module';
 import { LastfmIntegrationModule } from 'src/integrations/lastfm-integration/lastfm-integration.module';
 import { LastfmController } from './lastfm.controller';

@@ -3,7 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Artist } from '../entities/artist.entity';
 import { Disc } from '../../discs/entities/disc.entity';
-import { NationalRelease } from '../../../national-releases/entities/national-release.entity';
+import { NationalRelease } from '../../../editorial/national-releases/entities/national-release.entity';
+import {
+  DiscRateProjectionRaw,
+  mapDiscProjection,
+} from '../helpers/map-disc-projection';
 
 @Injectable()
 export class ArtistDetailsService {
@@ -45,7 +49,7 @@ export class ArtistDetailsService {
         )
         .where('disc.artistId = :id', { id })
         .orderBy('disc.releaseDate', 'DESC')
-        .getRawAndEntities(),
+        .getRawAndEntities<DiscRateProjectionRaw>(),
 
       this.nationalReleaseRepository
         .createQueryBuilder('nr')
@@ -54,23 +58,9 @@ export class ArtistDetailsService {
         .getMany(),
     ]);
 
-    const processedDiscs = discs.entities.map((disc, index) => ({
-      id: disc.id,
-      name: disc.name,
-      releaseDate: disc.releaseDate,
-      ep: disc.ep,
-      debut: disc.debut,
-      image: disc.image,
-      link: disc.link,
-      genre: disc.genre
-        ? { id: disc.genre.id, name: disc.genre.name, color: disc.genre.color }
-        : null,
-      rateCount: parseInt(discs.raw[index].rateCount, 10) || 0,
-      averageRate:
-        discs.raw[index].averageRate != null
-          ? parseFloat(discs.raw[index].averageRate)
-          : null,
-    }));
+    const processedDiscs = discs.entities.map((disc, index) =>
+      mapDiscProjection(disc, discs.raw[index]),
+    );
 
     return {
       id: artist.id,

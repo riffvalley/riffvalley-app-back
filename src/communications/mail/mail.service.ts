@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SmtpTransportService } from 'src/integrations/smtp-integration/smtp-transport.service';
-import { CreateNationalReleaseDto } from 'src/national-releases/dto/create-national-release.dto';
+import { CreateNationalReleaseDto } from 'src/editorial/national-releases/dto/create-national-release.dto';
 
 @Injectable()
 export class MailService {

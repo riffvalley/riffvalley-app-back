@@ -13,9 +13,9 @@ import { Country } from '../src/catalog/countries/entities/country.entity';
 import { Disc } from '../src/catalog/discs/entities/disc.entity';
 import { Genre } from '../src/catalog/genres/entities/genre.entity';
 import { Rate } from '../src/community/rates/entities/rate.entity';
-import { UserAccessLog } from '../src/auth/entities/user-access-log.entity';
-import { User } from '../src/auth/entities/user.entity';
-import { ValidRoles } from '../src/auth/interfaces/valid-roles';
+import { UserAccessLog } from '../src/identity/auth/entities/user-access-log.entity';
+import { User } from '../src/identity/auth/entities/user.entity';
+import { ValidRoles } from '../src/identity/auth/interfaces/valid-roles';
 
 interface TestUser {
   id: string;

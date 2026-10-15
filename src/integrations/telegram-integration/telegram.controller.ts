@@ -2,8 +2,8 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { TelegramService } from './telegram.service';
 import { ChannelPostsQueryDto } from './dto/channel-posts-query.dto';
 import { TelegramPostsQueryDto } from './dto/telegram-posts-query.dto';
-import { Auth } from '../../auth/decorators/auth.decorator';
-import { ValidRoles } from '../../auth/interfaces/valid-roles';
+import { Auth } from '../../identity/auth/decorators/auth.decorator';
+import { ValidRoles } from '../../identity/auth/interfaces/valid-roles';
 
 @Controller('telegram')
 export class TelegramController {

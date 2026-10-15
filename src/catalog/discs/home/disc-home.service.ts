@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../../../auth/entities/user.entity';
-import { PaginationDto } from '../../../common/dtos/pagination.dto';
+import { User } from '../../../identity/auth/entities/user.entity';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { Disc } from '../entities/disc.entity';
 import { loadHomeGlobalStats } from './loaders/home-global-stats';
 import { loadHomeDiscTotals } from './loaders/home-totals';
@@ -38,7 +38,13 @@ export class DiscHomeService {
     ratingDistribution: { rate: number; count: number }[];
   }> {
     const userId = user.id;
-    const { dateRange, country, countryId, statsDateRange, distributionDateRange } = paginationDto as any;
+    const {
+      dateRange,
+      country,
+      countryId,
+      statsDateRange,
+      distributionDateRange,
+    } = paginationDto as any;
     const today = new Date();
     const homeDiscFilters = buildHomeDiscFilters({
       userId,
@@ -83,16 +89,17 @@ export class DiscHomeService {
       LEFT JOIN country c ON a."countryId" = c.id
       LEFT JOIN genre g ON d."genreId" = g.id
       LEFT JOIN rate r ON d.id = r."discId"
-      LEFT JOIN favorite f ON f."discId" = d.id AND f."userId" = $1
-      LEFT JOIN pending p ON p."discId" = d.id AND p."userId" = $1
       ${homeDiscFilters.mainWhere}
-      GROUP BY d.id, a.name, g.name, g.color, f.id, c.id, c.name, c."isoCode"
+      GROUP BY d.id, a.name, g.name, g.color, c.id, c.name, c."isoCode"
       HAVING COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) > 0 OR d."pinned" = true
-      ORDER BY "weightedScore" DESC
+      ORDER BY "weightedScore" DESC, d.id ASC
       LIMIT 20;
     `;
 
-    const topRatedDiscs = await this.discRepository.query(query, homeDiscFilters.mainParams);
+    const topRatedDiscs = await this.discRepository.query(
+      query,
+      homeDiscFilters.mainParams,
+    );
 
     // --- Otras estadísticas: total de discos y total de votos ---
     const { totalDiscs, totalVotes } = await loadHomeDiscTotals(

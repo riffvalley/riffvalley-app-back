@@ -10,16 +10,27 @@ describe('parseManualDate', () => {
     expect(date?.getDate()).toBe(4);
   });
 
-  it('returns null for an unrecognized month while malformed missing fields still throw', () => {
+  it('returns null for unrecognized months and malformed values', () => {
     expect(parseManualDate('Not a date')).toBeNull();
-    expect(() => parseManualDate('October')).toThrow(TypeError);
+    expect(parseManualDate('October')).toBeNull();
+    expect(parseManualDate('February NaN, 2026')).toBeNull();
+    expect(parseManualDate('October 4, 2026 extra')).toBeNull();
   });
 
-  it('preserves native Date rollover for out-of-range day values', () => {
-    const date = parseManualDate('February 31, 2026');
+  it.each([
+    ['nonexistent day', 'February 31, 2026'],
+    ['nonexistent month', 'Undecember 4, 2026'],
+    ['non-leap February 29', 'February 29, 2025'],
+  ])('rejects a %s', (_description, input) => {
+    expect(parseManualDate(input)).toBeNull();
+  });
 
-    expect(date?.getFullYear()).toBe(2026);
-    expect(date?.getMonth()).toBe(2);
-    expect(date?.getDate()).toBe(3);
+  it('accepts February 29 in a leap year without changing its calendar date', () => {
+    const date = parseManualDate('February 29, 2024');
+
+    expect(date).toBeInstanceOf(Date);
+    expect(date?.getFullYear()).toBe(2024);
+    expect(date?.getMonth()).toBe(1);
+    expect(date?.getDate()).toBe(29);
   });
 });

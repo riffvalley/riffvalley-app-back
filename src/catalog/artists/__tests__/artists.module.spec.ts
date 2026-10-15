@@ -1,12 +1,12 @@
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
-import { User } from 'src/auth/entities/user.entity';
-import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
-import { NationalRelease } from 'src/national-releases/entities/national-release.entity';
-import { RiffValleyPlaylistArtist } from 'src/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { NationalRelease } from 'src/editorial/national-releases/entities/national-release.entity';
+import { RiffValleyPlaylistArtist } from 'src/editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
 import { Artist } from '../entities/artist.entity';
 import { ArtistCatalogService } from '../catalog/artist-catalog.service';
 import { ArtistDetailsService } from '../details/artist-details.service';
@@ -77,12 +77,22 @@ describe('ArtistsModule dependency injection', () => {
     };
 
     expect(controller.artistsService).toBe(moduleRef.get(ArtistsService));
-    expect(facade.artistCatalogService).toBe(moduleRef.get(ArtistCatalogService));
+    expect(facade.artistCatalogService).toBe(
+      moduleRef.get(ArtistCatalogService),
+    );
     expect(facade.artistWriteService).toBe(moduleRef.get(ArtistWriteService));
     expect(facade.artistSearchService).toBe(moduleRef.get(ArtistSearchService));
-    expect(facade.artistDetailsService).toBe(moduleRef.get(ArtistDetailsService));
-    expect(facade.artistManagementService).toBe(moduleRef.get(ArtistManagementService));
-    expect(facade.artistOrphansService).toBe(moduleRef.get(ArtistOrphansService));
-    expect(management.artistOrphansService).toBe(moduleRef.get(ArtistOrphansService));
+    expect(facade.artistDetailsService).toBe(
+      moduleRef.get(ArtistDetailsService),
+    );
+    expect(facade.artistManagementService).toBe(
+      moduleRef.get(ArtistManagementService),
+    );
+    expect(facade.artistOrphansService).toBe(
+      moduleRef.get(ArtistOrphansService),
+    );
+    expect(management.artistOrphansService).toBe(
+      moduleRef.get(ArtistOrphansService),
+    );
   });
 });

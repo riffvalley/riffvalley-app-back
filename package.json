@@ -10,9 +10,9 @@
   },
   "scripts": {
     "build": "nest build",
-    "postbuild": "copyfiles -u 1 src/i18n/*.json dist/src/i18n",
+    "postbuild": "copyfiles -u 2 src/platform/i18n/*.json dist/platform",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "copy-i18n": "copyfiles -u 1 src/i18n/*.json dist/src/i18n",
+    "copy-i18n": "copyfiles -u 2 src/platform/i18n/*.json dist/platform",
     "start": "node dist/main",
     "start:dev": "concurrently \"nest start --watch\" \"npm run copy-i18n -- -w\"",
     "start:debug": "nest start --debug --watch",
@@ -32,6 +32,7 @@
     "db:status": "node scripts/db-migrations.js status",
     "db:migrate": "node scripts/db-migrations.js migrate",
     "db:check": "node scripts/db-migrations.js check",
+    "db:bootstrap-catalog-test": "node -r ts-node/register -r tsconfig-paths/register scripts/bootstrap-catalog-test-schema.ts",
     "migration:revert": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert --dataSource src/data-source.ts",
     "console": "node dist/standalone"
   },

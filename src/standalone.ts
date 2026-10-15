@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ContentSchedulerService } from './contents/content-scheduler.service';
+import { ContentSchedulerService } from './editorial/contents/content-scheduler.service';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './winston.config';
 import { Logger } from '@nestjs/common';

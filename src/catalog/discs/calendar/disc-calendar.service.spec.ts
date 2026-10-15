@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { User } from '../../../auth/entities/user.entity';
+import { User } from '../../../identity/auth/entities/user.entity';
 import { Country } from '../../countries/entities/country.entity';
 import { Genre } from '../../genres/entities/genre.entity';
 import { Disc } from '../entities/disc.entity';

@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Artist } from '../../artists/entities/artist.entity';
 import { CreateDiscDto } from '../dto/create-discs.dto';
 import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
@@ -14,8 +14,10 @@ describe('DiscWriteService characterization', () => {
     preload: jest.Mock;
     delete: jest.Mock;
     findOneOrFail: jest.Mock;
+    manager: { transaction: jest.Mock };
   };
   let artistRepository: { find: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let transactionManager: { getRepository: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -25,15 +27,23 @@ describe('DiscWriteService characterization', () => {
       preload: jest.fn(),
       delete: jest.fn(),
       findOneOrFail: jest.fn(),
+      manager: { transaction: jest.fn() },
     };
     artistRepository = {
       find: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
     };
+    transactionManager = {
+      getRepository: jest.fn((entity) =>
+        entity === Disc ? discRepository : artistRepository,
+      ),
+    };
+    discRepository.manager.transaction.mockImplementation((operation) =>
+      operation(transactionManager),
+    );
     service = new DiscWriteService(
       discRepository as unknown as Repository<Disc>,
-      artistRepository as unknown as Repository<Artist>,
     );
   });
 
@@ -68,7 +78,7 @@ describe('DiscWriteService characterization', () => {
     expect(entity.releaseDate).toBeUndefined();
   });
 
-  it('passes all DTO fields to TypeORM create and persists the resulting entity once', async () => {
+  it('maps relation IDs and passes only entity fields to TypeORM create', async () => {
     const dto: CreateDiscDto = {
       name: 'Album',
       description: 'Description',
@@ -96,12 +106,27 @@ describe('DiscWriteService characterization', () => {
       featured: dto.featured,
       pinned: dto.pinned,
     });
-    discRepository.create.mockReturnValue(entity);
+    discRepository.create.mockImplementation((values: Partial<Disc>) =>
+      Object.assign(entity, values),
+    );
     discRepository.save.mockResolvedValue(entity);
 
     await expect(service.create(dto)).resolves.toBe(entity);
 
-    expect(discRepository.create).toHaveBeenCalledWith(dto);
+    expect(discRepository.create).toHaveBeenCalledWith({
+      name: dto.name,
+      description: dto.description,
+      image: dto.image,
+      verified: dto.verified,
+      link: dto.link,
+      releaseDate: dto.releaseDate,
+      ep: dto.ep,
+      debut: dto.debut,
+      featured: dto.featured,
+      pinned: dto.pinned,
+      artist: { id: dto.artistId },
+      genre: { id: dto.genreId },
+    });
     expect(discRepository.save).toHaveBeenCalledWith(entity);
     expect(discRepository.create).toHaveBeenCalledTimes(1);
     expect(discRepository.save).toHaveBeenCalledTimes(1);
@@ -119,6 +144,8 @@ describe('DiscWriteService characterization', () => {
     });
     expect(entity.artist).toBeUndefined();
     expect(entity.genre).toBeUndefined();
+    expect(entity).not.toHaveProperty('artistId');
+    expect(entity).not.toHaveProperty('genreId');
   });
 
   it('maps PostgreSQL unique violation 23505 to the current bad request detail', async () => {
@@ -169,6 +196,42 @@ describe('DiscWriteService characterization', () => {
     }
     expect(logError).toHaveBeenCalledWith(persistenceError);
     expect(discRepository.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the current generic 500 when a relation reference violates a foreign key', async () => {
+    const dto: CreateDiscDto = {
+      name: 'Album',
+      artistId: 'a6f9cc5f-c3af-4a3d-9eeb-2de532320241',
+      genreId: 'a6f9cc5f-c3af-4a3d-9eeb-2de532320242',
+    };
+    const entity = new Disc();
+    const foreignKeyError = {
+      code: '23503',
+      detail: 'Key (artistId)=(...) is not present in table "artist".',
+    };
+    const logError = jest
+      .spyOn((service as any).logger, 'error')
+      .mockImplementation();
+    discRepository.create.mockReturnValue(entity);
+    discRepository.save.mockRejectedValue(foreignKeyError);
+
+    await expect(service.create(dto)).rejects.toMatchObject({
+      status: 500,
+      response: {
+        message: 'An unexpected error occurred',
+        error: 'Internal Server Error',
+        statusCode: 500,
+      },
+    });
+
+    expect(discRepository.create).toHaveBeenCalledWith({
+      name: 'Album',
+      artist: { id: dto.artistId },
+      genre: { id: dto.genreId },
+    });
+    expect(discRepository.save).toHaveBeenCalledWith(entity);
+    expect(artistRepository.find).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith(foreignKeyError);
   });
 
   describe('update mapping', () => {
@@ -451,7 +514,11 @@ describe('DiscWriteService characterization', () => {
 
   describe('resolveArtist', () => {
     const resolveArtist = (artistName: string, countryId?: string) =>
-      (service as any).resolveArtist(artistName, countryId) as Promise<Artist>;
+      (service as any).resolveArtist(
+        artistName,
+        artistRepository as unknown as Repository<Artist>,
+        countryId,
+      ) as Promise<Artist>;
 
     it('creates and saves an artist when there are no matches and countryId is absent', async () => {
       const artistName = '  Árbol de Ñandú  ';
@@ -750,5 +817,307 @@ describe('DiscWriteService characterization', () => {
       });
       expect(result.artist.countryId).toBe(dto.countryId);
     });
+  });
+});
+
+describe('DiscWriteService.create with TypeORM Disc metadata', () => {
+  let dataSource: DataSource;
+  let repository: Repository<Disc>;
+
+  beforeAll(async () => {
+    dataSource = new DataSource({
+      type: 'postgres',
+      entities: ['src/**/*.entity.ts'],
+    });
+    await (dataSource as any).buildMetadatas();
+    repository = dataSource.getRepository(Disc);
+  });
+
+  it('maps relation references to the real artistId and genreId join columns without connecting to PostgreSQL', async () => {
+    const artistId = 'a6f9cc5f-c3af-4a3d-9eeb-2de532320241';
+    const genreId = 'a6f9cc5f-c3af-4a3d-9eeb-2de532320242';
+    const discMetadata = dataSource.getMetadata(Disc);
+    const artistRelation = discMetadata.findRelationWithPropertyPath('artist');
+    const genreRelation = discMetadata.findRelationWithPropertyPath('genre');
+    let persistedArtistId: string | undefined;
+    let persistedGenreId: string | undefined;
+    const save = jest
+      .spyOn(repository, 'save')
+      .mockImplementation(async (entity: Disc) => {
+        persistedArtistId = discMetadata.columns
+          .find(({ databaseName }) => databaseName === 'artistId')!
+          .getEntityValue(entity);
+        persistedGenreId = discMetadata.columns
+          .find(({ databaseName }) => databaseName === 'genreId')!
+          .getEntityValue(entity);
+        return entity;
+      });
+    const service = new DiscWriteService(repository);
+
+    const created = await service.create({
+      name: 'Album',
+      description: 'Description',
+      image: 'https://images.test/album.jpg',
+      verified: true,
+      link: 'https://album.test',
+      artistId,
+      genreId,
+      releaseDate: new Date('2024-03-10T00:00:00.000Z'),
+      ep: true,
+      debut: true,
+      featured: true,
+      pinned: true,
+    });
+
+    expect(
+      artistRelation.joinColumns.map(({ databaseName }) => databaseName),
+    ).toEqual(['artistId']);
+    expect(artistRelation.joinColumns[0].referencedColumn.propertyName).toBe(
+      'id',
+    );
+    expect(
+      genreRelation.joinColumns.map(({ databaseName }) => databaseName),
+    ).toEqual(['genreId']);
+    expect(genreRelation.joinColumns[0].referencedColumn.propertyName).toBe(
+      'id',
+    );
+    expect(persistedArtistId).toBe(artistId);
+    expect(persistedGenreId).toBe(genreId);
+    expect(created.artist).toBeUndefined();
+    expect(created.genre).toBeUndefined();
+    expect(created).not.toHaveProperty('artistId');
+    expect(created).not.toHaveProperty('genreId');
+    expect(created).toMatchObject({
+      name: 'Album',
+      description: 'Description',
+      image: 'https://images.test/album.jpg',
+      verified: true,
+      link: 'https://album.test',
+      releaseDate: new Date('2024-03-10T00:00:00.000Z'),
+      ep: true,
+      debut: true,
+      featured: true,
+      pinned: true,
+    });
+    expect(save).toHaveBeenCalledWith(created);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps relation properties absent when neither relation ID was supplied', () => {
+    const created = repository.create({ name: 'Unlinked album' });
+
+    expect(created.artist).toBeUndefined();
+    expect(created.genre).toBeUndefined();
+    expect(created).not.toHaveProperty('artistId');
+    expect(created).not.toHaveProperty('genreId');
+  });
+});
+
+describe('DiscWriteService.createWithArtist transaction', () => {
+  const dto: CreateDiscWithArtistDto = {
+    discName: 'Transactional album',
+    artistName: 'New Band',
+    countryId: 'country-id',
+    ep: true,
+  };
+
+  let service: DiscWriteService;
+  let rootDiscRepository: {
+    create: jest.Mock;
+    save: jest.Mock;
+    manager: { transaction: jest.Mock };
+  };
+  let committedArtists: Artist[];
+  let committedDiscs: Disc[];
+  let transactionManager: { getRepository: jest.Mock };
+  let transactionArtistRepository: {
+    find: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+  };
+  let transactionDiscRepository: { create: jest.Mock; save: jest.Mock };
+
+  function configureTransaction(options?: {
+    existingArtists?: Artist[];
+    artistSaveError?: Error;
+    discSaveError?: Error;
+    transactionError?: Error;
+  }) {
+    committedArtists = [...(options?.existingArtists ?? [])];
+    committedDiscs = [];
+    transactionManager = { getRepository: jest.fn() };
+
+    rootDiscRepository = {
+      create: jest.fn(),
+      save: jest.fn(),
+      manager: { transaction: jest.fn() },
+    };
+
+    rootDiscRepository.manager.transaction.mockImplementation(
+      async (operation) => {
+        if (options?.transactionError) throw options.transactionError;
+
+        const stagedArtists = [...committedArtists];
+        const stagedDiscs = [...committedDiscs];
+        transactionArtistRepository = {
+          find: jest.fn(async ({ where }) =>
+            stagedArtists.filter(
+              ({ name }) =>
+                name.toLowerCase() === where.name.value.toLowerCase(),
+            ),
+          ),
+          create: jest.fn((values: Partial<Artist>) =>
+            Object.assign(new Artist(), values),
+          ),
+          save: jest.fn(async (artist: Artist) => {
+            if (options?.artistSaveError) throw options.artistSaveError;
+            Object.assign(artist, { id: 'new-artist-id' });
+            stagedArtists.push(artist);
+            return artist;
+          }),
+        };
+        transactionDiscRepository = {
+          create: jest.fn((values: Partial<Disc>) =>
+            Object.assign(new Disc(), values),
+          ),
+          save: jest.fn(async (disc: Disc) => {
+            if (options?.discSaveError) throw options.discSaveError;
+            Object.assign(disc, { id: 'new-disc-id' });
+            stagedDiscs.push(disc);
+            return disc;
+          }),
+        };
+        transactionManager.getRepository.mockImplementation((entity) =>
+          entity === Artist
+            ? transactionArtistRepository
+            : transactionDiscRepository,
+        );
+
+        try {
+          const result = await operation(transactionManager);
+          committedArtists = stagedArtists;
+          committedDiscs = stagedDiscs;
+          return result;
+        } catch (error) {
+          // Discard the staged state just as a database rollback discards writes.
+          throw error;
+        }
+      },
+    );
+
+    service = new DiscWriteService(
+      rootDiscRepository as unknown as Repository<Disc>,
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    configureTransaction();
+  });
+
+  it('commits a Disc using an existing Artist without changing that Artist', async () => {
+    const existingArtist = Object.assign(new Artist(), {
+      id: 'existing-artist-id',
+      name: 'New Band',
+      nameNormalized: 'new band',
+      countryId: 'existing-country',
+      needsReview: false,
+    });
+    configureTransaction({ existingArtists: [existingArtist] });
+
+    const result = await service.createWithArtist(dto);
+
+    expect(result.id).toBe('new-disc-id');
+    expect(result.artist).toBe(existingArtist);
+    expect(committedArtists).toEqual([existingArtist]);
+    expect(committedArtists[0]).toMatchObject({
+      countryId: 'existing-country',
+      needsReview: false,
+    });
+    expect(committedDiscs).toEqual([result]);
+    expect(transactionArtistRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('commits a newly created Artist and Disc through repositories from one transaction manager', async () => {
+    const result = await service.createWithArtist(dto);
+
+    expect(committedArtists).toHaveLength(1);
+    expect(committedArtists[0]).toMatchObject({
+      id: 'new-artist-id',
+      name: 'New Band',
+      nameNormalized: 'new band',
+      countryId: 'country-id',
+    });
+    expect(committedDiscs).toEqual([result]);
+    expect(result.artist).toBe(committedArtists[0]);
+    expect(rootDiscRepository.create).not.toHaveBeenCalled();
+    expect(rootDiscRepository.save).not.toHaveBeenCalled();
+    expect(transactionManager.getRepository.mock.calls).toEqual([
+      [Artist],
+      [Disc],
+    ]);
+    expect(transactionArtistRepository.save).toHaveBeenCalledTimes(1);
+    expect(transactionDiscRepository.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls back a new Artist when saving the Disc fails and propagates the error', async () => {
+    const discSaveError = new Error('disc save failed');
+    configureTransaction({ discSaveError });
+
+    await expect(service.createWithArtist(dto)).rejects.toBe(discSaveError);
+
+    expect(committedArtists).toEqual([]);
+    expect(committedDiscs).toEqual([]);
+    expect(transactionArtistRepository.save).toHaveBeenCalledTimes(1);
+    expect(transactionDiscRepository.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves an existing Artist when saving its Disc fails', async () => {
+    const existingArtist = Object.assign(new Artist(), {
+      id: 'existing-artist-id',
+      name: 'New Band',
+      nameNormalized: 'new band',
+      countryId: 'existing-country',
+      needsReview: false,
+    });
+    const discSaveError = new Error('disc save failed');
+    configureTransaction({
+      existingArtists: [existingArtist],
+      discSaveError,
+    });
+
+    await expect(service.createWithArtist(dto)).rejects.toBe(discSaveError);
+
+    expect(committedArtists).toEqual([existingArtist]);
+    expect(committedDiscs).toEqual([]);
+    expect(transactionArtistRepository.save).not.toHaveBeenCalled();
+    expect(existingArtist).toMatchObject({
+      countryId: 'existing-country',
+      needsReview: false,
+    });
+  });
+
+  it('does not attempt to save a Disc when creating the Artist fails', async () => {
+    const artistSaveError = new Error('artist save failed');
+    configureTransaction({ artistSaveError });
+
+    await expect(service.createWithArtist(dto)).rejects.toBe(artistSaveError);
+
+    expect(committedArtists).toEqual([]);
+    expect(committedDiscs).toEqual([]);
+    expect(transactionArtistRepository.save).toHaveBeenCalledTimes(1);
+    expect(transactionDiscRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('propagates a transaction failure without returning success', async () => {
+    const transactionError = new Error('transaction start failed');
+    configureTransaction({ transactionError });
+
+    await expect(service.createWithArtist(dto)).rejects.toBe(transactionError);
+
+    expect(committedArtists).toEqual([]);
+    expect(committedDiscs).toEqual([]);
+    expect(rootDiscRepository.create).not.toHaveBeenCalled();
+    expect(rootDiscRepository.save).not.toHaveBeenCalled();
   });
 });

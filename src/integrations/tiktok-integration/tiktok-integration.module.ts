@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from 'src/identity/auth/auth.module';
 import { MailModule } from 'src/communications/mail/mail.module';
 import { TiktokConnection } from './oauth/tiktok-connection.entity';
 import { TiktokVideo } from './entities/tiktok-video.entity';

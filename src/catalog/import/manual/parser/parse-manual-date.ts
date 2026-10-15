@@ -14,14 +14,29 @@ const MONTHS = {
 } as const;
 
 export function parseManualDate(dateStr: string): Date | null {
-  const [monthName, dayWithComma, yearString] = dateStr.split(' ');
-  const day = parseInt(dayWithComma.replace(',', ''), 10);
-  const year = parseInt(yearString, 10);
+  if (typeof dateStr !== 'string') return null;
+
+  const match = dateStr.match(/^([A-Za-z]+) (\d{1,2}), (\d{4})$/);
+  if (!match) return null;
+
+  const [, monthName, dayString, yearString] = match;
+  const day = Number(dayString);
+  const year = Number(yearString);
 
   const monthIndex = MONTHS[monthName.toLowerCase() as keyof typeof MONTHS];
-  if (monthIndex === undefined) {
+  if (monthIndex === undefined || year === 0) return null;
+
+  const date = new Date(0);
+  date.setFullYear(year, monthIndex, day);
+  date.setHours(0, 0, 0, 0);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== monthIndex ||
+    date.getDate() !== day
+  ) {
     return null;
   }
 
-  return new Date(year, monthIndex, day);
+  return date;
 }

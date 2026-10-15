@@ -12,10 +12,10 @@ import {
 import { RequestsService } from './requests.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
-import { Auth } from 'src/auth/decorators/auth.decorator';
-import { GetUser } from 'src/auth/decorators/get-user.decorator';
-import { User } from 'src/auth/entities/user.entity';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { Auth } from 'src/identity/auth/decorators/auth.decorator';
+import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
 @Controller('requests')
 export class RequestsController {

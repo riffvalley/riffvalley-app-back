@@ -1,13 +1,62 @@
-import { RequestMethod } from '@nestjs/common';
+import { BadRequestException, RequestMethod } from '@nestjs/common';
 import {
   GUARDS_METADATA,
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
-import { roleMeetsMinimum, ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import {
+  roleMeetsMinimum,
+  ValidRoles,
+} from 'src/identity/auth/interfaces/valid-roles';
 import { LastfmController } from './lastfm.controller';
+import { LastfmService } from './lastfm.service';
+
+describe('LastfmController artist query', () => {
+  const getArtistInfo = jest.fn();
+  const controller = new LastfmController({
+    getArtistInfo,
+  } as unknown as LastfmService);
+
+  beforeEach(() => {
+    getArtistInfo.mockReset();
+  });
+
+  it.each([
+    undefined,
+    '',
+    '   ',
+    '\t\n',
+    ['Artist one', 'Artist two'],
+    { name: 'Artist' },
+  ])(
+    'rejects invalid artist query value %p without calling the service',
+    (artist) => {
+      let error: unknown;
+      try {
+        controller.getArtistInfo(artist);
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as BadRequestException).getStatus()).toBe(400);
+      expect(getArtistInfo).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['The Artist', 'Björk + Co / 東京'])(
+    'passes the valid name %s unchanged and returns the service payload',
+    async (artist) => {
+      const payload = { name: artist, stats: { listeners: '42' } };
+      getArtistInfo.mockResolvedValue(payload);
+
+      await expect(controller.getArtistInfo(artist)).resolves.toBe(payload);
+      expect(getArtistInfo).toHaveBeenCalledWith(artist);
+    },
+  );
+});
 
 describe('LastfmController authorization metadata', () => {
   it('restricts fill-images to superadmin and leaves artist reads public', () => {

@@ -20,6 +20,8 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 - [Spotify](roadmap/spotify.md) — separación del dominio de la playlist de Riff Valley y la integración con la API externa de Spotify.
 - [Integrations](roadmap/integrations.md) — agrupación e inventario progresivo de integraciones externas bajo `src/integrations/`.
 - [Integrations Cleanup](roadmap/integrations-cleanup.md) — auditoría interna y saneamiento progresivo de las ocho integraciones.
+- [Backend Architecture](roadmap/backend-architecture.md) — inventario global de módulos, ownership propuesto, árbol objetivo y plan futuro de reorganización física sin cambios de comportamiento.
+- [Backend Cleanup](roadmap/backend-cleanup.md) — auditoría técnica progresiva módulo por módulo y tareas de mejora interna posteriores.
 
 ## Estado de alto nivel
 

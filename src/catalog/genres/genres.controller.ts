@@ -11,10 +11,11 @@ import {
 } from '@nestjs/common';
 import { GenresService } from './genres.service';
 import { CreateGenreDto } from './dto/create-genre.dto';
+import { CreateGenresBatchDto } from './dto/create-genres-batch.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
-import { PaginationDto } from '../../common/dtos/pagination.dto';
-import { Auth } from 'src/auth/decorators/auth.decorator';
-import { ValidRoles } from 'src/auth/interfaces/valid-roles';
+import { GenresQueryDto } from './dto/genres-query.dto';
+import { Auth } from 'src/identity/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
 @Controller('genres')
 export class GenresController {
@@ -28,14 +29,12 @@ export class GenresController {
 
   @Post('bultCreateGenre')
   @Auth(ValidRoles.riffvalley)
-  bulkCreate(
-    @Body() createGenresArray: { genres: { name: string; color: string }[] },
-  ) {
+  bulkCreate(@Body() createGenresArray: CreateGenresBatchDto) {
     return this.unitsService.bulkCreate(createGenresArray);
   }
 
   @Get()
-  findAll(@Query() paginationDto: PaginationDto) {
+  findAll(@Query() paginationDto: GenresQueryDto) {
     return this.unitsService.findAll(paginationDto);
   }
 

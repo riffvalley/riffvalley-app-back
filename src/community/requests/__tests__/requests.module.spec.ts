@@ -11,25 +11,25 @@ import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
-import { AuthModule } from 'src/auth/auth.module';
-import { User } from 'src/auth/entities/user.entity';
-import { META_MINIMUM_ROLE } from 'src/auth/decorators/role-protected.decorator';
-import { roleMeetsMinimum, ValidRoles } from 'src/auth/interfaces/valid-roles';
-import { UserAccessLog } from 'src/auth/entities/user-access-log.entity';
+import { AuthModule } from 'src/identity/auth/auth.module';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { roleMeetsMinimum, ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
+import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { DiscRequest } from '../entities/disc-request.entity';
 import { RequestsController } from '../requests.controller';
 import { RequestsModule } from '../requests.module';
 import { RequestsService } from '../requests.service';
 
-jest.mock('src/auth/auth.module', () => {
+jest.mock('src/identity/auth/auth.module', () => {
   const { Module } = require('@nestjs/common');
   const { PassportModule } = require('@nestjs/passport');
   const { TypeOrmModule } = require('@nestjs/typeorm');
-  const { User } = require('src/auth/entities/user.entity');
+  const { User } = require('src/identity/auth/entities/user.entity');
   const {
     UserRoleGuard,
-  } = require('src/auth/guards/user-role/user-role.guard');
+  } = require('src/identity/auth/guards/user-role/user-role.guard');
 
   class AuthModule {}
   Module({

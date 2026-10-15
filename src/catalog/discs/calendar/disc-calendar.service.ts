@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from 'src/auth/entities/user.entity';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
-import { PaginationDto } from '../../../common/dtos/pagination.dto';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { Disc } from '../entities/disc.entity';
 import { getCalendarPageMetadata } from './helpers/get-calendar-page-metadata';
 import {

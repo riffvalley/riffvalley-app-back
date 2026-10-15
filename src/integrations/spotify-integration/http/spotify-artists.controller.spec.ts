@@ -2,7 +2,7 @@ import { BadGatewayException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
-import { UserRoleGuard } from 'src/auth/guards/user-role/user-role.guard';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { SpotifyArtistsController } from './spotify-artists.controller';
 import { SpotifyAlbumsController } from './spotify-albums.controller';
 

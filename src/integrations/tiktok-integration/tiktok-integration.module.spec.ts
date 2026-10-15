@@ -1,4 +1,4 @@
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from 'src/identity/auth/auth.module';
 import { MailModule } from 'src/communications/mail/mail.module';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';

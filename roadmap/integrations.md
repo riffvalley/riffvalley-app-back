@@ -73,7 +73,7 @@ Las rutas HTTP listadas abajo incluyen el prefijo global `/api`. Solo se anotan 
 
 ### Cloudflare R2 (S3 compatible)
 
-- **Ubicación y responsabilidades:** `src/uploads/uploads.service.ts` instancia `S3Client` y ejecuta `PutObjectCommand`; el endpoint, bucket y URL pública están codificados allí. `UploadsController` aplica el contrato HTTP, el límite de 5 MB, filtro de imagen y autorización.
+- **Ubicación y responsabilidades:** `src/platform/uploads/uploads.service.ts` instancia `S3Client` y ejecuta `PutObjectCommand`; el endpoint, bucket y URL pública están codificados allí. `UploadsController` aplica el contrato HTTP, el límite de 5 MB, filtro de imagen y autorización.
 - **Autenticación, consumers y endpoints:** usa `R2_ACCESS_KEY_ID` y `R2_SECRET_ACCESS_KEY`. `UploadsModule` se registra en `AppModule`; no se encontró otro consumer del servicio. `POST /api/uploads/image` requiere `superadmin`.
 - **Tests y riesgo:** existe `uploads.controller.spec.ts`, pero no spec del servicio/cliente R2. Propuesta: mover solamente el cliente/operación de almacenamiento a Cloudflare R2 Integration y mantener `UploadsController`, validación, autorización y forma de respuesta en `uploads/`. Conservar bucket/key/URL, MIME y errores; no cambiar los endpoints ni el contrato del objeto devuelto.
 
@@ -215,7 +215,7 @@ Las subcarpetas internas de cada módulo se decidirán por su contenido real y c
 
 - **Estado:** Completada.
 - **Objetivo:** agrupar la escritura en almacenamiento externo y mantener `uploads/` como feature HTTP.
-- **Alcance:** crear `src/integrations/cloudflare-r2-integration/` y `CloudflareR2IntegrationModule` para el cliente/adaptador de `PutObject`; hacer que `UploadsService` o el módulo local lo consuma. Mantener controller, autorización, filtros y límite de archivo en `src/uploads/`.
+- **Alcance:** crear `src/integrations/cloudflare-r2-integration/` y `CloudflareR2IntegrationModule` para el cliente/adaptador de `PutObject`; hacer que `UploadsService` o el módulo local lo consuma. Mantener controller, autorización, filtros y límite de archivo en `src/platform/uploads/`.
 - **Exclusiones:** no cambiar ruta, forma de respuesta, bucket/key, MIME, URL pública, errores ni variables de credenciales; no mover a producción ni subir archivos reales.
 - **Dependencias:** I.0.
 - **Criterios de aceptación:** `POST /api/uploads/image` mantiene guard, validación y response; objeto se sube con los mismos metadatos y error observable; no se filtran credenciales al log/respuesta.

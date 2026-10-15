@@ -1,10 +1,14 @@
 import * as ExcelJS from 'exceljs';
-import { ExcelWorkbookParser } from './excel-workbook.parser';
+import {
+  ExcelWorkbookParser,
+  InvalidExcelWorkbookError,
+} from './excel-workbook.parser';
 
 type SheetFixture = {
   name: string;
   rows: unknown[][];
   state?: 'visible' | 'hidden' | 'veryHidden';
+  dateFormatRows?: number[];
 };
 
 async function createWorkbookBuffer(sheets: SheetFixture[]): Promise<Buffer> {
@@ -12,7 +16,12 @@ async function createWorkbookBuffer(sheets: SheetFixture[]): Promise<Buffer> {
   for (const sheetFixture of sheets) {
     const worksheet = workbook.addWorksheet(sheetFixture.name);
     if (sheetFixture.state) worksheet.state = sheetFixture.state;
-    for (const values of sheetFixture.rows) worksheet.addRow(values);
+    for (const [index, values] of sheetFixture.rows.entries()) {
+      worksheet.addRow(values);
+      if (sheetFixture.dateFormatRows?.includes(index + 1)) {
+        worksheet.getCell(index + 1, 1).numFmt = 'dd/mm/yyyy';
+      }
+    }
   }
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
@@ -32,7 +41,68 @@ describe('ExcelWorkbookParser', () => {
   it('rejects a workbook with no worksheets', async () => {
     await expect(
       parser.parse(await createEmptyWorkbookBuffer()),
-    ).rejects.toThrow('El archivo Excel está vacío o no tiene hojas legibles');
+    ).rejects.toBeInstanceOf(InvalidExcelWorkbookError);
+  });
+
+  it('classifies non-XLSX input and a truncated ZIP workbook as invalid workbooks', async () => {
+    await expect(
+      parser.parse(Buffer.from('not an xlsx')),
+    ).rejects.toBeInstanceOf(InvalidExcelWorkbookError);
+
+    const workbookBuffer = await createWorkbookBuffer([
+      { name: 'Discos', rows: [['header'], ['', 'Artist', 'Album']] },
+    ]);
+    await expect(
+      parser.parse(workbookBuffer.subarray(0, workbookBuffer.length - 10)),
+    ).rejects.toBeInstanceOf(InvalidExcelWorkbookError);
+  });
+
+  it.each([
+    [new Error('1:3: text data outside of root node.')],
+    [new Error('1:29: unexpected close tag.')],
+    [new Error('1:16: disallowed character.')],
+    [new Error('1:22: undefined entity.')],
+    [new Error('1:35: unmatched closing tag: workbook.')],
+    [new TypeError("Cannot read properties of undefined (reading 'sheets')")],
+    [new TypeError("Cannot set properties of undefined (setting 'sheetNo')")],
+  ])(
+    'classifies a recognized malformed workbook structure as invalid',
+    async (error) => {
+      const workbookBuffer = await createWorkbookBuffer([
+        { name: 'Discos', rows: [['header'], ['', 'Artist', 'Album']] },
+      ]);
+      const xlsxSpy = jest
+        .spyOn(ExcelJS.Workbook.prototype, 'xlsx', 'get')
+        .mockReturnValue({
+          read: jest.fn().mockRejectedValue(error),
+        } as never);
+
+      try {
+        await expect(parser.parse(workbookBuffer)).rejects.toBeInstanceOf(
+          InvalidExcelWorkbookError,
+        );
+      } finally {
+        xlsxSpy.mockRestore();
+      }
+    },
+  );
+
+  it('preserves an unexpected ExcelJS parsing error as an internal error', async () => {
+    const workbookBuffer = await createWorkbookBuffer([
+      { name: 'Discos', rows: [['header'], ['', 'Artist', 'Album']] },
+    ]);
+    const internalError = new Error('unexpected parser failure');
+    const xlsxSpy = jest
+      .spyOn(ExcelJS.Workbook.prototype, 'xlsx', 'get')
+      .mockReturnValue({
+        read: jest.fn().mockRejectedValue(internalError),
+      } as never);
+
+    try {
+      await expect(parser.parse(workbookBuffer)).rejects.toBe(internalError);
+    } finally {
+      xlsxSpy.mockRestore();
+    }
   });
 
   it('processes visible sheets in order, ignores hidden sheets and the first row', async () => {
@@ -173,17 +243,65 @@ describe('ExcelWorkbookParser', () => {
     expect(rows[0].releaseDate).toEqual(expectedDate);
   });
 
-  it('converts an unparseable date to null', async () => {
+  it('preserves empty optional dates without marking them invalid', async () => {
     const rows = await parser.parse(
       await createWorkbookBuffer([
         {
           name: 'Discos',
-          rows: [['header'], ['not a date', 'Artist', 'Album']],
+          rows: [
+            ['header'],
+            ['', 'Artist', 'Empty date'],
+            ['  ', 'Artist', 'Whitespace date'],
+            [null, 'Artist', 'Null date'],
+          ],
         },
       ]),
     );
 
-    expect(rows[0].releaseDate).toBeNull();
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row.releaseDate).toBeNull();
+      expect(row).not.toHaveProperty('releaseDateError');
+    }
+  });
+
+  it.each([
+    ['unreadable text', 'not a date'],
+    ['impossible day in day-first text', '31/02/2026'],
+    ['impossible month in day-first text', '05/13/2026'],
+    ['impossible day in ISO text', '2026-02-31'],
+    ['impossible day in month-name text', 'February 31, 2026'],
+    ['unsupported boolean cell', true],
+    ['unsupported object cell', { formula: 'TODAY()', result: 'not a date' }],
+  ])('marks %s as invalid instead of an empty date', async (_label, value) => {
+    const rows = await parser.parse(
+      await createWorkbookBuffer([
+        {
+          name: 'Discos',
+          rows: [['header'], [value, 'Artist', 'Album']],
+        },
+      ]),
+    );
+
+    expect(rows[0]).toMatchObject({
+      releaseDate: null,
+      releaseDateError: 'INVALID_DATE',
+    });
+  });
+
+  it('reads a numeric Excel date serial as a valid date when ExcelJS identifies the cell as a date', async () => {
+    const rows = await parser.parse(
+      await createWorkbookBuffer([
+        {
+          name: 'Discos',
+          rows: [['header'], [45292, 'Artist', 'Album']],
+          dateFormatRows: [2],
+        },
+      ]),
+    );
+
+    expect(rows[0].releaseDate).toEqual(new Date(Date.UTC(2024, 0, 1)));
+    expect(rows[0]).not.toHaveProperty('releaseDateError');
   });
 
   it.each([
