@@ -629,3 +629,89 @@ No es seguro excluir el commit transversal dejando intactos los cuatro commits d
 ### Estado respecto al merge
 
 Los cambios de Catalog identificados quedaron confirmados en commits locales y sus verificaciones solicitadas pasaron. **No se realizó merge. El backend no queda certificado como listo para integrar en `main`**: siguen vigentes los bloqueos registrados en RELEASE-4 sobre aceptar/revisar el alcance transversal de cinco commits, verificar el contrato HTTP con los hashes frontend/backend que se integrarán y comprobar compatibilidad del esquema e historial de migraciones de producción. No se accedió a producción para esta preparación.
+
+## BC-CAT-RELEASE-8 — Preflight de integración y despliegue
+
+**Fecha:** 2026-10-15. **Resultado:** **BLOCKED**; no se hizo merge ni despliegue. Se conservaron los ocho commits candidatos y los cambios locales de Community.
+
+### Git y alcance
+
+- Backend en `refactor/editorial`, HEAD `f61b2c70a277b6f5d705728d2582b5ea4048c794`; `origin/main` actualizado en `2b203b8fcd5140cda663be4e4a5f687dd35c4269`. La rama candidata está 8 commits por delante y 0 por detrás.
+- Commits candidatos, conservados sin reescritura: `be08be6` (reorganización BA-1–BA-13), `614fcab` (Artists), `e019e55` (Countries), `f7518cf` (Genres), `7a7760b` (Import/Last.fm y `data.results`), `0b3ce8e` (BC-DIS-1–4), `b78e599` (pruebas/bootstrap PostgreSQL) y `f61b2c7` (documentación/evidencia).
+- Al iniciar el preflight, `git status` mostraba únicamente `src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts` modificado y unstaged. Se preservó sin incluirlo. No había otros cambios staged ni sin seguimiento en el checkout backend. El `.aws` dentro del rango comprometido es un archivo de 0 bytes, no contiene credenciales; `.env` no se incluyó. `.impeccable/config.json` no se modificó.
+- La reorganización transversal permanece como commit íntegro. Los cuatro commits BC-DIS corresponden a las correcciones y pruebas ya registradas en RELEASE-5; no se hallaron cambios locales adicionales en esos archivos.
+- `git diff --check origin/main...HEAD` y `git diff --check` pasan. No se detectaron cambios de `src/migrations`, `src/data-source.ts`, `scripts/db-migrations.js` o `Procfile` en el candidato.
+
+### Verificaciones del candidato
+
+- `yarn --ignore-engines build`: aprobado.
+- `yarn --ignore-engines exec tsc --noEmit --incremental false -p tsconfig.build.json --pretty false`: aprobado.
+- Suites unitarias de Catalog: **57 suites aprobadas, 576 tests aprobados; 8 suites opt-in omitidas**. Sigue fallando la expectativa de `discId` en `src/catalog/discs/catalog/disc-catalog.service.spec.ts`; RELEASE-1 confirmó el mismo fallo en `main` antes de los cambios de Discs, por lo que es preexistente.
+- Regresión backend (sin suites PostgreSQL ni migraciones): **125 suites aprobadas, 6 fallidas y 1 omitida; 1.147 tests aprobados, 12 fallidos y 4 omitidos**. Los fallos son la expectativa preexistente de `discId`, dos specs de `Versions` con dependencias Nest sin registrar y tres suites HTTP que chocan con `listen EPERM` al abrir `0.0.0.0`. No se corrigieron ni suprimieron.
+- Las pruebas de imports/módulos de Catalog incluidas en la ejecución focalizada pasan. El build/typecheck validan resolución de imports y compilación, no sustituyen un smoke test HTTP.
+- Suites PostgreSQL opt-in: **no ejecutadas en esta revisión**. Las variables para una base de prueba están unset y `127.0.0.1:55432` no responde; por tanto, no se preparó ni tocó ninguna base. RELEASE-5 conserva la evidencia previa 9/9 suites y 33/33 tests en PostgreSQL desechable.
+- No se pudieron completar pruebas HTTP desde este entorno por el permiso de sockets. No hubo llamadas a proveedores externos.
+
+### Esquema, ledger y Heroku
+
+- La CLI autenticada identifica la app exacta `spammusic-back`. El release actual sigue siendo `v314` (`Deploy 2b203b8f`, 2026-10-14); PostgreSQL está disponible en la región EU, versión 16.14, con 34 tablas. No se cambió configuración ni estado de Heroku.
+- La ejecución de solo lectura del release actual confirma `STAGE=prod`, `DB_NAME=ddddmrfqbqstju` y que `DATABASE` conecta a esa misma base. El ledger `migrations` existe. `yarn db:check` reporta **90 migraciones compiladas, 91 filas aplicadas y 0 pendientes**.
+- Comparación de solo lectura de identidades: no hay duplicados; la única fila aplicada sin clase fuente actual es `UpdateListStatusEnum1766066905027`. Está documentada como discrepancia histórica de procedencia en `roadmap/roles-production-deployment.md`; no coincide con una migración pendiente ni es ejecutada por este candidato. No hay migraciones nuevas de Catalog ni pendientes que justifiquen ejecutar migraciones.
+- Esta comprobación acredita destino y ledger, pero no constituye una comparación completa de cada columna, enum y relación de las entidades del commit transversal contra PostgreSQL. La compatibilidad estructural completa del candidato no queda demostrada, así que se mantiene como preflight pendiente.
+- El backup `b008` figura como Completed el 2026-10-13 22:06 UTC. No se creó otro backup. El procedimiento documentado separa rollback de release de restauración de PostgreSQL; cualquier restauración requiere evaluación, no sería automática.
+- No se publicó nada; no se ejecutaron smoke tests de API ni importaciones en producción. Release y hash productivos siguen siendo `v314` / `2b203b8f`.
+
+### Frontend y ventana de publicación
+
+- En el checkout frontend, `origin/main` actualizado es `4e136c1369743892d60fa482aa0c75be757e900a` (merge PR #185), que ya contiene la rama de integración observada en `95baad07647c1fbb5854bdc189eac6650a299af5`. La rama frontend solicitada ya no está pendiente de merge en Git; su estado de despliegue automático no se verificó.
+- `yarn build` del frontend terminó correctamente, con advertencias previas de Browserslist, CSS y tamaño de chunks. `yarn test --run` no llegó a ejecutar las pruebas: Vite no pudo crear su archivo temporal `vite.config.ts.timestamp-…` porque el checkout frontend es de solo lectura. No se alteraron `.impeccable/config.json` ni `.aws` locales.
+- No se puede confirmar desde esta tarea que las importaciones Manual/Excel estén detenidas durante una ventana coordinada, ni comprobar el despliegue real del frontend. Dado que frontend `main` ya incluye el contrato `data.results` y el backend productivo continúa en `2b203b8f`, confirmar estado operativo y coordinar la transición es obligatorio antes de publicar backend.
+
+### Decisión y pendientes
+
+**No merge, no deploy.** No se confirma compatibilidad estructural completa de PostgreSQL con el árbol transversal, no se pudo repetir la regresión PostgreSQL opt-in, la regresión completa conserva fallos conocidos y no se verificó el estado publicado del frontend ni una ventana sin importaciones. El backend no queda certificado como listo para integrar en `main` o desplegar.
+
+- Hash de `main` backend: sin cambios, `2b203b8fcd5140cda663be4e4a5f687dd35c4269`.
+- Commits integrados y release Heroku nuevo: ninguno.
+- Archivos locales pendientes: `src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts`, intacto y fuera del alcance, y esta actualización del roadmap RELEASE-8, que queda unstaged porque no se integró el candidato.
+- Smoke tests: no ejecutados porque no hubo despliegue.
+- Para reanudar: comparar las entidades del candidato con el esquema productivo mediante lectura completa, repetir suites PostgreSQL sobre base desechable verificada, comprobar el estado real del frontend publicado, y acordar/desactivar importaciones durante la ventana coordinada. Después repetir el preflight sobre los hashes exactos antes del merge y deploy.
+
+## BC-CAT-RELEASE-10 — Verificación para merge en main y deploy automático
+
+**Fecha:** 2026-10-15. **Resultado:** **BLOCKED antes del merge**. No se hizo merge, push ni deploy; no se ejecutaron migraciones ni smoke tests posteriores a deploy.
+
+### Git y candidato
+
+- Rama actual: `refactor/editorial`, HEAD `f61b2c70a277b6f5d705728d2582b5ea4048c794`. Tras actualizar `origin`, `origin/main` sigue en `2b203b8fcd5140cda663be4e4a5f687dd35c4269`; el candidato está 8 commits por delante y 0 por detrás.
+- Se conservan los ocho commits existentes: `be08be6`, `614fcab`, `e019e55`, `f7518cf`, `7a7760b`, `0b3ce8e`, `b78e599` y `f61b2c7`. No se reescribió ni separó la reorganización transversal.
+- El árbol tiene solo dos cambios locales: este roadmap y `src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts`. El spec de Community se conserva fuera de la integración; no hay cambios locales de aplicación sin commit. `.impeccable/config.json` no se modificó.
+- El diff `main...refactor/editorial` no contiene cambios en `src/migrations`; el `Procfile`, el datasource y `migrationsRun: false` tampoco cambian. No hay una migración nueva de Catalog.
+
+### Base de producción
+
+- `heroku run --app spammusic-back --no-tty --exit-code -- yarn db:check`: aprobado. Ledger `migrations`; 90 migraciones compiladas, 91 aplicadas y **0 pendientes**.
+- Se consultó `DATABASE` dentro de `BEGIN READ ONLY`/`ROLLBACK`. Las tablas consultadas de Catalog están presentes y las 18 FK examinadas apuntan a las tablas/columnas existentes. UUID, fechas, booleanos, textos y campos numéricos usados por Artist, Country, Genre, Disc, Rate, Favorite, Pending y las relaciones incluidas en las consultas de Catalog tienen tipos PostgreSQL compatibles. El `name` de Country acepta como máximo 50 caracteres en el DTO, por debajo de `varchar(100)` productivo; el DTO no escribe `isoCode`, cuya columna existente es `varchar(5)`. No se hizo una auditoría del resto del esquema ni se consultaron datos de negocio.
+- No se ejecutó ningún runner de migración ni se modificó esquema o datos.
+
+### Protección de importaciones
+
+- El código frontend revisado no incluye un interruptor temporal de importación: las rutas Manual y Excel dependen de los permisos existentes (`superadmin`/`riffvalley`). No se cambiaron roles ni permisos.
+- La protección operativa disponible es activar maintenance en `spammusic-back`, escalar `web` a cero y esperar a que no queden dynos ni escrituras activas antes de iniciar el merge; mantener ambos controles hasta que el release nuevo esté validado. En esta comprobación el estado observado era `maintenance=off`, `web=1` (`web.1` arriba). No se cambió porque el preflight quedó bloqueado antes de abrir una ventana.
+- La ruta Manual frontend espera `data.results`; el backend candidato entrega el resultado Manual dentro de `data` y su resultado incluye `results`. El servicio Excel del frontend espera `data.results` y el controlador candidato devuelve el resultado de importación, que incluye `results`. El par de fuentes apunta al mismo contrato; la comprobación del frontend publicado y el smoke HTTP real siguen siendo necesarios para autorizar la reapertura.
+
+### Frontend y Automatic Deploys
+
+- El checkout local del frontend conserva el cambio de `.impeccable/config.json` y `.aws`; no se modificó ninguno. La rama frontend y su código local no acreditan qué versión sirve Netlify ahora.
+- La URL pública identificada en el frontend (`https://app.riffvalley.es`) respondió HTTP 403 desde esta sesión, por lo que no se pudo inspeccionar el bundle publicado ni acreditar que el frontend nuevo esté activo.
+- `heroku apps:info` identifica `spammusic-back`, pero no informa del toggle de Automatic Deploys ni de la rama conectada. El navegador integrado no está disponible. La consulta de webhooks de GitHub fue rechazada porque la sesión carece del scope `admin:repo_hook`; no se amplió ningún permiso. Por tanto, **no se ha demostrado que Automatic Deploys esté activo para `main`**.
+- La secuencia candidata podría mantener las importaciones bloqueadas durante el corte con maintenance y `web=0`, pero no compensa la falta de evidencia de que el frontend publicado use el contrato nuevo después de reabrir el backend.
+
+### Decisión
+
+**No merge, no push, no deploy.** Bloquean la integración dos comprobaciones requeridas que no pudieron acreditarse: el commit/contrato frontend realmente publicado y la configuración efectiva de Automatic Deploys de Heroku para `main`. El esquema consultado y el ledger no muestran bloqueos; no se cambió producción.
+
+- `main` confirmado local/remoto: `2b203b8fcd5140cda663be4e4a5f687dd35c4269`.
+- Release Heroku sin cambio: `v314`, `Deploy 2b203b8f`.
+- Smoke tests post-deploy: no ejecutados porque no hubo deploy.
+- Para reanudar: verificar en Netlify/panel o con acceso de solo lectura al deploy que el frontend publicado consume `data.results`; verificar en el panel de Heroku que Automatic Deploys está conectado a `main`. Después repetir el preflight inmediatamente, activar maintenance y `web=0`, integrar y publicar sin force-push, comprobar el release y completar los smoke tests antes de reabrir tráfico.
