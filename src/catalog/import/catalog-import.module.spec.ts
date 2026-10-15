@@ -1,6 +1,7 @@
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MODULE_METADATA } from '@nestjs/common/constants';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as fs from 'fs';
 import { Artist } from '../artists/entities/artist.entity';
@@ -21,6 +22,13 @@ import { ExcelController } from './excel/controller/excel.controller';
 import { ExcelImportService } from './excel/import/excel-import.service';
 import { ExcelWorkbookParser } from './excel/parser/excel-workbook.parser';
 import { ExcelTemplateService } from './excel/template/excel-template.service';
+
+@Global()
+@Module({
+  providers: [{ provide: getDataSourceToken(), useValue: {} }],
+  exports: [getDataSourceToken()],
+})
+class MockDataSourceModule {}
 
 describe('CatalogImportModule dependency injection', () => {
   let moduleRef: TestingModule;
@@ -44,7 +52,7 @@ describe('CatalogImportModule dependency injection', () => {
     ];
 
     const testingModule = Test.createTestingModule({
-      imports: [CatalogImportModule],
+      imports: [MockDataSourceModule, CatalogImportModule],
     })
       .overrideProvider(ConfigService)
       .useValue({ get: jest.fn(() => 'catalog-import-module-test-secret') });

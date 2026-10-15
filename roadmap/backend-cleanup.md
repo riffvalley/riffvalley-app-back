@@ -56,7 +56,7 @@ La secuencia se ampliará después de cada dominio; no constituye una orden para
 
 | Orden | Dominio                   | Módulos previstos                                                                                                                 | Estado                              |
 | ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries y Genres completados; resto pendiente |
+| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries, Genres, CatalogImport y LastfmCatalog completados; Discs y CatalogOverview pendientes |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                           |
 | 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Pendiente                           |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                           |
@@ -75,9 +75,9 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado**. S
 | Catalog                   | Countries           | completado |
 | Catalog                   | Genres              | completado |
 | Catalog                   | Discs               | pendiente  |
-| Catalog                   | CatalogImport       | pendiente  |
+| Catalog                   | CatalogImport       | completado |
 | Catalog                   | CatalogOverview     | pendiente  |
-| Catalog                   | LastfmCatalog       | pendiente  |
+| Catalog                   | LastfmCatalog       | completado |
 | Community                 | Comments            | pendiente  |
 | Community                 | Favorites           | pendiente  |
 | Community                 | Pendings            | pendiente  |
@@ -579,7 +579,338 @@ Las siguientes tareas quedan pendientes; BC-GEN-0 no implementó ninguna.
 - **Asignations/Links y género textual:** los campos libres son distintos del Genre estructurado de Disc, aunque haya fragmentos comentados de resolución. No hay evidencia suficiente para unificarlos ni para atribuirlo a Genres.
 - **Sin cleanup arquitectónico:** CRUD, módulo, relación e inventario no justifican dividir el service, extraer helpers ni centralizar queries de consumidores.
 
-**Verificaciones de BC-GEN-0:** revisión estática del módulo, DTO compartido, composición y consumers directos conocidos; lectura de suites existentes sin ejecución; coherencia del estado del roadmap; `git diff --check`. No se modificó producción, tests ni fixtures. No se ejecutaron tests, migraciones, seeds, servicios externos ni queries a PostgreSQL. Discs, CatalogImport, CatalogOverview y demás módulos consumidores permanecen pendientes de auditoría.
+**Verificaciones de BC-GEN-0:** revisión estática del módulo, DTO compartido, composición y consumers directos conocidos; lectura de suites existentes sin ejecución; coherencia del estado del roadmap; `git diff --check`. No se modificó producción, tests ni fixtures. No se ejecutaron tests, migraciones, seeds, servicios externos ni queries a PostgreSQL. En ese cierre histórico, Discs, CatalogImport, CatalogOverview y demás módulos consumidores permanecían pendientes de auditoría.
+
+## Auditoría 4 — Catalog / CatalogImport
+
+**Estado:** completado (2026-10-15); BC-IMP-1, BC-IMP-2 y sus subtareas BC-IMP-2.1 a BC-IMP-2.5, BC-IMP-3 y BC-IMP-4 completadas; análisis BC-IMP-2.A y BC-IMP-2.1b completados. Se conserva como condición de release el despliegue coordinado backend/frontend del contrato.
+**Base observada:** rama actual, 2026-10-15. No se modificaron código, tests ni fixtures durante esta auditoría; solo este roadmap.
+**Alcance leído:** implementación completa de `src/catalog/import/` (controllers, servicios, DTO, parser, logger, plantilla, módulo y specs); `test/excel.e2e-spec.ts`; composición en `AppModule`; entidades y normalizadores de Artists/Discs relevantes; usos directos del módulo. Se leyeron las pruebas sin ejecutarlas. Durante BC-IMP-0 no se inspeccionó frontend ni se auditaron los módulos consumidores.
+
+### Inventario, responsabilidades y contratos
+
+- `CatalogImportModule` registra ambos controllers y cinco providers. Importa `Artist`, `Disc`, `Country`, `Genre` y `AuthModule`; no tiene entidades propias ni migraciones.
+- **Entrada manual:** `POST /api/catalog/import/manual`, protegido con mínimo `superadmin`. `ProcessManualDataDto` valida string no vacío para `date`, array `albums` y DTO anidado (`line`, IDs UUID opcionales, flags booleanos). `CatalogImportService` parsea fecha/texto, busca o crea Artist, busca o crea Disc, consulta Country/Genre y genera un reporte de discos nuevos/existentes. Los formatos inválidos y re-releases de línea se omiten y solo se registran en `manual_data.log`.
+- **Excel:** `GET /api/catalog/import/excel/template` y `POST /api/catalog/import/excel`, ambos con mínimo `riffvalley` (superadmin hereda el nivel). Template lee Countries/Genres ordenados y crea un XLSX. Upload usa `FileInterceptor('file')`, parser ExcelJS, precarga Countries/Genres y procesa filas visibles; acumula errores de fila y continúa. Las filas requieren Artist y Disc cuando alguna de esas celdas está presente. Headers no se comprueban; se usan columnas posicionales. Los flags solo son verdaderos con `si` case-insensitive.
+- Las reglas de duplicados difieren: manual compara Artist con `ILike(trim(name))` y Disc con `ILike(trim(name))` + Artist, sin releaseDate; Excel compara Artist por igualdad exacta de nombre (y Country ID cuando viene) y Disc por igualdad exacta de nombre + Artist, incluyendo releaseDate solo cuando se pudo parsear. Ambos reutilizan el catálogo y no crean Countries/Genres. Excel crea Artist antes de consultar/guardar Disc; manual guarda Artist y Disc secuencialmente.
+- Las dos vías escriben directo por repositorios TypeORM, sin transacción explícita. Excel atrapa errores por fila y devuelve `{ created, errors }`; manual propaga el primer error y no devuelve su reporte parcial. Logger manual escribe un stream a archivo relativo al proceso; Excel/template usan Logger de Nest y también hay `console.log/error` en el template/controller.
+- No hay integración HTTP ni servicio externo dentro del módulo. Dependencias runtime relevantes: PostgreSQL/TypeORM, ExcelJS, Multer/Express y filesystem para `manual_data.log`.
+- **Consumers directos conocidos:** solo `CatalogImportController`/`ExcelController` llaman sus servicios; `AppModule` compone `CatalogImportModule`. `test/excel.e2e-spec.ts` monta el módulo e integra upload, descarga y roles; `auth-rate.consumer.spec.ts` verifica dirección de importación entre Auth, Rates y CatalogImport. Servicios de CatalogImport inyectan entidades/repositorios compartidos de Artists, Discs, Countries y Genres, pero no son llamados por esos servicios de dominio.
+- Las entidades implicadas son `Artist` y `Disc` (Country/Genre como relaciones de catálogo). `Artist.nameNormalized` es campo requerido por entidad; el flujo Excel/manual lo calcula de forma distinta al helper actual de Artists.
+
+### Pruebas existentes y cobertura consultada
+
+- Manual: specs de controller fijan ruta, verbo, guardas/rol y envelope de éxito; el spec del servicio caracteriza fecha válida e inválida, default Country, referencias Country/Genre, creación/reuso/duplicado, orden, skips y persistencia previa a un fallo posterior; parser de línea/fecha y normalizador tienen specs propios; logger tiene spec.
+- Excel: specs de controller fijan rutas, rol, headers de plantilla, falta de archivo y propagación de error; servicio caracteriza columnas por posición, hojas hidden, trimming, resolución de catálogos, flags, errores por fila, duplicate lookup y continuación tras fallo; parser caracteriza formatos de fecha válidos e ilegibles; template caracteriza las dos hojas y dropdowns. E2E caracteriza autorización y una subida vacía válida, pero no import real con repositorios persistentes.
+- Módulo tiene spec de DI. No se ejecutaron suites ni E2E durante BC-IMP-0. Los tests ya fijan varios comportamientos legacy observables; las tareas de abajo separan explícitamente las decisiones que los cambiarían.
+
+### Hallazgos
+
+#### IMP-F1 — Clave normalizada de Artist depende del formato de importación
+
+- **Ubicación:** `src/catalog/import/manual/parser/normalize-import-artist-name.ts:1-8`; `src/catalog/import/manual/import/catalog-import.service.ts:103-113`; `src/catalog/import/excel/import/excel-import.service.ts:120-135`; comparación con `src/catalog/artists/helpers/normalize-for-search.ts:1-9` y `src/catalog/discs/write/helpers/normalize-artist-name.ts:1-8`.
+- **Evidencia (hecho):** Manual elimina diacríticos, pasa a minúsculas y compacta espacios, pero conserva `+`; Excel solo aplica `toLowerCase()` y conserva diacríticos/espacios repetidos. Artists Write usa `normalizeForSearch`, que además sustituye `+` por espacio. Los specs actuales fijan diferencias: manual espera `arbol del mar` y Excel espera `árbol  del mar` para el mismo nombre con acento/espacios.
+- **Consecuencia (riesgo demostrado por valores, no por datos reales):** el campo `nameNormalized` se persiste con claves distintas según el camino y puede no coincidir con Artists Write/búsqueda. No se consultó la base de datos y no se afirma que ya existan duplicados.
+- **Categoría / prioridad / tamaño:** calidad con impacto potencial de integridad funcional; media; S.
+- **Propuesta:** ambos importadores calculan y consultan `nameNormalized` con la regla canónica existente `normalizeForSearch`. Mantener el filtro de Country opcional que ya aplica Excel, sin unificarlo con el flujo manual. Caracterizar acentos, `+`, espacios y conservación del nombre visible.
+- **Dependencias y riesgos:** depende del helper estabilizado en BC-ART-1. La resolución por `nameNormalized` reemplaza el lookup por nombre visible anterior; un Artist histórico con clave ausente o calculada con otra regla no coincidirá hasta una decisión separada sobre reparación de datos. No se actualizan filas existentes ni se cambia el criterio de Country.
+- **Hecho frente a hipótesis:** divergencia de transformación y specs comprobada; duplicados existentes o impacto en una pantalla concreta no verificados.
+
+#### IMP-F2 — El import manual aborta el lote y oculta resultados parciales ante errores por fila
+
+- **Ubicación:** `src/catalog/import/manual/import/catalog-import.service.ts:58-68, 84-96, 98-137`; expectativa explícita en `src/catalog/import/manual/import/catalog-import.service.spec.ts:257-274`.
+- **Evidencia (hecho):** los álbumes se procesan secuencialmente. Un Disc duplicado se añade a `existingDiscs` y continúa el bucle; una línea inválida o `re-release` solo se registra en log y se omite sin resultado individual. En cambio, una referencia Genre/Country ausente o un error de repositorio escapa del bucle: la spec espera que Artist y Disc del primer registro permanezcan guardados cuando el segundo usa un Genre inexistente, pero no se retorna `report` y el controller propaga el error. La fecha y la consulta inicial del Country por defecto también pueden fallar antes/durante el lote. No hay transacción por registro ni envelope de resultados parciales.
+- **Clasificación demostrada:** errores de validación estructural del DTO se rechazan antes del servicio; la fecha inválida y el fallo de la consulta inicial del Country por defecto pueden fallar globalmente; una línea que no parsea y `re-release` se omiten con log; referencias Genre/Country ausentes lanzan `NotFoundException`; duplicado de Disc es un resultado normal que se añade a `existingDiscs`; excepciones de repositorio son fallos técnicos no clasificados por fila. Las referencias ausentes y fallos técnicos no se devuelven hoy como resultados individuales.
+- **Diferencia frente a lo deseado (decisión funcional BC-IMP-2.A):** cada disco debe terminar independientemente como importado, duplicado omitido o fallido con motivo; un error de fila no revierte éxitos anteriores ni evita procesar filas posteriores. Para 30 filas con 3 duplicados y sin otros fallos, la respuesta debe permitir identificar 27 importadas y 3 duplicadas.
+- **Consecuencia:** hoy una referencia inválida o fallo técnico en una fila impide que las posteriores se procesen y oculta todo el reporte, pese a que escrituras previas siguen persistidas. Los duplicados sí continúan, pero el usuario solo los reconoce en la colección `existingDiscs`; skips de sintaxis/re-release no se muestran.
+- **Categoría / prioridad / tamaño:** bug funcional/consistencia; media; M.
+- **Propuesta:** aislar cada fila con transacción TypeORM individual para que una falla posterior a guardar un Artist no deje ese Artist creado sin su Disc, capturar y clasificar fallos por fila, continuar el lote y devolver un resultado identificable para cada entrada procesada. Mantener los errores estructurales de request (DTO y fecha/lote inválidos, según decisión de BC-IMP-4) como errores de request. Preservar intactos el criterio actual de duplicado de Disc (`ILike` por título y Artist, sin fecha) y la asociación Artist-Disc.
+- **Dependencias y riesgos:** el lookup del Country por defecto se realiza una vez antes del bucle, por lo que su fallo hoy aborta todo el lote; la implementación deberá localizar ese fallo por fila o reportarlo para cada fila afectada. Se requiere usar el mismo manager transaccional para escrituras de Artist/Disc y actualizar el test que actualmente fija persistencia previa a un error posterior. La forma del nuevo resultado es cambio de contrato y requiere coordinar el consumidor frontend conocido. Sin transacción por fila, una falla en el lookup de duplicado o al crear/guardar Disc después de guardar un Artist puede dejar un Artist huérfano; el orden de llamadas lo demuestra, pero no se simuló una transacción ni se consultó una BD real.
+- **Hecho frente a hipótesis:** continuación en duplicado, abortos por excepción, ausencia de reporte y persistencia previa están probados con repositorios mock. El código permite fallar después del guardado de Artist y antes del Disc; la escritura parcial concreta bajo errores reales del driver no se verificó con PostgreSQL. Que ya haya Artists huérfanos es una hipótesis no confirmada.
+
+#### IMP-F3 — La fecha manual admite rollover e `Invalid Date`
+
+**Estado:** resuelto por BC-IMP-4.
+
+- **Ubicación:** `src/catalog/import/manual/dto/process-manual-data.dto.ts:26-34`; `src/catalog/import/manual/parser/parse-manual-date.ts:16-26`; `src/catalog/import/manual/import/catalog-import.service.ts:45-56, 135`; specs en `src/catalog/import/manual/parser/parse-manual-date.spec.ts:13-24`.
+- **Evidencia (hecho):** DTO solo exige una cadena no vacía. El parser usa `parseInt` sin comprobar día/año y construye `new Date(year, monthIndex, day)`. `February 31, 2026` se convierte en 3 de marzo y el test fija ese rollover; un año no numérico da un objeto `Invalid Date` truthy que no activa `if (!releaseDate)` y llega al guardado. Texto incompleto puede lanzar y el servicio lo transforma en `Error` genérico.
+- **Consecuencia:** entradas de fecha no calendario pueden almacenarse con otro día o fallar tarde durante persistencia; las fechas malformadas producen un error interno genérico en vez de validación de request. El cambio a rechazo 400 modifica el contrato para entradas antes aceptadas.
+- **Categoría / prioridad / tamaño:** bug funcional y validación/contrato; media; S.
+- **Propuesta:** parsear de forma estricta una fecha completa válida, rechazar rollover y `Invalid Date`, y traducir fecha inválida a `BadRequestException`; preservar formato admitido y fecha válida del reporte.
+- **Dependencias y riesgos:** confirmar consumidores del endpoint antes de desplegar el nuevo 400; no hay consumer frontend en este checkout. Cambia la aceptación de fechas legacy; no requiere schema ni migración.
+- **Hecho frente a hipótesis:** rollover está fijado en test y flujo de Invalid Date se demuestra por el código; fallo exacto de driver para `Invalid Date` no se ejecutó.
+
+#### IMP-F4 — Fechas Excel inválidas se convierten en ausencia o rollover y la fila se importa
+
+- **Ubicación:** `src/catalog/import/excel/parser/excel-workbook.parser.ts:76-91`; `src/catalog/import/excel/import/excel-import.service.ts:50-60, 159-170`; `src/catalog/import/excel/parser/excel-workbook.parser.spec.ts:176-187`; `src/catalog/import/excel/import/excel-import.service.spec.ts:171-180`.
+- **Evidencia (hecho):** parser devuelve `null` tanto para fecha vacía como texto no parseable; servicio crea Disc con ese `null` y devuelve éxito. Un test afirma `{ created: 1, errors: [] }` para texto `not a date`. Además, la rama `DD/MM/YYYY` usa `Date.UTC` sin validar que el día resultante coincida con el ingresado (`excel-workbook.parser.ts:80-87`), por lo que una fecha imposible como `31/02/2026` se normaliza al mes siguiente. El template permite fecha vacía, por lo que fecha vacía, inválida e imposible no se distinguen correctamente.
+- **Consecuencia:** un error tipográfico de fecha se acepta como álbum sin fecha y no aparece en el resumen de errores, indistinguible de una fecha opcionalmente vacía.
+- **Categoría / prioridad / tamaño:** bug funcional; media; S.
+- **Propuesta (realizada en BC-IMP-3):** preservar fecha vacía como opcional, representar una fecha no vacía pero inválida como fallo de esa fila y continuar el resto dentro del contrato `data.results`; no conservar el shape legacy `{ created, errors }` retirado por BC-IMP-2.4.
+- **Dependencias y riesgos:** cambio del parser y tests; consumer frontend coordinado por BC-IMP-2.5 presenta `reasonCode`, hoja y fila sin depender de errores internos. La aceptación de fechas vacías permanece.
+- **Hecho frente a hipótesis:** colapso de estados y success actual probados; no se inspeccionó si el frontend distingue el texto de error más allá de renderizar la lista.
+
+#### IMP-F5 — Upload no clasifica los errores del workbook como errores de cliente
+
+**Estado:** resuelto por BC-IMP-4.
+
+- **Ubicación:** `src/catalog/import/excel/controller/excel.controller.ts:59-77`; parser `src/catalog/import/excel/parser/excel-workbook.parser.ts:18-28`; test actual del controller `src/catalog/import/excel/controller/excel.controller.spec.ts:233-244`.
+- **Evidencia (hecho):** el upload solo convierte archivo ausente en 400; el controller propaga cualquier error del servicio. ExcelJS/parser lanza errores ordinarios para workbook ilegible o sin hojas. El spec fija passthrough del error genérico de importación, y no existe prueba de status HTTP para archivo corrupto.
+- **Consecuencia:** entrada Excel inválida no tiene una respuesta 4xx estable; errores de parsing llegan como errores internos 500, mezclados con fallos de almacenamiento. El servicio por fila sí mantiene un resumen parcial para errores de datos/persistencia.
+- **Categoría / prioridad / tamaño:** calidad de contrato HTTP; media; S.
+- **Propuesta:** clasificar fallos de formato como 400 con mensaje estable y seguro, preservando el resultado parcial por fila y dejando los fallos inesperados de infraestructura como 500 genérico; caracterizar mediante controller/E2E sin acceder a servicios reales.
+- **Dependencias y riesgos:** el status/error body es cambio contractual; verificar consumers frontend y límites entre errores esperados del parser y fallos de DB. El tamaño y tipo MIME no tienen configuración de límites explícita en `FileInterceptor`; no se propone un límite sin definirlo con datos de uso.
+- **Hecho frente a hipótesis:** propagación del error ordinario está implementada y probada a nivel controller; status HTTP efectivo de workbook corrupto se infiere del manejo por defecto de Nest y no se verificó ejecutando E2E.
+
+#### IMP-F6 — El resumen Excel no identifica resultados individuales y mezcla duplicados con fallos técnicos
+
+- **Ubicación:** `src/catalog/import/excel/parser/excel-workbook.parser.ts:30-69`; `src/catalog/import/excel/import/excel-import.service.ts:37-44, 46-68, 70-119, 121-188, 190-193`; `src/catalog/import/excel/controller/excel.controller.ts:59-78`; tests `src/catalog/import/excel/import/excel-import.service.spec.ts:134-157, 181-200, 345-366, 393-466`; consumer `riffvalley-app-front/src/services/imports/imports.ts:48-64` y `src/views/importPage/ImportDiscs.vue:88-105, 153-179`.
+- **Evidencia (hecho):** el parser procesa hojas visibles en orden y conserva `sheet` y `rowNumber` físico; omite hojas hidden/veryHidden, cabecera, filas completamente vacías. `rowNumber` se reinicia en cada hoja. El servicio retorna `{ created, errors }`; `created` es solo un total, y `errors` contiene `{ row, disc, artist, error }`. Validaciones de campos/referencias y duplicados agregan error y siguen; el spec también fija que un fallo en `discRepo.save` agrega error y procesa una fila posterior. El duplicado se presenta como texto dentro de `errors`, no como estado distinto. Una fila no vacía sin Artist ni Disc se omite silenciosamente. El `catch` incluye `err.message` sin clasificarlo ni sanearlo. El frontend muestra el total creado y una lista de errores por número de fila; no presenta los discos importados uno a uno ni muestra hoja como campo independiente.
+- **Escrituras parciales (riesgo respaldado por orden de código):** el servicio puede guardar un Artist nuevo en `artistRepo.save` antes de consultar duplicado y guardar el Disc; si una operación posterior falla no existe transacción/rollback para esa fila. El test del fallo de Disc usa un Artist preexistente, por lo que la existencia real de Artists huérfanos no queda demostrada. No se consultó PostgreSQL.
+- **Errores técnicos (límite demostrado):** toda excepción producida dentro del `try` por fila se convierte en elemento de `errors` y el bucle continúa; el código no diferencia un fallo aislado de una caída sistémica del repositorio. Que un error técnico concreto exponga SQL depende del contenido que arroje el driver: el hecho demostrado es que se devuelve texto de excepción sin filtrar.
+- **Comportamiento que ya cumple:** conserva el orden de procesamiento; reporta fila física para validaciones, referencias y duplicados; continúa tras esos errores y tras un fallo de `save`; cuenta los Discs creados; los specs caracterizan esos caminos. La lectura de workbook y la precarga inicial de Genres/Countries ocurren antes del bucle y, si fallan, abortan la importación.
+- **Diferencia frente al contrato común:** Excel ya ofrece parcialidad y errores por registro para varios casos, pero no un resultado para cada fila procesable ni identificación individual de éxitos, no separa `duplicate` de `failed`, y su fila física necesita el nombre de hoja para ser inequívoca. Su trabajo no es rehacer la continuación ya existente; es estructurar estados/fuentes, manejar skips, sanear mensajes y distinguir fallos técnicos que se pueden aislar.
+- **Categoría / prioridad / tamaño:** contrato de resultados y clasificación de errores; media; M para adaptar el flujo y caracterizar los límites sistémicos, más la consistencia por fila compartida con IMP-F2.
+- **Propuesta:** añadir `data.results` por fila procesable bajo el contrato común definitivo. Usar estado `duplicate` en vez de tratarlo semánticamente como fallo; informar éxitos individuales; incluir `sheet` junto al `rowNumber`; convertir filas no vacías sin artista/disco en `failed` con código seguro, manteniendo fuera del reporte las filas totalmente vacías, cabeceras y hojas ocultas. Clasificar solo fallos técnicos recuperables con rollback confirmado como fallos de fila; un fallo sistémico o rollback incierto detiene el lote. Sanear los mensajes públicos.
+- **Dependencias y riesgos:** BC-IMP-2.1 define los tipos; transacción individual común por BC-IMP-2.2. No cambiar reglas de duplicate lookup, normalización ni la aceptación de fechas en BC-IMP-3. Cambiar la respuesta afecta el contrato observado por la UI; backend y frontend deben activarse en un despliegue coordinado, sin desplegar por separado versiones incompatibles. Los errores de parseo de workbook y precarga siguen siendo globales según IMP-F5/contrato común.
+- **Hecho frente a hipótesis:** forma de respuesta, continuación y orden Artist→Disc están demostrados por el servicio/tests. No se ejecutaron fallos reales de conexión/rollback ni se comprobó contenido SQL en respuestas; fugas concretas de SQL y Artists huérfanos en datos existentes no están confirmados.
+
+### Contract finding — IMP-F2, IMP-F3, IMP-F4, IMP-F5 e IMP-F6
+
+**Current behavior:** manual recibe `{ date, albums: [{ line, genreId?, countryId?, ep?, debut? }] }`; éxito responde 201 `{ message, data: { savedDiscs, existingDiscs } }`, con items `{ discId, artistId, message }`. El array position no se devuelve; artist/title se recuperan del texto concatenado `message`. DTO/ValidationPipe rechaza como 400 los errores estructurales, UUID y flags antes de iniciar servicio; la fecha compartida se procesa antes del bucle y una fecha que lanza `Error` ordinario acaba normalmente en 500. Referencia inexistente lanza 404. Esos fallos no incluyen resultados previos y las líneas no parseables/re-release se omiten.
+
+Excel recibe un multipart `file` en `POST /api/catalog/import/excel` (201 por default); responde directamente `{ created, errors }`, donde `errors` contiene `{ row, disc, artist, error }`. Parser recorre hojas visibles en orden y produce `sheet` + número físico de fila; cabeceras, hojas hidden/veryHidden y filas totalmente vacías se excluyen; el número físico puede repetirse entre hojas. La respuesta no incluye `sheet` como campo ni items importados individuales. Errores de fila y duplicados llegan juntos en `errors`. La UI presenta conteo `created` y lista por fila; errores globales (archivo ausente 400, parser/precarga fallidos normalmente 500) se muestran como un mensaje. `ImportPage.vue` es consumidor manual y `ImportDiscs.vue` consumidor Excel, ambos desde `src/services/imports/imports.ts`; no se encontró otro uso directo. El primero analiza `message`, el segundo consume estructura de `errors`; ninguna vista usa un resultado común.
+
+**Problem:** el shape manual no distingue resultados por entrada ni conserva resultado al fallar. Excel continúa para muchos errores por fila, pero confunde duplicado con fallo, no identifica éxitos uno a uno, y `row` sin `sheet` no es inequívoco. Además, su `catch` devuelve `err.message` sin filtrar y trata toda excepción por fila como recuperable. Los dos flujos necesitan distintos adaptadores de localización, pero pueden compartir estado, campos de artista/disco, IDs, reason code y mensaje seguro. La fecha almacenada puede diferir de la ingresada o quedar ausente sin error; la clasificación de workbook inválido queda en IMP-F5.
+
+**Impact:** backend + frontend para el contrato común y su presentación; backend-only para transacciones individuales; backend + frontend para clasificación de errores HTTP globales si cambia el status/body de IMP-F3/4/5.
+
+**Options:**
+
+1. Mantener ambos contratos legacy; no satisface la identificación por entrada.
+2. Refactorizar persistencia por fila sin cambiar reportes; resuelve consistencia, pero no hace visibles los resultados.
+3. Usar un único contrato definitivo para ambos formatos y retirar los campos legacy cuando se active.
+4. Coordinar la activación backend/frontend tras completar los cambios backend. No desplegar por separado versiones incompatibles; la adaptación frontend se prepara para el mismo cambio contractual coordinado.
+
+**Recommendation:** usar el mismo contrato definitivo para ambos flujos bajo `data.results`; al activarlo, retirar `savedDiscs`, `existingDiscs`, `created` y `errors`. `inputIndex` es entero base cero y local al request: manual = posición del elemento en `albums`; Excel = ordinal base cero entre las filas `ParsedExcelRow` que el parser devuelve, en orden de workbook/hoja/fila y excluyendo cabeceras, hojas ocultas y filas totalmente vacías. El índice no se renumera por éxito/error y distingue entradas repetidas. `source` es una unión discriminada: `{ kind: 'manual', inputLine?: string }` (se incluye cuando el valor es una cadena) o `{ kind: 'excel', sheet, rowNumber }`; Excel necesita hoja y fila física porque el número se repite entre hojas. Cada elemento tiene `inputIndex`, `source`, `status` y `message` seguro. Resultados `imported` y `duplicate` incluyen nombres e IDs de Artist y Disc; `failed` incluye `reasonCode` estable, nombres/IDs disponibles y mensaje seguro. No se incluyen IDs inciertos ni SQL, stack o información interna. Los códigos representan causas por entrada (entrada inválida, re-release, referencia inexistente o persistencia aislada); un fallo global no genera un resultado de fila y conserva la semántica HTTP global existente/definida por IMP-F3/4/5. Los criterios de duplicado de cada formato permanecen propios. Filas Excel totalmente vacías/cabeceras/hojas ocultas no son entradas; una fila con contenido pero sin artista o disco sí devuelve `failed`. Los parsers de texto manual y workbook Excel siguen siendo independientes.
+
+**Respuesta definitiva:** ambos endpoints devolverán `{ message, data: { results: CatalogImportResultItem[] } }` en manual y `{ data: { results: CatalogImportResultItem[] } }` en Excel, junto al status HTTP ya definido para éxito. El shape de los controllers no cambia en BC-IMP-2.1; en las tareas de activación del contrato se sustituyen los campos legacy. Una petición/archivo que no se puede interpretar o un fallo sistémico sigue rechazándose con error HTTP global y mensaje seguro; errores de validación/duplicado/fallo técnico aislable se representan por entrada según su clasificación.
+
+La adaptación frontend se realiza después de completar los cambios backend y se despliega coordinadamente con la versión backend que activa el contrato. No se deben desplegar versiones incompatibles por separado. No habrá fallback legacy permanente; durante desarrollo se mantienen las respuestas actuales hasta el cambio coordinado.
+
+**Blocks the current task:** No; BC-IMP-2.1 define y tipa el contrato sin cambiar respuestas. La adaptación frontend y activación del contrato quedan para después de 2.2, 2.3 y 2.4, con despliegue coordinado.
+
+### BC-IMP-2.1b — Análisis de Excel y contrato común
+
+- **Estado:** análisis completado. La decisión preliminar de compatibilidad aditiva registrada aquí queda sustituida por BC-IMP-2.1: contrato definitivo único y despliegue backend/frontend coordinado.
+- **Alcance revisado:** controllers, servicio, parser, specs manual y Excel; types/servicios/vistas frontend `ImportPage.vue` y `ImportDiscs.vue`; rutas, roles y respuesta HTTP. No se ejecutaron pruebas, llamadas de API/importaciones ni accesos a base de datos.
+- **Conclusión:** Excel ya continúa y devuelve filas con errores para validaciones, referencias, duplicados y excepciones de fila; no necesita que se reescriba esa política para todos los casos. Sí necesita estado duplicate separado, éxito por fila con IDs, ubicación Excel inequívoca, fallas seguras y distinción entre aislables y sistémicas. La escritura Artist→Disc puede ser parcial, por lo que comparte necesidad de transacción individual con manual.
+- **Contrato analizado:** `data.results` en ambos; `inputIndex` base cero por secuencia de entrada especificada; `source` discriminada por formato; estado/nombres/IDs/reasonCode/mensaje común. La recomendación inicial de mantener proyecciones legacy era preliminar y queda reemplazada por el contrato definitivo de BC-IMP-2.1.
+- **Verificación documental:** lectura estática y de pruebas; consumers directos frontend localizados; `git diff --check`.
+
+### Tareas propuestas
+
+#### BC-IMP-1 — Alinear la clave normalizada de Artist en ambos importadores (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** Ambos importadores usan `normalizeForSearch` para buscar y crear Artists; se conserva el nombre visible y el filtro opcional de Country de Excel.
+
+- **Hallazgo:** IMP-F1.
+- **Objetivo:** persistir `Artist.nameNormalized` con la normalización canónica ya usada por Artists Write.
+- **Alcance:** ambos flujos calculan una clave con `normalizeForSearch` y la usan tanto en `findOne({ nameNormalized })` como al crear Artist. Manual continúa sin filtrar por Country; Excel conserva `countryId` como filtro cuando se informó País. Preservar el nombre visible, las relaciones y el response. Caracterizar acentos, `+`, espacios repetidos y combinación de casos.
+- **Exclusiones:** unificar el filtro de Country de los dos importadores, cambiar duplicate lookup de Disc, Disc Write u otros consumers; reparar/deduplicar valores persistidos; schema/migraciones o contrato HTTP.
+- **Dependencias/riesgos:** helper de Artists incorporado por BC-ART-1. Revisar import entre dominios y fijar comportamiento de caracteres compuestos. No se recalculan valores históricos; una Artist antigua cuya clave se guardó con la normalización previa puede no reutilizarse por la consulta canónica hasta reparar sus datos en una tarea independiente.
+- **Criterios de aceptación:** ambos importadores encuentran Artists existentes por clave normalizada y guardan esa misma clave para Artist nuevo; `name` permanece sin normalizar; Excel mantiene el filtro opcional de Country; los QueryBuilders y criterios de Disc duplicado permanecen iguales; Disc conserva la asociación al Artist reutilizado/creado. **Verificado.**
+- **Diferencias restantes documentadas:** manual no filtra Artist por Country mientras Excel añade `countryId` si se indicó; Disc duplicado manual usa `ILike` y no compara fecha, mientras Excel usa igualdad exacta y agrega `releaseDate` cuando la fecha se parsea. No se modificaron en esta tarea.
+- **Pruebas añadidas/adaptadas:** specs manual y Excel cubren Artist existente por clave, Artist nuevo con diacríticos, `+`, espacios repetidos y combinación, conservación del valor visible y asociación del Disc.
+- **Archivos:** ambos servicios y sus specs; eliminados el normalizador manual redundante y su spec; este roadmap.
+- **Verificaciones realizadas:** import manual + Excel + Artists Write: 3 suites, 42 tests aprobados; Requests: 1 suite, 8 tests aprobados; `yarn --ignore-engines build` y `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json` aprobados. `git diff --check` se vuelve a ejecutar al cierre. Prettier se comprobó; el check integral informa formato pendiente en archivos manuales/specs y roadmap, y el mismo check falla sobre `HEAD` en esos archivos. Las regiones modificadas de TypeScript se formatearon con Prettier por rango para no reformatear código preexistente fuera de alcance; `excel-import.service.ts` pasa el check integral. Sin PostgreSQL ni servicios externos.
+- **Tamaño:** S.
+
+#### BC-IMP-2 — Procesar imports manual y Excel por disco con resultados parciales (tarea padre; L, prioridad media)
+
+- **Hallazgos:** IMP-F2 e IMP-F6.
+- [x] **Completada (2026-10-15).** Backend manual/Excel y adaptación frontend implementados según BC-IMP-2.1 a BC-IMP-2.5.
+- **Objetivo:** procesar de manera independiente los registros manuales y las filas procesables de Excel, con un resultado inequívoco por entrada y sin atomicidad global.
+- **Alcance realizado:** contrato común, transacciones individuales, continuidad manual y Excel por disco/fila y adaptación frontend del reporte. Se preservaron autenticación, rutas, entrada actual y reglas de duplicados.
+- **Exclusiones:** transacción global, cambio de criterios de duplicado, normalización de Artist, corrección de fechas (BC-IMP-3/4), cambios de formato de plantilla, migraciones, reparación histórica, endpoint nuevo o versionado.
+- **Dependencias/riesgos:** se completó la secuencia 2.1 → 2.2 → 2.3/2.4 → 2.5. La activación requiere desplegar backend y frontend coordinadamente; no desplegar por separado versiones incompatibles. Errores sistémicos/rollback incierto detienen el import; escrituras de transacciones anteriores pueden persistir y no siempre será posible devolver reporte si el proceso/HTTP falla. El despliegue coordinado queda como condición operacional antes de release, no como tarea de implementación abierta.
+- **Criterios de aceptación globales:** cada registro reportable tiene un resultado ordenado e identificado por `inputIndex` y localización propia del formato; imported/duplicate/failed son distinguibles; fallos recuperables no revierten otros discos y se sigue cuando rollback es seguro; regla de duplicado permanece intacta; fallos globales siguen siendo HTTP errors seguros; frontend presenta resultados por entrada y errores globales por separado bajo el único contrato, sin mantener compatibilidad legacy permanente.
+- **Verificaciones globales:** tests focalizados en mocks de ambos servicios/controllers y tests frontend existentes; consistencia transaccional, orden/índice/fuente, errores globales, build/typecheck, Prettier y `git diff --check` comprobados en las subtareas. Sin importaciones reales ni PostgreSQL/servicios externos. La publicación queda condicionada a despliegue coordinado.
+- **Tamaño total:** L (S + M + M + S).
+
+#### BC-IMP-2.1 — Definir el contrato único tipado de resultados (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** Contrato tipado compartido añadido; no se cambiaron respuestas HTTP ni se integró aún en los servicios/controllers.
+- **Hallazgo:** IMP-F2 e IMP-F6.
+- **Objetivo:** definir una única forma tipada para los resultados por entrada de Manual y Excel.
+- **Tipos:** `src/catalog/import/dto/catalog-import-result.types.ts` exporta `CatalogImportResultItem`, las variantes discriminadas `CatalogImportImportedResult`, `CatalogImportDuplicateResult`, `CatalogImportFailedResult`, `CatalogImportResultSource`, `CatalogImportResultStatus`, `CatalogImportFailureReasonCode` y el contenedor `CatalogImportResultsData` (`{ results }`). Los éxitos y duplicados requieren nombres e IDs de Artist/Disc; los fallidos exigen `reasonCode`, admiten nombres/IDs disponibles y todos los resultados llevan índice, fuente y mensaje.
+- **Contrato definitivo:** los dos flujos usan `data.results`. `inputIndex` es entero base cero y estable por orden de entrada; manual usa el índice original en `albums`, Excel el ordinal sobre filas emitidas por el parser. La fuente manual puede llevar `inputLine`; Excel lleva hoja y fila física. Códigos de fallo por entrada: `INVALID_INPUT`, `RE_RELEASE`, `REFERENCE_NOT_FOUND`, `PERSISTENCE_FAILED`. Fallos globales quedan fuera de results y usan error HTTP global seguro. Detalles y semántica en Contract finding.
+- **Alcance realizado:** añadir tipos compartidos backend y documentar el contrato. Parsers manual/Excel siguen independientes; el contrato no unifica su parsing ni los criterios de duplicado.
+- **Exclusiones:** integrar los tipos en servicios/controllers, cambiar sus respuestas HTTP actuales, modificar frontend, persistencia, transacciones, validaciones o reglas de duplicado. No se crean tests cosméticos para interfaces sin comportamiento ejecutable.
+- **Criterios de aceptación:** ambos formatos pueden expresar imported/duplicate/failed con identificación de origen sin campos de localización ajenos al formato; resultados repetidos se distinguen por índice; reason codes solo se exigen para fallos; el contrato no admite datos internos en mensajes por su especificación documental; endpoints siguen respondiendo exactamente con sus shapes actuales en esta tarea.
+- **Verificaciones realizadas:** `yarn --ignore-engines build` y `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json` aprobados; Prettier pasa sobre el archivo de tipos. No aplican tests focalizados porque solo se añadieron tipos sin comportamiento ejecutable. El check Prettier del roadmap falla por formato preexistente ya registrado en BC-IMP-1; no se reformateó el documento completo para evitar cambios ajenos. `git diff --check` aprobado. Sin tests/importaciones reales, DB o servicios externos.
+- **Tamaño:** S.
+
+#### BC-IMP-2.2 — Aislar escrituras y validar consistencia de cada disco (M, prioridad media)
+
+- [x] **Completada (2026-10-15).** Ambos importadores realizan Artist/Disc lookup y persistencia de cada entrada con un QueryRunner independiente.
+- **Hallazgo:** IMP-F2, IMP-F6.
+- **Objetivo:** asegurar rollback de una entrada cuando falla después de crear/reutilizar Artist, en ambos formatos, sin revertir transacciones de otras entradas.
+- **Alcance realizado:** `runCatalogImportTransaction` en `src/catalog/import/catalog-import-transaction.ts` abre, confirma o revierte y libera un QueryRunner por disco. En ambos flujos se obtienen repositorios de Artist y Disc desde el mismo `EntityManager` de ese runner. Quedan en la transacción la búsqueda/creación de Artist, su guardado, lookup de Disc y guardado de Disc. Cada commit queda independiente y no se abre una transacción por lote.
+- **Operaciones fuera del límite:** Manual parsea fecha y línea, obtiene Country predeterminado y resuelve Genre/Country explícitos antes de abrir la transacción; Excel parsea el workbook, precarga Genre/Country y valida los campos/referencias antes de abrir cada transacción. Son lecturas/preparación sin escrituras de Artist/Disc. Los logs de inicio, parsing y validación quedan fuera; los logs de éxito y la composición del reporte ocurren después del commit y tampoco son reversibles.
+- **Diferencias preservadas:** Manual continúa lanzando el primer error de referencia o persistencia y no entrega el reporte; los commits de registros previos permanecen. Excel conserva su `catch`/continuidad ante errores de operación de fila después de un rollback completado, y su response actual `{ created, errors }`. No se añadió `data.results` ni cambió el contrato HTTP. Criterios duplicate manual (ILike y Artist) y Excel (igualdad exacta Artist+Disc, fecha opcional) siguen intactos.
+- **Límite de error transaccional:** los fallos al crear/conectar/iniciar/confirmar/liberar QueryRunner se propagan como `CatalogImportTransactionError`; en Excel salen del `catch` por fila y abortan la petición. Los fallos del callback con rollback completado conservan el comportamiento actual de cada importador. Si rollback falla, el wrapper conserva el error original y `rollbackError` y evita que Excel continúe. No se agregan reintentos ni se convierten errores de ciclo transaccional en errores recuperables. La versión instalada de TypeORM descarta el error de rollback dentro de `EntityManager.transaction`, por lo que el QueryRunner explícito hace visible ese fallo.
+- **Exclusiones:** transacción global, cambiar forma de entrada/respuesta, reintentar automáticamente, capturar/continuar por filas todavía, cambiar duplicate lookup/normalización/fechas, cambiar Excel parser o plantilla.
+- **Dependencias/riesgos:** depende de modelos/types de 2.1. Rollback debe confirmarse para clasificar error como aislado; una prueba simulada no garantiza comportamiento de PostgreSQL. Si rollback/conexión quedan inciertos, detener como fallo sistémico. Mantener writes Artist y Disc dentro del mismo manager también para éxito y duplicate lookup de cada fila.
+- **Criterios de aceptación:** Artist nuevo y Disc exitoso se confirman juntos; fallo del guardado de Disc revierte el Artist recién creado cuando el rollback se confirma; Artist preexistente no se guarda ni elimina por fallo de otro registro; commits previos permanecen; manager usa repositorios transaccionales para todas las operaciones de Artist/Disc; duplicados y relaciones mantienen su semántica actual.
+- **Verificaciones realizadas:** `yarn --ignore-engines test --runInBand src/catalog/import`: 10 suites, 89 tests aprobados; `yarn --ignore-engines test --runInBand src/identity/auth/__tests__/auth-rate.consumer.spec.ts`: 1 suite, 3 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; `git diff --check`. Prettier pasa en el helper transaccional, servicio Excel y spec de módulo. La versión HEAD anterior a esta tarea ya falla Prettier en el servicio/spec Manual y spec Excel; las secciones añadidas se formatearon por rango sin reformatear el resto. Sin PostgreSQL ni importaciones reales.
+- **Tamaño:** M.
+
+#### BC-IMP-2.3 — Procesar el lote manual con resultados parciales (M, prioridad media)
+
+- [x] **Completada (2026-10-15).** Manual procesa y reporta cada álbum por separado; el endpoint activa el contrato definitivo.
+- **Hallazgo:** IMP-F2.
+- **Alcance realizado:** el servicio emite un elemento ordenado por cada índice de `albums`, con `inputIndex`, `source.kind: manual`, `inputLine` cuando es string, nombres/IDs disponibles, estado y mensaje seguro. `imported` se devuelve tras commit confirmado; el lookup existente Artist+Disc mantiene el criterio `ILike` y genera `duplicate`; línea inválida o incompleta produce `INVALID_INPUT`, re-release `RE_RELEASE`, Genre/Country ausente `REFERENCE_NOT_FOUND`. La respuesta ya no incluye `savedDiscs` ni `existingDiscs`; el controller mantiene el envelope `{ message, data }`, fija HTTP 201 y `data` contiene `{ results }`.
+- **Validación y errores:** `albums` ausente/no-array, entrada que no puede transformarse como objeto, campo raíz inválido y fecha compartida inválida siguen rechazándose globalmente; `AlbumItemDto` conserva whitelist anidada con `@Allow`, y el servicio clasifica por posición los valores/IDs opcionales inválidos como `INVALID_INPUT`. Genre/Country inexistentes son fallos por fila; fallos técnicos de sus consultas y de Country predeterminado se convierten en error HTTP global seguro. La persistencia solo continúa como `PERSISTENCE_FAILED` para `QueryFailedError` con SQLSTATE PostgreSQL allowlist (`22001`, `22003`, `22007`, `22008`, `23502`, `23503`, `23514`) después de que el helper haya completado rollback y release. Errores desconocidos, códigos no permitidos (incluido `23505`, cuya semántica de duplicado no se infiere), errores de conectividad y fallos de connect/start/commit/rollback/release detienen el lote; nunca se inspeccionan mensajes SQL. No hay reintentos.
+- **Límite y consistencia:** cada álbum mantiene su propio QueryRunner de BC-IMP-2.2; no se abre transacción global. Una fila recuperable revierte únicamente sus writes de Artist/Disc y deja continuar; commits anteriores se conservan. En fallo sistémico la API propaga error global sanitizado, no procesa filas restantes y no entrega un reporte parcial; el mensaje no afirma si la fila en curso se confirmó o revirtió.
+- **Exclusiones:** Excel (2.4), transacción global, fallos sistémicos no recuperables, exponer detalle interno, cambios de normalización/duplicados, reglas de fecha BC-IMP-4.
+- **Dependencias/riesgos:** depende de 2.1 (tipos disponibles) y 2.2 (atomicidad por entrada). La clasificación continuable está ligada a SQLSTATE de PostgreSQL; las pruebas usan QueryRunner/repositorios simulados y no validan códigos ante una instancia real. Si el backend se despliega con el contrato nuevo sin la adaptación frontend, las versiones son incompatibles; la activación requiere despliegue coordinado según el padre BC-IMP-2. Si un error sistémico impide responder, commits previos pueden persistir sin que el usuario reciba sus resultados.
+- **Criterios de aceptación:** la respuesta procesada contiene exactamente un resultado por entrada indexable, conserva el orden y permite distinguir títulos repetidos por `inputIndex`/`inputLine`; 30 entradas con 3 duplicadas, 2 fallidas y 25 correctas reportan 25 `imported`, 3 `duplicate` y 2 `failed`; resultado incluye código estable y mensaje seguro cuando falla; inputs globalmente inválidos conservan error HTTP; una fila solo continúa tras rollback confirmado y error allowlisted; error sistémico detiene inmediatamente el lote; relaciones Disc-Artist y commits previos se conservan; el contrato definitivo no expone campos legacy.
+- **Verificaciones realizadas:** `yarn --ignore-engines test --runInBand src/catalog/import/manual`: 6 suites, 44 tests aprobados; `yarn --ignore-engines test --runInBand src/catalog/import`: 11 suites, 97 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; Prettier check de los seis archivos Manual propios modificados; `git diff --check`. Solo mocks; sin PostgreSQL ni importaciones reales.
+- **Tamaño:** M.
+
+#### BC-IMP-2.4 — Adaptar Excel al resultado común sin rehacer su continuidad (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** Excel devuelve resultados estructurados por fila y distingue duplicados, fallos recuperables y errores sistémicos.
+- **Hallazgo:** IMP-F6.
+- **Contrato y alcance realizado:** `ExcelImportService` produce un `CatalogImportResultsData` con un `result` por cada `ParsedExcelRow` en orden. `inputIndex` es el ordinal base cero entre filas emitidas por el parser en orden de hoja/fila; `source` conserva `{ kind: 'excel', sheet, rowNumber }` con número físico de fila. Las filas vacías completas, cabeceras y hojas ocultas continúan excluidas por parser; una fila emitida con Artist o Disc ausente produce `failed/INVALID_INPUT`. `imported` y `duplicate` incluyen nombres/IDs de Artist y Disc; duplicados ya no se mezclan con fallos. `failed` utiliza los reason codes del contrato común y mensajes seguros.
+- **Errores y consistencia:** se mantienen preloads de Genre/Country y el procesamiento secuencial; las referencias ausentes y los campos obligatorios faltantes son fallos de fila recuperables. La transacción por fila de BC-IMP-2.2 conserva Artist/Disc conjuntamente y no se crea transacción global. Solo un `QueryFailedError` con SQLSTATE allowlisted (`22001`, `22003`, `22007`, `22008`, `23502`, `23503`, `23514`) se convierte en `PERSISTENCE_FAILED`, y únicamente cuando el helper devuelve tras rollback y liberación confirmados. Errores desconocidos, códigos no permitidos (incluido `23505`), fallos de conexión/ciclo de QueryRunner, rollback o liberación detienen el lote con HTTP 500 seguro; los mensajes SQL/driver no se devuelven y no se reintenta. Error de lectura del workbook sigue siendo global para BC-IMP-4.
+- **Contrato HTTP:** `POST /api/catalog/import/excel`, multipart `file`, permisos y status de éxito permanecen; `@Post()` conserva el HTTP 201 por defecto. La respuesta ahora es `{ data: { results } }`, retirando `{ created, errors }` y sin añadir un mensaje nuevo. La adaptación frontend debe activarse con este backend en un despliegue coordinado; no desplegar versiones incompatibles por separado.
+- **Rendimiento observado:** Genre y Country se consultan una vez cada uno antes del bucle y se usan mapas en memoria. Cada fila importable mantiene una búsqueda de Artist, una búsqueda de Disc y un QueryRunner/transacción individual, además de los saves que correspondan; el bucle no se paraleliza. La prueba simulada de 150 filas confirma que el cambio no añade consultas de referencia ni consultas por fila nuevas. No hay evidencia para optimizar esas operaciones ni para añadir cache; no se midió con PostgreSQL.
+- **Exclusiones:** reimplementar loop/continuidad que ya existe; cambiar regla exacta de duplicate lookup (Artist+Disc y fecha opcional), normalización de Artist, aceptación de fecha (BC-IMP-3), clasificación de workbook ilegible/status global (BC-IMP-4/IMP-F5), columnas/plantilla, atomicidad global.
+- **Dependencias/riesgos:** depende de 2.1 (tipos compartidos) y 2.2 (atomicidad por entrada). La allowlist de SQLSTATE se prueba con mocks; no se validó ante PostgreSQL real. El 23505 y los errores desconocidos no se atribuyen a una fila porque su causa no se puede determinar con seguridad; por tanto, un caso concurrente no clasificable interrumpe el lote y no se presenta falsamente como `failed`. El contrato nuevo es incompatible con consumidores frontend antiguos hasta el despliegue coordinado.
+- **Criterios de aceptación:** cada `ParsedExcelRow` tiene exactamente un resultado con índice estable; hoja/fila distinguen ubicaciones repetidas entre sheets; duplicado incluye Artist/Disc IDs y no aparece como `failed`; validación y referencias ausentes continúan; fallo de persistencia solo continúa tras rollback/liberación confirmados y clasificación allowlisted; fallo sistémico detiene el procesamiento restante con error global seguro; transacciones y orden individuales se conservan; no se exponen mensajes SQL ni campos legacy.
+- **Verificaciones realizadas:** `yarn --ignore-engines test --runInBand src/catalog/import/excel`: 4 suites, 55 tests aprobados; `yarn --ignore-engines test --runInBand src/catalog/import`: 11 suites, 101 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; Prettier check de los cuatro archivos Excel modificados; `git diff --check`. Se añadieron casos con 150 filas y mocks; sin PostgreSQL ni importaciones reales.
+- **Tamaño:** S.
+
+#### BC-IMP-2.5 — Adaptar el frontend al contrato único de importación
+
+- [x] **Completada en frontend (2026-10-15).** Estado registrado tras inspeccionar implementación, pruebas existentes y roadmap del frontend; ese repositorio no se modificó durante BC-IMP-3.
+- **Evidencia:** `riffvalley-app-front/src/services/imports/imports.ts` consume `data.results` para Excel y rechaza la forma legacy; `src/views/importPage/ImportDiscs.vue` presenta conteos, estados y hoja/fila; `src/services/imports/imports.test.ts` y `src/views/importPage/importResults.test.ts` caracterizan contrato, orden, estados y localización. `roadmap/catalog-import.md` registra esta tarea como completada y requiere despliegue coordinado.
+- **Resultado:** ambas vistas consumen el contrato definitivo sin fallback legacy y distinguen importados, duplicados omitidos y fallidos. Los errores sistémicos seguros advierten sobre escrituras anteriores; backend y frontend deben desplegarse coordinadamente.
+- **Verificación en esta tarea:** revisión estática de los archivos y pruebas citados; no se ejecutaron tests frontend.
+
+#### BC-IMP-3 — Distinguir fecha Excel opcional de fecha inválida (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** Excel diferencia fecha vacía, válida e inválida sin cambiar la respuesta HTTP.
+- **Hallazgo:** IMP-F4.
+- **Reglas implementadas:** el parser conserva `null` para valores vacíos (incluidos espacios), conserva objetos `Date` válidos que ExcelJS entrega para celdas de fecha y acepta los formatos textuales previos solo si su calendario existe. Valida componentes antes de crear fechas día/mes/año, ISO y mes textual; no hay rollover para días o meses imposibles. Celdas con tipo no admitido, fechas ilegibles y objetos `Date` inválidos quedan marcados `INVALID_DATE` en el resultado del parser. Los seriales numéricos con formato de fecha se convierten a `Date` por ExcelJS y conservan su fecha; números sin formato de fecha y otros tipos no admitidos se rechazan como entrada inválida.
+- **Resultados:** el servicio convierte una fecha inválida en `failed/INVALID_INPUT`, mensaje seguro y `source` con hoja y fila física; omite la persistencia de esa fila y continúa con las siguientes. Fecha ausente sigue siendo opcional y se guarda como `releaseDate: null`. No se alteró el envelope ni el status HTTP de Excel.
+- **Exclusiones:** fechas obligatorias, nuevos formatos de plantilla, cambios de headers/columnas, reglas de duplicado, parser/validación manual y BC-IMP-4 (errores globales de workbook).
+- **Verificaciones:** `yarn --ignore-engines test --runInBand src/catalog/import/excel`: 4 suites, 65 tests aprobados; `yarn --ignore-engines test --runInBand src/catalog/import`: 11 suites, 111 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; Prettier sobre parser/specs y servicio/spec Excel; `git diff --check`. Sin PostgreSQL ni importaciones reales.
+- **Tamaño:** S.
+
+#### BC-IMP-4 — Validar fechas manuales y clasificar workbook ilegible (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** Fechas compartidas manuales estrictas y errores de workbook clasificados sin convertir errores internos en 400.
+- **Hallazgos:** IMP-F3 e IMP-F5.
+- **Fechas manuales:** `parseManualDate` acepta el formato de mes inglés completo, día y año de cuatro cifras que ya usa el flujo, y comprueba que los componentes forman una fecha real sin rollover. Devuelve `null` para fechas imposibles, malformadas o que producirían `Invalid Date`; el servicio responde `BadRequestException` con mensaje seguro antes de consultar catálogos o iniciar escrituras. `date` continúa siendo requerido por el DTO. No existe campo de fecha por álbum, por lo que no se inventó un fallo individual; si se añade en otro contrato, su clasificación requerirá una decisión independiente.
+- **Workbook Excel:** archivo ausente y buffer vacío/inválido reciben 400. El parser emite `InvalidExcelWorkbookError` para firma que no es ZIP, errores conocidos de estructura ZIP, manifest workbook ausente/malformado reconocido y workbook sin hojas. El controller traduce únicamente ese error tipado a un 400 seguro. Excepciones no reconocidas de ExcelJS y fallos inesperados se propagan como errores de servidor; no se convierten indiscriminadamente todos los errores de librería en errores de cliente. No se cambió el procesamiento de filas ni el parser de fechas Excel de BC-IMP-3.
+- **Contratos y exclusiones:** se preservan `data.results`, mensajes de resultado por disco/fila, rutas, permisos y status de éxito; fecha Excel sigue opcional. Sin cambios al frontend, criterios duplicate, importación secuencial, esquema o migraciones. El frontend ya muestra los errores globales aprobados según BC-IMP-2.5; el contrato actualizado backend/frontend requiere despliegue coordinado.
+- **Criterios comprobados:** se acepta fecha válida e incluyendo 29 de febrero en año bisiesto; se rechazan días/meses inexistentes, años no bisiestos, texto malformado e `Invalid Date`; fecha raíz inválida no toca repositorios. Workbook válido continúa; archivo ausente, vacío, no ZIP, ZIP truncado o sin hojas se clasifica como 400; fallo desconocido conserva el camino de servidor.
+- **Verificaciones realizadas:** `yarn --ignore-engines test --runInBand src/catalog/import/manual`: 6 suites, 51 tests aprobados; `yarn --ignore-engines test --runInBand src/catalog/import/excel`: 4 suites, 76 tests aprobados; `yarn --ignore-engines test --runInBand src/catalog/import`: 11 suites, 129 tests aprobados; build y typecheck aprobados; Prettier sobre los ocho archivos TypeScript propios; `git diff --check`. Sin PostgreSQL, APIs ni importaciones reales.
+- **Hallazgos fuera de alcance:** la fecha individual no existe en `AlbumItemDto`; las fechas por fila de Excel permanecen bajo BC-IMP-3. El límite de upload/MIME y clasificación de errores de generación de plantilla siguen fuera de BC-IMP-4, según el alcance aprobado.
+- **Tamaño:** S.
+
+### Hallazgos sin tarea
+
+- **Reglas distintas de resolución y duplicate:** manual usa `ILike` y omite fecha en la búsqueda de Disc; Excel usa igualdad exacta y condición de fecha opcional. Está demostrado, pero no hay evidencia de qué identidad de álbum representa un mismo Disc cuando varían mayúsculas, Country o releaseDate. No unificar semánticas sin decisión de dominio.
+- **Cabeceras Excel posicionales:** el template define siete encabezados y el parser ignora nombres. El spec caracteriza explícitamente headers arbitrarios; no se detectó un fallo de consumer ni se propone cambiar el formato legacy.
+- **Error de persistencia Excel por fila:** se captura y continúa intencionalmente y existe prueba de escrituras previas/posteriores; no se propone atomicidad del workbook completo. La posible Artist huérfana si falla el guardado de Disc no se verificó con DB real y no justifica tarea separada frente al flujo de revisión de Artists.
+- **Tamaño/MIME del upload:** `FileInterceptor` no configura límites explícitos, pero no se inspeccionaron límites globales de Express/Multer ni patrones de carga. Se registra para decidir límites con datos de operación, sin tarea de seguridad inferida.
+- **Plantilla y logging:** hay `console.log/error` de diagnóstico y envío de error de generación de plantilla con texto de excepción. Son hechos de calidad, pero no se crea tarea de cleanup aislada sin impacto actual demostrado.
+
+**Verificaciones de BC-IMP-0:** lectura estática del módulo, entidades/normalizadores relevantes, composición, consumers directos y specs existentes; coherencia de estados/tareas del roadmap; `git diff --check`. No se modificó código, tests ni fixtures; no se ejecutaron tests/E2E, importaciones reales, PostgreSQL, migraciones ni servicios externos. Discs, CatalogOverview y LastfmCatalog siguen pendientes.
+
+## Auditoría 5 — Catalog / LastfmCatalog
+
+**Estado:** completado (2026-10-15); BC-LFM-1 completada.
+**Base observada:** rama actual, 2026-10-15. El checkout contiene cambios locales preexistentes en este roadmap y en Catalog Import; se conservaron. BC-LFM-1 modificó solo el controller, su spec y esta sección del roadmap.
+**Alcance leído:** implementación completa de `src/catalog/lastfm/` y sus cuatro specs; composición de `AppModule`; métodos de `DiscsService` usados directamente y sus pruebas de delegación; referencias de entorno; lectura limitada de la interfaz de `LastfmIntegrationModule`/`LastfmApiService` y de sus specs para entender el límite. Se leyeron las pruebas sin ejecutarlas. No se auditó Lastfm Integration.
+
+### Inventario, responsabilidades y dependencias
+
+- `LastfmModule` compone `LastfmController`, `LastfmService`, `DiscModule`, `AuthModule` y `LastfmIntegrationModule`; no declara entidades ni repositorios propios. `AppModule` es su consumidor de composición conocido. No se encontraron otras llamadas directas a Lastfm Catalog.
+- `GET /api/lastfm/artist?artist=...` no requiere rol y delega el payload sin transformación. `POST /api/lastfm/fill-images?month=...&year=...&week=...` requiere mínimo `superadmin`. Su DTO local convierte parámetros a número y valida mes 1–12, año desde 2020 y semana opcional >= 1. La validación global aplica whitelist, rechazo de campos desconocidos y transformación.
+- `LastfmService` concentra dos flujos pequeños y cohesionados: delega la consulta de artista y coordina el enriquecimiento semanal de discos. Para imágenes verifica configuración, pide candidatos sin imagen a `DiscsService`, consulta Last.fm por artista/álbum y persiste cada URL mediante `DiscsService.updateImage`. No accede directamente a TypeORM ni repite consultas de catálogo.
+- `DiscsService` delega las operaciones de enriquecimiento a `DiscEnrichmentService`, que selecciona candidatos por rango de fechas semanal y ausencia de imagen y actualiza `Disc.image`. Esta dependencia mantiene las consultas y escrituras del catálogo dentro de Discs.
+- La frontera observada es suficiente: Catalog controla selección/orquestación/persistencia de negocio mediante Discs; Integration ofrece `assertConfigured`, `getArtistInfo` y `getAlbumImage` para la comunicación externa. Lastfm Catalog no construye URLs ni interpreta el protocolo HTTP/JSON.
+- Dependencia de configuración: `LASTFM_API_KEY` aparece en `.env.template`; su validación ocurre al ejecutar los métodos del provider, antes de la búsqueda semanal. No se encontraron otras referencias de configuración específicas de Catalog.
+- En la lectura acotada de Integration, `getArtistInfo` propaga errores HTTP/provider como `BadRequestException`; `getAlbumImage` convierte ausencia, error HTTP, red o JSON inválido a `null`. Catalog conserva esa semántica y un fallo de `updateImage` rechaza la operación agregada. La calidad de esos contratos y respuestas pertenece a la auditoría independiente de Integration.
+- No hay entidades/migraciones ni consultas TypeORM propias de Lastfm Catalog. No se observó duplicación o código muerto demostrable que justifique cleanup estructural.
+
+### Pruebas existentes y cobertura consultada
+
+- `lastfm.module.spec.ts` caracteriza el cableado Nest de Catalog, Auth e Integration.
+- `lastfm.controller.spec.ts` caracteriza rutas, verbos, ausencia de guarda en lectura pública, rol `superadmin` en la operación de escritura y, tras BC-LFM-1, el rechazo de parámetros inválidos y la delegación/payload para nombres válidos.
+- `lastfm.service.spec.ts` caracteriza delegación del payload de artista, candidatos vacíos, orden de llamada de configuración, consulta semanal, imagen encontrada/no encontrada y persistencia. No caracteriza fallos de escritura, candidatos múltiples con respuestas fuera de orden o fallo parcial de la operación agregada.
+- `lastfm-api.service.spec.ts` se leyó solo para entender la interfaz de dependencia; no se tomó como auditoría de Integration.
+- No se ejecutaron tests, llamadas a Last.fm ni consultas a PostgreSQL.
+
+### Hallazgos
+
+#### LFM-F1 — La consulta pública de artista no valida el parámetro requerido
+
+**Estado:** resuelto por BC-LFM-1 (2026-10-15).
+
+- **Ubicación:** `src/catalog/lastfm/lastfm.controller.ts:18-20`; dependencia observada en `src/integrations/lastfm-integration/lastfm-api.service.ts:23-27, 64-72`.
+- **Evidencia (hecho):** el controller recibe `@Query('artist') artist: string` sin DTO, pipe o comprobación. La integración construye la URL usando `encodeURIComponent(value)`; si el parámetro está ausente, el valor no se valida antes de producir la solicitud externa. El spec de controller comprueba ruta y exposición pública, pero no el input.
+- **Consecuencia:** la ruta puede gastar una solicitud externa en un nombre ausente, vacío, whitespace o repetido/multivalor y devolver un error originado por Last.fm en vez de rechazar una petición local malformada. No se confirmó qué consumidor frontend usa la ruta ni si envía estos valores.
+- **Categoría / prioridad / tamaño:** bug funcional de validación; media; S.
+- **Propuesta:** validar en el límite del controller que `artist` sea un único string no vacío (rechazar whitespace-only) y responder HTTP 400 antes de llamar al servicio. Mantener sin transformación los nombres válidos para preservar el valor que se consulta. Añadir cobertura del parámetro ausente, vacío/whitespace, multivalor y nombre válido.
+- **Dependencias y riesgos:** revisar el consumidor HTTP disponible antes de implementar; frontend no está en este checkout y el uso concreto permanece no confirmado. Cambia el error observable solo para entradas inválidas; conservar ruta, permisos públicos y respuesta para entradas válidas. No cambiar el tratamiento de errores/respuestas de Last.fm, que corresponde a Integration.
+- **Hecho frente a hipótesis:** falta de validación y envío del argumento a la dependencia comprobados estáticamente; que algún consumer actual envíe entradas inválidas no está confirmado.
+
+### Contract finding — LFM-F1
+
+**Current behavior:** `GET /api/lastfm/artist` no valida `artist`; los valores inválidos se envían a Last.fm y el error devuelto depende del provider.
+
+**Problem:** una petición local incompleta o multivalor genera tráfico externo y un error externo en lugar de una respuesta de validación clara.
+
+**Impact:** backend + frontend; el consumer frontend y su comportamiento no se confirmaron en este repositorio.
+
+**Options:**
+
+1. Preservar el comportamiento actual para entradas inválidas.
+2. Añadir validación interna del controller con HTTP 400, conservando el contrato para nombres válidos.
+3. Definir otro contrato de error o cambiar la forma de respuesta.
+4. Coordinar una adaptación backend/frontend si el inventario del consumer encuentra solicitudes inválidas.
+
+**Recommendation:** opción 2; evita solicitudes externas inútiles y no cambia el contrato válido. Confirmar el consumer antes de implementación y coordinar solo si depende del comportamiento inválido actual.
+
+**Blocks the current task:** No; la auditoría termina con el hallazgo y la tarea queda pendiente.
+
+### Tareas propuestas
+
+#### BC-LFM-1 — Validar `artist` en la consulta pública de Last.fm (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** El controller rechaza valores ausentes, no string, vacíos y whitespace-only con `BadRequestException` HTTP 400 antes de llamar a LastfmService. No transforma ni normaliza nombres válidos.
+- **Hallazgo:** LFM-F1.
+- **Alcance realizado:** validación de string único no vacío/no whitespace en `lastfm.controller.ts`; la comprobación acepta espacios internos, Unicode y símbolos, y pasa el valor válido intacto a LastfmService. Se conserva ruta, exposición pública y payload devuelto por el servicio.
+- **Exclusiones:** cambios a respuestas válidas, permisos, protocolo o errores del provider; cambios en Lastfm Integration; nuevos endpoints; adaptación frontend automática; cambios a fill-images o consultas de Discs.
+- **Consumidores:** no se encontraron consumidores directos del endpoint en backend fuera de su controller/spec; el frontend no está disponible en este checkout.
+- **Criterios verificados:** ausente, vacío, espacios, tab/newline, multivalor y objeto reciben HTTP 400 y no llaman al servicio; nombres con espacios internos y con Unicode/símbolos se delegan sin cambios y devuelven por identidad el payload del servicio; ruta y permisos siguen caracterizados.
+- **Verificaciones realizadas:** `yarn --ignore-engines test --runInBand src/catalog/lastfm/lastfm.controller.spec.ts` — 1 suite, 9 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines tsc --noEmit -p tsconfig.build.json`; Prettier check de los dos archivos Lastfm modificados; `git diff --check`. Sin llamadas a Last.fm, PostgreSQL ni otros servicios externos.
+- **Tamaño:** S.
+
+### Hallazgos sin tarea
+
+- `fillWeeklyImages` procesa candidatos concurrentemente con `Promise.all`; `notFound` se añade según el orden de respuesta y no necesariamente el orden de la consulta. No hay requisito ni evidencia de consumer que demuestre que el orden sea contractual, por lo que no se propone cambiar concurrencia ni respuesta.
+- Los errores de consulta/persistencia de un disco rechazan la operación agregada aunque otras escrituras concurrentes puedan completarse. Es una consecuencia visible del flujo, pero no hay evidencia de fallo operativo ni definición de resultados parciales que justifique convertirlo en una tarea de Catalog; una decisión futura necesitaría caracterizar el contrato y clasificar errores con evidencia.
+- La validación de shape de respuestas, HTTP/red/JSON y tipado del payload opcional de artista pertenecen a Lastfm Integration y quedan expresamente fuera de BC-LFM-0.
+- No se justifica extraer servicios/helpers ni mover código: la responsabilidad de Catalog es pequeña y coherente y las dependencias respetan los límites actuales.
+
+**Verificaciones de BC-LFM-0:** revisión estática completa de `src/catalog/lastfm/`, composición, consumers directos conocidos, operaciones de Discs usadas, referencias de configuración y specs existentes; lectura limitada de la dependencia Lastfm Integration; coherencia del roadmap; `git diff --check`. En BC-LFM-0 no se modificó producción, tests ni fixtures ni se ejecutaron tests/E2E, PostgreSQL o servicios externos. **Cierre de BC-LFM-1:** implementación y verificaciones registradas arriba; LFM-F1 resuelto y sin tareas Lastfm Catalog pendientes. Discs y CatalogOverview permanecen pendientes; Lastfm Integration conserva su estado pendiente para auditoría propia.
 
 ## Hallazgos históricos pendientes de clasificación futura
 

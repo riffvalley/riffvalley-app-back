@@ -1,4 +1,10 @@
-import { Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
@@ -16,7 +22,11 @@ export class LastfmController {
   constructor(private readonly lastfmService: LastfmService) {}
 
   @Get('artist')
-  getArtistInfo(@Query('artist') artist: string) {
+  getArtistInfo(@Query('artist') artist: unknown) {
+    if (typeof artist !== 'string' || artist.trim().length === 0) {
+      throw new BadRequestException('artist must be a non-empty string');
+    }
+
     return this.lastfmService.getArtistInfo(artist);
   }
 
