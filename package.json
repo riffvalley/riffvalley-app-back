@@ -32,6 +32,7 @@
     "db:status": "node scripts/db-migrations.js status",
     "db:migrate": "node scripts/db-migrations.js migrate",
     "db:check": "node scripts/db-migrations.js check",
+    "db:bootstrap-catalog-test": "node -r ts-node/register -r tsconfig-paths/register scripts/bootstrap-catalog-test-schema.ts",
     "migration:revert": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert --dataSource src/data-source.ts",
     "console": "node dist/standalone"
   },
