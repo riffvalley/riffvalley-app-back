@@ -9,7 +9,8 @@ import {
   Query,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { ArticlesService, FindArticleParams } from './articles.service';
+import { ArticlesService } from './articles.service';
+import { FindArticlesQueryDto } from './dto/find-articles-query.dto';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
@@ -26,7 +27,7 @@ export class ArticlesController {
   }
 
   @Get()
-  findAll(@Query() query: FindArticleParams) {
+  findAll(@Query() query: FindArticlesQueryDto) {
     return this.articlesService.findAll(query);
   }
 

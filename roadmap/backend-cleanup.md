@@ -58,7 +58,7 @@ La secuencia se ampliará después de cada dominio; no constituye una orden para
 | ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries, Genres, CatalogImport, CatalogOverview y LastfmCatalog completados; Discs en cleanup |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                                                                                                |
-| 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Pendiente                                                                                                |
+| 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Articles completado; resto pendiente                                                                     |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                                                                                                |
 | 5     | Identity                  | Auth, AccessRequests                                                                                                              | Pendiente                                                                                                |
 | 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                            | Pendiente                                                                                                |
@@ -83,7 +83,7 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado**. S
 | Community                 | Pendings            | pendiente  |
 | Community                 | Rates               | pendiente  |
 | Community                 | Requests            | pendiente  |
-| Editorial                 | Articles            | pendiente  |
+| Editorial                 | Articles            | completado |
 | Editorial                 | Asignations         | pendiente  |
 | Editorial                 | Contents            | pendiente  |
 | Editorial                 | FestivalPlaylists   | pendiente  |
@@ -1122,6 +1122,187 @@ La adaptación frontend se realiza después de completar los cambios backend y s
 - Los errores de `findOneOrFail` se traducen todos a 404, incluidos errores distintos a “no encontrado”; la consulta no distingue errores de infraestructura. No se observó un caso concreto que justifique cambiar ese contrato ahora.
 
 **Verificaciones de BC-DIS-0:** revisión estática de módulo, controller, servicios, DTOs, entidad, helpers, consultas, composición, consumers directos y specs; contraste de la configuración de ValidationPipe y del transformer instalado de TypeORM para DIS-F1; revisión de coherencia de estados y tareas del roadmap; `git diff --check -- roadmap/backend-cleanup.md`. En ese cierre de auditoría no se modificó producción, pruebas, fixtures, entidades ni migraciones y no se ejecutaron pruebas/typecheck/build, PostgreSQL, migraciones, Heroku ni servicios externos. Las implementaciones posteriores se registran en sus tareas.
+
+## Auditoría 2 — Editorial / Articles
+
+**Estado:** completado; BC-ARTI-1, BC-ARTI-2 y BC-ARTI-3 completadas. BC-ARTI-0 completada (2026-10-15).
+**Base observada:** rama `refactor/editorial`, 2026-10-15. Se detectó un cambio local previo en `src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts`; se conservó sin inspeccionarlo como parte de Articles ni modificarlo.
+**Alcance leído en BC-ARTI-0:** `src/editorial/articles/` completo (controller, service, module, DTOs y entidad); composición de `AppModule`; consumidores backend directos de Article/service/repositorio; entidades Content y User; rutas de Contents usadas por Articles; ValidationPipe global y pruebas pertinentes. Entonces no se revisó frontend ni se ejecutaron tests, build o typecheck.
+**Ampliación en BC-ARTI-1:** se revisaron los consumidores de Articles en `riffvalley-app-front`, especialmente creación y edición en Articles Kanban y edición desde Content Calendar. No se modificó frontend. No se accedió a PostgreSQL ni a servicios externos.
+**Ampliación en BC-ARTI-2:** se verificó el consumer `getArticles`, que actualmente envía solo `userId` como UUID y omite filtros vacíos; se añadieron pruebas de listado mediante un `ValidationPipe` con la misma configuración que `main.ts`. No se modificó frontend ni se accedió a PostgreSQL o servicios externos.
+**Ampliación en BC-ARTI-3:** se revisaron las migraciones que declaran las constraints de Article→User y se caracterizaron mediante `QueryFailedError` los errores específicos y los errores ajenos; no se accedió a PostgreSQL ni se modificaron otros módulos.
+
+### Inventario y contratos observados
+
+`ArticlesModule` está registrado en `AppModule`. Incluye `ArticlesController`, `ArticlesService`, `Article`, DTOs de creación y actualización, y registra el repositorio TypeORM. El módulo importa `AuthModule` y `ContentsModule`; exporta `ArticlesService` y `TypeOrmModule`.
+
+| Método y ruta (`/api`) | Método | Acceso observado |
+| --- | --- | --- |
+| `/articles` | GET | Público; filtros `limit`, `offset`, `q`, `status`, `userId`; devuelve arreglo paginado de hasta 200 filas |
+| `/articles/:id` | GET | Público; `ParseUUIDPipe`; 404 si no existe |
+| `/articles` | POST | `riffValley`; `CreateArticleDto` |
+| `/articles/:id` | PATCH | `riffValley`; `ParseUUIDPipe` y `UpdateArticleDto` |
+| `/articles/:id/content` | POST | `riffValley`; crea Content de backlog vinculado si Article tiene usuario y no tiene Content |
+| `/articles/:id` | DELETE | `riffValley`; `ParseUUIDPipe`; rechaza con 400 si existe Content asociado |
+
+No hay autorización por ownership ni uso de `@GetUser()`; las mutaciones están restringidas al rol editorial `riffValley`. Las lecturas quedan públicas. La prueba `src/identity/auth/__tests__/domain-mutation-authorization.spec.ts` incluye las cuatro mutaciones de Articles y sus mínimos de rol; no es una prueba HTTP integral.
+
+`Article` tiene campos `name`, `status`, `type`, `link`, `updateDate`, marcas de tiempo y relaciones con Content y con User en los papeles de autor, editor y coautor. Las relaciones de usuario permiten `null` y usan `ON DELETE SET NULL`; Content es la relación inversa one-to-one. Article no declara relaciones eager. `findAll` y `findOne` cargan explícitamente `user`, `content`, `editor` y `coauthor`; se preserva el payload observable. La lista se pagina en SQL, limita `limit` a 200 y ordena por `updatedAt DESC`, sin segundo criterio de desempate. No hay evidencia de impacto real del empate que justifique una tarea de ordenación.
+
+### Arquitectura, dependencias y consumidores
+
+- Articles representa el registro y flujo editorial de artículos, con una acción explícita para crear el Content correspondiente. El servicio mantiene la persistencia Article, sus reglas de estado y la coordinación de esa acción. La responsabilidad es coherente; no se propone dividirlo por tamaño.
+- `ArticlesService` depende de `ContentsService` para consultar Content vinculado, crear uno y evitar la eliminación de Article mientras ese Content exista. `ContentsService` no inyecta `ArticlesService`: registra `Repository<Article>` y lee/escribe Article directamente. `ContentsModule` registra la entidad y no importa `ArticlesModule`; no se observa ciclo de módulos Nest. El `forwardRef` de `ArticlesModule` a `ContentsModule` no tiene un import inverso visible que lo requiera.
+- Consumers directos encontrados: `ContentsService` lee Article para sincronizar inicialmente la fecha, lo crea al crear ciertos Contents de tipo ARTICLE y recibe `articleId` para vincularlo; `Content` mantiene la relación; `User` tiene la colección `articles`; `AppModule` compone el módulo. No se encontraron consumidores de `ArticlesService` fuera de su controller. Articles no depende directamente de Catalog.
+- `ArticlesService` guarda el Article y luego vuelve a consultarlo con sus relaciones para formar la respuesta. Ese fetch es parte del payload actual, por lo que no se propone quitarlo. No se observaron consultas N+1 demostradas ni motivo para optimizar SQL sin medición.
+
+### Hallazgos
+
+#### ARTI-F1 — La creación permite estados que la transición PATCH rechaza — resuelto
+
+- **Ubicación:** `src/editorial/articles/articles.service.ts:33-49,119-139`; validación DTO en `src/editorial/articles/dto/create-article.dto.ts:12-40`.
+- **Evidencia (hecho):** `create()` guarda directamente cualquier combinación válida por enum. En cambio, `update()` exige usuario para `editing` y `ready`, y exige `updateDate` para cambiar a `published`. Por tanto, POST puede crear un Article `editing`/`ready` sin usuario o `published` sin fecha, combinaciones que la ruta PATCH impide al transicionar. Contents solo copia la fecha a `publicationDate` cuando Article está `published` y tiene `updateDate` (`src/editorial/contents/contents.service.ts:119-135`).
+- **Consecuencia:** el estado inicial puede violar reglas que sí rigen el mismo flujo al editar; un Article publicado sin fecha no aporta fecha inicial al Content que se cree después.
+- **Categoría / prioridad / tamaño:** bug funcional / media / S.
+- **Corrección propuesta:** aplicar al estado inicial las mismas invariantes de usuario y fecha vigentes en las transiciones; fijar los casos permitidos y rechazados en pruebas de servicio/HTTP.
+- **Dependencias y riesgos:** ninguna técnica. Formalizará como HTTP 400 combinaciones que ahora llegan a persistencia; revisar si hay consumidores que deliberadamente crean estos estados antes de implementarlo.
+- **Resolución:** BC-ARTI-1 aplica esas mismas condiciones a la creación. El frontend (`riffvalley-app-front/src/views/articles/ArticlesKanban.vue:614-621`) crea `not_started` y puede enviar el usuario autenticado; `ContentsService` también crea Articles en `editing` con usuario y fecha (`src/editorial/contents/contents.service.ts:203-223`). Esas rutas permanecen válidas. No se encontró un consumidor que necesite estados iniciales incompletos.
+
+#### ARTI-F2 — Los filtros de listado no pasaban por validación de DTO — resuelto
+
+- **Ubicación:** `src/editorial/articles/articles.controller.ts:28-31`; `FindArticleParams` y coerciones en `src/editorial/articles/articles.service.ts:16-22,54-76`; `src/main.ts:36-43`.
+- **Evidencia (hecho):** `@Query()` recibe el interface TypeScript `FindArticleParams`, que no existe como clase de runtime ni tiene decoradores. El ValidationPipe global no valida sus campos. La aritmética convierte `limit`/`offset` de forma implícita; valores no numéricos pueden producir `NaN` que se pasa a `take`/`skip`; `status` tampoco se contrasta con `ArticleStatus`. `limit` conserva un máximo de 200 y ambos parámetros limitan valores negativos a cero.
+- **Consecuencia:** parámetros mal formados no reciben un rechazo HTTP 400 consistente; se pasan sin validar a TypeORM y el resultado/error queda delegado a TypeORM y PostgreSQL. No se consultó base de datos para caracterizar la respuesta exacta.
+- **Categoría / prioridad / tamaño:** bug funcional / media / S.
+- **Corrección propuesta:** sustituir el interface de entrada HTTP por un DTO de clase que valide/transforme los campos sin cambiar los defaults ni el límite de 200; definir de manera explícita la respuesta para valores inválidos y cubrirla.
+- **Dependencias y riesgos:** decisión de contrato sobre parámetros inválidos. Validarlos como enum/números puede cambiar errores delegados al driver por HTTP 400; los consumidores válidos conservan valores y paginación actuales.
+- **Resolución:** BC-ARTI-2 añadió `FindArticlesQueryDto`, valida el estado enum, el UUID, el tipo de texto y enteros seguros para `limit`/`offset`. Los negativos y límites superiores continúan sujetos al clamp existente; las cadenas vacías mantienen sus resultados efectivos. El consumer frontend observado solo envía `userId` con formato UUID, por lo que no se encontró un envío actual incompatible.
+
+#### ARTI-F3 — IDs de usuario inexistentes se detectaban solo al guardar — resuelto
+
+- **Ubicación:** `src/editorial/articles/articles.service.ts:33-49,102-113`; relaciones Article en `src/editorial/articles/entities/article.entity.ts:62-73`; validación de forma en `src/editorial/articles/dto/create-article.dto.ts:32-42`.
+- **Evidencia (hecho):** los DTOs solo comprueban que `userId`, `editorId` y `coauthorId` tengan formato UUID. `create()` y `update()` asignan referencias parciales sin consultar que los usuarios existan ni traducir errores de persistencia. Las tres relaciones tienen clave foránea hacia User. No se encontró un filtro global que traduzca violaciones de clave foránea a error HTTP de cliente.
+- **Consecuencia:** una referencia inexistente alcanza `repo.save()` y la violación de integridad queda como error de persistencia no clasificado, en vez de un error HTTP de recurso/referencia identificable.
+- **Categoría / prioridad / tamaño:** bug funcional / media / S.
+- **Corrección propuesta:** definir y aplicar una clasificación HTTP uniforme para IDs referenciados inexistentes en creación y actualización, con pruebas que cubran cada asignación y la preservación del error ante fallos no relacionados.
+- **Dependencias y riesgos:** elegir si la respuesta será 400 o 404 y considerar la carrera entre comprobación y escritura; la restricción de base de datos debe seguir siendo la protección final.
+- **Resolución:** BC-ARTI-3 traduce únicamente violaciones PostgreSQL `23503` de las tres constraints Article→User (`userId`, `editorId`, `coauthorId`) a HTTP 404 genérico. No añade consultas de existencia; las claves foráneas siguen protegiendo frente a referencias inválidas y carreras. Otros errores se propagan sin cambios.
+
+### Contract findings
+
+#### ARTI-F1 — Validación distinta entre POST y PATCH
+
+**Current behavior antes de BC-ARTI-1:** PATCH rechazaba la transición a `editing`/`ready` sin usuario y a `published` sin fecha; POST aceptaba esos estados sin los campos relacionados.
+
+**Problem:** dos rutas que crean/modifican el mismo recurso aplican invariantes editoriales distintas, y Contents usa `updateDate` al construir la fecha de publicación inicial.
+
+**Impact:** backend + frontend.
+
+**Options:**
+
+1. Preserve compatibility: mantener la aceptación actual en POST.
+2. Refactor internally: extraer una validación compartida sin aplicarla a la creación; no resuelve el estado inicial inconsistente.
+3. Change the contract: rechazar en POST las mismas combinaciones incompletas que ya rechaza PATCH.
+4. Coordinate a backend/frontend refactor: confirmar primero los payloads usados por cada cliente y adaptar cualquier flujo que dependa de las combinaciones incompletas.
+
+**Recommendation:** opción 3, aceptada tras revisar los consumidores disponibles. La creación ahora aplica los requisitos existentes y conserva los payloads válidos.
+
+**Blocks the current task:** No; la decisión quedó sustentada por el uso actual y BC-ARTI-1 está completada.
+
+#### ARTI-F2 — Parámetros de listado sin validación HTTP
+
+**Current behavior antes de BC-ARTI-2:** la ruta recibía query strings mediante un interface sin validación de runtime; valores se transformaban parcialmente en el servicio y el estado se pasaba a TypeORM sin comprobación de enum. Ahora un DTO de query valida los filtros y las entradas incorrectas reciben HTTP 400 antes del servicio.
+
+**Problem:** entradas inválidas no reciben un HTTP 400 consistente y pueden alcanzar la consulta con `NaN` o un estado arbitrario. La respuesta exacta del driver no se verificó con PostgreSQL.
+
+**Impact:** backend + frontend.
+
+**Options:**
+
+1. Preserve compatibility: conservar el comportamiento actual, incluido delegar entradas inválidas a la capa de consulta.
+2. Refactor internally: usar un DTO manteniendo deliberadamente la coerción y los errores actuales; no evita estados arbitrarios ni `NaN`.
+3. Change the contract: devolver HTTP 400 para query params mal formados y mantener filtros/paginación válidos.
+4. Coordinate a backend/frontend refactor: inventariar payloads de clientes y corregir cualquier envío inválido antes de activar 400.
+
+**Recommendation:** opción 3, aceptada tras revisar los consumidores; conservar defaults, clamp, búsqueda, relaciones de respuesta y límite para las solicitudes válidas. Los valores inválidos de estado/UUID/formato numérico se rechazan con HTTP 400.
+
+**Blocks the current task:** No; la regla quedó sustentada por los consumidores revisados y BC-ARTI-2 está completada.
+
+#### ARTI-F3 — Error de referencia de usuario delegado a la base de datos
+
+**Current behavior antes de BC-ARTI-3:** un UUID con formato válido se asignaba como relación parcial; una referencia inexistente alcanzaba la escritura sin traducción a error HTTP de cliente. Ahora se clasifican solo las tres constraints de Article hacia User.
+
+**Problem:** el cliente recibe un error de persistencia no clasificado en vez de una respuesta estable para una referencia inválida.
+
+**Impact:** backend + frontend.
+
+**Options:**
+
+1. Preserve compatibility: dejar que la FK rechace la operación y mantener el error actual.
+2. Refactor internally: mapear las violaciones de FK específicas de Article a un error de cliente sin cambiar el resto de persistencia.
+3. Change the contract: comprobar las referencias y devolver 400 o 404 acordado antes de guardar.
+4. Coordinate a backend/frontend refactor: acordar el status y la presentación de errores de referencia en los consumidores.
+
+**Recommendation:** opción 3, aplicada con HTTP 404 siguiendo la convención de `ContentsService` para User inexistente. Se conservan las FKs como defensa final y los fallos ajenos no se convierten en errores de cliente.
+
+**Blocks the current task:** No; el status y mensaje quedaron definidos y BC-ARTI-3 está completada.
+
+### Contrato observado sin tarea separada
+
+En `PATCH`, `UpdateArticleDto` deriva de `PartialType(CreateArticleDto)`, cuyos campos opcionales aceptan `null` con `@IsOptional()`. El servicio actualiza `link`, `updateDate`, `userId`, `editorId` y `coauthorId` solo si el valor es truthy; enviar `null` pasa validación pero se ignora. Las columnas/relaciones correspondientes permiten nulos. No se revisó frontend ni se confirmó si los consumidores usan `null` para solicitar limpieza o si `null` debe equivaler a ausencia. No se propone cambiar esta semántica ni abrir tarea hasta confirmar el contrato de los consumidores; preservarla es la opción segura por ahora.
+
+### Pruebas y cobertura
+
+- `src/editorial/articles/articles.controller.spec.ts` cubre validación de estados de POST/PATCH y filtros de GET mediante un `ValidationPipe` configurado como el global. El listado cubre ausencia de filtros, cada filtro, combinaciones, cadenas vacías, transformaciones/clamp, valores inválidos con HTTP 400 antes de invocar el servicio y conservación de la respuesta.
+- La cobertura de escritura incluye éxito con relaciones asignadas, referencias Article→User inexistentes en creación/actualización, opcionalidad y propagación de FKs ajenas y errores de persistencia inesperados. Se mantienen fuera de estas tareas pruebas de PostgreSQL, eliminación con Content y creación de Content. La cobertura de permisos sigue incluyendo el registro de Articles dentro de `domain-mutation-authorization.spec.ts`; no es una prueba HTTP integral.
+- No se añadieron ni ejecutaron pruebas durante BC-ARTI-0; las pruebas de tareas implementadas se documentan en sus cierres.
+- Los IDs inválidos por sintaxis reciben validación DTO en los cuerpos de escritura, e IDs de ruta pasan `ParseUUIDPipe`; la falta identificada para relaciones es existencia y clasificación de la referencia, no su formato.
+
+### Tareas propuestas
+
+#### BC-ARTI-1 — Aplicar invariantes editoriales al estado inicial (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** ARTI-F1 resuelto.
+- **Regla acordada:** los cinco valores del enum son válidos como estado inicial cuando cumplen los requisitos existentes: `not_started` e `in_progress` no exigen usuario ni fecha; `editing` y `ready` exigen usuario; `published` exige `updateDate`. No se impone usuario a `published`, porque PATCH tampoco lo exige.
+- **Implementación:** `ArticlesService` comparte la validación de requisitos entre POST y las transiciones PATCH. POST rechaza combinaciones incompletas con `BadRequestException` antes de guardar. PATCH conserva sus mismas condiciones, mensajes, estados y transiciones; no se introdujo una matriz de transiciones ni se alteró el tratamiento de un status sin cambio.
+- **Pruebas:** nuevo `articles.controller.spec.ts` con `ValidationPipe` real y la configuración global de `main.ts`. Cubre creación en cada estado válido, estados iniciales incompletos, enum inválido, transiciones representativas válidas/rechazadas, respuestas con HTTP 400 y status sin cambio. No se modificó frontend.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/articles/articles.controller.spec.ts` — 1 suite, 19 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines tsc --noEmit -p tsconfig.build.json`; `yarn --ignore-engines prettier --check src/editorial/articles/articles.service.ts src/editorial/articles/articles.controller.spec.ts`; `git diff --check`.
+- **Entorno:** Yarn v1 omitió la comprobación de `engines` porque el proyecto declara Node 20.x y la sesión usa Node 22.23.1. No se cambió Node ni se instalaron dependencias. No se accedió a PostgreSQL o servicios externos.
+- **Límite de alcance:** `ArticleActionsModal` permite escoger `published`, pero `ContentCalendar.handleUpdateArticle` no envía `updateDate`, que la transición PATCH ya requiere. Este comportamiento preexistente no lo causó BC-ARTI-1 ni se cambió porque esta tarea preserva PATCH y excluye cambios de frontend; queda señalado para clasificación en el trabajo que corresponda.
+
+#### BC-ARTI-2 — Validar filtros de Articles con DTO (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** ARTI-F2 resuelto.
+- **Alcance:** reemplazar `FindArticleParams` como entrada HTTP por una clase DTO; validar `limit`, `offset`, `status`, `userId` y `q`, conservando defaults y máximo 200 para solicitudes válidas; cubrir los parámetros inválidos con pruebas.
+- **Contrato confirmado:** `getArticles` en el frontend solo envía `userId`, y lo hace como UUID cuando tiene valor. `limit` y `offset` continúan aceptando enteros negativos y sobre 200 para aplicar el clamp preexistente; formatos fraccionarios, no numéricos, exponentes, hexadecimal y enteros fuera del rango seguro reciben 400. `q` vacío conserva su efecto de no filtrar; `status` y `userId` vacíos se tratan como omitidos; paginación vacía conserva su coerción efectiva a cero.
+- **Implementación:** `FindArticlesQueryDto` valida filtros antes de la llamada al servicio. Se conservan consulta por texto, estado, ramas de autor/editor/coautor, defaults 50/0, límite máximo 200, orden, relaciones y forma de respuesta. No cambian rutas, permisos, reglas de estados ni frontend.
+- **Pruebas:** extensión de `articles.controller.spec.ts` con `ValidationPipe` y opciones globales. Cubre consulta sin filtros, filtros individuales y combinados, cadena vacía, transformaciones/clamp, HTTP 400 para cada tipo inválido y que el servicio no se invoque antes del rechazo; verifica resultado y forwarding a TypeORM.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/articles/articles.controller.spec.ts` — 1 suite, 39 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; Prettier sobre `find-articles-query.dto.ts`, controller, service y spec de Articles; `git diff --check`.
+- **Entorno:** Yarn v1 omitió la comprobación de `engines` porque el proyecto declara Node 20.x y la sesión usa Node 22.23.1. No se cambió Node ni se instalaron dependencias. No se accedió a PostgreSQL o servicios externos.
+- **Exclusiones:** cambiar forma del payload, reglas de búsqueda, orden, semántica de `userId` o añadir filtros.
+- **Aceptación:** filtros válidos mantienen búsqueda/paginación actuales; entradas mal formadas reciben una respuesta 400 definida antes de llamar TypeORM; la paginación no pasa `NaN` a `take`/`skip`.
+- **Dependencias y riesgos:** no quedan dependencias para esta tarea. Los parámetros inválidos que antes se delegaban a TypeORM ahora reciben HTTP 400.
+- **Verificaciones:** pruebas del DTO mediante ValidationPipe global y pruebas del controller/service para forwarding y límites; build/typecheck según el procedimiento aprobado.
+
+#### BC-ARTI-3 — Clasificar las referencias a usuarios que no existen (S, prioridad media)
+
+- [x] **Completada (2026-10-15).** ARTI-F3 resuelto.
+- **Alcance:** acordar y mapear el error de referencia inexistente para `userId`, `editorId` y `coauthorId` en POST y PATCH; cubrirlo y comprobar que fallos de base de datos ajenos a esas referencias no se convierten en errores de cliente.
+- **Decisión de contrato:** HTTP 404, en línea con `ContentsService` cuando User no existe. El mensaje es genérico y no expone SQL, nombres de constraints ni detalles del driver.
+- **Implementación:** `ArticlesService` convierte solo `QueryFailedError` PostgreSQL con código `23503`, tabla `article` y una de las constraints Article→User conocidas en `NotFoundException`. No consulta Users antes de guardar; no transforma otras FKs ni errores inesperados. Las relaciones siguen siendo opcionales y las constraints conservan su función de integridad.
+- **Pruebas:** `articles.controller.spec.ts` cubre éxito y ausencia de asignación, las tres relaciones en POST/PATCH, 404 con respuesta segura, FK de otra relación y errores inesperados propagados sin modificación.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/articles/articles.controller.spec.ts` — 1 suite, 52 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; `yarn --ignore-engines prettier --check src/editorial/articles/articles.service.ts src/editorial/articles/articles.controller.spec.ts`; `git diff --check`.
+- **Entorno:** Yarn v1 omitió la comprobación de `engines` porque el proyecto declara Node 20.x y la sesión usa Node 22.23.1. No se cambió Node ni se instalaron dependencias. No se accedió a PostgreSQL o servicios externos.
+- **Exclusiones:** cambios en `User`, reglas de ownership/roles, transacciones amplias, migraciones o traducción global de errores para otros módulos.
+- **Aceptación:** cada referencia inexistente produce 404 sin persistir el Article; relaciones existentes siguen asignándose; la restricción de FK permanece activa como defensa ante carreras.
+- **Dependencias y riesgos:** no quedan dependencias. El clasificador depende de los nombres estables de constraints definidos en las migraciones actuales.
+- **Verificaciones:** pruebas unitarias de resolución/error y de escritura; si se decide una prueba PostgreSQL, usar la infraestructura aislada del proyecto y no servicios externos; build/typecheck según el procedimiento aprobado.
+
+**Decisiones no convertidas en tareas:** no se propone extraer otro servicio, cambiar relaciones cargadas, modificar el payload, cambiar orden/paginación válida, añadir índices ni optimizar queries sin medición. El `forwardRef` hacia Contents parece innecesario con la composición actual, pero su retirada es limpieza de bajo beneficio y no justifica una tarea independiente.
+
+**Cierre del módulo:** BC-ARTI-0 y BC-ARTI-1 a BC-ARTI-3 completadas; Articles queda completado. Los demás módulos de Editorial siguen pendientes. No se avanzó a Asignations.
+
+**Verificaciones de BC-ARTI-0:** revisión estática de implementación, pruebas, consumidores directos y composición; coherencia revisada contra las reglas generales y estado detallado del roadmap; `git diff --check -- roadmap/backend-cleanup.md`. No se ejecutaron tests, build, typecheck, migraciones ni operaciones con base de datos o servicios externos durante BC-ARTI-0. Las verificaciones de las tareas posteriores se registran en sus cierres.
 
 ## Hallazgos históricos pendientes de clasificación futura
 
