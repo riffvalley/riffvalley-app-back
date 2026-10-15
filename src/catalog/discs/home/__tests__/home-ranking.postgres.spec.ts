@@ -3,15 +3,18 @@ import { User } from '../../../../identity/auth/entities/user.entity';
 import { Disc } from '../../entities/disc.entity';
 import { DiscHomeService } from '../disc-home.service';
 
-const describePostgres = process.env.D32_POSTGRES_TEST === '1' ? describe : describe.skip;
+const describePostgres =
+  process.env.D32_POSTGRES_TEST === '1' ? describe : describe.skip;
 const USER_ID = '00000000-0000-4000-8000-000000000001';
 const ARTIST_ID = '00000000-0000-4000-8000-000000000002';
 const COUNTRY_ID = '00000000-0000-4000-8000-000000000003';
 const OTHER_COUNTRY_ID = '00000000-0000-4000-8000-000000000004';
 const GENRE_ID = '00000000-0000-4000-8000-000000000005';
 const OTHER_GENRE_ID = '00000000-0000-4000-8000-000000000006';
-const DISC_IDS = Array.from({ length: 10 }, (_, index) =>
-  `00000000-0000-4000-8000-${String(index + 10).padStart(12, '0')}`,
+const DISC_IDS = Array.from(
+  { length: 10 },
+  (_, index) =>
+    `00000000-0000-4000-8000-${String(index + 10).padStart(12, '0')}`,
 );
 
 describePostgres('home disc ranking with PostgreSQL fixtures', () => {
@@ -69,7 +72,9 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
   });
 
   async function clearFixtures() {
-    await client.query('TRUNCATE comment, pending, favorite, rate, disc, genre, artist, country');
+    await client.query(
+      'TRUNCATE comment, pending, favorite, rate, disc, genre, artist, country',
+    );
   }
 
   async function seedBaseFixtures() {
@@ -82,7 +87,12 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     await client.query(
       `INSERT INTO artist (id, name, "countryId") VALUES
         ($1, 'Fixture Artist', $2), ($3, 'Other Artist', $4)`,
-      [ARTIST_ID, COUNTRY_ID, '00000000-0000-4000-8000-000000000007', OTHER_COUNTRY_ID],
+      [
+        ARTIST_ID,
+        COUNTRY_ID,
+        '00000000-0000-4000-8000-000000000007',
+        OTHER_COUNTRY_ID,
+      ],
     );
     await client.query(
       `INSERT INTO genre (id, name, color) VALUES
@@ -149,7 +159,10 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     const queries: { sql: string; params: unknown[]; rows?: any[] }[] = [];
     const repository = {
       query: async (sql: string, params: unknown[] = []) => {
-        const call: { sql: string; params: unknown[]; rows?: any[] } = { sql, params };
+        const call: { sql: string; params: unknown[]; rows?: any[] } = {
+          sql,
+          params,
+        };
         queries.push(call);
         if (sql.includes('AVG(avgRates)')) {
           call.rows = (await client.query(sql, params as any[])).rows;
@@ -169,7 +182,9 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
         getRawOne: jest.fn().mockResolvedValue({ totalVotes: '0' }),
       }),
     };
-    const service = new DiscHomeService(repository as unknown as Repository<Disc>);
+    const service = new DiscHomeService(
+      repository as unknown as Repository<Disc>,
+    );
 
     try {
       const result = await service.findTopRatedOrFeaturedAndStats(
@@ -215,29 +230,40 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     }
     expect(result.discs.map(({ id }) => id)).toEqual(ids);
 
-    const globalQuery = queries.find(({ sql }) => sql.includes('AVG(avgRates)'))!;
-    expect(globalQuery.sql).toContain('WHERE d."releaseDate" BETWEEN $1 AND $2 AND d."releaseDate" <= $3 AND d."genreId" = $4 AND c.name = $5');
-    expect(main.sql).toContain('WHERE d."releaseDate" BETWEEN $2 AND $3 AND d."releaseDate" <= $4 AND d."genreId" = $5 AND c.name = $6');
+    const globalQuery = queries.find(({ sql }) =>
+      sql.includes('AVG(avgRates)'),
+    )!;
+    expect(globalQuery.sql).toContain(
+      'WHERE d."releaseDate" BETWEEN $1 AND $2 AND d."releaseDate" <= $3 AND d."genreId" = $4 AND c.name = $5',
+    );
+    expect(main.sql).toContain(
+      'WHERE d."releaseDate" BETWEEN $2 AND $3 AND d."releaseDate" <= $4 AND d."genreId" = $5 AND c.name = $6',
+    );
     expect(main.sql).toContain('LEFT JOIN artist a ON d."artistId" = a.id');
     expect(main.sql).toContain('LEFT JOIN country c ON a."countryId" = c.id');
     expect(main.sql).toContain('LEFT JOIN genre g ON d."genreId" = g.id');
     expect(main.sql).toContain('LEFT JOIN rate r ON d.id = r."discId"');
-    expect(main.sql).toContain('HAVING COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) > 0 OR d."pinned" = true');
-    expect(main.sql).toContain('ORDER BY "weightedScore" DESC\n      LIMIT 20;');
-    expect(main.sql).not.toMatch(/ORDER BY "weightedScore" DESC\s*,/);
+    expect(main.sql).toContain(
+      'HAVING COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) > 0 OR d."pinned" = true',
+    );
+    expect(main.sql).toContain(
+      'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 20;',
+    );
+    expect(main.sql).not.toContain('LEFT JOIN favorite');
+    expect(main.sql).not.toContain('LEFT JOIN pending');
   });
 
   it('includes a disc at the inclusive dateRange upper bound when today is later', async () => {
     await seedBaseFixtures();
-    const { main } = await runHomeDiscs(
-      '2025-12-31',
-      ['2020-01-01', '2024-12-31'],
-    );
+    const { main } = await runHomeDiscs('2025-12-31', [
+      '2020-01-01',
+      '2024-12-31',
+    ]);
 
     expect(main.rows!.map(({ id }) => id)).toContain(DISC_IDS[4]);
   });
 
-  it('limits 25 equal-score pinned discs to 20 without promising a tie order', async () => {
+  it('limits 25 equal-score pinned discs to the first 20 IDs in stable tie order', async () => {
     await clearFixtures();
     await client.query(
       `INSERT INTO country (id, name, "isoCode") VALUES ($1, 'Fixtureland', 'FX')`,
@@ -265,37 +291,53 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     expect(ids).toHaveLength(20);
     expect(new Set(ids).size).toBe(20);
     expect(main.rows!.every(({ pinned }) => pinned === true)).toBe(true);
-    expect(main.sql).toContain('ORDER BY "weightedScore" DESC\n      LIMIT 20;');
+    expect(ids).toEqual(
+      Array.from(
+        { length: 20 },
+        (_, index) =>
+          `00000000-0000-4000-8000-${String(index + 101).padStart(12, '0')}`,
+      ),
+    );
+    expect(main.sql).toContain(
+      'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 20;',
+    );
   });
 
-  it('characterizes duplicate rows when duplicate favorites split a disc by favorite ID', async () => {
+  it('returns one disc and uninflated rating aggregates with multiple favorites and pendings', async () => {
     await seedBaseFixtures();
     await client.query(
       `INSERT INTO favorite (id, "discId", "userId") VALUES
-        ('00000000-0000-4000-8000-000000000202', $1, $2);`,
+        ('00000000-0000-4000-8000-000000000202', $1, $2),
+        ('00000000-0000-4000-8000-000000000203', $1, $2);`,
       [DISC_IDS[0], USER_ID],
     );
-
-    const { main } = await runHomeDiscs('2024-12-31');
-    const ratedDiscRows = main.rows!.filter(({ id }) => id === DISC_IDS[0]);
-
-    expect(ratedDiscRows).toHaveLength(2);
-    expect(ratedDiscRows.map(({ voteCount }) => Number(voteCount))).toEqual([2, 2]);
-  });
-
-  it('characterizes rating-count multiplication when duplicate pendings are not grouped', async () => {
-    await seedBaseFixtures();
     await client.query(
       `INSERT INTO pending (id, "discId", "userId") VALUES
-        ('00000000-0000-4000-8000-000000000302', $1, $2);`,
+        ('00000000-0000-4000-8000-000000000302', $1, $2),
+        ('00000000-0000-4000-8000-000000000303', $1, $2);`,
       [DISC_IDS[0], USER_ID],
     );
 
-    const { main } = await runHomeDiscs('2024-12-31');
+    const { main, queries } = await runHomeDiscs('2024-12-31');
     const ratedDiscRows = main.rows!.filter(({ id }) => id === DISC_IDS[0]);
 
     expect(ratedDiscRows).toHaveLength(1);
-    expect(Number(ratedDiscRows[0].voteCount)).toBe(4);
-    expect(Number(ratedDiscRows[0].weightedScore)).toBeCloseTo(2.5);
+    expect(Number(ratedDiscRows[0].voteCount)).toBe(2);
+    expect(Number(ratedDiscRows[0].averageRate)).toBe(3);
+    expect(Number(ratedDiscRows[0].averageCover)).toBe(3);
+
+    const { globalAvgRate, medianVotes } = queries.find(({ sql }) =>
+      sql.includes('AVG(avgRates)'),
+    )!.rows![0];
+    const effectiveMedianVotes = parseInt(String(medianVotes), 10) || 1;
+    const expectedWeightedScore =
+      (3 * 2 + Number(globalAvgRate) * effectiveMedianVotes) /
+      (2 + effectiveMedianVotes);
+    expect(Number(ratedDiscRows[0].weightedScore)).toBeCloseTo(
+      expectedWeightedScore,
+    );
+
+    const ids = main.rows!.map(({ id }) => id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

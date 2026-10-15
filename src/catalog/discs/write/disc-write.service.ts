@@ -22,14 +22,20 @@ export class DiscWriteService {
   constructor(
     @InjectRepository(Disc)
     private readonly discRepository: Repository<Disc>,
-    @InjectRepository(Artist)
-    private readonly artistRepository: Repository<Artist>,
   ) {}
 
   async create(createDiscDto: CreateDiscDto) {
     try {
-      const disc = this.discRepository.create(createDiscDto);
+      const { artistId, genreId, ...discFields } = createDiscDto;
+      const disc = this.discRepository.create({
+        ...discFields,
+        ...(artistId && { artist: { id: artistId } as Artist }),
+        ...(genreId && { genre: { id: genreId } as Genre }),
+      });
       await this.discRepository.save(disc);
+      // Keep the POST response shape unchanged while persisting the relations.
+      delete (disc as Partial<Disc>).artist;
+      delete (disc as Partial<Disc>).genre;
       return disc;
     } catch (error) {
       this.handleDbExceptions(error);
@@ -37,21 +43,29 @@ export class DiscWriteService {
   }
 
   async createWithArtist(dto: CreateDiscWithArtistDto): Promise<Disc> {
-    const artist = await this.resolveArtist(dto.artistName, dto.countryId);
+    return this.discRepository.manager.transaction(async (manager) => {
+      const artistRepository = manager.getRepository(Artist);
+      const discRepository = manager.getRepository(Disc);
+      const artist = await this.resolveArtist(
+        dto.artistName,
+        artistRepository,
+        dto.countryId,
+      );
 
-    const disc = this.discRepository.create({
-      name: dto.discName,
-      artist,
-      ...(dto.genreId && { genre: { id: dto.genreId } as Genre }),
-      ...(dto.releaseDate && { releaseDate: new Date(dto.releaseDate) }),
-      ep: dto.ep ?? false,
-      debut: dto.debut ?? false,
-      link: dto.link,
-      image: dto.image,
-      description: dto.description,
+      const disc = discRepository.create({
+        name: dto.discName,
+        artist,
+        ...(dto.genreId && { genre: { id: dto.genreId } as Genre }),
+        ...(dto.releaseDate && { releaseDate: new Date(dto.releaseDate) }),
+        ep: dto.ep ?? false,
+        debut: dto.debut ?? false,
+        link: dto.link,
+        image: dto.image,
+        description: dto.description,
+      });
+
+      return discRepository.save(disc);
     });
-
-    return this.discRepository.save(disc);
   }
 
   async update(id: string, updateDiscDto: UpdateDiscDto) {
@@ -92,15 +106,16 @@ export class DiscWriteService {
 
   private async resolveArtist(
     artistName: string,
+    artistRepository: Repository<Artist>,
     countryId?: string,
   ): Promise<Artist> {
-    const matches = await this.artistRepository.find({
+    const matches = await artistRepository.find({
       where: { name: ILike(artistName) },
     });
 
     if (matches.length === 0) {
-      return this.artistRepository.save(
-        this.artistRepository.create({
+      return artistRepository.save(
+        artistRepository.create({
           name: artistName,
           nameNormalized: normalizeArtistName(artistName),
           ...(countryId && { countryId }),
@@ -123,8 +138,8 @@ export class DiscWriteService {
     if (match) return match;
 
     // No hay ninguno con ese país → es un artista distinto, se crea
-    return this.artistRepository.save(
-      this.artistRepository.create({
+    return artistRepository.save(
+      artistRepository.create({
         name: artistName,
         nameNormalized: normalizeArtistName(artistName),
         countryId,

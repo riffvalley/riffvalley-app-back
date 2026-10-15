@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
 
@@ -31,9 +35,17 @@ describe('DiscsController baseline', () => {
     controller = new DiscsController(discsService as unknown as DiscsService);
   });
 
-  it('delegates POST /discs to the service and returns its response unchanged', async () => {
-    const dto = { name: 'Album' } as any;
-    const response = { id: 'disc-id', name: 'Album', verified: false };
+  it('delegates relation IDs on POST /discs and returns its response unchanged', async () => {
+    const dto = {
+      name: 'Album',
+      artistId: 'a6f9cc5f-c3af-4a3d-9eeb-2de532320241',
+      genreId: 'a6f9cc5f-c3af-4a3d-9eeb-2de532320242',
+    } as any;
+    const response = {
+      id: 'disc-id',
+      name: 'Album',
+      verified: false,
+    };
     discsService.create.mockResolvedValue(response);
 
     await expect(controller.create(dto)).resolves.toBe(response);
