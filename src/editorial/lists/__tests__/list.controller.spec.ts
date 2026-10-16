@@ -4,13 +4,14 @@ import {
   PATH_METADATA,
 } from '@nestjs/common/constants';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
-import { ListsController } from './list.controller';
-import { ListsService } from './list.service';
-import { GenerateWpPostsQueryDto } from './dto/generate-wp-posts-query.dto';
+import { ListsController } from '../list.controller';
+import { ListsService } from '../list.service';
+import { CreateWeeklyListDto } from '../dto/create-weekly-list.dto';
+import { GenerateWpPostsQueryDto } from '../dto/generate-wp-posts-query.dto';
 import {
   ListYearMonthParamsDto,
   ListYearParamsDto,
-} from './dto/list-period-params.dto';
+} from '../dto/list-period-params.dto';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import {
@@ -26,6 +27,7 @@ describe('ListsController WordPress authorization', () => {
     findPastWeeklyListsByMonth: jest.Mock;
     findPastMonthListsByYear: jest.Mock;
     findPastVideoListsByYear: jest.Mock;
+    createWeeklyList: jest.Mock;
   };
 
   beforeEach(() => {
@@ -35,6 +37,7 @@ describe('ListsController WordPress authorization', () => {
       findPastWeeklyListsByMonth: jest.fn(),
       findPastMonthListsByYear: jest.fn(),
       findPastVideoListsByYear: jest.fn(),
+      createWeeklyList: jest.fn(),
     };
     controller = new ListsController(listsService as unknown as ListsService);
   });
@@ -107,6 +110,41 @@ describe('ListsController WordPress authorization', () => {
     );
     expect(roleMeetsMinimum(ValidRoles.superadmin, ValidRoles.riffvalley)).toBe(
       true,
+    );
+  });
+
+  it('requires an explicit valid date on direct weekly list creation', async () => {
+    const validationPipe = new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+    const transformBody = (value: Record<string, unknown>) =>
+      validationPipe.transform(value, {
+        type: 'body',
+        metatype: CreateWeeklyListDto,
+        data: undefined,
+      });
+
+    for (const body of [
+      {},
+      { releaseDate: null },
+      { releaseDate: 'invalid' },
+    ]) {
+      await expect(transformBody(body)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    }
+
+    const body = (await transformBody({
+      releaseDate: '2026-10-01T00:00:00.000Z',
+    })) as CreateWeeklyListDto;
+    const response = { id: 'weekly-list-id' };
+    listsService.createWeeklyList.mockResolvedValue(response);
+
+    await expect(controller.createWeekly(body)).resolves.toBe(response);
+    expect(listsService.createWeeklyList).toHaveBeenCalledWith(
+      new Date('2026-10-01T00:00:00.000Z'),
     );
   });
 

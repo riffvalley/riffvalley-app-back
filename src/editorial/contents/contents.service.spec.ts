@@ -1,6 +1,7 @@
 import { Content, ContentType } from './entities/content.entity';
 import { ContentsService } from './contents.service';
 import { List, ListType } from 'src/editorial/lists/entities/list.entity';
+import { BadRequestException } from '@nestjs/common';
 
 describe('ContentsService List synchronization', () => {
   const makeContent = (overrides: Partial<Content> = {}) =>
@@ -154,6 +155,82 @@ describe('ContentsService List synchronization', () => {
       manager,
     );
     expect(result.list).toMatchObject({ id: 'list-id' });
+  });
+
+  it.each([ContentType.RADAR, ContentType.BEST, ContentType.REUNION])(
+    'rejects %s creation without a valid publicationDate before persistence',
+    async (type) => {
+      const { service, contentRepository, userRepository, transaction } =
+        makeService();
+
+      for (const publicationDate of [undefined, null, 'not-a-date']) {
+        await expect(
+          service.create({
+            type,
+            name: 'Editorial content',
+            authorId: 'author-id',
+            publicationDate,
+          } as any),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+
+      expect(userRepository.findOne).not.toHaveBeenCalled();
+      expect(contentRepository.create).not.toHaveBeenCalled();
+      expect(transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it('creates BEST with the supplied date and creates its List transactionally', async () => {
+    const { service, listsService, txContentRepository, manager, transaction } =
+      makeService();
+    const publicationDate = '2026-11-15T12:00:00.000Z';
+
+    await service.create({
+      type: ContentType.BEST,
+      name: 'Mejores de noviembre',
+      authorId: 'author-id',
+      publicationDate,
+    } as any);
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(txContentRepository.save).toHaveBeenCalledTimes(2);
+    expect(listsService.createMonthlyList).toHaveBeenCalledWith(
+      new Date(publicationDate),
+      undefined,
+      undefined,
+      manager,
+    );
+  });
+
+  it.each([ContentType.RADAR, ContentType.BEST, ContentType.REUNION])(
+    'rejects null, empty, or invalid publicationDate updates for %s before persistence',
+    async (type) => {
+      const content = makeContent({ type });
+      const { service, contentRepository, transaction } = makeService(content);
+
+      for (const publicationDate of [null, '', 'not-a-date']) {
+        await expect(
+          service.update('content-id', { publicationDate } as any),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+
+      expect(contentRepository.save).not.toHaveBeenCalled();
+      expect(transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects changing a Content to BEST when its existing publicationDate is absent', async () => {
+    const content = makeContent({
+      type: ContentType.ARTICLE,
+      publicationDate: null,
+    });
+    const { service, contentRepository } = makeService(content);
+
+    await expect(
+      service.update('content-id', { type: ContentType.BEST } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(contentRepository.save).not.toHaveBeenCalled();
   });
 
   it('rolls back the Content/List deletion pair when List removal fails', async () => {

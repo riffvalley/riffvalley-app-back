@@ -18,7 +18,6 @@ import { AsignationsModule } from './editorial/lists/asignations/asignations.mod
 import { ListsModule } from './editorial/lists/list.module';
 import { ReunionsModule } from './editorial/reunions/reunions.module';
 import { PointsModule } from './editorial/reunions/points/points.module';
-import { LinksModule } from './editorial/links/links.module';
 import { SeedModule } from './platform/seeds/seed.module';
 import { FavoritesModule } from './community/favorites/favorites.module';
 import { PendingsModule } from './community/pendings/pendings.module';
@@ -77,7 +76,6 @@ import { TiktokIntegrationModule } from './integrations/tiktok-integration/tikto
     ListsModule,
     ReunionsModule,
     PointsModule,
-    LinksModule,
     SeedModule,
     FavoritesModule,
     PendingsModule,

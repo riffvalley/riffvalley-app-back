@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ListsService } from './list.service';
 import { CreateListDto } from './dto/create-list.dto';
+import { CreateWeeklyListDto } from './dto/create-weekly-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { GenerateWpPostsQueryDto } from './dto/generate-wp-posts-query.dto';
 import {
@@ -106,8 +107,10 @@ export class ListsController {
 
   @Post('weekly/create')
   @Auth(ValidRoles.riffvalley)
-  createWeekly() {
-    return this.listsServices.createWeeklyList();
+  createWeekly(@Body() createWeeklyListDto: CreateWeeklyListDto) {
+    return this.listsServices.createWeeklyList(
+      new Date(createWeeklyListDto.releaseDate),
+    );
   }
 
   @Post(':id/wp-posts')

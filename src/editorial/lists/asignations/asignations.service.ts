@@ -11,11 +11,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { Asignation } from './entities/asignations.entity';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
-import { List } from 'src/editorial/lists/entities/list.entity';
+import { List, ListType } from 'src/editorial/lists/entities/list.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
 import sanitizeHtml = require('sanitize-html');
+
+const MAX_RADAR_DISCS_PER_GROUP = 4;
 
 const ASIGNATION_RELATION_FOREIGN_KEYS = new Set([
   'FK_9d41fe509640ba0c786b5daf75d', // asignation.userId -> users.id
@@ -113,7 +115,31 @@ export class AsignationsService {
         list,
       });
 
-      await this.asignationRepository.save(asignation);
+      await this.asignationRepository.manager.transaction(async (manager) => {
+        await this.lockListType(manager, listId);
+        const transactionalList = await manager
+          .getRepository(List)
+          .findOneBy({ id: listId });
+        if (!transactionalList)
+          throw new NotFoundException(`List with id ${listId} not found`);
+        asignation.list = transactionalList;
+
+        if (
+          disc &&
+          transactionalList.type === ListType.WEEK &&
+          asignation.position != null &&
+          asignation.position !== 0
+        ) {
+          await this.lockRadarGroup(manager, listId, asignation.position);
+          const count = await this.countDiscsInGroup(
+            manager.getRepository(Asignation),
+            listId,
+            asignation.position,
+          );
+          this.assertRadarGroupCapacity(count);
+        }
+        await manager.getRepository(Asignation).save(asignation);
+      });
 
       return asignation;
     } catch (error) {
@@ -161,51 +187,131 @@ export class AsignationsService {
       ...restDto
     } = updateAsignationDto;
 
-    // Cargamos un parcial de disc con preload
-    const asignation = await this.asignationRepository.preload({
-      id,
-      ...restDto,
-      ...(description !== undefined
-        ? {
-            description: sanitizeHtml(
-              description,
-              DESCRIPTION_SANITIZE_OPTIONS,
-            ),
-          }
-        : {}),
-      ...(similarBands !== undefined
-        ? {
-            similarBands: sanitizeHtml(
-              similarBands,
-              PLAIN_TEXT_SANITIZE_OPTIONS,
-            ),
-          }
-        : {}),
-      ...(genre !== undefined
-        ? { genre: sanitizeHtml(genre, PLAIN_TEXT_SANITIZE_OPTIONS) }
-        : {}),
-      ...(spotifyTrackId !== undefined
-        ? { spotifyTrackId: spotifyTrackId || null }
-        : {}),
-    });
-
-    if (!asignation)
-      throw new NotFoundException(`Asignation with id ${id} not found`);
-
     try {
-      // Asignamos la relación manualmente
-      if (userId) {
-        // Opción A: si no te interesa cargar la info del género,
-        // basta con crear un objeto con su id.
-        asignation.user = { id: userId } as User;
+      const asignation = await this.asignationRepository.manager.transaction(
+        async (manager) => {
+          const asignationRepo = manager.getRepository(Asignation);
+          const existing = await asignationRepo.findOne({
+            where: { id },
+            relations: ['list', 'disc'],
+            lock: { mode: 'pessimistic_write' },
+          });
 
-        // Opción B: si quieres verificar que el género existe:
-        // const genre = await this.genreRepository.findOneBy({ id: genreId });
-        // if (!genre) throw new NotFoundException(`Genre with id ${genreId} not found`);
-        // disc.genre = genre;
-      }
+          if (!existing)
+            throw new NotFoundException(`Asignation with id ${id} not found`);
 
-      await this.asignationRepository.save(asignation);
+          const targetListId = restDto.listId ?? existing.list.id;
+          for (const listId of [
+            ...new Set([existing.list.id, targetListId]),
+          ].sort()) {
+            await this.lockListType(manager, listId);
+          }
+          const currentList = await manager
+            .getRepository(List)
+            .findOneBy({ id: existing.list.id });
+          const targetList = await manager
+            .getRepository(List)
+            .findOneBy({ id: targetListId });
+          if (!currentList)
+            throw new NotFoundException(
+              `List with id ${existing.list.id} not found`,
+            );
+          if (!targetList)
+            throw new NotFoundException(
+              `List with id ${targetListId} not found`,
+            );
+
+          const targetPosition =
+            restDto.position !== undefined
+              ? restDto.position
+              : existing.position;
+          const hasDisc = restDto.discId
+            ? true
+            : restDto.discId === null
+              ? false
+              : !!existing.disc;
+          const isTargetRadarGroup =
+            targetList.type === ListType.WEEK &&
+            targetPosition != null &&
+            targetPosition !== 0 &&
+            hasDisc;
+          const isAlreadyInTargetGroup =
+            existing.list.id === targetListId &&
+            existing.position === targetPosition &&
+            !!existing.disc;
+
+          if (isTargetRadarGroup && !isAlreadyInTargetGroup) {
+            const groups = [
+              ...(currentList.type === ListType.WEEK &&
+              existing.position != null &&
+              existing.position !== 0 &&
+              existing.disc
+                ? [{ listId: existing.list.id, position: existing.position }]
+                : []),
+              { listId: targetListId, position: targetPosition },
+            ];
+            const uniqueGroups = Array.from(
+              new Map(
+                groups.map((group) => [
+                  `${group.listId}:${group.position}`,
+                  group,
+                ]),
+              ).values(),
+            ).sort((a, b) =>
+              `${a.listId}:${a.position}`.localeCompare(
+                `${b.listId}:${b.position}`,
+              ),
+            );
+            for (const group of uniqueGroups) {
+              await this.lockRadarGroup(manager, group.listId, group.position);
+            }
+
+            const count = await this.countDiscsInGroup(
+              asignationRepo,
+              targetListId,
+              targetPosition,
+            );
+            this.assertRadarGroupCapacity(
+              count - (isAlreadyInTargetGroup ? 1 : 0),
+            );
+          }
+
+          const nextAsignation = await asignationRepo.preload({
+            id,
+            ...restDto,
+            ...(description !== undefined
+              ? {
+                  description: sanitizeHtml(
+                    description,
+                    DESCRIPTION_SANITIZE_OPTIONS,
+                  ),
+                }
+              : {}),
+            ...(similarBands !== undefined
+              ? {
+                  similarBands: sanitizeHtml(
+                    similarBands,
+                    PLAIN_TEXT_SANITIZE_OPTIONS,
+                  ),
+                }
+              : {}),
+            ...(genre !== undefined
+              ? { genre: sanitizeHtml(genre, PLAIN_TEXT_SANITIZE_OPTIONS) }
+              : {}),
+            ...(spotifyTrackId !== undefined
+              ? { spotifyTrackId: spotifyTrackId || null }
+              : {}),
+          });
+
+          if (!nextAsignation)
+            throw new NotFoundException(`Asignation with id ${id} not found`);
+
+          if (userId) nextAsignation.user = { id: userId } as User;
+
+          await asignationRepo.save(nextAsignation);
+          return nextAsignation;
+        },
+      );
 
       // Si se ha tocado el texto, las bandas similares o la canción, y
       // esta asignación pertenece a una lista mensual que ya tiene post en
@@ -230,6 +336,44 @@ export class AsignationsService {
       return asignation;
     } catch (error) {
       this.handleDbExceptions(error);
+    }
+  }
+
+  private async lockRadarGroup(
+    manager: any,
+    listId: string,
+    position: number,
+  ): Promise<void> {
+    await manager.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`riffvalley:radar-group:${listId}:${position}`],
+    );
+  }
+
+  private async lockListType(manager: any, listId: string): Promise<void> {
+    await manager.query(
+      'SELECT pg_advisory_xact_lock_shared(hashtextextended($1, 0))',
+      [`riffvalley:list-type:${listId}`],
+    );
+  }
+
+  private async countDiscsInGroup(
+    repository: Repository<Asignation>,
+    listId: string,
+    position: number,
+  ): Promise<number> {
+    const [row] = await repository.query(
+      'SELECT COUNT(*)::int AS count FROM asignation WHERE "listId" = $1 AND position = $2 AND "discId" IS NOT NULL',
+      [listId, position],
+    );
+    return Number(row?.count ?? 0);
+  }
+
+  private assertRadarGroupCapacity(existingDiscs: number): void {
+    if (existingDiscs >= MAX_RADAR_DISCS_PER_GROUP) {
+      throw new BadRequestException(
+        'Un grupo de Radar admite como máximo cuatro discos.',
+      );
     }
   }
 

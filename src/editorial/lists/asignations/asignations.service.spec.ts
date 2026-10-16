@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { AsignationsService } from './asignations.service';
 import { Asignation } from './entities/asignations.entity';
+import { List } from '../entities/list.entity';
 
 jest.mock('sanitize-html', () => jest.fn((value: string) => value));
 
@@ -24,11 +25,16 @@ describe('AsignationsService error classification', () => {
     preload: jest.Mock;
     delete: jest.Mock;
     findAndCount: jest.Mock;
+    manager: { transaction: jest.Mock };
+    findOne: jest.Mock;
+    query: jest.Mock;
   };
   let userRepository: { findOneBy: jest.Mock };
   let discRepository: { findOneBy: jest.Mock };
   let listRepository: { findOneBy: jest.Mock };
   let listsService: { syncDiscToWordPress: jest.Mock };
+  let groupCount = 0;
+  let transactionManager: any;
 
   function queryFailedError(
     code: string,
@@ -58,6 +64,7 @@ describe('AsignationsService error classification', () => {
   }
 
   beforeEach(() => {
+    groupCount = 0;
     asignationRepository = {
       create: jest.fn((values) => ({ ...values })),
       save: jest.fn(async (asignation) => asignation),
@@ -65,10 +72,28 @@ describe('AsignationsService error classification', () => {
       preload: jest.fn(async () => ({ id: asignationId })),
       delete: jest.fn(async () => ({ affected: 1 })),
       findAndCount: jest.fn(async () => [[], 0]),
+      findOne: jest.fn(async () => ({
+        id: asignationId,
+        list: { id: listId, type: 'week' },
+        position: 2,
+        disc: { id: discId },
+      })),
+      query: jest.fn(async () => [{ count: groupCount }]),
+      manager: {
+        transaction: jest.fn(async (callback) => callback(transactionManager)),
+      },
     };
     userRepository = { findOneBy: jest.fn(async () => ({ id: userId })) };
     discRepository = { findOneBy: jest.fn(async () => ({ id: discId })) };
-    listRepository = { findOneBy: jest.fn(async () => ({ id: listId })) };
+    listRepository = {
+      findOneBy: jest.fn(async () => ({ id: listId, type: 'week' })),
+    };
+    transactionManager = {
+      query: jest.fn(),
+      getRepository: jest.fn((entity) =>
+        entity === List ? listRepository : asignationRepository,
+      ),
+    };
     listsService = { syncDiscToWordPress: jest.fn() };
     service = new AsignationsService(
       asignationRepository as any,
@@ -120,9 +145,66 @@ describe('AsignationsService error classification', () => {
       expect.objectContaining({
         user: { id: userId },
         disc: { id: discId },
-        list: { id: listId },
+        list: expect.objectContaining({ id: listId }),
         position: 2,
       }),
+    );
+  });
+
+  it('allows the first and fourth Radar discs, rejects the fifth without saving', async () => {
+    listRepository.findOneBy.mockResolvedValue({ id: listId, type: 'week' });
+    await expect(
+      service.create({ listId, discId, position: 0 }),
+    ).resolves.toBeDefined();
+    expect(asignationRepository.query).not.toHaveBeenCalled();
+
+    const createAt = (position: number) =>
+      service.create({ listId, discId, position });
+
+    groupCount = 0;
+    await expect(createAt(1)).resolves.toBeDefined();
+    groupCount = 3;
+    await expect(createAt(1)).resolves.toBeDefined();
+    groupCount = 4;
+    const previousSaves = asignationRepository.save.mock.calls.length;
+    await expect(createAt(1)).rejects.toMatchObject({
+      status: 400,
+      message: 'Un grupo de Radar admite como máximo cuatro discos.',
+    });
+    expect(asignationRepository.save).toHaveBeenCalledTimes(previousSaves);
+  });
+
+  it('limits nonzero negative positions as groups too', async () => {
+    listRepository.findOneBy.mockResolvedValue({ id: listId, type: 'week' });
+    groupCount = 4;
+
+    await expect(
+      service.create({ listId, discId, position: -1 }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it.each([
+    ['SPECIAL', 'special'],
+    ['MONTH', 'month'],
+  ])('does not apply the cap to %s lists', async (_name, type) => {
+    listRepository.findOneBy.mockResolvedValue({ id: listId, type });
+    groupCount = 9;
+    await expect(
+      service.create({ listId, discId, position: 1 }),
+    ).resolves.toBeDefined();
+    expect(asignationRepository.query).not.toHaveBeenCalled();
+  });
+
+  it('takes a transaction-scoped advisory lock before counting and saving', async () => {
+    listRepository.findOneBy.mockResolvedValue({ id: listId, type: 'week' });
+    await service.create({ listId, discId, position: 3 });
+
+    expect(transactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`riffvalley:radar-group:${listId}:3`],
+    );
+    expect(transactionManager.query.mock.invocationCallOrder[0]).toBeLessThan(
+      asignationRepository.query.mock.invocationCallOrder[0],
     );
   });
 
@@ -221,7 +303,7 @@ describe('AsignationsService error classification', () => {
   });
 
   it('returns 404 when update cannot preload the requested asignation', async () => {
-    asignationRepository.preload.mockResolvedValue(null);
+    asignationRepository.findOne.mockResolvedValue(null);
 
     await expectNotFound(service.update(asignationId, { done: true }));
     expect(asignationRepository.save).not.toHaveBeenCalled();
@@ -242,6 +324,68 @@ describe('AsignationsService error classification', () => {
     expect(asignationRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ user: { id: userId }, done: true }),
     );
+  });
+
+  it('allows updates in the same group and movement into a group with space', async () => {
+    groupCount = 4;
+    asignationRepository.preload.mockImplementation(async (values) => ({
+      ...values,
+    }));
+    await expect(
+      service.update(asignationId, { done: true }),
+    ).resolves.toBeDefined();
+    expect(asignationRepository.save).toHaveBeenCalled();
+
+    asignationRepository.findOne.mockResolvedValueOnce({
+      id: asignationId,
+      list: { id: listId, type: 'week' },
+      position: 1,
+      disc: { id: discId },
+    });
+    groupCount = 2;
+    await expect(
+      service.update(asignationId, { position: 2 }),
+    ).resolves.toBeDefined();
+    expect(transactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`riffvalley:radar-group:${listId}:1`],
+    );
+    expect(transactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`riffvalley:radar-group:${listId}:2`],
+    );
+  });
+
+  it('rejects movement into a full group and preserves the existing assignment', async () => {
+    asignationRepository.findOne.mockResolvedValue({
+      id: asignationId,
+      list: { id: listId, type: 'week' },
+      position: 1,
+      disc: { id: discId },
+    });
+    groupCount = 4;
+    asignationRepository.save.mockClear();
+
+    await expect(
+      service.update(asignationId, { position: 2 }),
+    ).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(asignationRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('does not apply the cap to update destinations outside WEEK lists', async () => {
+    listRepository.findOneBy.mockResolvedValue({ id: listId, type: 'special' });
+    asignationRepository.findOne.mockResolvedValue({
+      id: asignationId,
+      list: { id: listId, type: 'special' },
+      position: 1,
+      disc: { id: discId },
+    });
+    groupCount = 8;
+    await expect(
+      service.update(asignationId, { position: 2 }),
+    ).resolves.toBeDefined();
   });
 
   it('maps the known user foreign key on update and propagates unrelated save failures', async () => {

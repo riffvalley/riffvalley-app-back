@@ -30,6 +30,7 @@ import {
 } from 'src/editorial/videos/entities/video.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
 import { List } from 'src/editorial/lists/entities/list.entity';
+import { isValidDateValue } from 'src/editorial/lists/domain/list-date-rules';
 
 @Injectable()
 export class ContentsService {
@@ -64,11 +65,13 @@ export class ContentsService {
       ...rest
     } = createContentDto;
 
-    // RADAR and REUNION always require publicationDate
+    // RADAR and BEST publish through a dated List; REUNION keeps its existing
+    // required publication date.
     if (
       (createContentDto.type === ContentType.RADAR ||
+        createContentDto.type === ContentType.BEST ||
         createContentDto.type === ContentType.REUNION) &&
-      !publicationDate
+      !isValidDateValue(publicationDate)
     ) {
       throw new BadRequestException(
         `El tipo ${createContentDto.type} requiere una fecha de publicación.`,
@@ -402,14 +405,11 @@ export class ContentsService {
     Object.assign(content, rest);
 
     if (publicationDate !== undefined) {
-      // RADAR and REUNION cannot have publicationDate removed
-      const isNullDate =
-        publicationDate === null ||
-        publicationDate === '' ||
-        (typeof publicationDate === 'string' && publicationDate.trim() === '');
+      // RADAR/BEST and REUNION cannot have publicationDate removed.
       if (
-        isNullDate &&
+        !isValidDateValue(publicationDate) &&
         (content.type === ContentType.RADAR ||
+          content.type === ContentType.BEST ||
           content.type === ContentType.REUNION)
       ) {
         throw new BadRequestException(
@@ -432,6 +432,18 @@ export class ContentsService {
           content.ready = false;
         }
       }
+    }
+
+    if (
+      (publicationDate !== undefined || rest.type !== undefined) &&
+      (content.type === ContentType.RADAR ||
+        content.type === ContentType.BEST ||
+        content.type === ContentType.REUNION) &&
+      !isValidDateValue(content.publicationDate)
+    ) {
+      throw new BadRequestException(
+        `El tipo ${content.type} requiere una fecha de publicación.`,
+      );
     }
 
     if (closeDate !== undefined) {

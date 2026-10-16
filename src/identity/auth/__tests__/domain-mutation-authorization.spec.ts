@@ -15,7 +15,6 @@ import { CountriesController } from 'src/catalog/countries/countries.controller'
 import { DiscsController } from 'src/catalog/discs/discs.controller';
 import { GenresController } from 'src/catalog/genres/genres.controller';
 import { ContentsController } from 'src/editorial/contents/contents.controller';
-import { LinksController } from 'src/editorial/links/links.controller';
 import { ListsController } from 'src/editorial/lists/list.controller';
 import { PointController } from 'src/editorial/reunions/points/points.controller';
 import { ReunionController } from 'src/editorial/reunions/reunions.controller';
@@ -58,8 +57,6 @@ const mutations: Mutation[] = [
   [ContentsController, 'create', '/', 1, riffvalley],
   [ContentsController, 'update', ':id', 4, riffvalley],
   [ContentsController, 'remove', ':id', 3, riffvalley],
-  [LinksController, 'update', ':id', 4, riffvalley],
-  [LinksController, 'remove', ':id', 3, riffvalley],
   [ListsController, 'create', '/', 1, riffvalley],
   [ListsController, 'createWeekly', 'weekly/create', 1, riffvalley],
   [ListsController, 'update', ':id', 4, riffvalley],
@@ -106,7 +103,6 @@ describe('domain mutation authorization', () => {
     [DiscsController, 'discs'],
     [GenresController, 'genres'],
     [ContentsController, 'contents'],
-    [LinksController, 'links'],
     [ListsController, 'lists'],
     [PointController, 'points'],
     [ReunionController, 'reunions'],
