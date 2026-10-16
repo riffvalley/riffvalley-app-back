@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -14,6 +16,7 @@ import {
   MoreThan,
   MoreThanOrEqual,
   Not,
+  EntityManager,
   Repository,
 } from 'typeorm';
 import {
@@ -26,8 +29,15 @@ import {
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
-import { Content } from 'src/editorial/contents/entities/content.entity';
-import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
+import {
+  Content,
+  ContentType,
+} from 'src/editorial/contents/entities/content.entity';
+import {
+  WordpressService,
+  WordpressWriteError,
+} from 'src/integrations/wordpress-integration/wordpress.service';
+import { WpPost } from 'src/integrations/wordpress-integration/wordpress.types';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
 
 // Un radar semanal sigue abierto hasta WEEKLY_CLOSE_GRACE_DAYS después de su
@@ -158,102 +168,174 @@ export class ListsService {
     if (!list) throw new NotFoundException(`List with id ${id} not found`);
 
     try {
-      await this.listRepository.save(list);
-
-      // Update associated Content if sync required
+      const dateFields = ['closeDate', 'releaseDate', 'listDate'] as const;
+      const syncRequested = dateFields.some(
+        (field) => updateListDto[field] !== undefined,
+      );
+      const linkedContent = syncRequested
+        ? await this.contentRepository.findOne({
+            where: { list: { id: list.id } },
+          })
+        : null;
       if (
-        updateListDto.closeDate ||
-        updateListDto.releaseDate ||
-        updateListDto.listDate
+        updateListDto.releaseDate === null &&
+        (linkedContent?.type === ContentType.RADAR ||
+          linkedContent?.type === ContentType.REUNION)
       ) {
-        const content = await this.contentRepository.findOne({
-          where: { list: { id: list.id } },
+        throw new BadRequestException(
+          `El tipo ${linkedContent.type} requiere una fecha de publicación.`,
+        );
+      }
+      const contentSyncNeeded =
+        !!linkedContent &&
+        ((updateListDto.closeDate !== undefined &&
+          !this.dateValuesMatch(linkedContent.closeDate, list.closeDate)) ||
+          (updateListDto.releaseDate !== undefined &&
+            !this.dateValuesMatch(
+              linkedContent.publicationDate,
+              list.releaseDate,
+            )) ||
+          (updateListDto.listDate !== undefined &&
+            this.listTypeHasSyncedListDate(list.type) &&
+            !this.dateValuesMatch(linkedContent.listDate, list.listDate)));
+
+      if (!contentSyncNeeded) {
+        await this.listRepository.save(list);
+        return list;
+      }
+
+      return await this.listRepository.manager.transaction(async (manager) => {
+        const listRepo = manager.getRepository(List);
+        const contentRepo = manager.getRepository(Content);
+        const transactionalList = await listRepo.preload({
+          id,
+          ...updateListDto,
+        });
+
+        if (!transactionalList) {
+          throw new NotFoundException(`List with id ${id} not found`);
+        }
+
+        await listRepo.save(transactionalList);
+        const content = await contentRepo.findOne({
+          where: { list: { id: transactionalList.id } },
         });
 
         if (content) {
-          let changed = false;
+          let contentChanged = false;
 
-          // Sync closeDate
-          if (list.closeDate) {
-            const listCloseDate = new Date(list.closeDate);
-            const contentCloseDate = content.closeDate
-              ? new Date(content.closeDate)
-              : null;
-            if (
-              !contentCloseDate ||
-              contentCloseDate.getTime() !== listCloseDate.getTime()
-            ) {
-              content.closeDate = listCloseDate;
-              changed = true;
-            }
+          if (updateListDto.closeDate !== undefined) {
+            contentChanged =
+              this.assignDateIfChanged(
+                content,
+                'closeDate',
+                transactionalList.closeDate,
+              ) || contentChanged;
           }
-
-          // Sync publicationDate with releaseDate (NOT listDate)
-          if (list.releaseDate) {
-            const releaseDate = new Date(list.releaseDate);
-            const contentDate = content.publicationDate
-              ? new Date(content.publicationDate)
-              : null;
-            if (
-              !contentDate ||
-              contentDate.getTime() !== releaseDate.getTime()
-            ) {
-              content.publicationDate = releaseDate;
-              changed = true;
-            }
+          if (updateListDto.releaseDate !== undefined) {
+            contentChanged =
+              this.assignDateIfChanged(
+                content,
+                'publicationDate',
+                transactionalList.releaseDate,
+              ) || contentChanged;
           }
-
-          // Sync list.listDate -> content.listDate (for RADAR, BEST, and VIDEO)
           if (
-            list.type === 'week' ||
-            list.type === 'month' ||
-            list.type === 'video'
+            updateListDto.listDate !== undefined &&
+            this.listTypeHasSyncedListDate(transactionalList.type)
           ) {
-            // week = RADAR, month = BEST, video = VIDEO
-            if (list.listDate) {
-              const listListDate = new Date(list.listDate);
-              const contentListDate = content.listDate
-                ? new Date(content.listDate)
-                : null;
-              if (
-                !contentListDate ||
-                contentListDate.getTime() !== listListDate.getTime()
-              ) {
-                content.listDate = listListDate;
-                changed = true;
-              }
-            }
+            contentChanged =
+              this.assignDateIfChanged(
+                content,
+                'listDate',
+                transactionalList.listDate,
+              ) || contentChanged;
           }
 
-          if (changed) {
-            await this.contentRepository.save(content);
+          if (contentChanged) {
+            await contentRepo.save(content);
             this.logger.log(`Updated content ${content.id} from list sync`);
           }
         }
-      }
 
-      return list;
+        return transactionalList;
+      });
     } catch (error) {
+      if (error instanceof BadRequestException) throw error;
       this.handleDbExceptions(error);
     }
   }
 
-  async removeList(id: string) {
+  async removeList(id: string, manager?: EntityManager) {
+    if (manager) return this.removeListWithManager(id, manager);
+
     const list = await this.listRepository.findOne({ where: { id } });
+    if (!list) {
+      throw new NotFoundException(`List with id ${id} not found`);
+    }
+
+    const content = await this.contentRepository.findOne({
+      where: { list: { id: list.id } },
+    });
+    if (!content) {
+      return this.listRepository.remove(list);
+    }
+
+    return this.listRepository.manager.transaction((transactionManager) =>
+      this.removeListWithManager(id, transactionManager),
+    );
+  }
+
+  private async removeListWithManager(id: string, manager: EntityManager) {
+    const listRepo = manager.getRepository(List);
+    const contentRepo = manager.getRepository(Content);
+    const list = await listRepo.findOne({ where: { id } });
 
     if (!list) {
       throw new NotFoundException(`List with id ${id} not found`);
     }
 
-    // Delete associated content if exists
-    const content = await this.contentRepository.findOne({
+    const content = await contentRepo.findOne({
       where: { list: { id: list.id } },
     });
     if (content) {
-      await this.contentRepository.remove(content);
+      await contentRepo.remove(content);
     }
 
-    return this.listRepository.remove(list);
+    return listRepo.remove(list);
+  }
+
+  private assignDateIfChanged<T extends object>(
+    target: T,
+    field: keyof T,
+    source: Date | null | undefined,
+  ): boolean {
+    const current = target[field] as Date | null | undefined;
+    const next = source == null ? null : new Date(source);
+    const currentTime = current == null ? null : new Date(current).getTime();
+    const nextTime = next == null ? null : next.getTime();
+
+    if (currentTime === nextTime) return false;
+
+    target[field] = next as T[keyof T];
+    return true;
+  }
+
+  private dateValuesMatch(
+    left: Date | null | undefined,
+    right: Date | null | undefined,
+  ): boolean {
+    const leftTime = left == null ? null : new Date(left).getTime();
+    const rightTime = right == null ? null : new Date(right).getTime();
+    return leftTime === rightTime;
+  }
+
+  private listTypeHasSyncedListDate(type: ListType): boolean {
+    return (
+      type === ListType.WEEK ||
+      type === ListType.MONTH ||
+      type === ListType.VIDEO
+    );
   }
 
   // Obtener todas las listas especiales
@@ -488,6 +570,7 @@ export class ListsService {
     releaseDate?: Date,
     listDate?: Date,
     closeDate?: Date,
+    manager?: EntityManager,
   ) {
     let targetReleaseDate: Date;
 
@@ -546,7 +629,7 @@ export class ListsService {
         closeDate: closeDate,
       });
 
-      await this.listRepository.save(list);
+      await (manager?.getRepository(List) ?? this.listRepository).save(list);
       this.logger.log(`Weekly list created: ${name}`);
       return list;
     } catch (error) {
@@ -558,6 +641,7 @@ export class ListsService {
     releaseDate?: Date,
     listDate?: Date,
     closeDate?: Date,
+    manager?: EntityManager,
   ) {
     let targetReleaseDate: Date;
 
@@ -612,7 +696,7 @@ export class ListsService {
         closeDate: closeDate,
       });
 
-      await this.listRepository.save(list);
+      await (manager?.getRepository(List) ?? this.listRepository).save(list);
       this.logger.log(`Monthly list created: ${name}`);
       return list;
     } catch (error) {
@@ -791,9 +875,14 @@ export class ListsService {
         const existingContent = await this.wordpressService.getPost(
           existingBySlug.id,
         );
+        if (!existingContent || existingContent.status === 'trash') {
+          throw this.uncertainWordPressResult(
+            `post slug ${slug} was found but could not be read safely`,
+          );
+        }
         const result = await this.syncDiscsIntoPost(
           existingBySlug.id,
-          existingContent?.content ?? '',
+          existingContent.content,
           discs,
           [],
           (d, trackIds) => this.buildWeeklyDiscSections(d, trackIds, title),
@@ -834,7 +923,7 @@ export class ListsService {
         spotifyTrackIds,
       );
 
-      const post = await this.wordpressService.createPost(
+      const { post, reconciled } = await this.createPostAndReconcile(
         title,
         content,
         'draft',
@@ -844,11 +933,31 @@ export class ListsService {
         slug,
       );
 
+      let publishedDiscs = discs.map((a) => this.toPublishedDiscRecord(a));
+      if (reconciled) {
+        const remotePost = await this.wordpressService.getPost(post.id);
+        if (!remotePost || remotePost.status === 'trash') {
+          throw this.uncertainWordPressResult(
+            `post slug ${slug} was found but its content could not be confirmed`,
+          );
+        }
+
+        const result = await this.syncDiscsIntoPost(
+          post.id,
+          remotePost.content,
+          discs,
+          [],
+          (d, trackIds) => this.buildWeeklyDiscSections(d, trackIds, title),
+          false,
+        );
+        publishedDiscs = result.publishedDiscs;
+      }
+
       const newEntry: PublishedWeeklyPostRecord = {
         position,
         wpPostId: post.id,
         wpPostUrl: post.link,
-        publishedDiscs: discs.map((a) => this.toPublishedDiscRecord(a)),
+        publishedDiscs,
       };
       list.wpWeeklyPosts = [
         ...(list.wpWeeklyPosts ?? []).filter((e) => e.position !== position),
@@ -1035,6 +1144,49 @@ export class ListsService {
     return { synced: false };
   }
 
+  private async updatePostContentWithReconciliation(
+    postId: number,
+    content: string,
+    insertedDiscIds: string[],
+  ) {
+    try {
+      await this.wordpressService.updatePostContent(postId, content);
+      return;
+    } catch (error) {
+      if (
+        !(error instanceof WordpressWriteError) ||
+        error.outcome !== 'unknown'
+      ) {
+        throw error;
+      }
+
+      let remotePost: { content: string; status: string } | null;
+      try {
+        remotePost = await this.wordpressService.getPost(postId);
+      } catch {
+        throw this.uncertainWordPressResult(
+          `post #${postId} could not be reread`,
+        );
+      }
+
+      if (!remotePost || remotePost.status === 'trash') {
+        throw this.uncertainWordPressResult(
+          `post #${postId} could not be verified after the write`,
+        );
+      }
+
+      const insertedBlocksConfirmed = insertedDiscIds.every(
+        (discId) =>
+          this.getUniqueDiscSection(remotePost.content, discId) !== null,
+      );
+      if (insertedBlocksConfirmed && remotePost.content === content) return;
+
+      throw this.uncertainWordPressResult(
+        `post #${postId} does not exactly match the requested content`,
+      );
+    }
+  }
+
   private async syncDiscToMonthlyPost(list: List, asignation: any) {
     if (!list.wpPostId) {
       // Todavía no hay post que actualizar: se recogerá con el próximo
@@ -1065,21 +1217,36 @@ export class ListsService {
     const alreadyPublished = publishedDiscs.some(
       (d) => d.discId === asignation.disc.id,
     );
+    const remoteBoundary = this.getUniqueDiscSection(
+      existingPost.content,
+      asignation.disc.id,
+    );
 
-    const replaced = alreadyPublished
+    if (alreadyPublished && !remoteBoundary) {
+      throw this.uncertainWordPressResult(
+        `disc ${asignation.disc.id} is tracked locally but its WordPress block is missing`,
+      );
+    }
+
+    const updatedContent = remoteBoundary
       ? this.replaceDiscSection(existingPost.content, asignation.disc.id, block)
-      : null;
-    const updatedContent =
-      replaced ?? this.insertBeforeFooter(existingPost.content, block);
+      : this.insertBeforeFooter(existingPost.content, block);
 
-    await this.wordpressService.updatePostContent(
+    if (updatedContent === null) {
+      throw this.uncertainWordPressResult(
+        `disc ${asignation.disc.id} could not be safely located in WordPress`,
+      );
+    }
+
+    await this.updatePostContentWithReconciliation(
       list.wpPostId,
       updatedContent,
+      alreadyPublished ? [] : [asignation.disc.id],
     );
 
     if (!alreadyPublished) {
       list.wpPublishedDiscs = [
-        ...publishedDiscs,
+        ...publishedDiscs.filter((d) => d.discId !== asignation.disc.id),
         this.toPublishedDiscRecord(asignation),
       ];
       await this.listRepository.save(list);
@@ -1124,16 +1291,31 @@ export class ListsService {
     const alreadyPublished = publishedDiscs.some(
       (d) => d.discId === asignation.disc.id,
     );
+    const remoteBoundary = this.getUniqueDiscSection(
+      existingPost.content,
+      asignation.disc.id,
+    );
 
-    const replaced = alreadyPublished
+    if (alreadyPublished && !remoteBoundary) {
+      throw this.uncertainWordPressResult(
+        `disc ${asignation.disc.id} is tracked locally but its WordPress block is missing`,
+      );
+    }
+
+    const updatedContent = remoteBoundary
       ? this.replaceDiscSection(existingPost.content, asignation.disc.id, block)
-      : null;
-    const updatedContent =
-      replaced ?? this.insertBeforeFooter(existingPost.content, block);
+      : this.insertBeforeFooter(existingPost.content, block);
 
-    await this.wordpressService.updatePostContent(
+    if (updatedContent === null) {
+      throw this.uncertainWordPressResult(
+        `disc ${asignation.disc.id} could not be safely located in WordPress`,
+      );
+    }
+
+    await this.updatePostContentWithReconciliation(
       entry.wpPostId,
       updatedContent,
+      alreadyPublished ? [] : [asignation.disc.id],
     );
 
     if (!alreadyPublished) {
@@ -1142,7 +1324,7 @@ export class ListsService {
         {
           ...entry,
           publishedDiscs: [
-            ...publishedDiscs,
+            ...publishedDiscs.filter((d) => d.discId !== asignation.disc.id),
             this.toPublishedDiscRecord(asignation),
           ],
         },
@@ -1288,6 +1470,11 @@ export class ListsService {
 
     const existing = await this.wordpressService.findPostBySlug(slug);
     if (existing) {
+      if (existing.status === 'trash') {
+        throw new ConflictException(
+          `WordPress post slug ${slug} is in the trash; review it manually before publishing`,
+        );
+      }
       this.logger.log(
         `WP post already exists for slug ${slug} (#${existing.id}), linking list to it`,
       );
@@ -1318,7 +1505,7 @@ export class ListsService {
       authors,
     );
 
-    const post = await this.wordpressService.createPost(
+    const { post } = await this.createPostAndReconcile(
       title,
       content,
       'draft',
@@ -1339,6 +1526,64 @@ export class ListsService {
       artist: a.disc?.artist?.name ?? '',
       name: a.disc?.name ?? '',
     };
+  }
+
+  private async createPostAndReconcile(
+    title: string,
+    content: string,
+    status: 'draft' | 'publish',
+    meta: Record<string, unknown>,
+    categories: number[],
+    tags: number[],
+    slug: string,
+  ): Promise<{ post: WpPost; reconciled: boolean }> {
+    try {
+      const post = await this.wordpressService.createPost(
+        title,
+        content,
+        status,
+        meta,
+        categories,
+        tags,
+        slug,
+      );
+      return { post, reconciled: false };
+    } catch (error) {
+      if (
+        !(error instanceof WordpressWriteError) ||
+        error.outcome !== 'unknown'
+      ) {
+        throw error;
+      }
+
+      let post: WpPost | null;
+      try {
+        post = await this.wordpressService.findPostBySlug(slug);
+      } catch {
+        throw this.uncertainWordPressResult(
+          `post slug ${slug} could not be checked after the write`,
+        );
+      }
+
+      if (!post) {
+        throw this.uncertainWordPressResult(
+          `post slug ${slug} was not found after an uncertain write`,
+        );
+      }
+      if (post.status === 'trash') {
+        throw new ConflictException(
+          `WordPress post slug ${slug} is in the trash; review it manually before retrying`,
+        );
+      }
+
+      return { post, reconciled: true };
+    }
+  }
+
+  private uncertainWordPressResult(detail: string) {
+    return new ServiceUnavailableException(
+      `WordPress write outcome is unknown; verify ${detail} before retrying`,
+    );
   }
 
   private async linkListToWpPost(
@@ -1373,7 +1618,7 @@ export class ListsService {
       true,
     );
 
-    if (syncResult.newCount || syncResult.removedDiscs.length) {
+    if (syncResult.trackingChanged) {
       list.wpPublishedDiscs = syncResult.publishedDiscs;
       await this.listRepository.save(list);
     }
@@ -1443,14 +1688,43 @@ export class ListsService {
     existingCount: number;
     removedDiscs: PublishedDiscRecord[];
     notFoundForUpdate: number;
+    trackingChanged: boolean;
   }> {
     const publishedIds = new Set(publishedDiscs.map((d) => d.discId));
     const currentIds = new Set(allDiscs.map((a) => a.disc.id));
+    const localDiscIds = new Set<string>();
+    for (const asignation of allDiscs) {
+      const discId = asignation.disc.id;
+      if (localDiscIds.has(discId)) {
+        throw new ConflictException(
+          `WordPress block identity is ambiguous for disc ${discId}; review the post manually`,
+        );
+      }
+      localDiscIds.add(discId);
+    }
 
-    const newDiscs = allDiscs.filter((a) => !publishedIds.has(a.disc.id));
-    // Discos que ya estaban en el post: se regeneran y se pisan siempre,
-    // sin comparar nada, para que cualquier edición del texto se refleje.
-    const existingDiscs = allDiscs.filter((a) => publishedIds.has(a.disc.id));
+    const remoteBlocks = new Map<string, boolean>();
+    for (const discId of new Set([...publishedIds, ...currentIds])) {
+      remoteBlocks.set(
+        discId,
+        this.getUniqueDiscSection(currentContent, discId) !== null,
+      );
+    }
+
+    const newDiscs = allDiscs.filter(
+      (a) => !publishedIds.has(a.disc.id) && !remoteBlocks.get(a.disc.id),
+    );
+    // Tracking local o marcador estable remoto identifican un bloque que ya
+    // pertenece a esta lista; se actualiza in situ y nunca se añade otra copia.
+    const existingDiscs = allDiscs.filter(
+      (a) =>
+        publishedIds.has(a.disc.id) || remoteBlocks.get(a.disc.id) === true,
+    );
+    const reconciledDiscIds = allDiscs
+      .filter(
+        (a) => !publishedIds.has(a.disc.id) && remoteBlocks.get(a.disc.id),
+      )
+      .map((a) => a.disc.id);
     const removedDiscs = publishedDiscs.filter(
       (d) => !currentIds.has(d.discId),
     );
@@ -1485,31 +1759,40 @@ export class ListsService {
           [spotifyTrackIds[offset]],
           [authors[offset]],
         );
-        const replaced = this.replaceDiscSection(
+        const remoteBoundary = this.getUniqueDiscSection(
+          updatedContent,
+          a.disc.id,
+        );
+        if (!remoteBoundary) {
+          notFoundForUpdate++;
+          return;
+        }
+        updatedContent = this.replaceDiscSection(
           updatedContent,
           a.disc.id,
           block,
         );
-        if (replaced === null) {
-          notFoundForUpdate++;
-        } else {
-          updatedContent = replaced;
-        }
       });
 
       if (updatedContent !== currentContent) {
-        await this.wordpressService.updatePostContent(wpPostId, updatedContent);
+        await this.updatePostContentWithReconciliation(
+          wpPostId,
+          updatedContent,
+          newDiscs.map((a) => a.disc.id),
+        );
       }
     }
 
-    let newPublishedDiscs = publishedDiscs;
-    if (newDiscs.length || removedDiscs.length) {
-      const stillTracked = publishedDiscs.filter((d) =>
-        currentIds.has(d.discId),
-      );
-      const newlyPublished = newDiscs.map((a) => this.toPublishedDiscRecord(a));
-      newPublishedDiscs = [...stillTracked, ...newlyPublished];
-    }
+    const stillTracked = publishedDiscs.filter((d) => currentIds.has(d.discId));
+    const trackedIds = new Set(stillTracked.map((d) => d.discId));
+    const newlyTracked = allDiscs
+      .filter((a) => !trackedIds.has(a.disc.id))
+      .map((a) => this.toPublishedDiscRecord(a));
+    const newPublishedDiscs = [...stillTracked, ...newlyTracked];
+    const trackingChanged =
+      reconciledDiscIds.length > 0 ||
+      newDiscs.length > 0 ||
+      removedDiscs.length > 0;
 
     return {
       publishedDiscs: newPublishedDiscs,
@@ -1519,6 +1802,7 @@ export class ListsService {
       existingCount: existingDiscs.length,
       removedDiscs,
       notFoundForUpdate,
+      trackingChanged,
     };
   }
 
@@ -1557,27 +1841,56 @@ export class ListsService {
   private findDiscSectionBoundaries(
     content: string,
   ): { discId: string; start: number; end: number }[] {
-    const groupOpenRegex = /<!--\s*wp:group[\s\S]*?-->/g;
+    const groupCommentRegex = /<!--\s*(\/?)wp:group\b[\s\S]*?-->/g;
     const boundaries: { discId: string; start: number; end: number }[] = [];
-    let openMatch: RegExpExecArray | null;
+    const stack: { discId?: string; start: number }[] = [];
+    let match: RegExpExecArray | null;
 
-    while ((openMatch = groupOpenRegex.exec(content)) !== null) {
-      const discIdMatch = openMatch[0].match(/rv-disc-([0-9a-f-]+)/i);
-      if (!discIdMatch) continue;
+    while ((match = groupCommentRegex.exec(content)) !== null) {
+      if (match[1]) {
+        const open = stack.pop();
+        if (open?.discId) {
+          boundaries.push({
+            discId: open.discId,
+            start: open.start,
+            end: match.index + match[0].length,
+          });
+        }
+        continue;
+      }
 
-      const closeRegex = /<!--\s*\/wp:group\s*-->/g;
-      closeRegex.lastIndex = openMatch.index + openMatch[0].length;
-      const closeMatch = closeRegex.exec(content);
-      if (!closeMatch) continue;
-
-      boundaries.push({
-        discId: discIdMatch[1],
-        start: openMatch.index,
-        end: closeMatch.index + closeMatch[0].length,
-      });
+      const discIdMatch = match[0].match(/rv-disc-([0-9a-f-]+)/i);
+      stack.push({ discId: discIdMatch?.[1], start: match.index });
     }
 
-    return boundaries;
+    return boundaries.sort((a, b) => a.start - b.start);
+  }
+
+  private findDiscGroupMarkers(content: string, discId: string): number {
+    const groupOpenRegex = /<!--\s*wp:group\b[\s\S]*?-->/g;
+    let count = 0;
+    let match: RegExpExecArray | null;
+    while ((match = groupOpenRegex.exec(content)) !== null) {
+      if (match[0].match(/rv-disc-([0-9a-f-]+)/i)?.[1] === discId) count++;
+    }
+    return count;
+  }
+
+  private getUniqueDiscSection(
+    content: string,
+    discId: string,
+  ): { discId: string; start: number; end: number } | null {
+    const markerCount = this.findDiscGroupMarkers(content, discId);
+    const boundaries = this.findDiscSectionBoundaries(content).filter(
+      (boundary) => boundary.discId === discId,
+    );
+
+    if (markerCount !== boundaries.length || markerCount > 1) {
+      throw new ConflictException(
+        `WordPress block identity is ambiguous for disc ${discId}; review the post manually`,
+      );
+    }
+    return boundaries[0] ?? null;
   }
 
   // Sustituye el bloque wp:group completo de un disco por una versión
@@ -1589,9 +1902,7 @@ export class ListsService {
     discId: string,
     newBlock: string,
   ): string | null {
-    const boundary = this.findDiscSectionBoundaries(content).find(
-      (b) => b.discId === discId,
-    );
+    const boundary = this.getUniqueDiscSection(content, discId);
     if (!boundary) return null;
 
     return `${content.slice(0, boundary.start)}${newBlock}${content.slice(boundary.end)}`;

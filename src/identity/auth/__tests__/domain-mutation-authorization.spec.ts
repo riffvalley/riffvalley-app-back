@@ -9,7 +9,7 @@ import { META_MINIMUM_ROLE } from '../decorators/role-protected.decorator';
 import { Reflector } from '@nestjs/core';
 import { ValidRoles } from '../interfaces/valid-roles';
 import { ArticlesController } from 'src/editorial/articles/articles.controller';
-import { AsignationsController } from 'src/editorial/asignations/asignations.controller';
+import { AsignationsController } from 'src/editorial/lists/asignations/asignations.controller';
 import { ArtistsController } from 'src/catalog/artists/artists.controller';
 import { CountriesController } from 'src/catalog/countries/countries.controller';
 import { DiscsController } from 'src/catalog/discs/discs.controller';

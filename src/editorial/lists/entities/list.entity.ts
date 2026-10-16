@@ -1,4 +1,4 @@
-import { Asignation } from 'src/editorial/asignations/entities/asignations.entity';
+import { Asignation } from 'src/editorial/lists/asignations/entities/asignations.entity';
 import { Link } from 'src/editorial/links/entities/links.entity';
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 

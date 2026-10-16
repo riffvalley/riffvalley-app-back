@@ -3,9 +3,14 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { ListsController } from './list.controller';
 import { ListsService } from './list.service';
 import { GenerateWpPostsQueryDto } from './dto/generate-wp-posts-query.dto';
+import {
+  ListYearMonthParamsDto,
+  ListYearParamsDto,
+} from './dto/list-period-params.dto';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import {
@@ -18,12 +23,18 @@ describe('ListsController WordPress authorization', () => {
   let listsService: {
     generateWordPressPosts: jest.Mock;
     generateBestDiscsWordPressPost: jest.Mock;
+    findPastWeeklyListsByMonth: jest.Mock;
+    findPastMonthListsByYear: jest.Mock;
+    findPastVideoListsByYear: jest.Mock;
   };
 
   beforeEach(() => {
     listsService = {
       generateWordPressPosts: jest.fn(),
       generateBestDiscsWordPressPost: jest.fn(),
+      findPastWeeklyListsByMonth: jest.fn(),
+      findPastMonthListsByYear: jest.fn(),
+      findPastVideoListsByYear: jest.fn(),
     };
     controller = new ListsController(listsService as unknown as ListsService);
   });
@@ -97,5 +108,124 @@ describe('ListsController WordPress authorization', () => {
     expect(roleMeetsMinimum(ValidRoles.superadmin, ValidRoles.riffvalley)).toBe(
       true,
     );
+  });
+
+  describe('historical period route parameters', () => {
+    const validationPipe = new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    async function validateParams<T extends object>(
+      value: Record<string, string>,
+      metatype: new () => T,
+    ): Promise<T> {
+      return validationPipe.transform(value, {
+        type: 'param',
+        metatype,
+        data: undefined,
+      });
+    }
+
+    it.each([
+      ['weekly', { year: '2026', month: '1' }, 1],
+      ['weekly', { year: '2026', month: '12' }, 12],
+    ])(
+      'preserves valid %s period parameters',
+      async (_route, params, month) => {
+        const dto = await validateParams(params, ListYearMonthParamsDto);
+        const response = [{ id: 'list-id' }];
+        listsService.findPastWeeklyListsByMonth.mockResolvedValue(response);
+
+        await expect(controller.findPastWeeklyByMonth(dto)).resolves.toBe(
+          response,
+        );
+        expect(listsService.findPastWeeklyListsByMonth).toHaveBeenCalledWith(
+          2026,
+          month,
+        );
+      },
+    );
+
+    it.each([
+      ['monthly', 'findPastMonthByYear'],
+      ['video', 'findPastVideoByYear'],
+      ['duplicate video route', 'findPastVideosByYear'],
+    ] as const)(
+      'preserves the valid %s year endpoint contract',
+      async (_route, handlerName) => {
+        const dto = await validateParams({ year: '2026' }, ListYearParamsDto);
+        const response = [{ id: 'list-id' }];
+        listsService.findPastMonthListsByYear.mockResolvedValue(response);
+        listsService.findPastVideoListsByYear.mockResolvedValue(response);
+
+        await expect(controller[handlerName](dto)).resolves.toBe(response);
+        if (handlerName === 'findPastMonthByYear') {
+          expect(listsService.findPastMonthListsByYear).toHaveBeenCalledWith(
+            2026,
+          );
+        } else {
+          expect(listsService.findPastVideoListsByYear).toHaveBeenCalledWith(
+            2026,
+          );
+        }
+      },
+    );
+
+    it.each([
+      ['empty year', { year: '' }, ListYearParamsDto],
+      ['non-numeric year', { year: 'year' }, ListYearParamsDto],
+      ['year suffix', { year: '2026abc' }, ListYearParamsDto],
+      ['negative year', { year: '-2026' }, ListYearParamsDto],
+      ['decimal year', { year: '2026.5' }, ListYearParamsDto],
+      ['year below Date constructor range', { year: '99' }, ListYearParamsDto],
+      [
+        'year above Date constructor range',
+        { year: '275760' },
+        ListYearParamsDto,
+      ],
+      ['month zero', { year: '2026', month: '0' }, ListYearMonthParamsDto],
+      ['month thirteen', { year: '2026', month: '13' }, ListYearMonthParamsDto],
+      ['negative month', { year: '2026', month: '-1' }, ListYearMonthParamsDto],
+      ['empty month', { year: '2026', month: '' }, ListYearMonthParamsDto],
+      [
+        'non-numeric month',
+        { year: '2026', month: 'month' },
+        ListYearMonthParamsDto,
+      ],
+      [
+        'month suffix',
+        { year: '2026', month: '10xyz' },
+        ListYearMonthParamsDto,
+      ],
+      ['decimal month', { year: '2026', month: '1.5' }, ListYearMonthParamsDto],
+    ])(
+      'returns HTTP 400 for %s without invoking the service',
+      async (_case, params, metatype) => {
+        try {
+          await validateParams(params, metatype);
+          fail('Expected parameter validation to reject the request');
+        } catch (error) {
+          expect(error).toBeInstanceOf(BadRequestException);
+          expect((error as BadRequestException).getStatus()).toBe(400);
+        }
+        expect(listsService.findPastWeeklyListsByMonth).not.toHaveBeenCalled();
+        expect(listsService.findPastMonthListsByYear).not.toHaveBeenCalled();
+        expect(listsService.findPastVideoListsByYear).not.toHaveBeenCalled();
+      },
+    );
+
+    it('accepts the supported year endpoints and rejects years that Date cannot represent as a full period', async () => {
+      await expect(
+        validateParams({ year: '100' }, ListYearParamsDto),
+      ).resolves.toMatchObject({ year: 100 });
+      await expect(
+        validateParams({ year: '275759' }, ListYearParamsDto),
+      ).resolves.toMatchObject({ year: 275759 });
+      await expect(
+        validateParams({ year: '1' }, ListYearParamsDto),
+      ).rejects.toMatchObject({ status: 400 });
+    });
   });
 });

@@ -13,6 +13,10 @@ import { ListsService } from './list.service';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { GenerateWpPostsQueryDto } from './dto/generate-wp-posts-query.dto';
+import {
+  ListYearMonthParamsDto,
+  ListYearParamsDto,
+} from './dto/list-period-params.dto';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
@@ -53,13 +57,10 @@ export class ListsController {
   }
 
   @Get('weekly/past/:year/:month')
-  findPastWeeklyByMonth(
-    @Param('year') year: string,
-    @Param('month') month: string,
-  ) {
+  findPastWeeklyByMonth(@Param() params: ListYearMonthParamsDto) {
     return this.listsServices.findPastWeeklyListsByMonth(
-      parseInt(year),
-      parseInt(month),
+      params.year,
+      params.month,
     );
   }
 
@@ -69,10 +70,8 @@ export class ListsController {
   }
 
   @Get('video/past/:year')
-  findPastVideoByYear(
-    @Param('year') year: string, // Only year is passed
-  ) {
-    return this.listsServices.findPastVideoListsByYear(parseInt(year));
+  findPastVideoByYear(@Param() params: ListYearParamsDto) {
+    return this.listsServices.findPastVideoListsByYear(params.year);
   }
 
   @Get('special')
@@ -91,10 +90,8 @@ export class ListsController {
   }
 
   @Get('month/past/:year')
-  findPastMonthByYear(
-    @Param('year') year: string, // Only year is passed
-  ) {
-    return this.listsServices.findPastMonthListsByYear(parseInt(year));
+  findPastMonthByYear(@Param() params: ListYearParamsDto) {
+    return this.listsServices.findPastMonthListsByYear(params.year);
   }
 
   @Get('video/current')
@@ -103,8 +100,8 @@ export class ListsController {
   }
 
   @Get('video/past/:year')
-  findPastVideosByYear(@Param('year') year: string) {
-    return this.listsServices.findPastVideoListsByYear(parseInt(year));
+  findPastVideosByYear(@Param() params: ListYearParamsDto) {
+    return this.listsServices.findPastVideoListsByYear(params.year);
   }
 
   @Post('weekly/create')

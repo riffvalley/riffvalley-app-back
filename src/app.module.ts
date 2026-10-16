@@ -14,7 +14,7 @@ import { GenresModule } from './catalog/genres/genres.module';
 import { CatalogImportModule } from './catalog/import/catalog-import.module';
 import { AuthModule } from './identity/auth/auth.module';
 import { RatesModule } from './community/rates/rates.module';
-import { AsignationsModule } from './editorial/asignations/asignations.module';
+import { AsignationsModule } from './editorial/lists/asignations/asignations.module';
 import { ListsModule } from './editorial/lists/list.module';
 import { ReunionsModule } from './editorial/reunions/reunions.module';
 import { PointsModule } from './editorial/reunions/points/points.module';

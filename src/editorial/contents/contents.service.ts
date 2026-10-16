@@ -275,25 +275,38 @@ export class ContentsService {
       await this.pointRepo.save(points);
     }
 
-    const savedContent = await this.contentRepo.save(content);
+    let savedContent: Content;
 
-    // Auto-create Weekly List if type is RADAR or BEST
-    if (savedContent.type === ContentType.RADAR) {
-      const list = await this.listsService.createWeeklyList(
-        savedContent.publicationDate,
-        savedContent.listDate,
-        savedContent.closeDate,
+    // RADAR/BEST creation writes both Content and List. Keep the local pair
+    // in one transaction; no external service is called in this block.
+    if (
+      content.type === ContentType.RADAR ||
+      content.type === ContentType.BEST
+    ) {
+      savedContent = await this.contentRepo.manager.transaction(
+        async (manager) => {
+          const contentRepo = manager.getRepository(Content);
+          const saved = await contentRepo.save(content);
+          const list =
+            saved.type === ContentType.RADAR
+              ? await this.listsService.createWeeklyList(
+                  saved.publicationDate,
+                  saved.listDate,
+                  saved.closeDate,
+                  manager,
+                )
+              : await this.listsService.createMonthlyList(
+                  saved.publicationDate,
+                  saved.listDate,
+                  saved.closeDate,
+                  manager,
+                );
+          saved.list = list;
+          return contentRepo.save(saved);
+        },
       );
-      savedContent.list = list;
-      await this.contentRepo.save(savedContent);
-    } else if (savedContent.type === ContentType.BEST) {
-      const list = await this.listsService.createMonthlyList(
-        savedContent.publicationDate,
-        savedContent.listDate,
-        savedContent.closeDate,
-      );
-      savedContent.list = list;
-      await this.contentRepo.save(savedContent);
+    } else {
+      savedContent = await this.contentRepo.save(content);
     }
 
     return savedContent;
@@ -443,85 +456,72 @@ export class ContentsService {
       }
     }
 
-    const savedContent = await this.contentRepo.save(content);
+    const canSyncList =
+      content.list &&
+      (content.type === ContentType.RADAR ||
+        content.type === ContentType.BEST ||
+        content.type === ContentType.VIDEO);
+    const dateSyncRequested =
+      publicationDate !== undefined ||
+      closeDate !== undefined ||
+      listDate !== undefined;
+    const listSyncNeeded =
+      canSyncList &&
+      dateSyncRequested &&
+      ((publicationDate !== undefined &&
+        !this.dateValuesMatch(
+          content.publicationDate,
+          content.list.releaseDate,
+        )) ||
+        (closeDate !== undefined &&
+          !this.dateValuesMatch(content.closeDate, content.list.closeDate)) ||
+        (listDate !== undefined &&
+          !this.dateValuesMatch(content.listDate, content.list.listDate)));
 
-    // Sync with List (RADAR, BEST, VIDEO)
-    if (
-      savedContent.type === ContentType.RADAR ||
-      savedContent.type === ContentType.BEST ||
-      savedContent.type === ContentType.VIDEO
-    ) {
-      const contentWithList = await this.contentRepo.findOne({
-        where: { id: savedContent.id },
-        relations: ['list'],
-      });
+    let savedContent: Content;
+    if (listSyncNeeded) {
+      savedContent = await this.contentRepo.manager.transaction(
+        async (manager) => {
+          const contentRepo = manager.getRepository(Content);
+          const listRepo = manager.getRepository(List);
+          const saved = await contentRepo.save(content);
+          const list = await listRepo.findOne({
+            where: { id: content.list.id },
+          });
 
-      if (contentWithList && contentWithList.list) {
-        let listChanged = false;
-
-        // Sync publicationDate -> releaseDate (NOT listDate - listDate is independent)
-        if (contentWithList.publicationDate) {
-          const contentDate = new Date(contentWithList.publicationDate);
-          const releaseDate = contentWithList.list.releaseDate
-            ? new Date(contentWithList.list.releaseDate)
-            : null;
-
-          if (!releaseDate || releaseDate.getTime() !== contentDate.getTime()) {
-            contentWithList.list.releaseDate = contentDate;
-            listChanged = true;
+          if (!list) {
+            throw new NotFoundException(
+              `List with id ${content.list.id} not found`,
+            );
           }
-        }
 
-        // Sync content.listDate -> list.listDate (for RADAR, BEST, and VIDEO)
-        if (
-          savedContent.type === ContentType.RADAR ||
-          savedContent.type === ContentType.BEST ||
-          savedContent.type === ContentType.VIDEO
-        ) {
-          if (contentWithList.listDate) {
-            const contentListDate = new Date(contentWithList.listDate);
-            const listListDate = contentWithList.list.listDate
-              ? new Date(contentWithList.list.listDate)
-              : null;
-
-            if (
-              !listListDate ||
-              listListDate.getTime() !== contentListDate.getTime()
-            ) {
-              contentWithList.list.listDate = contentListDate;
-              listChanged = true;
-            }
+          let listChanged = false;
+          if (publicationDate !== undefined) {
+            listChanged =
+              this.assignDateIfChanged(
+                list,
+                'releaseDate',
+                saved.publicationDate,
+              ) || listChanged;
           }
-        }
-
-        // Sync closeDate -> closeDate
-        if (contentWithList.closeDate) {
-          const contentCloseDate = new Date(contentWithList.closeDate);
-          const listCloseDate = contentWithList.list.closeDate
-            ? new Date(contentWithList.list.closeDate)
-            : null;
-
-          if (
-            !listCloseDate ||
-            listCloseDate.getTime() !== contentCloseDate.getTime()
-          ) {
-            contentWithList.list.closeDate = contentCloseDate;
-            listChanged = true;
+          if (closeDate !== undefined) {
+            listChanged =
+              this.assignDateIfChanged(list, 'closeDate', saved.closeDate) ||
+              listChanged;
           }
-        }
+          if (listDate !== undefined) {
+            listChanged =
+              this.assignDateIfChanged(list, 'listDate', saved.listDate) ||
+              listChanged;
+          }
 
-        if (listChanged) {
-          // Use update on ListsService.
-          // Note: ListsService.update triggers Content sync back. ListsService uses updated content values so it should be fine.
-          // But to be safe and avoid loops just save repo if possible, but ListsService.update is safer for abstraction.
-          // The loop is broken because values will match.
-          // Cast list to any to satisfy UpdateListDto
-          await this.listsService.update(
-            contentWithList.list.id,
-            contentWithList.list as any,
-          );
-        }
-      }
+          if (listChanged) await listRepo.save(list);
+          saved.list = list;
+          return saved;
+        },
+      );
+    } else {
+      savedContent = await this.contentRepo.save(content);
     }
 
     // NOTE: RiffValleyPlaylist/Article/Video status is no longer auto-synced here when the
@@ -600,23 +600,49 @@ export class ContentsService {
       throw new NotFoundException(`Content with id ${id} not found`);
     }
 
-    // Save reference before removing content
     const listId = content.list?.id;
 
-    await this.contentRepo.remove(content);
+    if (listId) {
+      await this.contentRepo.manager.transaction(async (manager) => {
+        await manager.getRepository(Content).remove(content);
+        await this.listsService.removeList(listId, manager);
+      });
+    } else {
+      await this.contentRepo.remove(content);
+    }
 
     if (content.reunion) {
       await this.reunionRepo.delete(content.reunion.id);
     }
 
-    // Delete associated List (like Reunion)
-    if (listId) {
-      await this.listsService.removeList(listId);
-    }
-
     // NOTE: The linked RiffValleyPlaylist/Article/Video entity is left untouched — its
     // status is no longer auto-reset on Content removal. Video/Article/RiffValleyPlaylist
     // and Content are fully independent now.
+  }
+
+  private assignDateIfChanged<T extends object>(
+    target: T,
+    field: keyof T,
+    source: Date | null | undefined,
+  ): boolean {
+    const current = target[field] as Date | null | undefined;
+    const next = source == null ? null : new Date(source);
+    const currentTime = current == null ? null : new Date(current).getTime();
+    const nextTime = next == null ? null : next.getTime();
+
+    if (currentTime === nextTime) return false;
+
+    target[field] = next as T[keyof T];
+    return true;
+  }
+
+  private dateValuesMatch(
+    left: Date | null | undefined,
+    right: Date | null | undefined,
+  ): boolean {
+    const leftTime = left == null ? null : new Date(left).getTime();
+    const rightTime = right == null ? null : new Date(right).getTime();
+    return leftTime === rightTime;
   }
 
   async findByMonth(year: number, month: number): Promise<Content[]> {

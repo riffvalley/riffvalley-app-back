@@ -5,6 +5,20 @@ import { WpPublicPost } from './wordpress.types';
 
 export type { WpPost } from './wordpress.types';
 
+export type WordpressWriteOutcome = 'rejected' | 'unknown';
+
+export class WordpressWriteError extends Error {
+  constructor(
+    message: string,
+    readonly outcome: WordpressWriteOutcome,
+    readonly status?: number,
+    readonly originalError?: unknown,
+  ) {
+    super(message);
+    this.name = 'WordpressWriteError';
+  }
+}
+
 @Injectable()
 export class WordpressService {
   private readonly logger = new Logger('WordpressService');
@@ -46,32 +60,69 @@ export class WordpressService {
     tags?: number[],
     slug?: string,
   ): Promise<WpPost> {
-    const response = await fetch(`${this.apiUrl}/posts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Basic ${this.credentials}`,
-      },
-      body: JSON.stringify({
-        title,
-        content,
-        status,
-        ...(meta ? { meta } : {}),
-        ...(categories?.length ? { categories } : {}),
-        ...(tags?.length ? { tags } : {}),
-        ...(slug ? { slug } : {}),
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${this.apiUrl}/posts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${this.credentials}`,
+        },
+        body: JSON.stringify({
+          title,
+          content,
+          status,
+          ...(meta ? { meta } : {}),
+          ...(categories?.length ? { categories } : {}),
+          ...(tags?.length ? { tags } : {}),
+          ...(slug ? { slug } : {}),
+        }),
+      });
+    } catch (error) {
+      throw new WordpressWriteError(
+        error instanceof Error ? error.message : 'WordPress request failed',
+        'unknown',
+        undefined,
+        error,
+      );
+    }
 
     if (!response.ok) {
-      const error = await response.text();
+      let error = '';
+      try {
+        error = await response.text();
+      } catch {
+        // El status HTTP basta para clasificar el resultado aunque falle leer
+        // el cuerpo de error.
+      }
       this.logger.error(
         `Failed to create WP post: ${response.status} - ${error}`,
       );
-      throw new Error(`WordPress API error: ${response.status}`);
+      throw new WordpressWriteError(
+        `WordPress API error: ${response.status}`,
+        response.status >= 500 ? 'unknown' : 'rejected',
+        response.status,
+      );
     }
 
-    const post: WpPost = await response.json();
+    let post: WpPost;
+    try {
+      post = await response.json();
+    } catch (error) {
+      throw new WordpressWriteError(
+        'WordPress created the post but returned an unreadable response',
+        'unknown',
+        response.status,
+        error,
+      );
+    }
+    if (!post || typeof post.id !== 'number' || typeof post.link !== 'string') {
+      throw new WordpressWriteError(
+        'WordPress created the post but returned incomplete publication identity',
+        'unknown',
+        response.status,
+      );
+    }
     this.logger.log(`Created WP post #${post.id}: ${title}`);
     return post;
   }
@@ -99,24 +150,61 @@ export class WordpressService {
   }
 
   async updatePostContent(postId: number, content: string): Promise<WpPost> {
-    const response = await fetch(`${this.apiUrl}/posts/${postId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Basic ${this.credentials}`,
-      },
-      body: JSON.stringify({ content }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${this.apiUrl}/posts/${postId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${this.credentials}`,
+        },
+        body: JSON.stringify({ content }),
+      });
+    } catch (error) {
+      throw new WordpressWriteError(
+        error instanceof Error ? error.message : 'WordPress request failed',
+        'unknown',
+        undefined,
+        error,
+      );
+    }
 
     if (!response.ok) {
-      const error = await response.text();
+      let error = '';
+      try {
+        error = await response.text();
+      } catch {
+        // El status HTTP basta para clasificar el resultado aunque falle leer
+        // el cuerpo de error.
+      }
       this.logger.error(
         `Failed to update WP post ${postId}: ${response.status} - ${error}`,
       );
-      throw new Error(`WordPress API error: ${response.status}`);
+      throw new WordpressWriteError(
+        `WordPress API error: ${response.status}`,
+        response.status >= 500 ? 'unknown' : 'rejected',
+        response.status,
+      );
     }
 
-    const post: WpPost = await response.json();
+    let post: WpPost;
+    try {
+      post = await response.json();
+    } catch (error) {
+      throw new WordpressWriteError(
+        'WordPress updated the post but returned an unreadable response',
+        'unknown',
+        response.status,
+        error,
+      );
+    }
+    if (!post || typeof post.id !== 'number') {
+      throw new WordpressWriteError(
+        'WordPress updated the post but returned incomplete publication identity',
+        'unknown',
+        response.status,
+      );
+    }
     this.logger.log(`Updated WP post #${post.id}`);
     return post;
   }
@@ -128,8 +216,24 @@ export class WordpressService {
         headers: { Authorization: `Basic ${this.credentials}` },
       },
     );
+    if (!res.ok) {
+      const error = await res.text();
+      this.logger.error(
+        `Failed to find WordPress post by slug ${slug}: ${res.status} - ${error}`,
+      );
+      throw new Error(`WordPress API error: ${res.status}`);
+    }
     const posts: WpPost[] = await res.json();
+    if (!Array.isArray(posts)) {
+      throw new Error('WordPress returned an invalid slug lookup response');
+    }
     if (!posts.length) return null;
+    if (
+      typeof posts[0]?.id !== 'number' ||
+      typeof posts[0]?.link !== 'string'
+    ) {
+      throw new Error('WordPress returned an incomplete slug lookup response');
+    }
     return {
       id: posts[0].id,
       link: posts[0].link,

@@ -58,7 +58,7 @@ La secuencia se ampliará después de cada dominio; no constituye una orden para
 | ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries, Genres, CatalogImport, CatalogOverview y LastfmCatalog completados; Discs en cleanup |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                                                                                                |
-| 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Articles completado; resto pendiente                                                                     |
+| 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Articles y Asignations completados; Lists en cleanup por la auditoría funcional de `free`; resto pendiente |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                                                                                                |
 | 5     | Identity                  | Auth, AccessRequests                                                                                                              | Pendiente                                                                                                |
 | 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                            | Pendiente                                                                                                |
@@ -84,11 +84,11 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado**. S
 | Community                 | Rates               | pendiente  |
 | Community                 | Requests            | pendiente  |
 | Editorial                 | Articles            | completado |
-| Editorial                 | Asignations         | pendiente  |
+| Editorial                 | Asignations         | completado |
 | Editorial                 | Contents            | pendiente  |
 | Editorial                 | FestivalPlaylists   | pendiente  |
 | Editorial                 | Links               | pendiente  |
-| Editorial                 | Lists               | pendiente  |
+| Editorial                 | Lists               | en cleanup |
 | Editorial                 | NationalReleases    | pendiente  |
 | Editorial                 | Points              | pendiente  |
 | Editorial                 | Reunions            | pendiente  |
@@ -1303,6 +1303,229 @@ En `PATCH`, `UpdateArticleDto` deriva de `PartialType(CreateArticleDto)`, cuyos 
 **Cierre del módulo:** BC-ARTI-0 y BC-ARTI-1 a BC-ARTI-3 completadas; Articles queda completado. Los demás módulos de Editorial siguen pendientes. No se avanzó a Asignations.
 
 **Verificaciones de BC-ARTI-0:** revisión estática de implementación, pruebas, consumidores directos y composición; coherencia revisada contra las reglas generales y estado detallado del roadmap; `git diff --check -- roadmap/backend-cleanup.md`. No se ejecutaron tests, build, typecheck, migraciones ni operaciones con base de datos o servicios externos durante BC-ARTI-0. Las verificaciones de las tareas posteriores se registran en sus cierres.
+
+## Auditoría BC-ASG-0 — Editorial / Asignations
+
+**Estado actual:** completado; BC-ASG-0, BC-ASG-1, BC-ASG-2 y BC-ASG-3 completadas. El resto de Editorial continúa pendiente.
+**Base observada:** rama `refactor/editorial`, 2026-10-16. Se detectó un cambio local preexistente en `src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts`; se conservó sin lectura funcional, edición ni atribución a esta auditoría.
+**Alcance leído:** implementación completa bajo `src/editorial/lists/asignations/` (controller, service, module, DTOs, entidad); registro en `AppModule`; entidades relacionadas de List, User y Disc; ValidationPipe global; consultas directas y transformaciones consumidoras en Lists, Contents y Disc Calendar; specs de autorización, Disc Calendar, Lists y consumers de relaciones. No se accedió al frontend, PostgreSQL, Heroku ni otros servicios. No se ejecutaron tests, build ni typecheck.
+
+### Resumen de arquitectura y contratos
+
+- `AsignationsModule` registra controller/service y repositorios de `Asignation`, `Disc`, `List` y `User`, e importa `AuthModule` y `ListsModule`. `AppModule` lo registra directamente. No exporta el servicio.
+- `AsignationsController` expone `POST /asignations`, `GET /asignations`, `GET /asignations/:id`, `PATCH /asignations/:id`, `DELETE /asignations/:id` y `GET /asignations/list/:listId`. Las rutas con `:id` usan `ParseUUIDPipe`; `listId` no tiene pipe.
+- Las lecturas son públicas; crear requiere JWT autenticado sin rol mínimo (`@Auth()`); editar y borrar requieren `riffValley`. No existe comprobación de ownership en servicio. No se infiere que sea un defecto porque las reglas permiten asignar una tarea a otro usuario y no se encontró una política de ownership definida para este recurso.
+- `AsignationsService` concentra CRUD y paginación, resolución de relaciones iniciales, saneamiento de texto y, al cambiar determinados campos, delegación de sincronización WordPress a `ListsService`. Es una única responsabilidad de gestión de asignaciones; su tamaño y dependencias no justifican extraer servicios.
+- El módulo depende de Editorial/Lists (`List` y `ListsService`), Identity (`User`) y Catalog (`Disc`). No importa Articles ni Contents. Contents y Lists consumen las asignaciones mediante relaciones de `List`; Disc Calendar las carga mediante `disc.asignations`. La entidad mantiene relaciones inversas desde List, User y Disc. La composición revisada no muestra un ciclo de módulos Nest.
+- `done` es boolean nullable; `position` int nullable con validación HTTP de entero firmado en rango PostgreSQL; descripción, bandas similares y género libre son texto nullable; `spotifyTrackId` varchar(32) nullable. `user` y `disc` son nullable y eager; al borrar User se conserva la asignación con usuario nulo, mientras que al borrar Disc o List se elimina la asignación. `list` es obligatoria. No hay columnas de fecha ni flujo de estados.
+- `findAll` usa `findAndCount` con paginación por defecto 10/0; `findByListId` filtra por List, ordena por username ascendente y usa 100/0. Ambos devuelven total, páginas, página actual, límite y entidades. `findOne` devuelve entidad o 404. `create` y `update` devuelven la entidad; `remove` devuelve un mensaje.
+- Los campos de texto se sanean al escribir: `description` admite un conjunto acotado de etiquetas y bandas similares/género se convierten en texto plano. `spotifyTrackId` admite cadena vacía para restaurar la selección automática. `position` es campo opcional. El DTO de update hereda los validadores de create con `PartialType`.
+- Las relaciones eager `user` y `disc` forman parte observable de las respuestas de entidad. Disc Calendar proyecta solo los datos de asignación que consume; Lists/Contents cargan listas con asignaciones para operaciones editoriales. No se propone retirar relaciones eager sin identificar y caracterizar consumidores externos del payload.
+- No se halló acceso directo a `AsignationsService` fuera de su controller; los consumers conocidos usan relaciones/repositorios y servicios de Lists. No se encontró duplicación sustancial, consulta N+1 demostrada, ni razón para índices o reescrituras SQL sin medición.
+
+### Hallazgos
+
+#### ASG-F1 — La validación de `position` queda desactivada
+
+- **Ubicación:** `src/editorial/lists/asignations/dto/create-asignations.dto.ts:55-59`; DTO heredado en `src/editorial/lists/asignations/dto/update-asignations.dto.ts:1-4`; validación global en `src/main.ts:37-41`.
+- **Evidencia (hecho observado antes de BC-ASG-1):** `ValidateIf` de `position` consultaba `o.rate`, propiedad que no pertenece a este DTO. Con `rate` ausente, condición que aplica al payload permitido por whitelist global, el predicado era falso y class-validator omitía `IsNumber`. Además, la conversión implícita global podía convertir strings numéricos antes de validar.
+- **Consecuencia:** valores de tipos no numéricos llegaban a la persistencia; decimales o enteros fuera del rango de la columna PostgreSQL `int` tampoco eran filtrados antes del servicio.
+- **Categoría / prioridad / tamaño:** bug funcional / media / XS.
+- **Resolución (BC-ASG-1):** sustituido el predicado ajeno por `IsInt`, límites `-2147483648..2147483647` y `Type(() => Object)` para impedir conversión implícita de strings en este campo. Se conserva la opcionalidad y `null`; no se impone positividad ni otro rango editorial. Decimales se rechazan porque no son representables por la columna `int`.
+
+#### ASG-F2 — Referencias inexistentes se responden como error 500
+
+- **Ubicación:** `src/editorial/lists/asignations/asignations.service.ts:71-85,110-112,189-227,238-245`.
+- **Evidencia (hecho):** `create()` lanza `Error` si List, User o Disc no existen, pero el catch convierte cualquier error salvo código PostgreSQL `23505` en `InternalServerErrorException`. `update()` guarda un User parcial sin comprobar existencia; la violación de FK `23503` cae en el mismo 500 genérico. Las FK de `Asignation` están definidas por las relaciones de la entidad y las migraciones existentes. `findOne()` también convierte cualquier excepción de consulta en 404 (líneas 136-144), por lo que un fallo de persistencia puede aparecer falsamente como ausencia.
+- **Consecuencia:** el cliente no recibe clasificación HTTP estable para referencias/recurso inexistentes y fallos de consulta pueden ocultarse como 404. Los consumidores no pueden distinguir adecuadamente entrada inválida/no encontrada de una indisponibilidad interna.
+- **Categoría / prioridad / tamaño:** bug funcional / media / S.
+- **Corrección propuesta:** mapear solo referencias inexistentes de List/User/Disc y ausencia de Asignation a errores HTTP acordados; propagar fallos de persistencia inesperados como 500. Cubrir create/update/findOne, incluyendo errores ajenos a las referencias.
+- **Dependencias y riesgos:** elegir 400/404 para referencias inexistentes; mantener las FK como garantía ante carreras. El mapeo debe ser específico para no exponer detalles del driver ni enmascarar fallos no relacionados.
+- **Resolución (BC-ASG-2):** las referencias List/User/Disc ausentes en `create` dan 404 con consulta previa ya existente; FK `23503` solo se traduce si coinciden tabla `asignation` y constraint User/Disc/List conocido. `findOne` devuelve 404 solo cuando la consulta responde `null`; los errores del repositorio se propagan. `update` conserva 404 al no encontrar el preload y mapea solo la FK conocida User→Asignation. `remove` conserva su 404 al afectar cero filas. Los errores inesperados y FK ajenas se propagan; `23505` de Asignation conserva 400 con mensaje genérico sin detalle SQL.
+
+#### ASG-F3 — `findAll` pagina sin orden estable
+
+- **Ubicación:** `src/editorial/lists/asignations/asignations.service.ts:124-132`; `findByListId` con orden parcial en `287-299`.
+- **Evidencia (hecho):** `findAll()` aplica `take`/`skip` sin `order`. `findByListId()` ordena solo por `user.username`, que es nullable a través de la relación opcional; múltiples asignaciones sin usuario quedan empatadas. No se declara orden contractual alternativo en controller/DTO.
+- **Consecuencia:** el orden entre páginas no está determinado por el contrato SQL; inserciones/replanes o empates pueden mover registros entre páginas y producir omisiones/repeticiones al recorrer resultados paginados.
+- **Categoría / prioridad / tamaño:** bug funcional / baja / XS.
+- **Corrección propuesta:** acordar un orden primario compatible con uso actual y añadir una clave única estable como desempate en ambas consultas paginadas; documentar/cubrir el orden de respuesta.
+- **Dependencias y riesgos:** confirmar el orden primario deseado de `findAll` con consumidores. Añadir desempate a username conserva el orden visible existente y resuelve empates; cualquier orden predeterminado nuevo de `findAll` puede afectar a consumidores que asumían el orden incidental de la base de datos.
+- **Resolución (BC-ASG-3):** `findAll()` ordena por `Asignation.id ASC`, al no existir orden funcional declarado ni consumidores directos del endpoint en el backend revisado. `findByListId()` conserva `user.username ASC` y añade `Asignation.id ASC` para desempatar. Las opciones `where`, `take` y `skip`, las relaciones y la forma de respuesta se mantienen.
+
+### Cobertura de pruebas
+
+- `src/editorial/lists/asignations/asignations.controller.spec.ts` prueba creación y PATCH parcial con el `ValidationPipe` global equivalente; cubre enteros negativos/positivos, `null`, ausencia, strings/tipos incorrectos, decimales y ambos extremos fuera del rango. Verifica HTTP 400 antes de llamar al servicio.
+- `src/editorial/lists/asignations/asignations.service.spec.ts` caracteriza referencias relacionadas existentes/ausentes, FK conocidas/ajenas, recursos ausentes, fallos de repositorio, respuestas válidas y mensajes seguros sin acceder a PostgreSQL.
+- `src/identity/auth/__tests__/domain-mutation-authorization.spec.ts` comprueba metadata de ruta/rol y decisiones del guard para `update` y `remove`; no cubre `create` ni autenticación/contrato HTTP integral de Asignations.
+- Los specs de Disc Calendar verifican la carga/proyección de asignaciones; los de Lists ejercitan datos asignados en generación; Contents no tiene en el árbol consultado un spec que caracterice payload/consulta de `list.asignations`.
+- La cobertura directa añadida en BC-ASG-1/2 cubre validación de `position` y clasificación de errores del servicio. BC-ASG-3 añade inspección de las opciones TypeORM para ambos listados, orden principal y desempate, paginación por `limit`/`offset`, páginas consecutivas sin duplicados, filtro por lista, resultado vacío y forma de respuesta. Sigue sin haber cobertura consultada de autorización HTTP de creación/lecturas, ownership ni contratos HTTP completos de CRUD; esos huecos corresponden a las revisiones futuras cuando apliquen.
+
+### Tareas propuestas
+
+#### BC-ASG-1 — Corregir la validación de `position` (XS, prioridad media)
+
+- [x] **Completada (2026-10-16).** ASG-F1 resuelto.
+- **Alcance ejecutado:** corregir la condición que consultaba `rate` y validar el tipo/rango representable por `position` en POST y PATCH mediante el ValidationPipe global.
+- **Exclusiones:** cambios de esquema, reglas de WordPress, modificaciones de consumers, reordenación de asignaciones o cambios a otros DTOs.
+- **Implementación:** `@Type(() => Object)` mantiene el tipo JSON original a pesar de `enableImplicitConversion` global; `@IsInt`, `@Min(-2147483648)` y `@Max(2147483647)` validan el rango de la columna PostgreSQL `int`. Se mantienen ausencia y `null` mediante `@IsOptional`; no se impone positividad, coherente con el campo entero firmado y la ausencia de una regla de negocio adicional.
+- **Pruebas:** el nuevo `asignations.controller.spec.ts` usa ValidationPipe con `whitelist`, `forbidNonWhitelisted`, `transform` y `enableImplicitConversion`. Cubre números válidos negativos/positivos, decimales, valores sobre/abajo del rango, string numérico, booleano, objeto, array, `null` y ausencia en POST/PATCH; verifica rechazo HTTP 400 antes de invocar el servicio.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/lists/asignations/asignations.controller.spec.ts` — 1 suite, 16 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; `yarn --ignore-engines prettier --check src/editorial/lists/asignations/dto/create-asignaciones.dto.ts src/editorial/lists/asignations/asignations.controller.spec.ts`; `git diff --check`.
+- **Riesgos:** no se consultó PostgreSQL; los límites se derivan del tipo `int` declarado por la entidad y su columna existente. No hay cambios de esquema.
+
+#### BC-ASG-2 — Clasificar ausencia de asignación y referencias relacionadas (S, prioridad media)
+
+- [x] **Completada (2026-10-16).** ASG-F2 resuelto.
+- **Alcance ejecutado:** clasificar referencias ausentes y recursos Asignation inexistentes; preservar fallos inesperados y clasificar FK únicamente por SQLSTATE, tabla y constraint concretos.
+- **Exclusiones:** cambiar forma de payload, ownership, reglas de roles, cambios de esquema o traducción global de errores.
+- **Implementación:** `create` devuelve 404 para List/User/Disc ausentes usando las consultas de existencia existentes. Se clasifican como 404 únicamente FK `23503` con tabla `asignation` y una constraint concreta de User/Disc/List; update aplica User FK. `findOne` devuelve 404 ante resultado nulo y propaga errores de consulta. `update` y `remove` conservan 404 cuando la Asignation no existe. `findByListId` ya no convierte fallos de consulta en una excepción genérica. Violaciones `23505` mantienen HTTP 400 con mensaje seguro, sin detalle de driver. Los demás errores se relanzan.
+- **Pruebas:** `asignations.service.spec.ts` cubre recursos y referencias existentes/ausentes, FK conocida, tabla o constraint ajena, errores inesperados, el 400 seguro por `23505`, y conservación de payload/paginación válida.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/lists/asignations` — 2 suites, 34 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; `yarn --ignore-engines prettier --check src/editorial/lists/asignations/asignations.service.ts src/editorial/lists/asignations/asignations.service.spec.ts`; `git diff --check`.
+- **Dependencias y riesgos:** no requiere PostgreSQL. La traducción de FK depende de los nombres concretos de constraints actuales y falla de forma segura (500 genérico de Nest) ante constraints no reconocidas.
+
+#### BC-ASG-3 — Dar orden determinista a las consultas paginadas (XS, prioridad baja)
+
+- [x] **Completada (2026-10-16).** ASG-F3 resuelto.
+- **Alcance ejecutado:** `findAll` ordena por ID ascendente como orden estable, ya que no tenía criterio funcional explícito; `findByListId` conserva username ascendente y añade ID ascendente como desempate. La revisión no encontró consumidores backend directos de estos endpoints fuera del controller.
+- **Exclusiones:** cambiar límite/defaults, contrato de paginación, filtros, índices o payload.
+- **Aceptación:** ambas consultas declaran orden estable por clave única; el orden por username permanece en listados por lista y los empates producen resultados predecibles.
+- **Compatibilidad y riesgos:** no cambian rutas, filtros, límites, relaciones ni forma de respuesta. El endpoint global adquiere un orden determinista donde antes el orden no estaba declarado.
+- **Pruebas:** `asignations.service.spec.ts` inspecciona las opciones de `findAndCount` y cubre orden principal, desempate por ID, limit/offset, páginas consecutivas sin repetición, filtro por lista, respuesta vacía y forma de respuesta.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/lists/asignations` — 2 suites, 35 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json`; `yarn --ignore-engines prettier --check src/editorial/lists/asignations/asignations.service.ts src/editorial/lists/asignations/asignations.service.spec.ts`; `git diff --check`.
+- **Riesgos:** no se accedió a PostgreSQL ni a servicios externos. La simulación de páginas en la prueba complementa la inspección de opciones TypeORM; no sustituye una prueba de integración contra PostgreSQL.
+
+### Aspectos revisados sin tarea
+
+- No se encontró lógica de ownership explícita. Las lecturas son públicas, creación acepta cualquier JWT y las escrituras requieren `riffValley`; con el material backend revisado no se demuestra que la asignación a otro usuario sea indebida.
+- La sincronización WordPress se ejecuta después del `save()` de Asignation y dentro del mismo bloque de manejo de errores. No se comprobó mediante servicios externos cómo se comportan sus fallos; no se propone transacción distribuida ni cambio de contrato en esta auditoría.
+- No se proponen cambios a relaciones eager porque las asignaciones son parte de los payloads consumidos por Lists/Contents y el calendar proyecta campos concretos; no se revisó frontend para establecer si todos los campos de user/disc se necesitan en respuestas directas.
+- No se proponen extracciones de servicio, reescrituras SQL ni índices. No hay evidencia de ciclo Nest, N+1 atribuible a consultas del módulo ni duplicación de responsabilidades que justifique reorganización.
+
+**Estado tras BC-ASG-3:** Asignations queda **completado**; ASG-F1/BC-ASG-1, ASG-F2/BC-ASG-2 y ASG-F3/BC-ASG-3 están resueltos/completadas. Articles conserva su estado completado; Contents y los demás módulos de Editorial continúan pendientes.
+
+**Verificaciones de BC-ASG-0:** revisión estática de implementación, composición, DTOs, pruebas existentes y consumers; coherencia del roadmap y estados; `git diff --check -- roadmap/backend-cleanup.md` aprobado. En BC-ASG-0 no se ejecutaron tests, build, typecheck, migraciones ni operaciones con PostgreSQL o servicios externos. Las verificaciones de BC-ASG-1, BC-ASG-2 y BC-ASG-3 constan arriba.
+
+## Auditoría BC-LST-0 — Editorial / Lists
+
+**Estado:** BC-LST-0 completada; BC-LST-1, BC-LST-2 y BC-LST-3 completadas. Lists sigue **en cleanup** por la auditoría funcional de `free` pendiente en BC-LST-4. Articles y Asignations siguen completados; los demás módulos de Editorial siguen pendientes. No se avanzó al módulo siguiente.
+**Base observada:** rama actual y estado local del checkout, 2026-10-16. Se conservaron los cambios locales encontrados, incluidos los movimientos/imports y cambios de BA-14.B, `src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts` y otros archivos preexistentes. No se atribuyen a BC-LST-0.
+**Alcance leído:** implementación completa de `src/editorial/lists/` (incluida la subcarpeta `asignations/` para entender la relación, sin auditar ni cambiar su cleanup ya completado); DTOs, entidad, queries, composición en `AppModule`, reglas globales de validación, consumidores directos en Contents, Videos, Links, Asignations, Catalog/Disc Calendar, User y `PaginationDto`; suites de Lists y pruebas consumidoras relevantes. No se inspeccionó frontend ni se accedió a PostgreSQL, Heroku, WordPress, Spotify u otros servicios. No se ejecutaron tests, build ni typecheck.
+
+### Arquitectura, responsabilidades y contratos
+
+- `ListsModule` registra `ListsController`/`ListsService`, repositorios de `List` y `Content`, `AuthModule`, WordPress Integration y Spotify Integration; exporta `ListsService`. `AppModule` registra Lists y Asignations como módulos Nest independientes. La arquitectura actual es adecuada: Lists mantiene el ownership editorial de listas, fechas y publicación; WordPress/Spotify son transportes externos y Asignations es un módulo independiente agrupado físicamente bajo Lists por BA-14.B. No hay evidencia para extraer responsabilidades ni reorganizar carpetas.
+- `ListsController` expone `POST /lists`; `GET /lists`, `/weeks`, `/next`, `/weekly/current`, `/weekly/past/:year/:month`, `/video/current`, `/video/past/:year`, `/special`, `/video`, `/month/current` y `/month/past/:year`; `POST /weekly/create`, `POST /:id/wp-posts` y `POST /:id/wp-best-post`; `GET /:id`; `PATCH /:id`; `DELETE /:id`. El código también declara dos veces `GET /video/current` y `GET /video/past/:year`, con handlers distintos que delegan a los mismos métodos. No se demostró un efecto funcional adverso; se deja como duplicación sin tarea.
+- Crear, actualizar, borrar lista, crear lista semanal y generar posts WordPress exigen rol mínimo `riffvalley`; `GET /lists` y `/weeks` exigen usuario autenticado; las lecturas específicas por tipo/periodo y `GET /:id` son públicas. Los IDs de `:id` usan `ParseUUIDPipe`; year/month de las rutas históricas semanales, mensuales y de vídeo se validan mediante DTOs de ruta y ValidationPipe. Los DTOs de create/update usan validaciones de nombre, enum, booleanos y fechas ISO; update hereda create y admite referencias WordPress; el query de generación valida `position` como entero >= 1. La paginación compartida transforma `limit` y `offset`, exige solo que `limit` sea positivo, no limita `offset` a no negativo y filtra `statusExclusions` como strings sin restringirlos a `ListStatus`.
+- `List` tiene UUID, nombre, tipo (`month`, `week`, `special`, `video`), estado editorial nullable, tipo especial, `free`, fechas de agenda, IDs/URL WordPress y tracking JSONB de discos/posts semanales. `asignations` y `links` son `OneToMany` eager+cascade; `Content` tiene relación `OneToOne` nullable a List. Las relaciones eager son parte observable; Lists y Contents consumen Asignations y Links para publicación/respuestas, y no se propone retirarlas. Asignation mantiene FKs a List/Disc/User; Links depende de List y `onDelete: CASCADE`.
+- Las queries listan por nombre ascendente con `findAndCount` y defaults 40/0. Lecturas de agenda mensual/semanal/vídeo filtran rangos temporales y ordenan por la fecha aplicable; las pruebas actuales caracterizan las fronteras mensuales y el cierre semanal. No se midió SQL ni se propone optimización, índice ni cambio de orden incidental.
+- `ContentsService` crea listas mensuales/semanales y mantiene fechas de Content/List; ListsService también sincroniza fechas desde List y elimina Content al borrar una List. `VideosService` crea listas de vídeo. Asignations guarda el cambio editorial antes de invocar `ListsService.syncDiscToWordPress`; el error externo se propaga al caller aunque la escritura local ya se haya completado. Este efecto distribuido no justifica presumir atomicidad entre sistemas ni se propone transacción distribuida o cambio de contrato.
+- La generación de publicaciones escribe primero en WordPress y guarda después el tracking `wpPostId`/`wpWeeklyPosts`/`wpPublishedDiscs` en PostgreSQL. La selección Spotify se usa para generar embeds; el fallo al consultar Spotify se captura y produce `null`/fallback. Los errores WordPress se propagan. No se observó compensación entre sistemas; sí se identificó el riesgo de reintento duplicado descrito en LST-F1.
+- No se encontró dependencia circular nueva ni duplicación que justifique reorganización. `ContentsModule` importa Lists con `forwardRef`; Lists no importa ContentsModule y usa su repositorio, por lo que la dependencia de módulo es unidireccional. Videos y Asignations importan Lists; Links solo registra/reposiciona List y conserva su módulo independiente.
+
+### Hallazgos
+
+#### LST-F1 — La publicación puede duplicar bloques si falla un paso posterior de sincronización
+
+- **Ubicación:** `src/editorial/lists/list.service.ts:623-824, 1017-1086, 1358-1379, 1427-1523`.
+- **Evidencia (hecho de código):** `syncDiscsIntoPost` actualiza el contenido externo y retorna el tracking nuevo en memoria. En el flujo semanal, el tracking de posiciones se guarda una sola vez al final de todas las posiciones (`generateWordPressPosts`); en el flujo mensual y el sync por asignación, WordPress se actualiza antes de guardar `wpPublishedDiscs`. Si una posición posterior o el guardado local falla, la escritura externa anterior ya ocurrió y el tracking local puede seguir indicando que ese disco no fue publicado. El siguiente intento calcula `newDiscs` desde ese tracking obsoleto e inserta otra vez el bloque antes del footer, sin comprobar primero si el marcador `rv-disc-<id>` ya está en el post.
+- **Consecuencia:** un fallo recuperable seguido de reintento puede duplicar uno o más bloques de discos en WordPress. La operación no es atómica entre sistemas; el problema demostrado es que el reintento no es idempotente.
+- **Categoría / prioridad / tamaño:** bug funcional / media / S.
+- **Estado:** resuelto por BC-LST-1 (2026-10-16).
+- **Corrección propuesta:** hacer idempotente la inserción usando los marcadores de bloque existentes y/o guardar checkpoints locales por publicación exitosa; preservar el comportamiento de actualización de bloques existentes y no introducir transacción distribuida. Cubrir fallo de guardado y fallo en una posición posterior, seguido de reintento sin contenido duplicado.
+- **Dependencias y riesgos:** ListsService, interfaz con WordPress y generación de contenido mensual/semanal; no modificar la frontera ni la lógica interna de Asignations. Debe preservarse contenido editado manualmente en WordPress; reconciliar por marcador solo si coincide con el formato generado.
+- **Pruebas revisadas:** `list.service.spec.ts` cubre selección de track, creación de post y propagación de un error WordPress durante lookup; no caracteriza fallo después de una escritura externa, checkpoints ni reintentos. No se ejecutó.
+
+#### LST-F2 — Fechas anuladas en List quedan obsoletas en el Content enlazado y escrituras pareadas no son atómicas
+
+- **Ubicación:** `src/editorial/lists/list.service.ts:152-239, 241-256`; DTO nullable en `src/editorial/lists/dto/create-list.dto.ts:31-42`; relación en `src/editorial/contents/entities/content.entity.ts:45-66`.
+- **Evidencia (hecho de código):** `IsOptional` admite `null` para las tres fechas y las columnas son nullable. `update()` guarda primero List, pero la sincronización solo arranca cuando el valor recibido es truthy y solo copia fechas no nulas. Así, PATCH con `closeDate: null`, `releaseDate: null` o `listDate: null` borra List pero conserva el valor previo en Content. Si guardar Content falla después de guardar List, también queda una divergencia y la petición falla aunque List ya cambió. `removeList()` elimina Content y después List en dos escrituras sin transacción; si falla el segundo paso, la lista permanece sin su Content.
+- **Consecuencia:** los endpoints/consumidores de Contents y Lists pueden observar agendas contradictorias o una eliminación parcial tras errores de persistencia. La aceptación de `null` convierte el caso de limpieza de fecha en comportamiento alcanzable por contrato.
+- **Estado:** resuelto por BC-LST-2 (2026-10-16).
+- **Categoría / prioridad / tamaño:** bug funcional / media / S.
+- **Corrección propuesta:** definir y aplicar sincronización también para los campos explícitamente enviados como `null`, y hacer transaccionales las escrituras conjuntas List/Content en actualización y borrado. Preservar el comportamiento cuando el campo no se envía y las relaciones/cascadas actuales. Añadir pruebas de cada campo nullable y rollback en fallos de la segunda escritura.
+- **Dependencias y riesgos:** `Content`/Lists y consumers directos Contents/Videos; usar transacción PostgreSQL solo en la implementación futura, sin acceder a la base en esta auditoría. Confirmar que `null` representa borrar el valor sincronizado, como permiten ya DTO y columna. No cambiar el contrato HTTP.
+- **Pruebas revisadas:** no hay pruebas CRUD de `ListsService` ni casos de null-synchronization o errores del repositorio. Hay specs de controller/scheduler de Contents, pero no caracterizan la sincronización de fechas de `ContentsService`; el caller inverso también ignora fechas nulas, fuera del alcance de esta auditoría.
+
+#### LST-F3 — Parámetros de año/mes aceptan valores parciales o meses fuera de rango
+
+- **Ubicación:** `src/editorial/lists/list.controller.ts:55-63, 71-76, 93-98, 105-108`; cálculo de rangos en `src/editorial/lists/list.service.ts:303-321, 349-373, 394-408`.
+- **Evidencia (hecho de código):** los valores de ruta llegan como strings y `parseInt` acepta prefijos numéricos (`2026x` → 2026). La ruta semanal acepta cualquier mes; `new Date(year, month - 1, 1)` normaliza valores como 13 al siguiente año y 0 al año anterior. No hay `ParseIntPipe`, validador de rango ni DTO de ruta.
+- **Consecuencia:** rutas malformadas no producen un 400 consistente; un mes fuera de 1–12 consulta un periodo distinto del que expresa la URL y puede devolver un calendario engañoso.
+- **Categoría / prioridad / tamaño:** bug funcional / baja / XS.
+- **Estado:** resuelto por BC-LST-3 (2026-10-16).
+- **Corrección propuesta:** (implementada por BC-LST-3) validar year/month completos y limitar el mes a 1–12 antes de llamar al servicio; validar además el rango que pueden representar sin rollover las ventanas anuales existentes.
+- **Dependencias y riesgos:** contrato de error 400 para parámetros inválidos; preservar rutas y resultados válidos. No toca SQL ni esquema.
+- **Pruebas revisadas:** `list.service.spec.ts` cubre fechas de corte con parámetros válidos; no hay cobertura de conversión/validación de los parámetros de ruta ni de CRUD/paginación HTTP.
+
+### Contract finding — LST-F3
+
+**Current behavior:** las rutas aceptan prefijos parseables y meses fuera de 1–12; los últimos se normalizan a otro periodo.
+
+**Problem:** una URL inválida puede devolver un calendario distinto del que solicita o fallar de forma no uniforme.
+
+**Impact:** backend-only para entradas inválidas; rutas y resultados de periodos válidos permanecen iguales.
+
+**Options:** 1) preservar el parseo actual; 2) validar enteros/rangos y devolver 400; 3) cambiar rutas o semántica de los archivos.
+
+**Recommendation:** opción 2; conserva compatibilidad válida y evita respuestas de otro periodo.
+
+**Blocks the current task:** No; BC-LST-3 cubre la validación sin depender de otras correcciones.
+
+### Tareas propuestas
+
+#### BC-LST-1 — Hacer idempotente la sincronización WordPress en reintentos (S, prioridad media)
+
+- [x] **Completada (2026-10-16).** LST-F1 resuelto; Lists permanece en cleanup por BC-LST-2 y BC-LST-3 pendientes.
+- **Objetivo:** impedir bloques duplicados cuando WordPress ya aceptó una actualización, pero falla un paso posterior de WordPress o el guardado de tracking local.
+- **Alcance ejecutado:** flujos mensual/semanal, sincronización por Asignation y creación/adopción de posts; reconciliación por slug estable del post y marcador Gutenberg `rv-disc-<discId>`; clasificación de resultados remotos de escritura.
+- **Exclusiones:** transacción distribuida, cambios de contrato, modificación del cleanup de Asignations, reescritura de plantillas HTML o limpieza de posts editados manualmente que no tengan marcador reconocido.
+- **Dependencias:** ninguna. Coordinarse con el formato actual `rv-disc-<discId>` y tracking JSONB existente.
+- **Implementación:** `syncDiscsIntoPost` inspecciona los grupos Gutenberg balanceados e identifica de forma única los marcadores de disco. Une los marcadores remotos con `wpPublishedDiscs`/`wpWeeklyPosts`, actualiza bloques propios en su posición y solo inserta los que no están ni en remoto ni en tracking; bloques con IDs ajenos permanecen intactos. Una identidad repetida o un bloque marcador incompleto detiene la operación con 409 para revisión manual. Los posts nuevos se recuperan por slug; si el lookup no está disponible, no tiene resultado concluyente o apunta a un post en papelera, Lists no guarda tracking ni crea otra publicación a ciegas.
+- **Resultado incierto:** WordPress Integration expone `WordpressWriteError` con resultado `rejected` para respuestas 4xx y `unknown` para red, 5xx o respuestas exitosas ilegibles/incompletas. Ante update incierto, Lists relee el post y solo avanza si el contenido coincide exactamente con el enviado y los marcadores recién insertados aparecen una sola vez. Si no se confirma, devuelve 503; no muta ni guarda tracking. Errores inesperados no se capturan como recuperables. El lookup por slug propaga respuestas HTTP fallidas o payloads inválidos en vez de informar falsamente que no existe.
+- **Límite:** WordPress REST no ofrece aquí clave de idempotencia ni transacción coordinada con PostgreSQL; no se afirma exactamente una ejecución. En resultados inciertos no verificables la petición falla para revisión manual. Los reintentos explícitos siempre consultan por slug o releen el post antes de intentar un cambio.
+- **Pruebas:** Lists prueba primera publicación, reintento con tracking completo, tracking local ausente pero marcador remoto presente, publicación semanal en orden, fallo de una posición posterior y reintento sin duplicar, fallo del save local después de crear, errores remotos confirmados e inciertos, verificación fallida, identidad duplicada, bloques ajenos, post por slug recuperado/no resuelto, y errores inesperados. WordPress Integration prueba la clasificación de escrituras y rechazo de lookups HTTP fallidos.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/lists/list.service.spec.ts src/editorial/lists/list.controller.spec.ts src/integrations/wordpress-integration/wordpress.service.spec.ts` — 3 suites, 61 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json --pretty false`; `yarn --ignore-engines prettier --check` sobre los 4 archivos modificados; `git diff --check`.
+- **Riesgos residuales:** un cambio externo manual que elimine o duplique el marcador impide la reconciliación automática y requiere revisión. Se preservan bloques sin identidad gestionada; no hay llamadas reales a WordPress ni PostgreSQL en las verificaciones.
+- **Estado final:** LST-F1 resuelto; BC-LST-1 completada. BC-LST-2 y BC-LST-3 siguen pendientes; Lists permanece **en cleanup**.
+
+#### BC-LST-2 — Sincronizar cambios y limpieza de fechas entre List y Content (S, prioridad media)
+
+- [x] **Completada (2026-10-16).** LST-F2 resuelto; Lists continúa en cleanup porque BC-LST-3 permanece pendiente.
+- **Semántica anterior:** List ya se guardaba antes que su Content asociado, pero solo se propagaban fechas truthy; desde Contents se guardaba primero Content y se omitían las fechas nulas al actualizar List. En ambos sentidos, campo ausente significaba conservar, pero `null` explícito dejaba fechas divergentes. La creación automática RADAR/BEST y el borrado de Content/List también usaban escrituras locales separadas.
+- **Semántica actual:** campo omitido no dispara sincronización; una fecha enviada sincroniza `closeDate`↔`closeDate`, `releaseDate`↔`publicationDate` y, para List week/month/video, `listDate`↔`listDate`. `null` explícito limpia ambos campos nullable. La regla previa que exige fecha de publicación para Content RADAR/REUNION se conserva: un `releaseDate: null` de List con ese Content asociado devuelve 400 sin modificar ninguna entidad.
+- **Transacciones:** `ListsService.update()` usa un `EntityManager` transaccional para guardar List y Content cuando ambos requieren cambio; si no hay Content enlazado o no necesita sincronización, solo guarda List sin abrir transacción. `ContentsService.update()` guarda su Content y la List mediante repositorios del mismo manager cuando la fecha requiere propagar un cambio. La creación automática de Content RADAR/BEST, su List y la asociación final también comparte manager. El borrado iniciado desde Lists o desde Contents elimina Content y List en una misma transacción; `ContentsService` pasa el manager a `ListsService.removeList()` para mantener el mismo contexto. La sincronización semanal/mensual no duplica cambios cuando las fechas ya coinciden.
+- **Exclusiones:** contratos HTTP, entidades/esquema, cascadas de Asignation/Link, reglas de estado editorial y transacciones distribuidas. No se abren transacciones para la creación aislada de una List ni para actualizaciones/borrados de una sola entidad.
+- **Integraciones y límite:** no se hacen llamadas a WordPress o Spotify dentro de estas transacciones ni se alteró BC-LST-1. La sincronización de `Content` con `Reunion` que puede continuar después de una actualización permanece fuera de la transacción List/Content; tampoco existe atomicidad entre PostgreSQL y servicios externos.
+- **Pruebas:** se añadieron pruebas de fechas válidas, `null`, campos omitidos, cambios parciales, fallo al guardar cualquiera de las entidades, rollback simulado del manager compartido, eliminación correcta/fallida, creación RADAR y preservación de la regla RADAR. Se ejecutaron también los tests relacionados con BC-LST-1.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/lists/list.service.spec.ts src/editorial/lists/list.controller.spec.ts src/integrations/wordpress-integration/wordpress.service.spec.ts src/editorial/contents/contents.service.spec.ts src/editorial/contents/contents.controller.spec.ts src/editorial/contents/content-scheduler.service.spec.ts` — 6 suites, 81 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json --pretty false`; Prettier en los cuatro archivos propios; `git diff --check`.
+- **Riesgos residuales:** si la sincronización posterior Content/Reunion falla, puede quedar pendiente aunque el par Content/List ya esté confirmado. El test utiliza mocks del manager y verifica que ambas escrituras se obtienen del mismo contexto y que un error aborta el callback; no se accedió a PostgreSQL.
+
+#### BC-LST-3 — Validar parámetros de periodo de listas (XS, prioridad baja)
+
+- [x] **Completada (2026-10-16).** LST-F3 resuelto; Lists permanece **en cleanup** por BC-LST-4, auditoría funcional de `free`.
+- **Implementación:** `/weekly/past/:year/:month`, `/month/past/:year` y ambas declaraciones actuales de `/video/past/:year` usan DTOs validados por `ValidationPipe`. La conversión solo admite dígitos decimales completos; mes requiere entero 1–12. Año requiere entero 100–275759: se excluye 0–99 porque el constructor `Date` lo convierte a 1900–1999, y el máximo permite representar el rango completo enero-diciembre usado por los servicios. No se aplican límites de año basados en reglas editoriales nuevas.
+- **Compatibilidad:** rutas, permisos, métodos de servicio y respuestas para periodos dentro del rango conservan su contrato. Entradas parciales, vacías, alfabéticas, mixtas, negativas, decimales, meses fuera de rango y años que producirían rollover o fechas no representables reciben HTTP 400 antes de invocar el servicio.
+- **Pruebas:** controller spec ejecuta los DTOs mediante `ValidationPipe`, comprueba 400 y ausencia de llamadas al servicio para inválidos, y delegación/respuesta para meses 1 y 12 y los endpoints anualizados; también cubre los límites de año. Incluye ambas declaraciones de vídeo.
+- **Verificaciones ejecutadas:** `yarn --ignore-engines test --runInBand src/editorial/lists/list.controller.spec.ts src/editorial/lists/list.service.spec.ts src/catalog/discs/calendar/disc-calendar.service.spec.ts` — 3 suites, 112 tests aprobados; `yarn --ignore-engines build`; `yarn --ignore-engines exec tsc --noEmit -p tsconfig.build.json --pretty false`; Prettier en los tres archivos propios; `git diff --check`.
+- **Riesgos residuales:** no se añadieron límites por antigüedad editorial; el mínimo evita la conversión 1900 de `Date` y el máximo su rango nativo de fechas. No se cambió la lógica de consulta del calendario.
+
+#### BC-LST-4 — Auditar la semántica funcional de `free` (S, prioridad baja)
+
+- [ ] **Pendiente.** Lists sigue en cleanup hasta completar esta auditoría.
+- **Objetivo:** determinar qué significa `free` en cada tipo de List, qué reglas lo gobiernan y qué comportamiento actual lo consume.
+- **Alcance:** revisar entidad/DTOs, creación y actualización, consumers backend y pruebas existentes; caracterizar reglas y contratos actuales antes de proponer cualquier cambio. Inspeccionar consumers frontend si están disponibles en el checkout correspondiente.
+- **Exclusiones:** no introducir reglas de `free` como parte de BC-LST-3; no cambiar datos, entidades, migraciones ni contratos durante la auditoría.
+- **Aceptación:** documentar significado y evidencia, inconsistencias demostrables, impacto, opciones y recomendación; proponer implementación separada solo si hay un defecto concreto justificable.
+
+### Cobertura y decisiones sin tarea
+
+- `list.controller.spec.ts` comprueba roles mínimos de creación/publicación, delegación WordPress y validación de parámetros de periodo mediante ValidationPipe. La metadata HTTP completa y las guardas de lecturas siguen sin caracterizarse.
+- `list.service.spec.ts` cubre cambios de estado temporal semanal/mensual, selección de tracks Spotify, creación de post, sincronización de fechas y reintentos. Los tests focalizados de Lists/Disc Calendar se ejecutaron durante BC-LST-3; el CRUD general, paginación y errores DB siguen fuera de esta tarea.
+- No se encontraron duplicados funcionales, N+1 demostrado ni consulta que justifique optimización. No se proponen reorganización de ListsService por tamaño, extracción de servicios, cambio de relaciones eager, índices ni rediseño de payload. La respuesta pública de Lists incluye relaciones eager de Asignations/Links; sus consumers frontend no se inspeccionaron, por lo que se preserva el shape.
+- Se observó que GET `/lists` está autenticado y varias lecturas específicas son públicas; se mantiene como contrato existente al no haber evidencia suficiente de que la diferencia sea un error de autorización.
+- Los errores WordPress propagados pueden ocurrir después de que Asignation quede guardada, porque la sincronización se ejecuta después del save. Ese resultado parcial entre PostgreSQL y WordPress se documenta y no se considera por sí solo un defecto: las operaciones no tienen que ser atómicas entre sistemas. BC-LST-1 aborda el defecto reproducible de duplicación en reintentos, no promete una transacción distribuida.
+
+**Verificaciones de BC-LST-0:** revisión estática de implementación, DTOs, módulos, entidad/relaciones, pruebas, composición y consumidores; coherencia revisada contra Backend Architecture, BA-14.A/BA-14.B y reglas generales del roadmap. `git diff --check -- roadmap/backend-cleanup.md` ejecutado tras actualizar este documento. No se ejecutaron tests, build, typecheck, migraciones ni operaciones contra PostgreSQL o servicios externos. Los demás módulos de Editorial permanecen pendientes.
 
 ## Hallazgos históricos pendientes de clasificación futura
 

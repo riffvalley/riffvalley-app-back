@@ -1,10 +1,13 @@
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
-  IsNumber,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Matches,
+  Min,
   MaxLength,
   ValidateIf,
 } from 'class-validator';
@@ -52,9 +55,12 @@ export class CreateAsignationDto {
   @IsUUID('4')
   listId: string;
 
-  // Opcional, mismas validaciones que rate
-  @ValidateIf((o) => o.rate !== null && o.rate !== undefined)
+  // Preserva el tipo JSON recibido: el ValidationPipe global tiene conversión
+  // implícita y no debe convertir strings a números antes de validar.
+  @Type(() => Object)
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(-2147483648)
+  @Max(2147483647)
   position?: number;
 }

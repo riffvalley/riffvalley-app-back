@@ -1,14 +1,14 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
-  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateAsignationDto } from './dto/create-asignations.dto';
 import { UpdateAsignationDto } from './dto/update-asignations.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { Asignation } from './entities/asignations.entity';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { List } from 'src/editorial/lists/entities/list.entity';
@@ -16,6 +16,12 @@ import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
 import sanitizeHtml = require('sanitize-html');
+
+const ASIGNATION_RELATION_FOREIGN_KEYS = new Set([
+  'FK_9d41fe509640ba0c786b5daf75d', // asignation.userId -> users.id
+  'FK_d9e53d3460644eb1f381733ce82', // asignation.discId -> disc.id
+  'FK_0f26ccdd372668431e245de0f3e', // asignation.listId -> list.id
+]);
 
 // El campo "description" ahora puede llevar el HTML del editor WYSIWYG del
 // front (negrita, cursiva, enlaces, párrafos). Se sanea aquí, al entrar,
@@ -70,18 +76,21 @@ export class AsignationsService {
 
     try {
       const list = await this.listRepository.findOneBy({ id: listId });
-      if (!list) throw new Error('List not found');
+      if (!list)
+        throw new NotFoundException(`List with id ${listId} not found`);
 
       let user: User | undefined = undefined;
       if (userId) {
         user = await this.userRepository.findOneBy({ id: userId });
-        if (!user) throw new Error('User not found');
+        if (!user)
+          throw new NotFoundException(`User with id ${userId} not found`);
       }
 
       let disc: Disc | undefined = undefined;
       if (discId) {
         disc = await this.discRepository.findOneBy({ id: discId });
-        if (!disc) throw new Error('Disc not found');
+        if (!disc)
+          throw new NotFoundException(`Disc with id ${discId} not found`);
       }
 
       const asignation = this.asignationRepository.create({
@@ -117,6 +126,7 @@ export class AsignationsService {
 
     const [asignations, totalItems] =
       await this.asignationRepository.findAndCount({
+        order: { id: 'ASC' },
         take: limit,
         skip: offset,
       });
@@ -134,14 +144,10 @@ export class AsignationsService {
   }
 
   async findOne(id: string): Promise<Asignation> {
-    try {
-      const asignation = await this.asignationRepository.findOneByOrFail({
-        id,
-      });
-      return asignation;
-    } catch (error) {
+    const asignation = await this.asignationRepository.findOneBy({ id });
+    if (!asignation)
       throw new NotFoundException(`Asignation with id ${id} not found`);
-    }
+    return asignation;
   }
 
   async update(id: string, updateAsignationDto: UpdateAsignationDto) {
@@ -235,47 +241,72 @@ export class AsignationsService {
     return { message: `Asignation with id ${id} has been removed` };
   }
 
-  private handleDbExceptions(error: any) {
-    // Ej. error.code === '23505' en postgres para entradas duplicadas
-    if (error.code === '23505') {
-      throw new BadRequestException(error.detail);
+  private handleDbExceptions(error: unknown): never {
+    if (error instanceof HttpException) throw error;
+
+    if (this.isUniqueViolation(error)) {
+      throw new BadRequestException('Asignation conflicts with existing data');
     }
+
+    if (this.isAsignationRelationForeignKeyViolation(error)) {
+      throw new NotFoundException(
+        'One or more referenced resources were not found',
+      );
+    }
+
     this.logger.error(error);
-    throw new InternalServerErrorException('An unexpected error occurred');
+    throw error;
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false;
+
+    const driverError = error.driverError as Error & {
+      code?: string;
+      table?: string;
+    };
+    return driverError.code === '23505' && driverError.table === 'asignation';
+  }
+
+  private isAsignationRelationForeignKeyViolation(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false;
+
+    const driverError = error.driverError as Error & {
+      code?: string;
+      table?: string;
+      constraint?: string;
+    };
+
+    return (
+      driverError.code === '23503' &&
+      driverError.table === 'asignation' &&
+      ASIGNATION_RELATION_FOREIGN_KEYS.has(driverError.constraint ?? '')
+    );
   }
 
   async findByListId(listId: string, paginationDto: PaginationDto) {
     const { limit = 100, offset = 0 } = paginationDto;
 
-    try {
-      const [asignations, totalItems] =
-        await this.asignationRepository.findAndCount({
-          where: { list: { id: listId } }, // Filtra por listId en la relación
-          order: {
-            user: { username: 'ASC' }, // Ajustar columna de tu User
-          },
-          take: limit, // Límite de resultados
-          skip: offset, // Desplazamiento
-        });
+    const [asignations, totalItems] =
+      await this.asignationRepository.findAndCount({
+        where: { list: { id: listId } }, // Filtra por listId en la relación
+        order: {
+          user: { username: 'ASC' }, // Ajustar columna de tu User
+          id: 'ASC',
+        },
+        take: limit, // Límite de resultados
+        skip: offset, // Desplazamiento
+      });
 
-      const totalPages = Math.ceil(totalItems / limit);
-      const currentPage = Math.floor(offset / limit) + 1;
+    const totalPages = Math.ceil(totalItems / limit);
+    const currentPage = Math.floor(offset / limit) + 1;
 
-      return {
-        totalItems,
-        totalPages,
-        currentPage,
-        limit,
-        data: asignations,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error finding asignations for listId ${listId}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        'Failed to retrieve asignations by listId',
-      );
-    }
+    return {
+      totalItems,
+      totalPages,
+      currentPage,
+      limit,
+      data: asignations,
+    };
   }
 }
