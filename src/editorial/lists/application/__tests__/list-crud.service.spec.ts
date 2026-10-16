@@ -165,6 +165,7 @@ describe('ListCrudService', () => {
       releaseDate,
       closeDate,
     });
+    expect(repository.save).toHaveBeenCalledTimes(1);
   });
 
   it('uses the existing first-of-month default when creating a VIDEO list', async () => {
@@ -287,6 +288,15 @@ describe('ListsService CRUD facade', () => {
       facade.createVideoList(releaseDate, listDate, 'Video', closeDate),
     ).resolves.toBe('video');
     await expect(
+      facade.createVideoList(
+        releaseDate,
+        listDate,
+        'Video',
+        closeDate,
+        manager,
+      ),
+    ).resolves.toBe('video');
+    await expect(
       facade.createWeeklyList(releaseDate, listDate, closeDate, manager),
     ).resolves.toBe('weekly');
     await expect(
@@ -301,6 +311,14 @@ describe('ListsService CRUD facade', () => {
       listDate,
       'Video',
       closeDate,
+      undefined,
+    );
+    expect(crudService.createVideoList).toHaveBeenLastCalledWith(
+      releaseDate,
+      listDate,
+      'Video',
+      closeDate,
+      manager,
     );
     expect(crudService.createWeeklyList).toHaveBeenCalledWith(
       releaseDate,

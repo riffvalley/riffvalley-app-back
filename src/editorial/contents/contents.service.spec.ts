@@ -2,6 +2,10 @@ import { Content, ContentType } from './entities/content.entity';
 import { ContentsService } from './contents.service';
 import { List, ListType } from 'src/editorial/lists/entities/list.entity';
 import { BadRequestException } from '@nestjs/common';
+import {
+  VideoStatus,
+  VideoType,
+} from 'src/editorial/videos/entities/video.entity';
 
 describe('ContentsService List synchronization', () => {
   const makeContent = (overrides: Partial<Content> = {}) =>
@@ -257,5 +261,53 @@ describe('ContentsService List synchronization', () => {
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(txContentRepository.remove).toHaveBeenCalledWith(content);
     expect(listsService.removeList).toHaveBeenCalledWith('list-id', manager);
+  });
+});
+
+describe('ContentsService automatic Video creation', () => {
+  it('continues creating an editing Video with the Content author and a date', async () => {
+    const author = { id: 'author-id' };
+    const savedVideo = { id: 'video-id' };
+    const videoRepository = {
+      create: jest.fn((values) => ({ ...values })),
+      save: jest.fn().mockResolvedValue(savedVideo),
+    };
+    const contentRepository = {
+      create: jest.fn((values) => ({ ...values })),
+      save: jest.fn().mockImplementation(async (content) => content),
+    };
+    const userRepository = {
+      findOne: jest.fn().mockResolvedValue(author),
+    };
+    const service = new ContentsService(
+      contentRepository as any,
+      userRepository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      videoRepository as any,
+      {} as any,
+      {} as any,
+    );
+
+    const result = await service.create({
+      type: ContentType.VIDEO,
+      name: 'Video from Content',
+      authorId: author.id,
+    });
+
+    expect(videoRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Video from Content',
+        status: VideoStatus.EDITING,
+        type: VideoType.CUSTOM,
+        updateDate: expect.any(Date),
+        user: author,
+      }),
+    );
+    expect(videoRepository.save).toHaveBeenCalledTimes(1);
+    expect(result.video).toBe(savedVideo);
+    expect(contentRepository.save).toHaveBeenCalledTimes(1);
   });
 });

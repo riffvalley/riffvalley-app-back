@@ -92,12 +92,14 @@ export class ListsService {
     listDate?: Date,
     listName?: string,
     closeDate?: Date,
+    manager?: EntityManager,
   ) {
     return this.listCrudService.createVideoList(
       releaseDate,
       listDate,
       listName,
       closeDate,
+      manager,
     );
   }
 

@@ -76,6 +76,7 @@ export class ListCrudService {
     listDate?: Date,
     listName?: string,
     closeDate?: Date,
+    manager?: EntityManager,
   ) {
     let targetReleaseDate: Date;
 
@@ -108,7 +109,8 @@ export class ListCrudService {
     const name = listName || `Videos ${currentMonthName}`;
 
     try {
-      const list = this.listRepository.create({
+      const repository = manager?.getRepository(List) ?? this.listRepository;
+      const list = repository.create({
         name,
         type: ListType.VIDEO,
         status: ListStatus.NEW,
@@ -117,7 +119,7 @@ export class ListCrudService {
         closeDate,
       });
 
-      await this.listRepository.save(list);
+      await repository.save(list);
       this.logger.log(`Video list created: ${name}`);
       return list;
     } catch (error) {
