@@ -3,9 +3,9 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { ContentsController } from './contents.controller';
-import { ContentSchedulerService } from './content-scheduler.service';
-import { ContentsService } from './contents.service';
+import { ContentsController } from '../contents.controller';
+import { DiscLinkMaintenanceService } from 'src/catalog/discs/maintenance/disc-link-maintenance.service';
+import { ContentsService } from '../contents.service';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import {
@@ -15,12 +15,12 @@ import {
 
 describe('ContentsController daily link update authorization', () => {
   const contentsService = {} as ContentsService;
-  const contentSchedulerService = {
+  const discLinkMaintenanceService = {
     checkMissingSpotifyLinks: jest.fn(),
-  } as unknown as ContentSchedulerService;
+  } as unknown as DiscLinkMaintenanceService;
   const controller = new ContentsController(
     contentsService,
-    contentSchedulerService,
+    discLinkMaintenanceService,
   );
   const handler = ContentsController.prototype.triggerDailyLinkUpdate;
 
@@ -54,7 +54,7 @@ describe('ContentsController daily link update authorization', () => {
   });
 
   it('preserves the scheduler delegation and HTTP response', async () => {
-    contentSchedulerService.checkMissingSpotifyLinks = jest
+    discLinkMaintenanceService.checkMissingSpotifyLinks = jest
       .fn()
       .mockResolvedValue(undefined);
 
@@ -62,8 +62,17 @@ describe('ContentsController daily link update authorization', () => {
       message: 'Daily link update triggered',
     });
     expect(
-      contentSchedulerService.checkMissingSpotifyLinks,
+      discLinkMaintenanceService.checkMissingSpotifyLinks,
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates manual maintenance failures unchanged', async () => {
+    const error = new Error('maintenance failed');
+    discLinkMaintenanceService.checkMissingSpotifyLinks = jest
+      .fn()
+      .mockRejectedValue(error);
+
+    await expect(controller.triggerDailyLinkUpdate()).rejects.toBe(error);
   });
 
   it('protects editorial Contents creation with the riffvalley minimum', () => {
@@ -80,5 +89,25 @@ describe('ContentsController daily link update authorization', () => {
     expect(roleMeetsMinimum(ValidRoles.superadmin, ValidRoles.riffvalley)).toBe(
       true,
     );
+  });
+});
+
+describe('ContentsController monthly agenda', () => {
+  it('keeps the public route and forwards validated year and month unchanged', async () => {
+    const result = [{ id: 'content-id' }];
+    const contentsService = {
+      findByMonth: jest.fn().mockResolvedValue(result),
+    } as unknown as ContentsService;
+    const controller = new ContentsController(contentsService, {} as any);
+    const handler = ContentsController.prototype.findByMonth;
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('by-month');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(0);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
+
+    await expect(
+      controller.findByMonth({ year: 2026, month: 12 }),
+    ).resolves.toBe(result);
+    expect(contentsService.findByMonth).toHaveBeenCalledWith(2026, 12);
   });
 });

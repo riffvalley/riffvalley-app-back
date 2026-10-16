@@ -14,6 +14,7 @@ import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
 import { DiscWriteService } from './write/disc-write.service';
 import { DiscSpotifyService } from './spotify/disc-spotify.service';
 import { DiscHomeService } from './home/disc-home.service';
+import { DiscLinkMaintenanceService } from './maintenance/disc-link-maintenance.service';
 
 @Module({
   controllers: [DiscsController],
@@ -25,12 +26,13 @@ import { DiscHomeService } from './home/disc-home.service';
     DiscWriteService,
     DiscSpotifyService,
     DiscHomeService,
+    DiscLinkMaintenanceService,
   ],
   imports: [
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
     AuthModule,
     SpotifyIntegrationModule,
   ],
-  exports: [DiscsService],
+  exports: [DiscsService, DiscLinkMaintenanceService],
 })
 export class DiscModule {}

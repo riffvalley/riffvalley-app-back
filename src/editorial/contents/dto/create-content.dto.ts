@@ -1,3 +1,4 @@
+import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
   IsString,
@@ -6,6 +7,8 @@ import {
   IsOptional,
   IsDateString,
   IsUUID,
+  IsBoolean,
+  ValidateIf,
 } from 'class-validator';
 import { ContentType } from '../entities/content.entity';
 
@@ -53,9 +56,18 @@ export class CreateContentDto {
   @IsUUID()
   videoId?: string;
 
-  @IsOptional()
+  // Preserve the input JSON type despite the global implicit conversion.
+  // Transform null to a non-boolean value so PartialType's IsOptional does
+  // not skip validation for PATCH requests.
+  @Type(() => Object)
+  @Transform(({ obj, key }) => (obj?.[key] === null ? 'null' : obj?.[key]))
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
   ready?: boolean;
 
-  @IsOptional()
+  @Type(() => Object)
+  @Transform(({ obj, key }) => (obj?.[key] === null ? 'null' : obj?.[key]))
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
   backlog?: boolean;
 }

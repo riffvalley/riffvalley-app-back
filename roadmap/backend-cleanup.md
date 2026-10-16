@@ -58,7 +58,7 @@ La secuencia se ampliará después de cada dominio; no constituye una orden para
 | ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries, Genres, CatalogImport, CatalogOverview y LastfmCatalog completados; Discs en cleanup |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                                                                                                |
-| 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Articles, Asignations, Lists y Videos completados; Links retirado por BC-LNK-1; Contents y el resto pendiente |
+| 3     | Editorial                 | Articles, Asignations, Contents, FestivalPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Articles, Asignations, Lists y Videos completados; Links retirado por BC-LNK-1; Contents auditado y en cleanup; el resto pendiente |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                                                                                                |
 | 5     | Identity                  | Auth, AccessRequests                                                                                                              | Pendiente                                                                                                |
 | 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                            | Pendiente                                                                                                |
@@ -85,7 +85,7 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Community                 | Requests            | pendiente  |
 | Editorial                 | Articles            | completado |
 | Editorial                 | Asignations         | completado |
-| Editorial                 | Contents            | pendiente  |
+| Editorial                 | Contents            | en cleanup |
 | Editorial                 | FestivalPlaylists   | pendiente  |
 | Editorial                 | Links               | retirado   |
 | Editorial                 | Lists               | completado |
@@ -2193,3 +2193,317 @@ Después de BC-LST-19 se abrió BC-LST-20, limitada a reorganizar físicamente s
 - **Consumers y tests revisados:** Kanban usa `list.id` para completar `listId` y navegación, y `response.list.id` al crear la lista; el detalle carga List/Asignations desde sus endpoints. Contents no solicita `video.list`; las specs de Videos comprueban la presencia de `list.id` en el resultado de creación, no el payload completo de listado/detalle. Consumers externos no confirmados.
 - **Compatibilidad/riesgo:** se preservan payload y consultas actuales; permanece sin cuantificar el coste de expansión y sin inventariar posibles consumers externos. No se modifica contrato HTTP.
 - **Verificaciones BC-VID-7:** lectura estática de consultas, entidades, DTOs, serialización implícita, rutas, frontend y tests existentes; se actualizó únicamente este roadmap. `git diff --check -- roadmap/backend-cleanup.md`. No se ejecutaron tests, build ni typecheck; no se accedió a PostgreSQL ni servicios externos.
+
+## Auditoría BC-CNT-0 — Editorial / Contents
+
+**Estado:** BC-CNT-0 completada (2026-10-16); BC-CNT-1–BC-CNT-12 completadas; CNT-F1–CNT-F7 tienen resolución documentada y CNT-F7 implementado por BC-CNT-8. Contents está **completado** tras la revisión arquitectónica final y la organización de pruebas por BC-CNT-12. Los demás módulos conservan sus estados previos; Links sigue retirado. No se avanzó a otro módulo Editorial.
+**Base observada:** rama actual y estado local del checkout. Se conservaron los cambios locales preexistentes; no se atribuyen a esta auditoría.
+**Alcance:** AGENTS.md, roadmaps de Cleanup y Architecture; implementación completa de `src/editorial/contents/`; DTOs, entidad/relaciones, composición, consumidores backend directos y pruebas existentes; contratos públicos de Articles, Lists, Videos y Reunions. No se inspeccionó frontend ni se accedió a servicios externos o PostgreSQL. Solo se actualizó este roadmap.
+
+### Inventario, arquitectura y contratos
+
+- `ContentsModule` registra Content, User, Reunion, Point, RiffValleyPlaylist, Article, Video, Disc y List; importa Lists, Points, Spotify Integration y Auth; exporta `ContentsService`. `AppModule` registra el módulo. `ContentSchedulerService` es el segundo provider. La entidad `Content` tiene relaciones nullable a List, RiffValleyPlaylist, Article y Video; author es nullable/eager; reunion es nullable/no eager, con FK `reunionId`. `ready` y `backlog` son booleanos no-null con default false.
+- `ContentsController` expone `POST /contents`, `GET /contents`, `GET /contents/:id`, `GET /contents/by-month?year=&month=`, `PATCH /contents/:id`, `DELETE /contents/:id` y `POST /contents/trigger-daily-link-update`. Las lecturas son públicas; creación, edición, borrado y trigger requieren mínimo `riffvalley`. Los IDs no usan `ParseUUIDPipe`. GET lista por `publicationDate DESC`; `ready` y `backlog` aceptan únicamente las cadenas literales `true`/`false` y el resto se interpreta como filtro ausente. El endpoint mensual usa `parseInt` sin validar parámetros.
+- `CreateContentDto` valida enum/título, fechas ISO y UUIDs opcionales; `UpdateContentDto` es `PartialType`. `ready` y `backlog` no tienen `@IsBoolean`; `@IsOptional` también permite null. La validación global elimina campos desconocidos y rechaza propiedades no permitidas.
+- `ContentsService` tiene 724 líneas y nueve dependencias inyectadas (ocho repositorios y ListsService). Responsabilidades actuales: altas por tipo con creación opcional de entidades editoriales, lectura/agenda, actualización y sincronización de fechas Content/List y Content/Reunion, borrado coordinado y búsquedas inversas por Article/Video/Playlist. Es una fachada de coordinación interdominio con varias escrituras y políticas por tipo. El tamaño por sí solo no demuestra que deba dividirse; aunque es grande, las operaciones descritas forman la coordinación de Content y no hay evidencia suficiente para ordenar una extracción de ContentsService antes de corregir los invariantes concretos.
+- `ContentSchedulerService` tiene 323 líneas y dos tareas funcionales diferentes: recuperación diaria de enlaces de Discs vía Spotify/Bandcamp y generación semanal de Content/Reunion mediante ContentsService. Sus dependencias incluyen Disc, Spotify, User y ContentsService. Ambas tareas comparten el mecanismo de cron, pero tienen efectos/owners distintos; se registra la separación como candidato arquitectónico sin cambio automático.
+- Ciclos: Articles, Videos y Reunions importan Contents con `forwardRef` y sus servicios consumen ContentsService. Contents importa Lists con `forwardRef`, pero ListsModule solo registra el repositorio Content y no importa ContentsModule ni inyecta ContentsService; el `forwardRef` de ese par no corresponde a un ciclo Nest observado. Riff Valley Playlists consume Contents, sin importación inversa. Contents importa Points para inyectar su repositorio; Points no importa ContentsModule.
+- Consumers directos: ArticlesService crea Content y consulta el Content asociado antes de eliminar Article; VideosService hace lo mismo para Video; RiffValleyPlaylistService crea Content y protege la eliminación de playlist asociada; ReunionService delega borrado de Content a ContentsService; Lists usa la entidad/repository Content y sincroniza fechas en sentido inverso; el scheduler crea Content REUNION semanal. `standalone.ts` registra ContentSchedulerService.
+- Articles ofrece CRUD en `/articles` y `POST /articles/:id/content`; Lists mantiene CRUD, calendarios por tipo/periodo y publicación WordPress; Videos ofrece CRUD, `POST /videos/:id/list` y `POST /videos/:id/content`; Reunions ofrece CRUD. Las mutaciones de estos módulos requieren `riffvalley` y las lecturas principales son públicas. Los contratos completados de Articles, Lists y Videos no se proponen cambiar. Article/Video/Playlist pueden seguir existiendo tras borrar Content; los servicios de Article y Video impiden borrar una entidad mientras haya Content asociado.
+- `Content.findAll`/`findOne`/`findByMonth` devuelven entidades con relaciones de autor, lista y asignaciones, playlist, Article y Video; varias relaciones transitivas son eager. Se conserva todo el payload observable. No se inspeccionaron consumidores frontend ni se propone reducir las relaciones.
+
+### Coordinación editorial y persistencia
+
+- RADAR y BEST exigen `publicationDate`, crean List WEEK/MONTH y guardan Content, List y asociación final con un mismo `EntityManager` transaccional. La actualización de fechas de Content/List también comparte manager cuando hay cambio sincronizado. El borrado iniciado en Contents elimina Content y List con el manager compartido. Estas garantías de BC-LST-2 y la aceptación/uso del manager de borrado de BC-LST-7 se mantienen; no se propone modificar Lists.
+- VIDEO crea Video en estado `editing` con author y fecha; ARTICLE crea Article `editing`; RIFF_VALLEY_PLAYLIST crea playlist `editing`; REUNION crea Reunion y dos Points predeterminados. Estas entidades secundarias se guardan antes del Content y fuera de su transacción. Los flujos Article/Video manuales de los módulos propietarios también usan ContentsService. La relación Content↔Article/Video/Playlist es independiente después del enlace, conforme a los cambios ya completados; no se propone resincronizar sus estados.
+- Al crear, se comprueba existencia de author y de Reunion si se pasó `reunionId`; Article, Video y RiffValleyPlaylist solo se buscan para sincronizar fecha si existen, pero la ausencia no se rechaza antes de asignar la referencia. Al cambiar Content, las fechas y el título se guardan primero en Content y luego se copian a Reunion en otra operación. Al borrar, Content/List se transaccionan, pero el borrado de Reunion ocurre después y fuera de ese manager. No hay llamadas externas dentro de estas transacciones.
+- `ContentType.REUNION` exige fecha y siempre crea Reunion/Points nuevos. Si también recibe `reunionId`, primero valida la Reunion indicada y la asigna, pero luego crea otra Reunion y reemplaza la asociación; el `reunionId` aceptado no queda vinculado al Content.
+- Estados/fechas: RADAR, BEST y REUNION exigen fecha válida al crear y al actualizar; cambiar tipo a uno de estos también valida la fecha existente. Las fechas close/list son opcionales/nullables. Campo omitido en PATCH conserva el valor; null puede limpiar close/list y fechas de tipos sin requisito. Actualizar publicationDate pone `ready=false` cuando se establece fecha. List WEEK/MONTH/VIDEO sincroniza fechas permitidas por Lists; BC-LST-2 cubre null y omisión. La agenda mensual extiende el rango siete días a ambos lados del mes y no valida límites del calendario.
+- No se encontraron operaciones externas dentro de las transacciones locales Content/List. Persistencia de las sincronizaciones con Reunion y de las altas secundarias sí ocurre en varias escrituras locales sin atomicidad. Los puntos tienen `onDelete: CASCADE` desde Reunion; la relación inversa Reunion declara cascade. Las relaciones Article, Video y Playlist no se borran al eliminar Content por la independencia ya decidida.
+
+### Pruebas y cobertura
+
+- Hay dos specs de ContentsService (313 líneas): caracterizan transacción/fechas/rollback de Content+List, requisitos de fecha de RADAR/BEST/REUNION, creación semanal/mensual de List y creación automática de Video. No caracterizan altas automáticas de Article/Playlist/Reunion/Points, referencias inválidas, errores de repositorio, borrado/rollback de Reunion, sincronización fallida Content/Reunion ni booleanos inválidos/null.
+- `contents.controller.spec.ts` (84 líneas) caracteriza ruta, rol mínimo y delegación del trigger; `domain-mutation-authorization.spec.ts` cubre roles/rutas de las mutaciones Contents. No hay prueba HTTP de CRUD, DTO/pipes ni respuestas completas/relaciones. `content-scheduler.service.spec.ts` (151 líneas) prueba el transporte de Spotify/Bandcamp con fetch simulado, no la creación semanal del contenido. No se ejecutaron las suites.
+- La ausencia de cobertura en CRUD/rollback es una carencia, no por sí sola un defecto. Las tareas se limitan a los casos con resultado inconsistente o error de persistencia concreto descritos abajo.
+
+### Hallazgos demostrados
+
+#### CNT-F1 — Referencias de Article, Video o Playlist inexistentes llegan a la FK
+
+- **Ubicación:** `src/editorial/contents/contents.service.ts:97-158`; asignación de relaciones en `:169-175`; relaciones de Content en `src/editorial/contents/entities/content.entity.ts:68-86`.
+- **Evidencia (hecho de código):** se consultan Article, Video y RiffValleyPlaylist solo para importar su fecha si la consulta encuentra entidad. Si la referencia UUID válida no existe, el servicio continúa asignando `{id}` y guarda Content con la FK. A diferencia de author y reunion, no produce NotFoundException. La violación FK no se traduce en error HTTP de dominio en Contents.
+- **Consecuencia:** una referencia inválida alcanza persistencia y puede responder como error interno en vez de 404/400 estable.
+- **Categoría / prioridad / tamaño:** bug funcional; media; S.
+- **Corrección propuesta:** validar cada ID proporcionado y devolver NotFoundException antes de persistir; mantener la sincronización de fechas existente y las semánticas para campo omitido/null.
+- **Dependencias y riesgos:** solo Contents; Article/Video/List permanecen completados. Caracterizar IDs válidos e inexistentes por cada tipo y confirmar status HTTP. No introducir cambios en esos módulos.
+- **Estado:** resuelto por BC-CNT-1 (2026-10-16). Las búsquedas que ya se hacían para importar fechas ahora producen `NotFoundException` si falta la entidad, antes de `contentRepo.create` o cualquier escritura. No se añadió una consulta ni se tradujeron errores SQL generales.
+
+#### CNT-F2 — Alta de Content y entidades secundarias no es atómica para varios tipos
+
+- **Ubicación:** `src/editorial/contents/contents.service.ts:179-279, 281-315`.
+- **Evidencia (hecho de código):** Article, Video, RiffValleyPlaylist y Reunion/Points se guardan antes del Content con repositorios globales, fuera de transacción. Solo RADAR/BEST guardan su par Content/List con manager común. Si falla un save posterior, las altas secundarias previas permanecen sin Content asociado; para REUNION puede quedar Reunion sin Content o sin los Points previstos.
+- **Consecuencia:** fallos de persistencia dejan entidades de trabajo huérfanas o una Reunion parcialmente configurada aunque el POST de Content falle.
+- **Categoría / prioridad / tamaño:** bug funcional de consistencia; media; M.
+- **Corrección propuesta:** definir el conjunto de entidades secundarias por tipo y persistirlo junto con Content bajo un único manager local; propagar ese manager a todos los saves relacionados. Mantener intacta la transacción RADAR/BEST y los defaults actuales.
+- **Dependencias y riesgos:** Contents y repositorios/entities de Article, Video, RiffValleyPlaylist, Reunion y Point. Riesgo de tocar relaciones/cascadas al mover el orden de persistencia; no alterar contratos ni servicios de módulos completados. Caracterizar rollback en cada rama.
+- **Estado:** resuelto por BC-CNT-4 (2026-10-16). Las altas de Content y sus entidades secundarias auto-creadas usan el mismo manager transaccional, incluidos Reunion y sus Points.
+
+#### CNT-F3 — `reunionId` aceptado se ignora al crear Content tipo REUNION
+
+- **Ubicación:** DTO `src/editorial/contents/dto/create-content.dto.ts:38-40`; `src/editorial/contents/contents.service.ts:87-95, 249-279`.
+- **Evidencia (hecho de código):** el DTO permite `reunionId`; el servicio valida y asigna esa relación. Si `type` es REUNION, crea otra Reunion y reemplaza `content.reunion`/`reunionId`. La Reunion recibida no se asocia y queda sin el Content esperado.
+- **Consecuencia:** el campo aceptado no cumple su intención aparente y puede dejar una Reunion previa sin relación; además se crean Reunion/Points duplicados para un solo alta solicitada.
+- **Categoría / prioridad / tamaño:** bug funcional; media; XS.
+- **Corrección implementada por BC-CNT-1:** reutilizar la Reunion indicada para tipo REUNION sin generar otra; preservar la creación automática cuando se omite `reunionId`.
+- **Dependencias y riesgos:** solo Contents, aunque consume Reunion. Se mantienen las asociaciones de `reunionId` en otros tipos.
+- **Decisión y estado:** resuelto por BC-CNT-1 (2026-10-16). Si se proporciona `reunionId` para tipo REUNION se reutiliza la entidad existente y no se crean una segunda Reunion ni Points por defecto; si se omite, se conserva la creación automática anterior.
+
+#### CNT-F4 — Campos booleanos aceptan valores que no son booleanos
+
+- **Ubicación:** `src/editorial/contents/dto/create-content.dto.ts:53-57`; columnas no-null en `src/editorial/contents/entities/content.entity.ts:88-92`; pipe global en `src/main.ts`.
+- **Evidencia (hecho de código):** `ready` y `backlog` solo llevan `@IsOptional`, sin `@IsBoolean`. El pipe global permite ambos campos porque tienen metadata de validación, pero no comprueba tipo; `null`, strings y números pueden llegar a `create`/`update`. Las columnas no aceptan null y ContentService asigna el valor directamente.
+- **Consecuencia:** payloads que no representan booleanos pueden provocar persistencia inválida o almacenar conversiones inesperadas en vez de un 400 de validación consistente.
+- **Categoría / prioridad / tamaño:** bug funcional/validación; media; XS.
+- **Corrección implementada por BC-CNT-2:** `ready` y `backlog` validan tipos booleanos estrictos; null se rechaza y los campos omitidos conservan la semántica previa. Se preserva el tipo JSON frente a la conversión implícita global, también en PATCH.
+- **Estado:** resuelto por BC-CNT-2 (2026-10-16). POST/PATCH responden 400 para null, string y número antes de llegar a persistencia; `true`/`false` se conservan. No cambia esquema ni contrato de permisos.
+
+#### CNT-F5 — Sincronización y borrado Content/Reunion pueden quedar parciales
+
+- **Ubicación:** `src/editorial/contents/contents.service.ts:493-602, 605-632`.
+- **Evidencia (hecho de código):** en actualización, Content se guarda (a veces dentro de Content/List) antes de guardar la Reunion sincronizada. En borrado, Content o el par Content/List se elimina antes de `reunionRepo.delete`, fuera de la transacción. Un error en el segundo save/delete devuelve error después de persistir el primer cambio, dejando fecha/título divergentes o Reunion sin Content.
+- **Consecuencia:** una operación reportada como fallida puede dejar calendario y evento/Reunion en estados diferentes; el delete puede dejar una Reunion huérfana.
+- **Categoría / prioridad / tamaño:** bug funcional de consistencia; media; S.
+- **Corrección propuesta:** cuando exista sincronización/borrado de Reunion, usar un solo manager para todas las escrituras locales involucradas, incluyendo el manager transaccional ya usado por Content/List cuando corresponda. No sincronizar estados de Article/Video/Playlist ni crear transacciones distribuidas.
+- **Dependencias y riesgos:** Contents, Reunion y Points (cascade). BC-LST-2 ya deja fuera deliberadamente esta sincronización; la nueva tarea debe cubrir solo Content/Reunion y conservar sus reglas/relaciones. Requiere cobertura de fallo del segundo save/delete y rollback.
+- **Estado:** resuelto por BC-CNT-5 (2026-10-16). Las actualizaciones que sincronizan Content/Reunion y los borrados de Content/Reunion usan una misma transacción local; el borrado conserva la cascada de Points.
+
+#### CNT-F6 — Parámetros de calendario mensual no se validan
+
+- **Ubicación:** `src/editorial/contents/contents.controller.ts:39-43`; rango en `src/editorial/contents/contents.service.ts:660-690`.
+- **Evidencia (hecho de código):** `parseInt` acepta prefijos (`2026x` → 2026), y no hay validación de presencia, año o mes 1–12. Valores incompletos generan fechas inválidas; meses 0/13 se normalizan a otro año/mes por `Date`.
+- **Consecuencia:** la URL puede devolver un periodo distinto al solicitado o producir un error de query sin respuesta 400 uniforme.
+- **Categoría / prioridad / tamaño:** bug funcional; baja; XS.
+- **Corrección propuesta:** DTO de query con enteros y rango mensual explícito; conservar exactamente el rango de calendario actual para entradas válidas.
+- **Dependencias y riesgos:** contrato de error para `/contents/by-month`; no altera consultas ni orden válidos.
+- **Estado:** resuelto por BC-CNT-3 (2026-10-16). El DTO de query exige year/month enteros completos y acota month a 1–12 antes de invocar el servicio.
+
+#### CNT-F7 — El job diario de enlaces de Disc está alojado en el scheduler de Contents
+
+- **Ubicación:** `src/editorial/contents/content-scheduler.service.ts`; provider de `ContentsModule`; ruta manual en `ContentsController`; comandos en `src/standalone.ts`.
+- **Evidencia (hecho):** el mismo provider contiene dos cron jobs. El semanal crea Content/Reunion con `ContentsService`; el diario consulta Disc liberados con link ausente o marcador de error, busca en Spotify y Bandcamp, y guarda `link`, `image` y `verified` mediante el repositorio de Disc. Este job no lee ni modifica Content.
+- **Consecuencia:** el ownership de mantenimiento de Disc queda en Editorial y `ContentsModule` registra un repositorio y una integración que solo requiere ese job. Los dos jobs tienen calendarios, datos y efectos distintos.
+- **Categoría / prioridad / tamaño:** arquitectura; baja; S.
+- **Decisión de BC-CNT-6:** asignar el job diario a Catalog/Discs; mantener el job semanal en Editorial/Contents. BC-CNT-8 implementa la extracción sin cambiar el contrato ni el comportamiento del job.
+- **Impacto/compatibilidad:** backend-only. Conservar `POST /contents/trigger-daily-link-update`, su mínimo `riffvalley`, respuesta y ejecución síncrona; conservar los comandos `check-spotify` y `create-weekly`, además de los cron existentes y su zona horaria.
+- **Estado:** ownership decidido por BC-CNT-6 y extracción implementada por BC-CNT-8 (2026-10-16). El mantenimiento diario queda bajo Catalog/Discs; el job semanal permanece en Contents.
+
+### Decisiones sin tarea contractual
+
+- Lecturas Contents son públicas y mutaciones exigen `riffvalley`; se mantiene. No hay evidencia en el backend de que esa diferencia sea accidental.
+- No se modifica la autonomía de Article/Video/Playlist respecto a Content, ni se propone volver a sincronizar estados publicados. Esto preserva BC-ART/BC-VID y el diseño de creación explícita ya documentado.
+- Las fechas de calendario RADAR/BEST/REUNION y su sincronización con Lists respetan BC-LST-2. No se reabre una tarea de Lists ni se cambia el calendario de Videos.
+- La relación Reunion/Content y las colecciones eager son payload observable; no se propone reducirlas. No se pudo confirmar consumidores externos.
+- El job semanal que crea Content/Reunion permanece en Editorial. BC-CNT-6 recomienda asignar el job diario de enlaces de Disc a Catalog, porque consulta y modifica Disc y usa integraciones Spotify/Bandcamp sin coordinar Content. BC-CNT-8 mueve su provider a Catalog y conserva los consumidores y contratos.
+
+### Tareas propuestas
+
+#### BC-CNT-1 — Validar referencias de entidades asociadas (S, prioridad media)
+
+- **Estado:** completada (2026-10-16); CNT-F1 y CNT-F3 resueltos; prioridad media; tamaño S.
+- **Alcance implementado:** validar Article, Video y RiffValleyPlaylist con las búsquedas ya existentes; devolver 404 antes de crear o guardar Content si falta una referencia. Para tipo REUNION, reutilizar el `reunionId` existente si se proporciona; sin ID se preserva la creación automática de Reunion y sus Points.
+- **Exclusiones:** no se modificaron Articles, Videos, Lists, rutas, permisos, entidades ni migraciones. Se conservaron las fechas importadas inicialmente desde entidades publicadas y las transacciones Content/List.
+- **Pruebas:** referencias existentes para los tres tipos conservan asociación; fechas de publicación iniciales se sincronizan; las tres referencias inexistentes devuelven 404 sin crear ni persistir entidades; lookup repository error se propaga sin traducción; Reunion existente para tipo REUNION se reutiliza; sin ID se mantienen Reunion y Points automáticos; Reunion inexistente conserva su 404.
+- **Verificaciones:** Yarn focalizado — 5 suites y 147 tests aprobados (`contents.service`, `contents.controller`, `videos.service`, `articles.controller` y `riff-valley-playlist.service`); build; typecheck `tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier limitado a los dos archivos Contents modificados. No se accedió a PostgreSQL ni servicios externos.
+- **Riesgo/compatibilidad:** se corrige el caso antes silencioso donde `reunionId` proporcionado se ignoraba para tipo REUNION; el campo ahora conserva su intención y la creación automática solo ocurre al omitirlo. Errores de lectura/persistencia distintos de “no existe” siguen propagándose.
+
+#### BC-CNT-2 — Validar `ready` y `backlog` como booleanos (XS, prioridad media)
+
+- **Estado:** completada (2026-10-16); CNT-F4 resuelto.
+- **Alcance:** hacer que DTO/pipeline rechace valores no booleanos, definir null como inválido y mantener omitido/default/no-op.
+- **Exclusiones:** no cambiar columnas, defaults, otras fechas ni permisos.
+- **Aceptación:** booleanos verdaderos/falsos se conservan en POST/PATCH; omitido conserva el comportamiento actual; null, string y número dan 400 sin invocar persistencia.
+- **Implementación y pruebas:** se añadieron `@IsBoolean()` con preservación del tipo recibido pese a la conversión implícita global; null se transforma en un valor inválido para que la validación no lo omita en `PartialType`. Pruebas de DTO caracterizan POST/PATCH para `true`, `false`, omitido, null, string y número; los rechazos ocurren en ValidationPipe antes de invocar controller/servicio.
+- **Verificaciones:** Yarn focalizado de `src/editorial/contents` (4 suites, 50 tests); build; typecheck `tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier limitado al DTO y su spec; `git diff --check`. No se accedió a PostgreSQL ni servicios externos.
+
+#### BC-CNT-3 — Validar parámetros de agenda mensual (XS, prioridad baja)
+
+- **Estado:** completada (2026-10-16); CNT-F6 resuelto.
+- **Alcance:** validar year/month completos y month 1–12 en `/contents/by-month`.
+- **Exclusiones:** no cambiar ventanas de siete días, filtros, orden, respuesta ni permisos.
+- **Aceptación:** periodos válidos conservan el resultado/rango actual; ausentes, parciales y fuera de rango devuelven 400.
+- **Dependencias/riesgos:** resuelve CNT-F6; solo Contents.
+- **Implementación y pruebas:** se añadió un DTO de query con enteros estrictos, año dentro del rango admitido por `Date` (100–275759) y mes 1–12. El controller delega los números ya validados y conserva ruta, respuesta, acceso público y servicio/rango. Pruebas con ValidationPipe cubren enero/diciembre, parámetros ausentes, prefijos/parciales, fracciones y límites inválidos; la prueba del controller fija la delegación.
+- **Verificaciones:** Yarn focalizado de `src/editorial/contents` (5 suites, 64 tests); build; typecheck `tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier de los cuatro archivos propios; `git diff --check`. Se usó `--ignore-engines` porque el entorno ejecuta Node 22.23.1 y el proyecto declara Node 20.x. No se accedió a PostgreSQL ni servicios externos.
+
+#### BC-CNT-4 — Persistir Content con sus entidades secundarias de forma atómica (M, prioridad media)
+
+- **Estado:** completada (2026-10-16); CNT-F2 resuelto.
+- **Alcance:** transacción local por alta para Content y entidades auto-creadas ARTICLE, VIDEO, RIFF_VALLEY_PLAYLIST o REUNION/Points.
+- **Exclusiones:** la pareja RADAR/BEST–List ya está transaccional por BC-LST-2 y debe preservarse; no modificar defaults ni endpoints de módulos completados.
+- **Aceptación:** éxito persiste todo el agregado correspondiente; fallo simulado en cada write revierte todos los writes de esa alta; los casos de asociación a entidades existentes no crean registros secundarios.
+- **Dependencias/riesgos:** resuelve CNT-F2; revisar providers/repositories y cascadas Reunion↔Points antes de elegir saves explícitos o cascade. Sin migraciones ni PostgreSQL durante la preparación.
+- **Implementación y pruebas:** ARTICLE, VIDEO, RIFF_VALLEY_PLAYLIST y REUNION guardan el Content y sus secundarios auto-creados con repositorios del mismo `EntityManager`. Reunion y sus Points se guardan explícitamente en esa transacción. Asociaciones existentes no crean secundarios. RADAR/BEST mantiene el guardado Content/List y el orden previo dentro de su transacción. Pruebas cubren éxito y fallo de cada write en las cuatro ramas, así como asociaciones existentes sin duplicación.
+- **Verificaciones:** Yarn focalizado `src/editorial/contents` (5 suites, 77 tests); `yarn build`; `yarn tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier en los dos archivos propios; `git diff --check`. Se usó `--ignore-engines`. No se accedió a PostgreSQL ni servicios externos.
+- **Riesgo/compatibilidad:** se conserva el orden y contrato RADAR/BEST–List, los defaults editoriales, permisos y respuestas. No se hicieron migraciones.
+
+#### BC-CNT-5 — Sincronizar Content y Reunion en una transacción (S, prioridad media)
+
+- **Estado:** completada (2026-10-16); CNT-F5 resuelto.
+- **Alcance:** transaccionar actualizaciones sincronizadas y borrados de Content/Reunion, incluyendo Content/List si participa, usando el mismo manager.
+- **Exclusiones:** no modificar Lists fuera del manager opcional ya establecido, ni Article/Video/Playlist, schema, contratos o efectos externos.
+- **Aceptación:** éxito mantiene fecha/título y borrado acordes; el fallo de cualquier segundo write deja ambas entidades como estaban; cascada de Points continúa respetada.
+- **Dependencias/riesgos:** resuelve CNT-F5 y se basa en el límite explícitamente pendiente de BC-LST-2. Caracterizar especialmente el flujo `ReunionService.deleteReunion()` → `ContentsService.remove()` para evitar cambios de contrato.
+- **Implementación y pruebas:** las actualizaciones de Content con sincronización de Reunion ejecutan el save de Content, la sincronización opcional de List y el save de Reunion con repositorios del mismo manager. El borrado usa una transacción común para Content, List cuando participa y Reunion; `ReunionService.deleteReunion()` conserva su llamada existente a `ContentsService.remove()`, y la eliminación de Reunion sigue respetando la cascada de Points. Pruebas cubren actualización Content/Reunion, rollback cuando falla el segundo save/delete, uso de un manager común con Content/List/Reunion y borrado de Content con Reunion asociada.
+- **Verificaciones:** Yarn focalizado `src/editorial/contents` (5 suites, 82 tests); build; typecheck `tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier limitado a `contents.service.ts` y `contents.service.spec.ts`; `git diff --check`. Se usó `--ignore-engines`. No se accedió a PostgreSQL ni servicios externos.
+- **Riesgo/compatibilidad:** se conservan rutas, permisos, respuestas, reglas editoriales, orden de operaciones y llamadas desde `ReunionService`; no hubo cambios de schema ni migraciones.
+
+#### BC-CNT-6 — Auditar el ownership del job diario de enlaces de Disc (S, prioridad baja)
+
+- **Estado:** completada (2026-10-16); CNT-F7 con decisión registrada.
+- **Motivo:** `ContentSchedulerService` combina el cron semanal que crea Content/Reunion con la búsqueda diaria de enlaces de Disc en Spotify/Bandcamp. Esta última operación lee y escribe Disc y no coordina entidades Content; es una responsabilidad distinta y dependiente de Catalog/Spotify.
+- **Alcance:** revisar owners y consumers del trigger manual, configuración cron y standalone, dependencias de Spotify/Bandcamp, repositorio Disc y tests existentes; proponer el destino/contrato del job y una migración incremental si se justifica.
+- **Exclusiones:** esta tarea no mueve providers ni rutas, no cambia horarios, permisos, respuestas, lógica de búsqueda, persistencia ni integración; no modifica Catalog, Spotify ni frontend.
+- **Aceptación:** decisión explícita de conservar o extraer el job, con diagrama de dependencias, consumers, riesgos de cron/DI y caracterización requerida antes de implementación. El job semanal de Content queda dentro del ownership Editorial salvo evidencia contraria.
+- **Dependencias/riesgos:** ninguna; es una auditoría de arquitectura independiente de CNT-F1–CNT-F6. No ejecutar el job ni llamar a Spotify/Bandcamp.
+- **Consumers y contratos observados:** el cron diario y `standalone check-spotify` llaman `checkMissingSpotifyLinks`; el cron semanal y `standalone create-weekly` llaman `createWeeklyContent`. `POST /contents/trigger-daily-link-update` es el único consumer HTTP hallado: exige `riffvalley`, espera a que termine el job y devuelve `{ message: 'Daily link update triggered' }`. `ScheduleModule.forRoot()` se registra en `AppModule`; ambos crons usan `Europe/Madrid` (diario 06:00, semanal lunes 08:00, además del guard de lunes).
+- **Diagrama actual:**
+
+  ```text
+  AppModule ── ScheduleModule.forRoot()
+    └─ ContentsModule ── ContentSchedulerService
+         ├─ @Cron diario 06:00 ── Disc repository ── Spotify Client Credentials
+         │                                      └── Bandcamp fetch
+         ├─ @Cron lunes 08:00 ── ContentsService ── Content/Reunion/Points
+         └─ ContentsController ── POST /contents/trigger-daily-link-update
+                                      └─ checkMissingSpotifyLinks()
+  standalone check-spotify ────────────────┘
+  standalone create-weekly ────────────────┘
+  ```
+
+- **Decisión y destino recomendado:** extraer solo la tarea diaria a un `DiscLinkMaintenanceService` bajo `src/catalog/discs/maintenance/`, registrado y exportado por `DiscModule`. Mantener `ContentSchedulerService` con `UserRepository` y `ContentsService` para el job semanal. Contents puede importar `DiscModule` para que el controller conserve la ruta; el provider de Catalog no necesita importar Contents ni formar un ciclo.
+- **Opciones consideradas:** conservar ambos jobs en Contents evita cambios de DI, pero mantiene el acceso a Disc/Spotify/Bandcamp en un scheduler editorial; extraer el job diario a Catalog alinea el owner con la entidad que modifica y conserva el controller y el contrato HTTP como fachada. Se recomienda la extracción interna en la revisión final, sin cambiar contratos.
+- **Diagrama destino propuesto:**
+
+  ```text
+  AppModule ── ScheduleModule.forRoot()
+    ├─ ContentsModule ── ContentSchedulerService ── @Cron semanal ── ContentsService
+    │                    └─ ContentsController ── POST existente ── DiscModule
+    └─ DiscModule ── DiscLinkMaintenanceService
+         ├─ @Cron diario ── Disc repository
+         ├─ Spotify Client Credentials / Bandcamp fetch
+         ├─ ContentsController ── checkMissingSpotifyLinks()
+         └─ standalone check-spotify
+  standalone create-weekly ── ContentSchedulerService
+  ```
+
+- **Riesgos y caracterización previa a extraer:** mantener el registro único del cron en el módulo incluido por `AppModule`, su timezone/expresión y el singleton visible para Nest Schedule; resolver `standalone.ts` desde el provider de Catalog sin renombrar comandos; mantener endpoint, guard, ejecución síncrona y payload. Mover junto al método su prueba de transporte, y ampliar caracterización local con fetch simulado para metadatos del cron, cero resultados, query/filtros de Disc, marcadores de link, errores por Disc y parsing de resultado Bandcamp. No ejecutar integraciones reales.
+- **Verificaciones de auditoría:** revisión estática de providers, imports, crons en código, `AppModule`, guard/payload de ruta, `standalone.ts`, entidades/repositorios y tests existentes. Yarn focalizado `src/editorial/contents` (5 suites, 82 tests); build; typecheck `tsc --noEmit --incremental false -p tsconfig.build.json`; `git diff --check`. No se añadieron pruebas al no cambiar el runtime. El Prettier de las adiciones aisladas es consistente; el check del roadmap completo falla por formato ya presente en `HEAD` (confirmado sobre el archivo base). No se accedió a PostgreSQL ni se llamaron servicios externos.
+- **Resultado:** CNT-F7 queda resuelto como decisión de ownership; la extracción se difiere a la revisión arquitectónica final. Contents no se marca completado.
+
+#### BC-CNT-7 — Planificar la reorganización de Contents (M, prioridad baja)
+
+- **Estado:** auditoría completada (2026-10-16). Se documenta un plan incremental BC-CNT-8 a BC-CNT-11; no se cambió código ni pruebas. Contents permanece **en cleanup**.
+- **Base revisada:** `AGENTS.md`, este roadmap, `roadmap/backend-architecture.md`; implementación completa de `src/editorial/contents/`, `ContentsModule`, entidad/DTOs y pruebas; consumidores backend directos; `AppModule`, `standalone.ts`, `DiscModule`, `PointsModule`, `ReunionsModule` y módulos relacionados; patrón de fachada y estructura vigente de Lists. No se inspeccionó frontend.
+- **Inventario de `ContentsService` (708 líneas, nueve dependencias inyectadas):** `create` (≈243 líneas; reglas de fecha, asociaciones y altas secundarias transaccionales); `findAll` (≈23), `findOne` (≈24), `findByMonth` (≈33), tres búsquedas inversas por RiffValleyPlaylist/Article/Video (≈6–8 cada una) y `getDefaultAuthorId` (≈11); `update` (≈242; reglas editoriales, fechas y sincronización Content/List/Reunion); `remove` (≈54; borrado coordinado). Las consultas cargan relaciones que forman parte del payload observable. `assignDateIfChanged` y `dateValuesMatch` son helpers pequeños del ciclo de vida, no justifican un módulo propio.
+- **Inventario de `ContentSchedulerService` (323 líneas):** constructor con UserRepository, ContentsService, DiscRepository y SpotifyClientCredentialsService; `checkMissingSpotifyLinks` (job diario, ≈150 líneas) con normalización, búsqueda Spotify y fallback/parsing Bandcamp (helper ≈80 líneas); `createWeeklyContent` (job semanal, ≈52 líneas). Los dos jobs tienen datos, efectos y ownership distintos; tras mover el job de Disc quedaría un scheduler editorial de aproximadamente 75–85 líneas.
+- **Responsabilidades recomendadas:** separar lecturas y calendario como consultas de Content; mantener las reglas editoriales dentro de los casos de uso de creación/actualización que las aplican; agrupar update/remove como ciclo de vida por su escritura coordinada; mantener create separado por sus altas secundarias y transacción de creación. No crear un servicio separado para una sola consulta de calendario ni para helpers de fecha. Mantener Content/List/Reunion dentro del mismo EntityManager de las operaciones ya transaccionales por BC-CNT-4/5.
+- **Consumers y firmas a conservar:** el controller invoca create/findAll/findOne/findByMonth/update/remove; ArticlesService y VideosService crean Content y usan sus búsquedas inversas; RiffValleyPlaylistService crea Content y consulta su asociación; ReunionService llama `ContentsService.remove`; el cron semanal llama `create`. Mantener las diez firmas públicas actuales de `ContentsService` como forwarding facade; las fachadas y consumers existentes no deben conocer los providers internos.
+- **NestJS y ciclos observados:** ArticlesModule, VideosModule, RiffValleyPlaylistsModule y ReunionsModule consumen Contents; solo Reunions depende circularmente de Contents mediante `forwardRef`. `ContentsModule → ListsModule` no es un ciclo: Lists registra `Content` y no importa Contents ni inyecta su servicio. Sí hay un ciclo de módulos indirecto `ContentsModule → PointsModule → ReunionsModule → ContentsModule`; Contents necesita `PointRepository`, no `PointService`. En la extracción de creación, se puede registrar `Point` en el `TypeOrmModule.forFeature` local de Contents y retirar `PointsModule` de sus imports, comprobando que el ciclo desaparezca sin cambiar providers/exports de Points ni su módulo. No cambiar el `forwardRef` de Lists como parte de una limpieza incidental. `DiscModule` no importa Contents; Contents puede importar/exportar el provider de mantenimiento de Disc sin formar ciclo. `AppModule` ya compone ambos módulos y registra `ScheduleModule.forRoot()`.
+- **Patrón/estructura:** seguir Lists: facade exportada, servicios de aplicación cohesionados como providers internos y specs junto a su responsabilidad; exportar únicamente `ContentsService` para el uso normal. Estructura destino propuesta:
+
+  ```text
+  src/editorial/contents/
+    contents.controller.ts
+    contents.module.ts
+    contents.service.ts                 # fachada pública
+    content-scheduler.service.ts        # cron semanal Content/Reunion
+    content-scheduler.service.spec.ts
+    __tests__/
+      contents.controller.spec.ts
+      contents.service.spec.ts
+    application/
+      content-creation.service.ts
+      content-query.service.ts
+      content-lifecycle.service.ts
+      __tests__/
+        content-creation.service.spec.ts
+        content-query.service.spec.ts
+        content-lifecycle.service.spec.ts
+    dto/
+    entities/
+
+  src/catalog/discs/
+    maintenance/
+      disc-link-maintenance.service.ts
+      disc-link-maintenance.service.spec.ts
+  ```
+
+  No crear un `domain/` o `shared/` nuevo por anticipado; las reglas editoriales actuales no son helpers compartidos demostrados. Mantener las pruebas DTO en `dto/`. La carpeta `maintenance/` se justifica por el nuevo caso de uso de catálogo y su prueba.
+- **Tamaño final estimado:** la fachada quedaría aproximadamente en **100–150 líneas**, con constructor, contratos y diez wrappers. La estimación no es cuota de líneas: se revisa al terminar los movimientos, como se hizo con Lists (170 líneas). El scheduler semanal quedaría en ≈75–85 líneas. El tamaño agregado no justifica dividirlo más.
+- **Riesgos generales:** cambiar relaciones/options de TypeORM al mover consultas puede alterar payload, orden o NotFound/null; mover un método transaccional y dejar un save en el repositorio global puede romper rollback/manager común; duplicar la implementación en la fachada y el provider crea divergencia; registrar un cron en más de un provider puede duplicar ejecuciones; resolver la CLI por el provider equivocado rompe el comando aunque el endpoint siga funcionando; mover providers puede alterar scope DI o iniciar ciclos nuevos. Antes de extraer, caracterizar comportamiento y consumidores; después comprobar wiring/imports/exports y que exista un solo cron propietario.
+- **Límites de esta auditoría:** no se modificaron implementación, pruebas, entidades, migraciones, frontend ni otros módulos; no se ejecutaron jobs, tests, build ni typecheck; no se accedió a PostgreSQL ni servicios externos. Se actualizó únicamente este roadmap.
+
+#### BC-CNT-8 — Extraer mantenimiento diario de enlaces de Disc a Catalog (S, prioridad baja)
+
+- **Estado:** completada (2026-10-16); CNT-F7 implementado. Contents sigue en cleanup por BC-CNT-9 a BC-CNT-11.
+- **Responsabilidad/métodos:** mover `checkMissingSpotifyLinks`, la normalización y el parsing/fallback Bandcamp desde `ContentSchedulerService` a un `DiscLinkMaintenanceService` en `src/catalog/discs/maintenance/`. Mantener cron diario 06:00 `Europe/Madrid` allí; conservar `ContentSchedulerService.createWeeklyContent` y el cron semanal lunes 08:00 con su guard actual en Contents.
+- **Archivos afectados:** nuevo servicio y spec bajo `src/catalog/discs/maintenance/`; provider/export de `src/catalog/discs/discs.module.ts`; wiring de `src/editorial/contents/contents.module.ts` y `contents.controller.ts`; `src/editorial/contents/content-scheduler.service.ts` y su spec; `src/standalone.ts`; specs de controller/scheduler. No se cambiaron Disc entity ni migraciones.
+- **Dependencias/consumidores:** `DiscLinkMaintenanceService` usa únicamente DiscRepository y SpotifyClientCredentialsService. DiscModule registra y exporta el provider; ContentsModule importa DiscModule para que el controller mantenga la ruta manual sin cambiar su respuesta síncrona. `standalone check-spotify` obtiene el provider de Catalog; `create-weekly` sigue obteniendo ContentSchedulerService. El provider de Catalog no importa Contents y el servicio diario ya no está registrado en Contents.
+- **Implementación:** se movieron `checkMissingSpotifyLinks`, `normalizeString` y `searchBandcamp` sin reescribir la consulta, filtros, fallback, marcadores de estado, resultados ni manejo de errores. `ContentSchedulerService` conserva `createWeeklyContent`, su guard de lunes y cron. Se eliminó de Contents el repositorio Disc y la importación directa de Spotify que solo se necesitaban para el job diario.
+- **Aceptación/regresiones:** cron diario único `0 6 * * *` en `Europe/Madrid`; cron semanal sin cambios (`0 8 * * 1`, `Europe/Madrid`); ruta `POST /contents/trigger-daily-link-update`, rol mínimo `riffvalley`, espera, respuesta y propagación de rechazos preservados; comandos `check-spotify` y `create-weekly` conservados. Tests cubren proveedor/cron único, weekly create/guard, autorización/delegación/respuesta/error, filtros/joins Disc, actualizaciones Spotify, no-match, fallo del token y parsing Bandcamp simulado. No se ejecutaron integraciones reales.
+- **Tamaño:** S.
+- **Verificaciones:** Yarn focalizado (3 suites, 14 tests); `yarn --ignore-engines build`; `yarn --ignore-engines tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier check limitado a los nueve archivos TypeScript propios; `git diff --check`. Wiring e imports se comprobaron mediante spec de metadata de módulos y revisión del código; `standalone.ts` conserva ambos nombres de comando. Sin acceso a PostgreSQL ni servicios externos.
+- **Resultado:** Catalog/Discs es el propietario del mantenimiento diario; CNT-F7 queda implementado además de decidido. Contents permanece en cleanup y BC-CNT-9 a BC-CNT-11 siguen pendientes.
+
+#### BC-CNT-9 — Extraer consultas y calendario de Content (S, prioridad baja)
+
+- **Estado:** completada (2026-10-16). Contents continúa **en cleanup** por BC-CNT-10 y BC-CNT-11.
+- **Responsabilidad/métodos:** crear `ContentQueryService` para `findAll`, `findOne`, `findByMonth`, `findOneByRiffValleyPlaylistId`, `findOneByArticleId`, `findOneByVideoId` y `getDefaultAuthorId`. El calendario mensual es una consulta y se agrupa aquí; no crear otro servicio de calendario. Mantener wrappers con las mismas firmas y tipos en ContentsService.
+- **Archivos afectados:** nuevo `application/content-query.service.ts` y spec adyacente; `contents.service.ts`, `contents.module.ts`, `contents.service.spec.ts`, suites de controller y consumidores que fijan su contrato. No cambiar controller ni DTO.
+- **Dependencias/consumidores:** ContentRepository y UserRepository. Consumers: controller, ArticlesService, VideosService y RiffValleyPlaylistService; mantener `ReunionService` independiente. El provider interno no debe inyectar la fachada.
+- **Riesgos y aceptación:** conservar íntegros filtros `ready/backlog`, relaciones explícitas/eager y payload, 404 de findOne, null de búsquedas inversas, orden DESC, rango de `findByMonth` ±7 días y selección del usuario default por UUID ascendente. Tests focalizados fijan opciones/repositorio, resultados y casos ausentes; spec de fachada verifica forwarding y firmas sin duplicar caracterizaciones.
+- **Implementación:** los siete métodos y sus consultas se trasladaron a `application/ContentQueryService`; `ContentsService` conserva las firmas públicas como wrappers. La consulta mensual mantiene joins, extremos inclusivos y rango local ±7 días; se conservan filtros, orden, relaciones, errores y nulls. El provider se registra una vez en `ContentsModule`, no se exporta y solo depende de Content/User repositories.
+- **Verificaciones BC-CNT-9:** Yarn focalizado en Contents, Articles, Videos y RiffValley Playlists (7 suites, 184 tests); `yarn --ignore-engines build`; `yarn --ignore-engines tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier check de archivos TypeScript propios; spec DI de `ContentQueryService` con repositorios simulados y chequeo de registro único; `git diff --check`. No se accedió a PostgreSQL ni servicios externos.
+- **Tamaño:** S.
+
+#### BC-CNT-10 — Extraer la creación transaccional de Content (M, prioridad media)
+
+- **Estado:** completada (2026-10-16). Contents continúa **en cleanup** por BC-CNT-11 y la revisión arquitectónica final.
+
+- **Responsabilidad/métodos:** mover `create` y sus reglas/flujo de asociación a `ContentCreationService`; no extraer cada tipo o regla a clases separadas. Mantener Content y entidades secundarias bajo el manager de BC-CNT-4; conservar la transacción RADAR/BEST–List con `ListsService` y el manager compartido.
+- **Archivos afectados:** nuevo `application/content-creation.service.ts` y spec; `contents.service.ts`, `contents.module.ts` y tests focalizados de creación. Ajuste DI acotado: añadir `Point` al `forFeature` de Contents y retirar `PointsModule` de imports si se confirma por wiring que solo se utilizaba para exportar `PointRepository`. No editar `PointsModule`, `ReunionsModule`, entidades ni otros dominios.
+- **Dependencias/consumidores:** Content/User/Reunion/Point/RiffValleyPlaylist/Article/Video/List repositories y ListsService. Consumers que continúan usando la fachada: controller, ArticlesService, VideosService, RiffValleyPlaylistService y scheduler semanal. Provider interno no depende de ContentsService. El reemplazo de PointsModule elimina el ciclo `Contents → Points → Reunions → Contents`; el ciclo directo Reunions–Contents permanece por el contrato actual.
+- **Riesgos y aceptación:** conservar validaciones de author/asociaciones, tipos y fechas, defaults, orden de escritura, relaciones y resultado; errores por asociaciones inexistentes antes de persistir; rollback de Content y cada entidad secundaria en fallos; no duplicar Reunion/Points cuando se reutiliza reunionId; conservar manager RADAR/BEST–List. Wiring test confirma la disponibilidad de todos los repositorios y que Contents ya no importa PointsModule; pruebas de creación mantienen los casos BC-CNT-1/2/4 relevantes.
+- **Implementación:** `ContentsService.create` delega en `ContentCreationService`; el provider interno no depende de la fachada. Las validaciones editoriales y de autor, sincronización inicial de publicación, asociaciones existentes, altas automáticas de Article/Video/RiffValleyPlaylist/Reunion/Points y resultado se conservaron. Content, entidades secundarias y el alta RADAR/BEST–List siguen usando el manager de la transacción original. `ContentsModule` registra `Point` en su `forFeature`, elimina su import de `PointsModule` y registra `ContentCreationService` una sola vez; no se cambió PointsModule ni el ciclo directo Reunions–Contents.
+- **Pruebas y verificaciones BC-CNT-10:** Yarn focalizado para Contents, Articles, Videos, RiffValley Playlists y Reunions (11 suites, 207 tests); suite HTTP de Playlists (1 suite, 2 tests, ejecutada con socket local autorizado); `yarn --ignore-engines build`; `yarn --ignore-engines tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier check limitado a los archivos TypeScript propios; spec del módulo para provider único y ausencia de `PointsModule`; `git diff --check`. Sin acceso a PostgreSQL ni servicios externos.
+- **Tamaño y fachada:** `ContentsService` conserva las diez firmas públicas y tiene 369 líneas. `create` es wrapper; `update` y `remove` permanecen en la fachada hasta BC-CNT-11; consultas siguen delegadas en `ContentQueryService`.
+
+#### BC-CNT-11 — Extraer actualización y borrado coordinados de Content (M, prioridad media)
+
+- **Estado:** completada (2026-10-16); cierre arquitectónico de Contents registrado por BC-CNT-12.
+
+- **Responsabilidad/métodos:** mover `update`, `remove` y helpers privados de comparación/asignación de fechas a `ContentLifecycleService`. Mantener ambos métodos juntos: son las escrituras del ciclo de vida que sincronizan Content con List/Reunion; no extraer reglas/helpers triviales por separado.
+- **Archivos afectados:** nuevo `application/content-lifecycle.service.ts` y spec; `contents.service.ts`, `contents.module.ts`, specs de Contents y, para integración, el spec de `ReunionService` solo si hace falta fijar su delegación existente. No editar el módulo o servicio List/Reunion.
+- **Dependencias/consumidores:** Content/User/Reunion/List repositories y ListsService; depender de `ContentQueryService` si se reutiliza el lookup completo de `findOne`, sin inyectar ContentsService ni crear ciclo. Consumers conservan facade: controller para PATCH/DELETE y ReunionService para `remove`.
+- **Riesgos y aceptación:** mantener PATCH omitido vs null, reglas por ContentType, `ready=false` al establecer publicationDate, cambios permitidos de fechas List, independencia de estados Article/Video/Playlist, relaciones/payload del lookup, 404, y manager común Content/List/Reunion para sincronización y rollback según BC-CNT-5. El borrado mantiene la cascada de Points y el contrato de `ReunionService.deleteReunion()` → `ContentsService.remove()`. Pruebas focalizadas para campos omitidos/null, fechas/tipos, List/Reunion, errores del segundo write y rollback; la fachada prueba forwarding.
+- **Implementación:** `update`, `remove` y los helpers `dateValuesMatch`/`assignDateIfChanged` se movieron a `ContentLifecycleService`. El lookup de actualización usa `ContentQueryService`; el servicio no llama a `ContentsService`. Se preservaron validaciones, contratos, reglas de fechas/estado, carga de relaciones y escrituras Content/List/Reunion con manager común. `ContentsModule` registra el provider una vez y solo exporta la fachada; no se modificaron módulos de Lists/Reunions, contratos, permisos ni entidades.
+- **Pruebas y verificaciones BC-CNT-11:** Yarn focalizado Contents, Lists, Reunions, Articles, Videos y RiffValley Playlists: 25 suites y 393 tests pasaron; la suite HTTP de Playlists pasó aparte (2 tests, socket local autorizado); build; typecheck `tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier limitado a TypeScript propio; spec de wiring para provider único y repositorios registrados; `git diff --check`. No se accedió a PostgreSQL ni servicios externos.
+- **Fachada:** `ContentsService` conserva sus diez firmas públicas como wrappers, sin lógica de negocio propia, en 63 líneas.
+- **Tamaño:** M.
+
+#### BC-CNT-12 — Cierre arquitectónico y organización de Contents (S, prioridad baja)
+
+- **Estado:** completada (2026-10-16). Contents queda **completado**.
+- **Organización final:** `ContentsModule`, `ContentsController` y `ContentsService` permanecen en la raíz; `ContentSchedulerService` y su spec permanecen allí por ser el cron semanal de Contents. Las specs de fachada, módulo y controller están en `contents/__tests__/`; las specs de `ContentCreationService`, `ContentLifecycleService` y `ContentQueryService` están en `application/__tests__/`. DTOs, entidades y specs DTO conservan sus carpetas.
+- **Cierre arquitectónico:** ContentsService tiene 63 líneas y solo delega sus firmas públicas. ContentsModule registra una vez Scheduler, Query, Creation y Lifecycle, exporta solo la fachada y registra localmente las entidades necesarias. Los servicios de aplicación no llaman a la fachada; Lifecycle depende de Query y ListsService. No se introdujeron ciclos: se mantiene únicamente la relación directa ya documentada entre Reunions y Contents. Las transacciones Content/List/Reunion permanecen en Lifecycle. El cron semanal continúa en Contents y el diario de Disc en Catalog/Discs.
+- **Contratos:** no se modificaron lógica, rutas, permisos, respuestas, DTOs de runtime, entidades ni migraciones. Los cambios de este cierre se limitaron a ubicación de specs, sus imports y este roadmap.
+- **Verificaciones BC-CNT-12:** descubrimiento de 9 suites en Contents con Jest; 25 suites y 393 tests de Contents, Lists, Reunions, Articles, Videos y RiffValley Playlists pasaron; suite HTTP de Playlists (2 tests) y spec de mantenimiento diario de Disc en Catalog (5 tests) pasaron por separado; `yarn --ignore-engines build`; `yarn --ignore-engines tsc --noEmit --incremental false -p tsconfig.build.json`; Prettier limitado a los seis specs movidos; `git diff --check`; búsqueda de imports antiguos sin resultados. No se accedió a PostgreSQL ni servicios externos reales.
+- **Resultado:** BC-CNT-1 a BC-CNT-12 cerradas; Contents pasa de cleanup a completado. No se inicia trabajo en otro módulo; Links permanece retirado.
+
+- **Orden recomendado:** BC-CNT-8 va primero y aislado por cruzar a Catalog/Spotify y modificar scheduler/CLI; después BC-CNT-9, BC-CNT-10 y BC-CNT-11 para estabilizar consultas compartidas antes de los casos de escritura. No combinar BC-CNT-8 con extracciones de Contents. Tras BC-CNT-11 realizar revisión de wiring, coherencia de fachada, pruebas movidas y diff; solo entonces decidir si Contents pasa a completado. No crear tareas adicionales para mover carpetas: cada extracción coloca su spec junto a la responsabilidad.
+- **Criterio arquitectónico final:** Contents puede quedar con `ContentsService` como fachada ligera cuando delegue las diez firmas públicas, `ContentSchedulerService` mantenga solo el cron semanal y `ContentsModule` registre los providers internos sin exponerlos a módulos consumidores. Verificar con consumidor real y pruebas de módulo que no hay ciclos nuevos; conservar el ciclo Reunions–Contents solo mientras su llamada pública siga siendo necesaria.
+- **Verificaciones BC-CNT-7:** inventario estático de métodos, líneas, dependencias y consumidores; revisión de imports/providers NestJS, manager transaccional y suites existentes; actualización exclusiva de `roadmap/backend-cleanup.md`; `git diff --check -- roadmap/backend-cleanup.md`. No se ejecutaron pruebas, build ni typecheck, jobs ni operaciones con PostgreSQL/servicios externos.
+- **Resultado:** BC-CNT-7 completada; se proponen BC-CNT-8 a BC-CNT-11. Contents permanece **en cleanup**; no se inicia otro módulo.
+
+**Verificaciones BC-CNT-0:** revisión estática de código, DTOs, rutas/roles, metadata de entidad, composición y consumers backend; lectura de specs sin ejecutarlas; comparación con garantías BC-LST-2, BC-LST-7 y BC-VID-3. No se accedió a PostgreSQL, WordPress, Spotify, Heroku ni servicios externos. `git diff --check -- roadmap/backend-cleanup.md` se ejecutó al cerrar la auditoría.

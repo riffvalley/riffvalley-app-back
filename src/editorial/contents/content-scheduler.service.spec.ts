@@ -1,151 +1,113 @@
-import { ConfigService } from '@nestjs/config';
 import { ContentSchedulerService } from './content-scheduler.service';
-import { SpotifyClientCredentialsService } from 'src/integrations/spotify-integration/api/spotify-client-credentials.service';
+import { ContentType } from './entities/content.entity';
+import { ContentsModule } from './contents.module';
+import { DiscLinkMaintenanceService } from 'src/catalog/discs/maintenance/disc-link-maintenance.service';
+import { DiscModule } from 'src/catalog/discs/discs.module';
+import { MODULE_METADATA } from '@nestjs/common/constants';
+import { SCHEDULE_CRON_OPTIONS } from '@nestjs/schedule/dist/schedule.constants';
 
-describe('ContentSchedulerService Spotify transport characterization', () => {
-  const originalFetch = global.fetch;
-  let fetchMock: jest.Mock;
-  let scheduler: ContentSchedulerService;
-  let disc: any;
-  let discRepo: any;
-  let spotifyClient: SpotifyClientCredentialsService;
-  let bandcampSearch: jest.Mock;
+const cronOptions = (target: object, method: string) =>
+  Reflect.getMetadata(SCHEDULE_CRON_OPTIONS, (target as any).prototype[method]);
 
-  const jsonResponse = (body: unknown, status = 200) => ({
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: status === 200 ? 'OK' : 'Error',
-    json: jest.fn().mockResolvedValue(body),
+describe('ContentSchedulerService weekly Content/Reunion job', () => {
+  it('keeps the Monday schedule and Europe/Madrid timezone', () => {
+    expect(cronOptions(ContentSchedulerService, 'createWeeklyContent')).toEqual(
+      {
+        cronTime: '0 8 * * 1',
+        timeZone: 'Europe/Madrid',
+      },
+    );
   });
 
-  const spotifyResult = (items: any[]) => ({ albums: { items } });
-  const album = (artistName: string) => ({
-    external_urls: { spotify: 'https://open.spotify.com/album/remote-id' },
-    images: [{ url: 'https://images.test/cover.jpg' }],
-    artists: [{ name: artistName }],
+  it('still creates weekly Reunion Content with the existing author and date', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'content-id' });
+    const userRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 'author-id' }),
+    };
+    const scheduler = new ContentSchedulerService(
+      userRepo as any,
+      { create } as any,
+    );
+    const monday = new Date(2026, 9, 19, 10);
+    const nextWednesday = new Date(monday);
+    nextWednesday.setDate(monday.getDate() + 2);
+    nextWednesday.setHours(20, 0, 0, 0);
+    jest.useFakeTimers().setSystemTime(monday);
+
+    try {
+      await scheduler.createWeeklyContent();
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(create).toHaveBeenCalledWith({
+      name: 'Reunion 21-10-2026',
+      type: ContentType.REUNION,
+      authorId: 'author-id',
+      publicationDate: nextWednesday.toISOString(),
+    });
   });
 
-  beforeEach(() => {
-    fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
-    disc = {
-      name: 'Álbum & Uno',
-      artist: { name: 'Bánda’ Norte' },
-      releaseDate: new Date('2020-01-01T00:00:00.000Z'),
-      link: null,
-      image: null,
-      verified: false,
-    };
-    discRepo = {
-      createQueryBuilder: jest.fn(() => ({
-        leftJoinAndSelect: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getMany: jest.fn().mockResolvedValue([disc]),
-      })),
-      save: jest.fn().mockResolvedValue(disc),
-    };
-    spotifyClient = new SpotifyClientCredentialsService({
-      get: (key: string) =>
-        ({
-          SPOTIFY_CLIENT_ID: 'client-id',
-          SPOTIFY_CLIENT_SECRET: 'client-secret',
-        })[key],
-    } as unknown as ConfigService);
-    scheduler = new ContentSchedulerService(
+  it('does not create Content outside Monday', async () => {
+    const create = jest.fn();
+    const scheduler = new ContentSchedulerService(
       { findOne: jest.fn() } as any,
-      {} as any,
-      discRepo,
-      spotifyClient,
+      { create } as any,
     );
-    bandcampSearch = jest.fn().mockResolvedValue(null);
-    (scheduler as any).searchBandcamp = bandcampSearch;
+    jest.useFakeTimers().setSystemTime(new Date(2026, 9, 20, 10));
+
+    try {
+      await scheduler.createWeeklyContent();
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(create).not.toHaveBeenCalled();
   });
+});
 
-  afterEach(() => {
-    global.fetch = originalFetch;
-    jest.restoreAllMocks();
-  });
+describe('Contents/Discs scheduled-job wiring', () => {
+  it('registers the daily job once in DiscModule and keeps only the weekly job in ContentsModule', () => {
+    const discProviders = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      DiscModule,
+    ) as unknown[];
+    const contentProviders = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      ContentsModule,
+    ) as unknown[];
+    const contentImports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      ContentsModule,
+    ) as { module?: unknown }[];
 
-  it('usa Client Credentials y conserva la búsqueda estricta, endpoint, filtros y respuesta', async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse({ access_token: 'token', expires_in: 3600 }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse(spotifyResult([album("Banda' Norte")])),
-      );
-
-    await scheduler.checkMissingSpotifyLinks();
-
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      'https://accounts.spotify.com/api/token',
-      expect.objectContaining({
-        method: 'POST',
-        body: 'grant_type=client_credentials',
-        headers: expect.objectContaining({
-          'Content-Type': 'application/x-www-form-urlencoded',
-        }),
-      }),
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent("album:Album & Uno artist:Banda' Norte")}&type=album&limit=1`,
-      { headers: { Authorization: 'Bearer token' } },
-    );
-    expect(disc).toEqual(
-      expect.objectContaining({
-        link: 'https://open.spotify.com/album/remote-id',
-        image: 'https://images.test/cover.jpg',
-        verified: true,
-      }),
-    );
-    expect(bandcampSearch).not.toHaveBeenCalled();
-  });
-
-  it('mantiene el fallback Bandcamp antes de la búsqueda amplia y valida el artista', async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse({ access_token: 'token', expires_in: 3600 }),
-      )
-      .mockResolvedValueOnce(jsonResponse(spotifyResult([])))
-      .mockResolvedValueOnce(
-        jsonResponse(spotifyResult([album("Banda' Norte")])),
-      );
-
-    await scheduler.checkMissingSpotifyLinks();
-
-    expect(bandcampSearch).toHaveBeenCalledWith('Bánda’ Norte', 'Álbum & Uno');
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent("Banda' Norte Album & Uno")}&type=album&limit=1`,
-      { headers: { Authorization: 'Bearer token' } },
-    );
-    expect(disc.link).toBe('https://open.spotify.com/album/remote-id');
-    expect(disc.verified).toBe(true);
-  });
-
-  it('mantiene la marca sin resultado cuando fallan Spotify estricto, Bandcamp y Spotify amplio', async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse({ access_token: 'token', expires_in: 3600 }),
-      )
-      .mockResolvedValueOnce(jsonResponse(spotifyResult([])))
-      .mockResolvedValueOnce(jsonResponse(spotifyResult([])));
-
-    await scheduler.checkMissingSpotifyLinks();
-
-    expect(disc.link).toBe('No se encontró el álbum');
-    expect(discRepo.save).toHaveBeenCalledWith(disc);
-  });
-
-  it('mantiene el error de búsqueda ante fallo al obtener el token', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({}, 503));
-
-    await scheduler.checkMissingSpotifyLinks();
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(discRepo.save).not.toHaveBeenCalled();
+    expect(
+      discProviders.filter(
+        (provider) => provider === DiscLinkMaintenanceService,
+      ),
+    ).toHaveLength(1);
+    expect(
+      contentProviders.filter(
+        (provider) => provider === ContentSchedulerService,
+      ),
+    ).toHaveLength(1);
+    expect(contentProviders).not.toContain(DiscLinkMaintenanceService);
+    expect(
+      contentImports.some(
+        (module) => module === DiscModule || module?.module === DiscModule,
+      ),
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(MODULE_METADATA.IMPORTS, DiscModule),
+    ).not.toContain(ContentsModule);
+    expect(
+      (ContentSchedulerService.prototype as any).checkMissingSpotifyLinks,
+    ).toBeUndefined();
+    expect(
+      cronOptions(DiscLinkMaintenanceService, 'checkMissingSpotifyLinks'),
+    ).toEqual({
+      cronTime: '0 6 * * *',
+      timeZone: 'Europe/Madrid',
+    });
   });
 });
