@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Point } from './entities/point.entity';
 import { CreatePointDto } from './dto/create-points.dto';
+import { UpdatePointDto } from './dto/update-point.dto';
 import { Reunion } from 'src/editorial/reunions/entities/reunion.entity';
 
 @Injectable()
@@ -43,9 +48,25 @@ export class PointService {
     return point;
   }
 
-  async updatePoint(id: string, updateData: Partial<Point>): Promise<Point> {
+  async updatePoint(id: string, updateData: UpdatePointDto): Promise<Point> {
     const point = await this.findOne(id);
-    Object.assign(point, updateData);
+    const { reunionId, ...pointFields } = updateData;
+
+    if (reunionId !== undefined) {
+      if (reunionId === null) {
+        throw new BadRequestException('reunionId must be a UUID v4');
+      }
+
+      const reunion = await this.reunionRepository.findOne({
+        where: { id: reunionId },
+      });
+      if (!reunion) {
+        throw new NotFoundException(`Reunion with ID ${reunionId} not found`);
+      }
+      point.reunion = reunion;
+    }
+
+    Object.assign(point, pointFields);
     return this.pointRepository.save(point);
   }
 

@@ -1,13 +1,9 @@
-import {
-  Injectable,
-  NotFoundException,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Reunion } from './entities/reunion.entity';
 import { CreateReunionDto } from './dto/create-reunion.dto';
+import { UpdateReunionDto } from './dto/update-reunion.dto';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
 
@@ -18,7 +14,6 @@ export class ReunionService {
     private readonly reunionRepository: Repository<Reunion>,
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
-    @Inject(forwardRef(() => ContentsService))
     private readonly contentsService: ContentsService,
   ) {}
 
@@ -47,7 +42,7 @@ export class ReunionService {
 
   async updateReunion(
     id: string,
-    updateData: Partial<Reunion>,
+    updateData: UpdateReunionDto,
   ): Promise<Reunion> {
     const reunion = await this.findOne(id);
     Object.assign(reunion, updateData);

@@ -1,16 +1,12 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Point } from './entities/point.entity';
+import { Reunion } from '../entities/reunion.entity';
 import { PointService } from './points.service';
 import { PointController } from './points.controller';
-import { ReunionsModule } from 'src/editorial/reunions/reunions.module';
 import { AuthModule } from 'src/identity/auth/auth.module';
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Point]), // Importa la entidad Point
-    forwardRef(() => ReunionsModule), // Importa el módulo Reunion para acceder al servicio
-    AuthModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Point, Reunion]), AuthModule],
   controllers: [PointController],
   providers: [PointService],
   exports: [TypeOrmModule],

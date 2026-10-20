@@ -1,4 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateReunionDto } from './create-reunion.dto';
 
-export class UpdateGenreDto extends PartialType(CreateReunionDto) {}
+export class UpdateReunionDto extends PartialType(CreateReunionDto, {
+  skipNullProperties: false,
+}) {}
