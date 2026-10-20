@@ -73,7 +73,7 @@ Todo código TypeScript dentro de `src/`, `apps/`, `libs/` y `test/` debe evitar
 
 El baseline temporal `scripts/type-safety-quality-gate.baseline.json` identifica cada hallazgo mediante regla, ruta relativa, huella del texto infractor y su línea de código normalizada, y ordinal entre firmas idénticas del mismo archivo. La identidad no depende de línea ni columna absolutas; esas posiciones se conservan solo para los informes. El comparador conserva cada repetición y rechaza hallazgos nuevos, entradas obsoletas y claves duplicadas. La versión 2 conserva los 551 hallazgos históricos documentados en BC-QG2. No añadas hallazgos nuevos; elimina cada entrada en el mismo cambio que corrija su infracción. No añadas excepciones para código nuevo. `yarn verify` y CI ejecutan las pruebas y el validador. Esta regla es obligatoria para código TypeScript nuevo o modificado.
 
-El inventario documentado en `roadmap/backend-cleanup.md` parte de 40 módulos y 201 infracciones del baseline: 46 en Editorial y 155 en el resto del backend. La migración debe reducir el baseline progresivamente; cuando no queden infracciones, se retirará el baseline y el validador quedará como regla estricta.
+El inventario documentado en `roadmap/backend-cleanup/README.md` cubre los 40 módulos y enlaza las auditorías de Editorial, que permanece abierto. Las normas transversales y el registro BC-QG2 están en `roadmap/backend-cleanup/quality-gates.md`. El registro histórico partió de 201 infracciones del baseline: 46 en Editorial y 155 en el resto del backend. La migración debe reducir el baseline progresivamente; cuando no queden infracciones, se retirará el baseline y el validador quedará como regla estricta.
 
 ## Responsabilidades y organización
 

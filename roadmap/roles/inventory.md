@@ -17,7 +17,7 @@ Se revisaron definiciones de Auth, decoradores, guards, controllers, servicios, 
 | `babyUser`                                 | No está definido ni referenciado en el código, tests o documentación backend revisados.                                                       |                 190 cuentas con el rol único `babyUser`. |
 | `collaborator`, `superadmin`, `riffvalley` | No encontrados como valores funcionales actuales; son nombres del contrato futuro, salvo coincidencias textuales del dominio indicadas abajo. |                             0 cuentas para esos valores. |
 
-La tabla `users` se modela en [user.entity.ts](../src/identity/auth/entities/user.entity.ts) con `roles: string[]` como PostgreSQL `text[]`, `select: false` y `default: ['user']`. El DTO no convierte el arreglo en un enum. `synchronize` está desactivado en [app.module.ts](../src/app.module.ts) y [data-source.ts](../src/data-source.ts); el módulo configura `migrationsRun: true`. No se encontró una migración que cree, normalice o altere `users.roles`.
+La tabla `users` se modela en [user.entity.ts](../../src/identity/auth/entities/user.entity.ts) con `roles: string[]` como PostgreSQL `text[]`, `select: false` y `default: ['user']`. El DTO no convierte el arreglo en un enum. `synchronize` está desactivado en [app.module.ts](../../src/app.module.ts) y [data-source.ts](../../src/data-source.ts); el módulo configura `migrationsRun: true`. No se encontró una migración que cree, normalice o altere `users.roles`.
 
 ### Distribución local observada
 
@@ -25,14 +25,14 @@ Consulta agregada de `users.roles` en desarrollo: 198 cuentas en total; 190 `{ba
 
 No se encontraron otros valores de rol en esta base. Esta observación cubre únicamente la base local consultada; antes de diseñar R.5 habrá que confirmar el estado y distribución del entorno de despliegue objetivo. El valor `riffValley` en `ListSpecialType` y en la migración `1770582845482-AddSpecialListType.ts` nombra un tipo de lista, no un rol.
 
-El seed de [seed.service.ts](../src/platform/seeds/seed.service.ts) propone dos usuarios: `['user','superUser']` y `['user']`; no contiene `babyUser`, `admin` ni `riffValley`. Su invocación en [main.ts](../src/main.ts) está comentada. Por tanto, no reproduce la distribución real observada.
+El seed de [seed.service.ts](../../src/platform/seeds/seed.service.ts) propone dos usuarios: `['user','superUser']` y `['user']`; no contiene `babyUser`, `admin` ni `riffValley`. Su invocación en [main.ts](../../src/main.ts) está comentada. Por tanto, no reproduce la distribución real observada.
 
 ## Definición central y evaluación de autorización
 
-- [valid-roles.ts](../src/identity/auth/interfaces/valid-roles.ts) enumera exactamente `admin`, `superUser`, `user` y `riffValley`.
-- [auth.decorator.ts](../src/identity/auth/decorators/auth.decorator.ts) combina `RoleProtected(...roles)` con `AuthGuard()` y `UserRoleGuard`.
-- [role-protected.decorator.ts](../src/identity/auth/decorators/role-protected.decorator.ts) guarda la lista como metadata `roles`.
-- [user-role.guard.ts](../src/identity/auth/guards/user-role/user-role.guard.ts) permite la petición si cualquier rol persistido coincide con cualquiera de los roles requeridos (OR). Busca primero metadata del handler y luego la del controller; la metadata del handler sustituye la del controller. Sin metadata, o con arreglo requerido vacío, no restringe por rol. Un usuario autenticado sin ID o eliminado produce `BadRequestException`; un usuario sin coincidencia recibe 403.
+- [valid-roles.ts](../../src/identity/auth/interfaces/valid-roles.ts) enumera exactamente `admin`, `superUser`, `user` y `riffValley`.
+- [auth.decorator.ts](../../src/identity/auth/decorators/auth.decorator.ts) combina `RoleProtected(...roles)` con `AuthGuard()` y `UserRoleGuard`.
+- [role-protected.decorator.ts](../../src/identity/auth/decorators/role-protected.decorator.ts) guarda la lista como metadata `roles`.
+- [user-role.guard.ts](../../src/identity/auth/guards/user-role/user-role.guard.ts) permite la petición si cualquier rol persistido coincide con cualquiera de los roles requeridos (OR). Busca primero metadata del handler y luego la del controller; la metadata del handler sustituye la del controller. Sin metadata, o con arreglo requerido vacío, no restringe por rol. Un usuario autenticado sin ID o eliminado produce `BadRequestException`; un usuario sin coincidencia recibe 403.
 - El guard vuelve a leer `roles` desde PostgreSQL. No autoriza a partir del claim `roles` del JWT. Los cambios de roles persistidos surten efecto en la siguiente petición autenticada aunque el token anterior siga vigente.
 - No hay comprobaciones de roles directas adicionales en servicios encontradas con las búsquedas de `user.roles`/`roles.includes`. La autorización de rol está concentrada en decoradores/guard; existen filtros de lectura por rol en `AuthService`.
 
@@ -99,13 +99,13 @@ Hallazgos concretos relevantes para el mapa de roles:
 
 ## Registro, DTOs, usuario y JWT
 
-- [CreateUserDto](../src/identity/auth/dto/create-user.dto.ts) declara `roles?: string[]` con `@IsArray`, `@ArrayNotEmpty` y `@IsString({ each: true })`; no usa `ValidRoles` ni validador enum. [UpdateUserDto](../src/identity/auth/dto/update-user.dto.ts) hereda esos campos mediante `PartialType`.
-- `POST /auth/register` es público. [AuthService.create](../src/identity/auth/auth.service.ts) pasa los campos recibidos al repositorio y emite un JWT con los roles de la entidad creada. El source permite enviar strings de rol arbitrarios; no se ejercitó el endpoint.
-- `PATCH /auth` admite cualquier usuario autenticado. [AuthService.updateUser](../src/identity/auth/auth.service.ts) aplica `Object.assign(user, updateData)` y guarda la entidad; el DTO incluye `roles`. El source permite que un usuario autenticado solicite una modificación de sus roles por esta ruta, sin guard de rol para la operación; no se ejecutó una petición.
+- [CreateUserDto](../../src/identity/auth/dto/create-user.dto.ts) declara `roles?: string[]` con `@IsArray`, `@ArrayNotEmpty` y `@IsString({ each: true })`; no usa `ValidRoles` ni validador enum. [UpdateUserDto](../../src/identity/auth/dto/update-user.dto.ts) hereda esos campos mediante `PartialType`.
+- `POST /auth/register` es público. [AuthService.create](../../src/identity/auth/auth.service.ts) pasa los campos recibidos al repositorio y emite un JWT con los roles de la entidad creada. El source permite enviar strings de rol arbitrarios; no se ejercitó el endpoint.
+- `PATCH /auth` admite cualquier usuario autenticado. [AuthService.updateUser](../../src/identity/auth/auth.service.ts) aplica `Object.assign(user, updateData)` y guarda la entidad; el DTO incluye `roles`. El source permite que un usuario autenticado solicite una modificación de sus roles por esta ruta, sin guard de rol para la operación; no se ejecutó una petición.
 - `PATCH /auth/superadmin/:id` exige `superUser`, pero recibe el mismo `UpdateUserDto` y `updateUserSuperAdmin` asigna directamente los campos actualizados. El nombre `superadmin` de la ruta no coincide con el nombre actual del rol.
-- [AuthService.login](../src/identity/auth/auth.service.ts) incluye `roles` en respuesta y claim JWT. [JwtPayload](../src/identity/auth/interfaces/jwt-payload.interface.ts) define `roles: string[]`; [JwtStrategy.validate](../src/identity/auth/strategies/jwt.strategy.ts) busca al usuario por ID y exige que esté activo, devolviendo la entidad actual.
-- [AuthModule](../src/identity/auth/auth.module.ts) configura expiración JWT de **8 horas**. Esto difiere de las 24 horas descritas en AGENTS.md/CLAUDE.md; es una discrepancia documental preexistente, no corregida en R.1.
-- [GetUser](../src/identity/auth/decorators/get-user.decorator.ts) expone `req.user`; `@Auth()` usa Passport antes del guard de roles.
+- [AuthService.login](../../src/identity/auth/auth.service.ts) incluye `roles` en respuesta y claim JWT. [JwtPayload](../../src/identity/auth/interfaces/jwt-payload.interface.ts) define `roles: string[]`; [JwtStrategy.validate](../../src/identity/auth/strategies/jwt.strategy.ts) busca al usuario por ID y exige que esté activo, devolviendo la entidad actual.
+- [AuthModule](../../src/identity/auth/auth.module.ts) configura expiración JWT de **8 horas**. Esto difiere de las 24 horas descritas en AGENTS.md/CLAUDE.md; es una discrepancia documental preexistente, no corregida en R.1.
+- [GetUser](../../src/identity/auth/decorators/get-user.decorator.ts) expone `req.user`; `@Auth()` usa Passport antes del guard de roles.
 
 ## Propiedad y comprobaciones adicionales
 
@@ -119,7 +119,7 @@ Hallazgos concretos relevantes para el mapa de roles:
 
 ## Seeds, tests y migraciones
 
-- Seeds de roles: [seed.service.ts](../src/platform/seeds/seed.service.ts), con los dos ejemplos descritos arriba; `createSeed()` está comentado en `main.ts`.
+- Seeds de roles: [seed.service.ts](../../src/platform/seeds/seed.service.ts), con los dos ejemplos descritos arriba; `createSeed()` está comentado en `main.ts`.
 - `src/identity/auth/guards/user-role/user-role.guard.spec.ts` cubre coincidencia de cualquiera de varios roles, 403 al no coincidir, rol persistido, metadata de handler sobre controller y metadata ausente/vacía. Los casos usan `admin`, `superUser` y `riffValley`.
 - Tests de controllers/imports verifican metadatos en Requests, Artists, Catalog Import y Excel. `test/excel.e2e-spec.ts` genera token `riffValley` admitido y token `user` denegado para imports Excel.
 - `test/auth.http` documenta `/auth/users/superusers`, filtros `superUser`/`riffValley` y la ruta de prueba. No hay tests de migración de roles ni referencias a `babyUser` en tests.
@@ -150,7 +150,7 @@ R.1 no toma estas decisiones:
 - Cómo restringir quién puede asignar roles al crear una cuenta o actualizar el perfil, y qué campos puede modificar cada tipo de actor.
 - Cómo interpretar y normalizar combinaciones, preservar el OR actual, arrays múltiples/ordenados y valores desconocidos; y cómo compatibilizar token/frontend durante el despliegue.
 
-R.2 documentó la resolución de las equivalencias y la matriz base, y dejó los permisos de `collaborator` y la población real de producción como decisiones/gates pendientes. La fuente vigente para continuar es [Contrato y matriz R.2](roles-contract.md).
+R.2 documentó la resolución de las equivalencias y la matriz base, y dejó los permisos de `collaborator` y la población real de producción como decisiones/gates pendientes. La fuente vigente para continuar es [Contrato y matriz R.2](contract.md).
 
 ## Propuesta revisada para R.2–R.8
 
@@ -158,7 +158,7 @@ R.2 documentó la resolución de las equivalencias y la matriz base, y dejó los
 | ------------------------------------ | --------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | R.2 Contrato y matriz                |               M | Depende de R.1; resolver decisiones anteriores antes de asignar permisos al nuevo `collaborator` o mapear poblaciones.                                                               |
 | R.3 Modelo y autorización central    |               M | R.1–R.2; incluye enum, validación común, guard y comportamiento de tokens.                                                                                                           |
-| R.4 Autorizaciones de módulos        |       3 M + 3 S | Desglosada en R.4.1–R.4.6 en `roadmap/roles.md`; Auth administrativo pasa a R.6.                                                                                                     |
+| R.4 Autorizaciones de módulos        |       3 M + 3 S | Desglosada en R.4.1–R.4.6 en `roadmap/roles/roles.md`; Auth administrativo pasa a R.6.                                                                                                     |
 | R.5 Migración de datos               |               L | R.1–R.2, coordinación de despliegue con R.3/R.4. La distribución local contiene población legacy `babyUser` masiva y roles múltiples; producción debe inventariarse antes de migrar. |
 | R.6 Registro, login y administración |               M | R.2–R.5; incluir permisos de alta/asignación/autoedición y los endpoints Auth sin restricción que R.1 documenta.                                                                     |
 | R.7 Pruebas y regresión              |               L | R.3–R.6; cubrir 67 rutas role-gated, 38 authenticated-only relevantes, contratos y migración.                                                                                        |

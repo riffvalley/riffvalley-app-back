@@ -180,7 +180,7 @@ No apareció test focalizado con mención Spotify para `ContentSchedulerService`
 | `src/tiktok/tiktok.service.ts` | comentario comparativo con Spotify | Mención textual de diferencias entre credenciales TikTok y Spotify; no es llamada Spotify observada en ese punto | OAuth TikTok | Documentación cercana de implementación |
 | `wordpress-plugin/riffvalley-table/riffvalley-table.php` | detección de host, icono y estilo Spotify | Presentación de enlaces Spotify en plugin PHP WordPress | URLs de links de releases | Visitantes de tablas WordPress; archivo fuera del backend NestJS |
 | `wordpress-plugin/riffvalley-releases/riffvalley-releases.php` | detección de host, icono y campos de link Spotify | Presentación/edición del enlace de Spotify en plugin PHP WordPress | Links de Disc y UI del plugin | Editor y visitantes de releases; archivo fuera del backend NestJS |
-| `roadmap.md`, `roadmap/catalog.md` y `roadmap/spotify.md` | menciones en roadmaps | Referencias de planificación/histórico y al alcance Spotify ya extraído dentro de Disc; no son código ejecutable | Documentación de roadmap | Mantenimiento del backend |
+| `roadmap.md`, `roadmap/catalog/catalog.md` y `roadmap/integrations/spotify/roadmap.md` | menciones en roadmaps | Referencias de planificación/histórico y al alcance Spotify ya extraído dentro de Disc; no son código ejecutable | Documentación de roadmap | Mantenimiento del backend |
 
 ### Observaciones que quedan abiertas para S.2
 

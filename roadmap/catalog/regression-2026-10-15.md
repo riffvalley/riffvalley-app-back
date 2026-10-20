@@ -370,7 +370,7 @@ El primer intento de esta nueva suite descubrió que el datasource de aplicació
 - El contrato real de Excel se confirmó como `{ data: { results: [...] } }`, con `source.sheet` y `source.rowNumber` físicos. El contrato Manual se presentó en la interfaz desde la respuesta real de NestJS como lista de resultados con estado por línea.
 - `yarn --ignore-engines build` backend: aprobado en copia temporal. `yarn build` frontend: aprobado en copia temporal; persistieron avisos de Browserslist, CSS `.flex-[2]` y chunk grande ya presentes.
 - `yarn test --cache=false src/views/importPage/importResults.test.ts src/services/imports/imports.test.ts`: 12/12 tests aprobados. Estas pruebas son unitarias y usan mocks; no sustituyen la evidencia HTTP anterior. Un primer intento sin `--cache=false` ejecutó los 12 tests, pero terminó con error de escritura de caché (`EROFS`) porque `node_modules` se compartió en solo lectura; la repetición sin caché terminó con exit code 0.
-- `yarn --ignore-engines prettier --check roadmap/catalog-regression-2026-10-15.md`: aprobado. La primera invocación sin `--ignore-engines` fue rechazada por el engine declarado Node 20.x frente al Node local 22.23.1; la comprobación final se ejecutó con el override explícito. `git diff --check` y la revisión de whitespace del informe: sin hallazgos.
+- `yarn --ignore-engines prettier --check roadmap/catalog/regression-2026-10-15.md`: aprobado. La primera invocación sin `--ignore-engines` fue rechazada por el engine declarado Node 20.x frente al Node local 22.23.1; la comprobación final se ejecutó con el override explícito. `git diff --check` y la revisión de whitespace del informe: sin hallazgos.
 - No se modificó código de aplicación, pruebas ni configuración del frontend. No se ejecutaron suites adicionales del backend porque esta tarea no introdujo cambios de código.
 
 ### Limpieza, riesgos y estado
@@ -423,7 +423,7 @@ El primer intento de esta nueva suite descubrió que el datasource de aplicació
 - Se preparó `/tmp/catalog-reg62-upload.xlsx` con ExcelJS, reflejando la estructura de la plantilla backend: hoja visible `Discos`, hoja oculta `Listas`, siete columnas (`Fecha`, `Artista`, `Disco`, `Género`, `País`, `Debut`, `EP`) y validaciones de lista. Incluía cuatro filas sintéticas en orden físico 2–5: una válida, un Disc duplicado presembrado, fecha inválida y otra válida después de la fila inválida.
 - El fixture previo (Genre, Country, Artist y Disc) se insertó solo después de verificar la identidad de la base. La verificación previa encontró una fila de cada tipo. El libro se comprobó localmente: nombres de hojas, encabezados, validaciones y valores de las cuatro filas en el orden esperado.
 - En Chrome se abrió `/import-discs` con el usuario autorizado. La herramienta conectada permitió abrir el selector del input visible, pero `fileChooser.setFiles('/tmp/catalog-reg62-upload.xlsx')` falló con `Not allowed`. El DOM confirmó que no había archivo seleccionado y el botón «Importar discos» seguía deshabilitado. No se usó una petición HTTP directa ni se llamó al endpoint de importación.
-- Captura del estado visible: [excel-selector-blocked.jpg](roadmap/catalog-regression-evidence/excel-selector-blocked.jpg). Muestra la pantalla de importación antes de enviar, sin archivo seleccionado.
+- Captura del estado visible: [excel-selector-blocked.jpg](regression-evidence/excel-selector-blocked.jpg). Muestra la pantalla de importación antes de enviar, sin archivo seleccionado.
 
 ### Resultado HTTP, persistencia y limpieza
 
@@ -546,8 +546,8 @@ El rango total reparte sus 289 rutas entre Catalog (68), Editorial (92), Communi
 | `src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts` | **Útil únicamente para pruebas** de Community/relación de usuario; queda fuera de la entrega funcional de Catalog. Es PostgreSQL opt-in. |
 | `scripts/bootstrap-catalog-test-schema.ts` y entrada `db:bootstrap-catalog-test` en `package.json` | **Útiles únicamente para pruebas**: bootstrap explícito de un esquema aislado desde metadata TypeORM. No es una migración ni prueba compatibilidad del esquema real. Excluir del artefacto de producción salvo decisión separada. |
 | `roadmap/backend-cleanup.md` | **Documentación útil**, con cambios locales pendientes de commit; preservar y revisar por separado. |
-| Este `roadmap/catalog-regression-2026-10-15.md` | **Documentación del análisis**, actualmente sin seguimiento. |
-| `roadmap/catalog-regression-evidence/excel-selector-blocked.jpg` | **Evidencia de prueba**, sin seguimiento (JPEG, 1173×680); no es código de producción. |
+| Este `roadmap/catalog/regression-2026-10-15.md` | **Documentación del análisis**, actualmente sin seguimiento. |
+| `roadmap/catalog/regression-evidence/excel-selector-blocked.jpg` | **Evidencia de prueba**, sin seguimiento (JPEG, 1173×680); no es código de producción. |
 
 No se observan otros archivos staged. El `.aws` de la rama está vacío (0 bytes) y fue añadido por `be08be6`; no aparece como cambio local sin commit. `.env` está ignorado; no se leyó ni se usó. No se detectaron archivos de credenciales entre los cambios de trabajo listados. No se descartó ni limpió nada.
 
@@ -599,7 +599,7 @@ No es seguro excluir el commit transversal dejando intactos los cuatro commits d
 - **Correcciones funcionales Catalog/Discs:** mapping de `artistId`/`genreId` en create, validación de fechas y flags en create/update, transacción en `createWithArtist`, eliminación del fanout en Home y orden de desempate estable. No se modificó código fuera de Catalog ni se reformatearon archivos adicionales.
 - **Pruebas de regresión:** specs de DTO/controller/escritura y las dos suites PostgreSQL de Home ligadas a BC-DIS-2; nueva suite persistente Catalog que cubre escritura, rollback e importaciones parcial Manual/Excel.
 - **Bootstrap PostgreSQL local:** comando opt-in en `package.json` y script que valida el contenedor, loopback, base, propietario, versión, esquema y ausencia del ledger antes de crear metadata de prueba. No es un runner de migraciones.
-- **Documentación y evidencia:** actualización de BC-DIS-1–4 en `roadmap/backend-cleanup.md`, este registro y la captura `roadmap/catalog-regression-evidence/excel-selector-blocked.jpg`.
+- **Documentación y evidencia:** actualización de BC-DIS-1–4 en `roadmap/backend-cleanup.md`, este registro y la captura `roadmap/catalog/regression-evidence/excel-selector-blocked.jpg`.
 - **Exclusiones:** `src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts` (Community, fuera del conjunto Catalog); no se incluyó en commits aunque se ejecutó para repetir el inventario PostgreSQL de RELEASE-4. `.env` y archivos temporales permanecieron fuera del staging; no se añadió ninguna credencial. `.impeccable/config.json` no se modificó. El `.aws` vacío citado en RELEASE-4 ya pertenecía a un commit anterior y no se volvió a incluir.
 - No se encontraron otros cambios funcionales, secretos ni configuraciones locales entre los cambios seleccionados. El comando de `package.json` no requirió cambios de lockfile ni dependencias.
 
@@ -656,7 +656,7 @@ Los cambios de Catalog identificados quedaron confirmados en commits locales y s
 
 - La CLI autenticada identifica la app exacta `spammusic-back`. El release actual sigue siendo `v314` (`Deploy 2b203b8f`, 2026-10-14); PostgreSQL está disponible en la región EU, versión 16.14, con 34 tablas. No se cambió configuración ni estado de Heroku.
 - La ejecución de solo lectura del release actual confirma `STAGE=prod`, `DB_NAME=ddddmrfqbqstju` y que `DATABASE` conecta a esa misma base. El ledger `migrations` existe. `yarn db:check` reporta **90 migraciones compiladas, 91 filas aplicadas y 0 pendientes**.
-- Comparación de solo lectura de identidades: no hay duplicados; la única fila aplicada sin clase fuente actual es `UpdateListStatusEnum1766066905027`. Está documentada como discrepancia histórica de procedencia en `roadmap/roles-production-deployment.md`; no coincide con una migración pendiente ni es ejecutada por este candidato. No hay migraciones nuevas de Catalog ni pendientes que justifiquen ejecutar migraciones.
+- Comparación de solo lectura de identidades: no hay duplicados; la única fila aplicada sin clase fuente actual es `UpdateListStatusEnum1766066905027`. Está documentada como discrepancia histórica de procedencia en `roadmap/roles/production-deployment.md`; no coincide con una migración pendiente ni es ejecutada por este candidato. No hay migraciones nuevas de Catalog ni pendientes que justifiquen ejecutar migraciones.
 - Esta comprobación acredita destino y ledger, pero no constituye una comparación completa de cada columna, enum y relación de las entidades del commit transversal contra PostgreSQL. La compatibilidad estructural completa del candidato no queda demostrada, así que se mantiene como preflight pendiente.
 - El backup `b008` figura como Completed el 2026-10-13 22:06 UTC. No se creó otro backup. El procedimiento documentado separa rollback de release de restauración de PostgreSQL; cualquier restauración requiere evaluación, no sería automática.
 - No se publicó nada; no se ejecutaron smoke tests de API ni importaciones en producción. Release y hash productivos siguen siendo `v314` / `2b203b8f`.

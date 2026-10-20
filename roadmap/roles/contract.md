@@ -2,7 +2,7 @@
 
 **Estado:** Contrato funcional implementado y transición de roles cerrada. Este contrato reemplaza el diseño de múltiples roles definido originalmente por R.2. Los apartados posteriores que dicen “pendiente” conservan decisiones y límites históricos o describen evolutivos que no bloquean el roadmap funcional completado.
 
-Fuentes: [Roadmap de roles](roles.md) y [Inventario R.1](roles-inventory.md).
+Fuentes: [Roadmap de roles](roles.md) y [Inventario R.1](inventory.md).
 
 ## Contrato vigente
 
@@ -98,7 +98,7 @@ La tabla conserva por endpoint la allowlist inventariada antes de R.3–R.6 y la
 
 ## Migración a `users.role` — plan histórico y resultado final
 
-**Resultado:** la migración se aplicó en producción y el postflight está registrado en [P.3.6](roles-production-deployment.md). Los pasos siguientes conservan la planificación previa y no representan tareas pendientes.
+**Resultado:** la migración se aplicó en producción y el postflight está registrado en [P.3.6](production-deployment.md). Los pasos siguientes conservan la planificación previa y no representan tareas pendientes.
 
 La columna de origen documentada es `users.roles text[]`. La migración futura crea `users.role text NOT NULL DEFAULT 'user'` (con restricción que limite el valor a los cuatro nombres canónicos), convierte los datos y solo después retira `roles`. Debe inspeccionar el esquema real, los defaults, la nulabilidad y constraints del entorno antes de preparar SQL definitivo.
 

@@ -1,6 +1,6 @@
 # Preflight y migración de roles — nuevo diseño de rol único
 
-**Estado histórico:** R.13a/R.13b y R.15a registran preflights y pruebas locales de 2026-10-13; las notas originales de esta página no describen el estado remoto final. La migración de producción y su postflight se completaron después; el registro autoritativo está en [cierre de despliegue](roles-production-deployment.md). Las menciones antiguas a Heroku sin modificar, release phase o migraciones pendientes son históricas y quedan supersedidas.
+**Estado histórico:** R.13a/R.13b y R.15a registran preflights y pruebas locales de 2026-10-13; las notas originales de esta página no describen el estado remoto final. La migración de producción y su postflight se completaron después; el registro autoritativo está en [cierre de despliegue](production-deployment.md). Las menciones antiguas a Heroku sin modificar, release phase o migraciones pendientes son históricas y quedan supersedidas.
 
 ### R.15c — Arranque del backend local (2026-10-13)
 
@@ -247,9 +247,9 @@ El informe siguiente permanece como evidencia del esquema y la base local observ
 
 ### Esquema y operación de migraciones observadas en R.5a
 
-- [User](../src/identity/auth/entities/user.entity.ts) almacena `roles` como `text[]` de PostgreSQL; la columna tiene `default ['user']`, no es nullable según la entidad y usa `select: false`. La autorización central vuelve a leer el array persistido.
-- [data-source.ts](../src/data-source.ts) tiene `synchronize: false` y carga `src/migrations/*.ts` en desarrollo o `dist/migrations/*.js` cuando `STAGE=prod`. Las migraciones existentes son clases TypeORM con `up` y, normalmente, `down`; no se encontró una migración previa que modifique `users.roles`.
-- [app.module.ts](../src/app.module.ts) configura `migrationsRun: true`: TypeORM puede aplicar migraciones pendientes al inicializar la aplicación. El datasource no fija `migrationsTransactionMode`; la versión instalada usa `all` como modo predeterminado del ejecutor. El modo debe comprobarse de nuevo con la versión/artifact exactos de R.5b.
+- [User](../../src/identity/auth/entities/user.entity.ts) almacena `roles` como `text[]` de PostgreSQL; la columna tiene `default ['user']`, no es nullable según la entidad y usa `select: false`. La autorización central vuelve a leer el array persistido.
+- [data-source.ts](../../src/data-source.ts) tiene `synchronize: false` y carga `src/migrations/*.ts` en desarrollo o `dist/migrations/*.js` cuando `STAGE=prod`. Las migraciones existentes son clases TypeORM con `up` y, normalmente, `down`; no se encontró una migración previa que modifique `users.roles`.
+- [app.module.ts](../../src/app.module.ts) configura `migrationsRun: true`: TypeORM puede aplicar migraciones pendientes al inicializar la aplicación. El datasource no fija `migrationsTransactionMode`; la versión instalada usa `all` como modo predeterminado del ejecutor. El modo debe comprobarse de nuevo con la versión/artifact exactos de R.5b.
 - `package.json` ofrece `yarn migration:run`, `yarn migration:run:prod` y `yarn migration:revert`. La primera ruta usa el datasource TypeScript y la ruta de producción usa el datasource compilado. R.5c debe elegir un único runner operativo y confirmar que apunta al datasource/artefacto esperado.
 
 ### Diagnóstico agregado de la base local en R.5a

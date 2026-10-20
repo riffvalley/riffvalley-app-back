@@ -1,8 +1,8 @@
 # R.15b — Contrato de Auth y roles para frontend
 
-**Estado:** Contrato completado. El frontend fue adaptado y desplegado en Netlify, confirmado manualmente por el usuario. El backend está desplegado en Heroku y PostgreSQL usa el rol singular; véase el [cierre de producción](roles-production-deployment.md). La confirmación manual del despliegue frontend no se presenta como una comprobación independiente de este repositorio.
+**Estado:** Contrato completado. El frontend fue adaptado y desplegado en Netlify, confirmado manualmente por el usuario. El backend está desplegado en Heroku y PostgreSQL usa el rol singular; véase el [cierre de producción](production-deployment.md). La confirmación manual del despliegue frontend no se presenta como una comprobación independiente de este repositorio.
 
-**Fuentes verificadas:** controllers, DTOs, servicios, entidad y estrategia de Auth actuales; [contrato jerárquico](roles-contract.md); [auditoría actual de endpoints](roles-endpoints-audit.md); [preflight de migración](roles-migration-preflight.md). La tabla completa de 252 handlers permanece en la auditoría y no se duplica aquí.
+**Fuentes verificadas:** controllers, DTOs, servicios, entidad y estrategia de Auth actuales; [contrato jerárquico](contract.md); [auditoría actual de endpoints](endpoints-audit.md); [preflight de migración](migration-preflight.md). La tabla completa de 252 handlers permanece en la auditoría y no se duplica aquí.
 
 ## Estado de la transición
 
@@ -113,7 +113,7 @@ La jerarquía está centralizada en Auth. Un valor desconocido, antiguo o malfor
 
 La auditoría de referencia contiene todos los paths y verbos: 252 handlers, **87 públicos**, **38 que requieren autenticación sin mínimo**, **99 con mínimo `riffvalley`** y **28 con mínimo `superadmin`**. Para construir navegación y controles:
 
-- Público: no mostrarlo como protegido por rol. La lista completa está en [auditoría de endpoints](roles-endpoints-audit.md).
+- Público: no mostrarlo como protegido por rol. La lista completa está en [auditoría de endpoints](endpoints-audit.md).
 - Autenticado: sesión válida para los 38 handlers `@Auth()`; las reglas de propiedad siguen aplicando donde corresponde.
 - Editorial: `riffvalley` o `superadmin` para operaciones con mínimo `riffvalley`, incluidas Artist Management, herramientas editoriales y Kanban de playlists locales.
 - Administración: solo `superadmin` para gestión de usuarios, versiones y operaciones con ese mínimo.
@@ -140,7 +140,7 @@ Este inventario describe lo conocido cuando se redactó el contrato backend, no 
 
 ## Compatibilidad y secuencia de adopción
 
-El contrato actual de backend y PostgreSQL usa `role` singular. El estado final del esquema y su ledger están registrados en [P.3.6](roles-production-deployment.md). Los párrafos que describían `users.roles` en producción son contexto histórico del preflight.
+El contrato actual de backend y PostgreSQL usa `role` singular. El estado final del esquema y su ledger están registrados en [P.3.6](production-deployment.md). Los párrafos que describían `users.roles` en producción son contexto histórico del preflight.
 
 La secuencia de adopción documentada fue: preflight y backup; corte manual; validación de esquema/datos; despliegue del backend singular y adaptación frontend. Se ejecutó y cerró en P.3.5/P.3.6. Esta guía se conserva como referencia histórica, no como trabajo pendiente.
 

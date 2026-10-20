@@ -1,6 +1,6 @@
 # Clasificación, ownership y resultado de S.3
 
-Este documento conserva la clasificación de S.2 y registra las decisiones finales que la implementación S.3 tomó. El inventario de partida está en [spotify-inventory.md](spotify-inventory.md).
+Este documento conserva la clasificación de S.2 y registra las decisiones finales que la implementación S.3 tomó. El inventario de partida está en [spotify-inventory.md](inventory.md).
 
 ## Decisiones aplicadas en S.3/S.4/S.5/S.6
 
@@ -58,7 +58,7 @@ No se reescribieron migraciones históricas. La migración S.3 de `content_type_
 ## Trabajo futuro
 
 - **S.4 completada:** migración física reversible y metadata actualizadas; la validación contra PostgreSQL real no estuvo disponible en este entorno.
-- **S.5/S.6/S.7 completadas:** la regresión backend quedó registrada en [spotify.md](spotify.md). S.8/S.9 permanecen pendientes; no ampliar el refactor sin una razón concreta.
+- **S.5/S.6/S.7 completadas:** la regresión backend quedó registrada en [spotify.md](roadmap.md). S.8/S.9 permanecen pendientes; no ampliar el refactor sin una razón concreta.
 
 ## Referencias `spotify` justificables
 

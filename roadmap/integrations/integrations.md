@@ -146,7 +146,7 @@ Las subcarpetas internas de cada módulo se decidirán por su contenido real y c
 - **Objetivo:** crear `src/integrations/` y alojar allí el módulo Spotify ya separado y cerrado por S.9.
 - **Alcance:** trasladar `src/spotify-integration/` a `src/integrations/spotify-integration/`, manteniendo `api/`, `http/`, `oauth/`, `index.ts`, módulo, controllers, servicios, tipos, entity y specs. Actualizar imports de `AppModule`, Festival Playlists, Lists, Contents, Catalog/Discs y pruebas consumidoras.
 - **Exclusiones:** no mover `RiffValleyPlaylist`, Festival Playlists ni Catalog; no crear un módulo agregador; no cambiar endpoints, DTOs, permisos, OAuth, configuración, entity metadata o persistencia.
-- **Dependencias:** Spotify S.9 completada (confirmada en `roadmap/spotify.md`). Es la primera implementación de este roadmap.
+- **Dependencias:** Spotify S.9 completada (confirmada en `roadmap/integrations/spotify/roadmap.md`). Es la primera implementación de este roadmap.
 - **Criterios de aceptación:** Spotify queda bajo `src/integrations/spotify-integration/`; Nest resuelve providers y `SpotifyConnection`; consumers compilan; rutas `/api/spotify/*`, respuestas y behavior siguen iguales; no quedan imports a la ubicación anterior.
 - **Verificaciones:** specs de API Client Credentials, API pública, OAuth, Account API, HTTP/DTO y consumers de Catalog/Discs, Contents, Lists, Festival Playlists y playlist local; prueba modular/DI; build, typecheck y `git diff --check` con Yarn. No ejecutar migraciones.
 - **Tamaño estimado:** S.

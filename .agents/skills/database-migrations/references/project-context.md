@@ -8,7 +8,7 @@ Reconfirma estos datos en el repositorio cada vez que uses la skill. Se observar
 - `src/data-source.ts` usa explícitamente `synchronize: false` y `migrationsRun: false`. Usa `STAGE=prod` para escoger `dist/**/*.entity.js` y `dist/migrations/*.js`; en desarrollo usa `src/**/*.entity.ts` y `src/migrations/*.ts`.
 - `Procfile` contiene únicamente `web: yarn start:prod`; no debe añadirse una fase `release` para migraciones.
 - NestJS no debe inicializar un runner de migraciones. Heroku Automatic Deploys despliega código y no debe ser conectado a ningún paso que aplique esquema.
-- Hay notas históricas en `roadmap/roles-migration-preflight.md` que mencionan `migrationsRun: true` y un Procfile distinto. Son evidencia histórica, no configuración vigente. Contrasta siempre los archivos ejecutables citados arriba y comunica la discrepancia si afecta la tarea; no la “corrijas” dentro de una tarea de skill/análisis.
+- Hay notas históricas en `roadmap/roles/migration-preflight.md` que mencionan `migrationsRun: true` y un Procfile distinto. Son evidencia histórica, no configuración vigente. Contrasta siempre los archivos ejecutables citados arriba y comunica la discrepancia si afecta la tarea; no la “corrijas” dentro de una tarea de skill/análisis.
 
 ## Paquete y comandos existentes
 

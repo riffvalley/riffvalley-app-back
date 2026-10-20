@@ -1,5 +1,7 @@
 # Roadmap de Catalog
 
+**Auditoría técnica relacionada:** las revisiones por módulo están en [Backend Cleanup — Catalog](../backend-cleanup/catalog.md); el índice global está en [Backend Cleanup](../backend-cleanup/README.md).
+
 Este documento conserva el detalle de la planificación con ownership de Catalog, incluidos Discs y la fase de ownership de Catalog. Se preservan numeración, estados y notas históricas.
 
 ## Objetivos

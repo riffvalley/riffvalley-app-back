@@ -35,7 +35,7 @@ El backend y frontend distinguen inequívocamente la playlist de Riff Valley de 
 - **Criterios de aceptación:** el inventario cubre todas las categorías del alcance; cada referencia tiene ubicación y contexto suficientes para clasificarla en S.2; producción permanece sin cambios.
 - **Verificaciones:** búsquedas de referencias sensibles a mayúsculas/minúsculas y nombres relacionados; revisión manual de resultados, configuración, queries, imports y consumidores backend; `git diff --check`.
 - **Tamaño estimado:** S.
-- **Resultado:** inventario backend documentado en [spotify-inventory.md](spotify-inventory.md). Incluye entity y tabla física, relaciones, módulos/DI, controllers y rutas, services/clientes y llamadas externas, DTOs, configuración sin valores secretos, consumidores, consultas, tests, migraciones y referencias ambiguas o documentales del repositorio.
+- **Resultado:** inventario backend documentado en [spotify-inventory.md](inventory.md). Incluye entity y tabla física, relaciones, módulos/DI, controllers y rutas, services/clientes y llamadas externas, DTOs, configuración sin valores secretos, consumidores, consultas, tests, migraciones y referencias ambiguas o documentales del repositorio.
 
 ## S.2 — Clasificar referencias
 
@@ -47,7 +47,7 @@ El backend y frontend distinguen inequívocamente la playlist de Riff Valley de 
 - **Criterios de aceptación:** todas las referencias relevantes del inventario tienen una clasificación; cada ambigüedad incluye la pregunta concreta y opciones razonables; las decisiones necesarias para S.3 y S.5 quedan documentadas antes de tocar las referencias afectadas.
 - **Verificaciones:** contraste de cada clasificación con su uso real y sus consumidores; revisión de que no haya cambios de producción; `git diff --check`.
 - **Tamaño estimado:** XS.
-- **Resultado:** clasificación, ownership y nomenclatura objetivo documentados en [spotify-classification.md](spotify-classification.md). Las decisiones iniciales de conservar rutas y nombres JSON locales se revisaron y superaron en S.3 con la migración coordinada de consumers.
+- **Resultado:** clasificación, ownership y nomenclatura objetivo documentados en [spotify-classification.md](classification.md). Las decisiones iniciales de conservar rutas y nombres JSON locales se revisaron y superaron en S.3 con la migración coordinada de consumers.
 
 ## S.3 — Renombrar dominio a `RiffValleyPlaylist`
 
