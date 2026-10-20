@@ -11,7 +11,20 @@ import { ListWordPressReconciliationService } from './list-wordpress-reconciliat
 import {
   buildPostContent,
   buildWeeklyDiscSections,
+  PublishableGutenbergDiscAssignment,
 } from './list-gutenberg-builder';
+
+type WeeklyPostResult = {
+  position: number;
+  wpPostId: number;
+  link: string;
+  title: string;
+  added?: number;
+  updated?: number;
+  adopted?: boolean;
+  removed?: number;
+  warning?: string;
+};
 
 @Injectable()
 export class WeeklyListPublisherService {
@@ -103,7 +116,7 @@ export class WeeklyListPublisherService {
     ]);
     const tags = [...FIXED_TAGS, yearTagId, monthTagId];
 
-    const createdPosts = [];
+    const createdPosts: WeeklyPostResult[] = [];
 
     for (const position of sortedPositions) {
       const discs = byPosition.get(position);
@@ -158,7 +171,7 @@ export class WeeklyListPublisherService {
             { ...entry, publishedDiscs: result.publishedDiscs },
           ];
 
-          const postResult: any = {
+          const postResult: WeeklyPostResult = {
             position,
             wpPostId: entry.wpPostId,
             link: entry.wpPostUrl,
@@ -308,7 +321,10 @@ export class WeeklyListPublisherService {
   // discos" correspondiente a la posición del disco. Cada posición tiene su
   // propio post (ver wpWeeklyPosts / generateWordPressPosts), así que
   // primero hay que localizar la entrada trackeada de esa posición.
-  async syncDiscToWeeklyPost(list: List, asignation: any) {
+  async syncDiscToWeeklyPost(
+    list: List,
+    asignation: PublishableGutenbergDiscAssignment,
+  ) {
     const position = asignation.position;
     if (position === null || position === undefined || position <= 0) {
       return { synced: false };

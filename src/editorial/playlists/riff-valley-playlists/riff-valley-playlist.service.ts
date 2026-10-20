@@ -293,7 +293,7 @@ export class RiffValleyPlaylistService {
       authorId: riffValleyPlaylist.user.id,
       riffValleyPlaylistId: riffValleyPlaylist.id,
       backlog: true,
-    } as any);
+    });
 
     return this.findOne(id);
   }

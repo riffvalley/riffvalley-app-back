@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Content } from '../entities/content.entity';
 
@@ -14,7 +14,7 @@ export class ContentQueryService {
   ) {}
 
   async findAll(ready?: boolean, backlog?: boolean): Promise<Content[]> {
-    const where: any = {};
+    const where: FindOptionsWhere<Content> = {};
     if (ready !== undefined) where.ready = ready;
     if (backlog !== undefined) where.backlog = backlog;
     return this.contentRepo.find({

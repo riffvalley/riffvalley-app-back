@@ -14,7 +14,7 @@ import { FestivalPlaylistsController } from '../festival-playlists.controller';
 describe('FestivalPlaylistsController authorization metadata', () => {
   const handler = (
     method: keyof typeof FestivalPlaylistsController.prototype,
-  ) => FestivalPlaylistsController.prototype[method] as Function;
+  ) => FestivalPlaylistsController.prototype[method];
 
   it('restricts playlist and Spotify connection operations to riffvalley with inherited superadmin access', () => {
     const protectedRoutes = [

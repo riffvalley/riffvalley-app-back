@@ -20,8 +20,6 @@ import {
 } from './dto/list-period-params.dto';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
-import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
-import { User } from 'src/identity/auth/entities/user.entity';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
 @Controller('lists')
@@ -36,7 +34,7 @@ export class ListsController {
 
   @Get()
   @Auth()
-  findAll(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
+  findAll(@Query() paginationDto: PaginationDto) {
     return this.listsServices.findAll(paginationDto);
   }
 

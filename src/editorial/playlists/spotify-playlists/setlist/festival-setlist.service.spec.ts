@@ -3,18 +3,30 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Test, TestingModule } from '@nestjs/testing';
 import { FestivalSetlistService } from './festival-setlist.service';
 
 describe('FestivalSetlistService', () => {
   let service: FestivalSetlistService;
-  let configService: { get: jest.Mock };
+  let testingModule: TestingModule;
+  let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     configService = { get: jest.fn().mockReturnValue('test-api-key') };
-    service = new FestivalSetlistService(configService as any);
+    testingModule = await Test.createTestingModule({
+      providers: [
+        FestivalSetlistService,
+        { provide: ConfigService, useValue: configService },
+      ],
+    }).compile();
+    service = testingModule.get(FestivalSetlistService);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(async () => {
+    await testingModule.close();
+    jest.restoreAllMocks();
+  });
 
   it('orders recent setlists and counts each normalized, non-tape song once per concert', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({

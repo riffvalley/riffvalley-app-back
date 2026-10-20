@@ -1,4 +1,10 @@
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  CanActivate,
+  Type,
+  ValidationPipe,
+} from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import {
   GUARDS_METADATA,
   METHOD_METADATA,
@@ -7,19 +13,62 @@ import {
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { ReunionController } from '../reunions.controller';
+import { CreateReunionDto } from '../dto/create-reunion.dto';
 import { UpdateReunionDto } from '../dto/update-reunion.dto';
+import { ReunionService } from '../reunions.service';
+import { Reunion } from '../entities/reunion.entity';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+
+const isGuardType = (value: unknown): value is Type<CanActivate> =>
+  typeof value === 'function';
+
+const guardsFor = (handlers: Array<(...args: never[]) => unknown>) =>
+  handlers.flatMap((handler) => {
+    const metadata: unknown = Reflect.getMetadata(GUARDS_METADATA, handler);
+    return Array.isArray(metadata) ? metadata.filter(isGuardType) : [];
+  });
 
 describe('ReunionController', () => {
-  const reunionService = {
-    createReunion: jest.fn(),
-    findAll: jest.fn(),
-    findOne: jest.fn(),
-    updateReunion: jest.fn(),
-    deleteReunion: jest.fn(),
+  const reunionService: jest.Mocked<
+    Pick<
+      ReunionService,
+      | 'createReunion'
+      | 'findAll'
+      | 'findOne'
+      | 'updateReunion'
+      | 'deleteReunion'
+    >
+  > = {
+    createReunion: jest.fn<Promise<Reunion>, [CreateReunionDto]>(),
+    findAll: jest.fn<Promise<Reunion[]>, []>(),
+    findOne: jest.fn<Promise<Reunion>, [string]>(),
+    updateReunion: jest.fn<Promise<Reunion>, [string, UpdateReunionDto]>(),
+    deleteReunion: jest.fn<Promise<void>, [string]>(),
   };
-  const controller = new ReunionController(reunionService as any);
+  let controller: ReunionController;
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const guardProviders = guardsFor([
+      ReunionController.prototype.create,
+      ReunionController.prototype.update,
+      ReunionController.prototype.remove,
+    ]).map((guard) => ({
+      provide: guard,
+      useValue: { canActivate: () => true },
+    }));
+    const testingModule = Test.createTestingModule({
+      controllers: [ReunionController],
+      providers: [
+        { provide: ReunionService, useValue: reunionService },
+        ...guardProviders,
+      ],
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: () => true });
+    const moduleRef = await testingModule.compile();
+    controller = moduleRef.get(ReunionController);
+  });
 
   it('preserves route paths, methods, public reads, and protected mutations', () => {
     expect(Reflect.getMetadata(PATH_METADATA, ReunionController)).toBe(
@@ -56,54 +105,72 @@ describe('ReunionController', () => {
       Reflect.getMetadata(METHOD_METADATA, ReunionController.prototype.remove),
     ).toBe(3);
 
-    for (const method of ['create', 'update', 'remove']) {
-      const handler = ReunionController.prototype[method];
+    for (const handler of [
+      ReunionController.prototype.create,
+      ReunionController.prototype.update,
+      ReunionController.prototype.remove,
+    ]) {
       expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
         ValidRoles.riffvalley,
       );
       expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeDefined();
     }
-    for (const method of ['findAll', 'findOne']) {
-      expect(
-        Reflect.getMetadata(
-          META_MINIMUM_ROLE,
-          ReunionController.prototype[method],
-        ),
-      ).toBeUndefined();
+    for (const handler of [
+      ReunionController.prototype.findAll,
+      ReunionController.prototype.findOne,
+    ]) {
+      expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
     }
   });
 
   it('delegates CRUD calls and returns service responses unchanged', async () => {
-    const reunion = { id: 'reunion-id' };
-    const dto = { titulo: 'Weekly reunion' };
+    const reunion: Reunion = {
+      id: 'reunion-id',
+      titulo: 'Weekly reunion',
+      fecha: new Date('2026-10-21T18:00:00.000Z'),
+      description: undefined,
+      points: [],
+      createdAt: new Date('2026-10-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-10-20T00:00:00.000Z'),
+    };
+    const dto: CreateReunionDto = {
+      titulo: reunion.titulo,
+      fecha: reunion.fecha,
+    };
+    const updateDto: UpdateReunionDto = { titulo: reunion.titulo };
     reunionService.createReunion.mockResolvedValueOnce(reunion);
     reunionService.findAll.mockResolvedValueOnce([reunion]);
     reunionService.findOne.mockResolvedValueOnce(reunion);
     reunionService.updateReunion.mockResolvedValueOnce(reunion);
     reunionService.deleteReunion.mockResolvedValueOnce(undefined);
 
-    await expect(controller.create(dto as any)).resolves.toBe(reunion);
+    await expect(controller.create(dto)).resolves.toBe(reunion);
     await expect(controller.findAll()).resolves.toEqual([reunion]);
     await expect(controller.findOne('reunion-id')).resolves.toBe(reunion);
-    await expect(controller.update('reunion-id', dto)).resolves.toBe(reunion);
+    await expect(controller.update('reunion-id', updateDto)).resolves.toBe(
+      reunion,
+    );
     await expect(controller.remove('reunion-id')).resolves.toBeUndefined();
 
     expect(reunionService.createReunion).toHaveBeenCalledWith(dto);
     expect(reunionService.findOne).toHaveBeenCalledWith('reunion-id');
     expect(reunionService.updateReunion).toHaveBeenCalledWith(
       'reunion-id',
-      dto,
+      updateDto,
     );
     expect(reunionService.deleteReunion).toHaveBeenCalledWith('reunion-id');
   });
 
   it('validates partial PATCH fields with UpdateReunionDto at runtime', async () => {
-    const parameterTypes = Reflect.getMetadata(
+    const parameterTypes: unknown = Reflect.getMetadata(
       'design:paramtypes',
       ReunionController.prototype,
       'update',
-    ) as unknown[];
-    expect(parameterTypes[1]).toBe(UpdateReunionDto);
+    );
+    const reflectedDto = Array.isArray(parameterTypes)
+      ? parameterTypes[1]
+      : undefined;
+    expect(reflectedDto).toBe(UpdateReunionDto);
 
     const pipe = new ValidationPipe({
       transform: true,
@@ -113,17 +180,24 @@ describe('ReunionController', () => {
     const body = { titulo: 'Renamed reunion' };
     const validated = await pipe.transform(body, {
       type: 'body',
-      metatype: parameterTypes[1] as any,
+      metatype: UpdateReunionDto,
       data: undefined,
     });
     expect(validated).toBeInstanceOf(UpdateReunionDto);
     expect(validated).toMatchObject(body);
+    if (!(validated instanceof UpdateReunionDto)) {
+      throw new Error('ValidationPipe did not transform the Reunion DTO');
+    }
     reunionService.updateReunion.mockResolvedValueOnce({
       id: 'reunion-id',
-      ...body,
+      titulo: body.titulo,
+      fecha: new Date('2026-10-21T18:00:00.000Z'),
+      points: [],
+      createdAt: new Date('2026-10-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-10-20T00:00:00.000Z'),
     });
     await expect(
-      controller.update('reunion-id', validated as UpdateReunionDto),
+      controller.update('reunion-id', validated),
     ).resolves.toMatchObject(body);
     expect(reunionService.updateReunion).toHaveBeenCalledWith(
       'reunion-id',
@@ -139,7 +213,7 @@ describe('ReunionController', () => {
       await expect(
         pipe.transform(invalidBody, {
           type: 'body',
-          metatype: parameterTypes[1] as any,
+          metatype: UpdateReunionDto,
           data: undefined,
         }),
       ).rejects.toBeInstanceOf(BadRequestException);

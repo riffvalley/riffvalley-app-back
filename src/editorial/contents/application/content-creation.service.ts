@@ -56,8 +56,12 @@ export class ContentCreationService {
       closeDate,
       listDate,
       reunionId,
+      riffValleyPlaylistId,
+      articleId,
+      videoId,
       ...rest
     } = createContentDto;
+    let resolvedPublicationDate = publicationDate;
 
     // RADAR and BEST publish through a dated List; REUNION keeps its existing
     // required publication date.
@@ -91,14 +95,14 @@ export class ContentCreationService {
 
     // If riffValleyPlaylistId is provided, fetch the entity to sync initial state (Import state from Entity to Content)
     let existingRiffValleyPlaylist: RiffValleyPlaylist | null = null;
-    if ((rest as any).riffValleyPlaylistId) {
+    if (riffValleyPlaylistId) {
       existingRiffValleyPlaylist =
         await this.riffValleyPlaylistRepository.findOne({
-          where: { id: (rest as any).riffValleyPlaylistId },
+          where: { id: riffValleyPlaylistId },
         });
       if (!existingRiffValleyPlaylist) {
         throw new NotFoundException(
-          `RiffValleyPlaylist with id ${(rest as any).riffValleyPlaylistId} not found`,
+          `RiffValleyPlaylist with id ${riffValleyPlaylistId} not found`,
         );
       }
 
@@ -110,77 +114,69 @@ export class ContentCreationService {
       ) {
         // Only override if content date wasn't explicitly provided?
         // Or force sync? Usually if linking, we want consistency.
-        if (!publicationDate) {
-          (rest as any).publicationDate = existingRiffValleyPlaylist.updateDate;
-          createContentDto.publicationDate =
-            existingRiffValleyPlaylist.updateDate.toISOString(); // Update DTO for consistency
+        if (!resolvedPublicationDate) {
+          resolvedPublicationDate =
+            existingRiffValleyPlaylist.updateDate.toISOString();
+          createContentDto.publicationDate = resolvedPublicationDate;
         }
       }
     }
 
     // If articleId is provided, fetch the entity to sync initial state
     let existingArticle: Article | null = null;
-    if ((rest as any).articleId) {
+    if (articleId) {
       existingArticle = await this.articleRepo.findOne({
-        where: { id: (rest as any).articleId },
+        where: { id: articleId },
       });
       if (!existingArticle) {
-        throw new NotFoundException(
-          `Article with id ${(rest as any).articleId} not found`,
-        );
+        throw new NotFoundException(`Article with id ${articleId} not found`);
       }
       if (
         existingArticle.status === ArticleStatus.PUBLISHED &&
         existingArticle.updateDate
       ) {
-        if (!publicationDate) {
-          (rest as any).publicationDate = existingArticle.updateDate;
-          createContentDto.publicationDate =
-            existingArticle.updateDate.toISOString();
+        if (!resolvedPublicationDate) {
+          resolvedPublicationDate = existingArticle.updateDate.toISOString();
+          createContentDto.publicationDate = resolvedPublicationDate;
         }
       }
     }
 
     // If videoId is provided, fetch the entity to sync initial state
     let existingVideo: Video | null = null;
-    if ((rest as any).videoId) {
+    if (videoId) {
       existingVideo = await this.videoRepo.findOne({
-        where: { id: (rest as any).videoId },
+        where: { id: videoId },
       });
       if (!existingVideo) {
-        throw new NotFoundException(
-          `Video with id ${(rest as any).videoId} not found`,
-        );
+        throw new NotFoundException(`Video with id ${videoId} not found`);
       }
       if (
         existingVideo.status === VideoStatus.PUBLISHED &&
         existingVideo.updateDate
       ) {
-        if (!publicationDate) {
-          (rest as any).publicationDate = existingVideo.updateDate;
-          createContentDto.publicationDate =
-            existingVideo.updateDate.toISOString();
+        if (!resolvedPublicationDate) {
+          resolvedPublicationDate = existingVideo.updateDate.toISOString();
+          createContentDto.publicationDate = resolvedPublicationDate;
         }
       }
     }
 
     const content = this.contentRepo.create({
       ...rest,
-      publicationDate: createContentDto.publicationDate
-        ? new Date(createContentDto.publicationDate)
+      publicationDate: resolvedPublicationDate
+        ? new Date(resolvedPublicationDate)
         : undefined,
       closeDate: closeDate ? new Date(closeDate) : undefined,
       listDate: listDate ? new Date(listDate) : undefined,
       author,
       reunionId,
-      riffValleyPlaylist: (rest as any).riffValleyPlaylistId
-        ? { id: (rest as any).riffValleyPlaylistId }
+      riffValleyPlaylist: riffValleyPlaylistId
+        ? { id: riffValleyPlaylistId }
         : undefined,
-      article: (rest as any).articleId
-        ? { id: (rest as any).articleId }
-        : undefined,
-      video: (rest as any).videoId ? { id: (rest as any).videoId } : undefined,
-      ready: createContentDto.publicationDate ? false : rest.ready,
+      article: articleId ? { id: articleId } : undefined,
+      video: videoId ? { id: videoId } : undefined,
+      ready: resolvedPublicationDate ? false : rest.ready,
     });
 
     return this.contentRepo.manager.transaction(async (manager) => {
@@ -190,7 +186,7 @@ export class ContentCreationService {
       // associations above are read-only and remain attached without new rows.
       if (
         createContentDto.type === ContentType.RIFF_VALLEY_PLAYLIST &&
-        !(rest as any).riffValleyPlaylistId
+        !riffValleyPlaylistId
       ) {
         const playlistRepo = manager.getRepository(RiffValleyPlaylist);
         const playlist = playlistRepo.create({
@@ -204,10 +200,7 @@ export class ContentCreationService {
         content.riffValleyPlaylist = await playlistRepo.save(playlist);
       }
 
-      if (
-        createContentDto.type === ContentType.ARTICLE &&
-        !(rest as any).articleId
-      ) {
+      if (createContentDto.type === ContentType.ARTICLE && !articleId) {
         const articleRepo = manager.getRepository(Article);
         const article = articleRepo.create({
           name: rest.name,
@@ -219,10 +212,7 @@ export class ContentCreationService {
         content.article = await articleRepo.save(article);
       }
 
-      if (
-        createContentDto.type === ContentType.VIDEO &&
-        !(rest as any).videoId
-      ) {
+      if (createContentDto.type === ContentType.VIDEO && !videoId) {
         const videoRepo = manager.getRepository(Video);
         const video = videoRepo.create({
           name: rest.name,

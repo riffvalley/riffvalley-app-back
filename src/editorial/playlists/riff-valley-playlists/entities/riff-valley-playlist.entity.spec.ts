@@ -1,4 +1,5 @@
 import { DataSource, getMetadataArgsStorage } from 'typeorm';
+import { EntityMetadataBuilder } from 'typeorm/metadata-builder/EntityMetadataBuilder';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { ContentType } from 'src/editorial/contents/entities/content.entity';
@@ -172,17 +173,22 @@ describe('RiffValleyPlaylist ORM metadata', () => {
       type: 'postgres',
       entities: ['src/**/*.entity.ts'],
     });
-    await (dataSource as any).buildMetadatas();
+    const entityMetadatas = new EntityMetadataBuilder(
+      dataSource,
+      getMetadataArgsStorage(),
+    ).build();
 
-    const playlist = dataSource.entityMetadatas.find(
+    const playlist = entityMetadatas.find(
       (entity) => entity.target === RiffValleyPlaylist,
     );
-    const content = dataSource.entityMetadatas.find(
-      (entity) => entity.target === Content,
-    );
-    const association = dataSource.entityMetadatas.find(
+    const content = entityMetadatas.find((entity) => entity.target === Content);
+    const association = entityMetadatas.find(
       (entity) => entity.target === RiffValleyPlaylistArtist,
     );
+
+    expect(playlist).toBeDefined();
+    expect(content).toBeDefined();
+    expect(association).toBeDefined();
 
     expect(playlist.tableName).toBe('riff_valley_playlists');
     expect(playlist.primaryColumns[0].primaryKeyConstraintName).toBe(

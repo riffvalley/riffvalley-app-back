@@ -14,7 +14,7 @@ import { NationalReleasesController } from './national-releases.controller';
 
 describe('NationalReleasesController authorization metadata', () => {
   const handler = (method: keyof typeof NationalReleasesController.prototype) =>
-    NationalReleasesController.prototype[method] as Function;
+    NationalReleasesController.prototype[method];
 
   it('restricts the six role-protected operations only to riffvalley', () => {
     const protectedRoutes = [

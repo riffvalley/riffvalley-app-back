@@ -15,28 +15,46 @@ import { ContentsModule } from '../contents.module';
 
 describe('ContentsModule providers', () => {
   it('registers each internal service once and no longer imports PointsModule', () => {
-    const providers = Reflect.getMetadata(
-      'providers',
-      ContentsModule,
-    ) as unknown[];
-    const imports = Reflect.getMetadata('imports', ContentsModule) as unknown[];
+    const providers: unknown = Reflect.getMetadata('providers', ContentsModule);
+    const imports: unknown = Reflect.getMetadata('imports', ContentsModule);
+    const providerList = Array.isArray(providers) ? providers : [];
+    const importList = Array.isArray(imports) ? imports : [];
 
     expect(
-      providers.filter((provider) => provider === ContentCreationService),
+      providerList.filter(
+        (provider: unknown) => provider === ContentCreationService,
+      ),
     ).toHaveLength(1);
     expect(
-      providers.filter((provider) => provider === ContentQueryService),
+      providerList.filter(
+        (provider: unknown) => provider === ContentQueryService,
+      ),
     ).toHaveLength(1);
     expect(
-      providers.filter((provider) => provider === ContentLifecycleService),
+      providerList.filter(
+        (provider: unknown) => provider === ContentLifecycleService,
+      ),
     ).toHaveLength(1);
-    expect(imports).not.toContain(PointsModule);
+    expect(importList).not.toContain(PointsModule);
 
-    const typeOrmFeature = imports.find(
-      (module: any) => module?.module === TypeOrmModule,
-    ) as any;
-    const repositoryTokens = typeOrmFeature.providers.map(
-      (provider: any) => provider.provide,
+    const typeOrmFeature = importList.find(
+      (module: unknown) =>
+        typeof module === 'object' &&
+        module !== null &&
+        'module' in module &&
+        module.module === TypeOrmModule,
+    );
+    const featureProviders =
+      typeof typeOrmFeature === 'object' &&
+      typeOrmFeature !== null &&
+      'providers' in typeOrmFeature &&
+      Array.isArray(typeOrmFeature.providers)
+        ? typeOrmFeature.providers
+        : [];
+    const repositoryTokens = featureProviders.flatMap((provider: unknown) =>
+      typeof provider === 'object' && provider !== null && 'provide' in provider
+        ? [provider.provide]
+        : [],
     );
     for (const entity of [
       Content,

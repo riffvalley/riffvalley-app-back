@@ -1,4 +1,9 @@
 import { Test } from '@nestjs/testing';
+import {
+  DynamicModule,
+  ForwardReference,
+  InjectionToken,
+} from '@nestjs/common';
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { getMetadataArgsStorage } from 'typeorm';
 import { Content } from 'src/editorial/contents/entities/content.entity';
@@ -25,90 +30,127 @@ import { ReunionService } from '../reunions.service';
 
 jest.mock('sanitize-html', () => jest.fn());
 
-const moduleImports = (module: Function): any[] =>
-  Reflect.getMetadata('imports', module) ?? [];
+type ModuleClass = abstract new (...args: never[]) => unknown;
 
-const featureFor = (module: Function) =>
-  moduleImports(module).find((entry) => entry?.module === TypeOrmModule);
+const moduleImports = (module: ModuleClass): unknown[] => {
+  const imports: unknown = Reflect.getMetadata('imports', module);
+  return Array.isArray(imports) ? imports : [];
+};
+
+const isDynamicModule = (value: unknown): value is DynamicModule =>
+  typeof value === 'object' && value !== null && 'module' in value;
+
+const featureFor = (module: ModuleClass): DynamicModule | undefined =>
+  moduleImports(module).find(
+    (entry): entry is DynamicModule =>
+      isDynamicModule(entry) && entry.module === TypeOrmModule,
+  );
+
+const isInjectionToken = (value: unknown): value is InjectionToken =>
+  typeof value === 'string' ||
+  typeof value === 'symbol' ||
+  typeof value === 'function';
+
+const isProviderWithToken = (
+  value: unknown,
+): value is { provide: InjectionToken } =>
+  typeof value === 'object' &&
+  value !== null &&
+  'provide' in value &&
+  isInjectionToken(value.provide);
+
+const providerTokens = (feature: DynamicModule | undefined): InjectionToken[] =>
+  (feature?.providers ?? []).flatMap((provider) =>
+    isProviderWithToken(provider) ? [provider.provide] : [],
+  );
+
+const isForwardReference = (value: unknown): value is ForwardReference =>
+  typeof value === 'object' &&
+  value !== null &&
+  'forwardRef' in value &&
+  typeof value.forwardRef === 'function';
 
 describe('Reunions and Points NestJS wiring', () => {
   it('registers each service and controller once with the expected repository tokens', () => {
-    const reunionProviders = Reflect.getMetadata(
+    const reunionProviders: unknown = Reflect.getMetadata(
       'providers',
       ReunionsModule,
-    ) as unknown[];
-    const pointProviders = Reflect.getMetadata(
+    );
+    const pointProviders: unknown = Reflect.getMetadata(
       'providers',
       PointsModule,
-    ) as unknown[];
-    const reunionControllers = Reflect.getMetadata(
+    );
+    const reunionControllers: unknown = Reflect.getMetadata(
       'controllers',
       ReunionsModule,
-    ) as unknown[];
-    const pointControllers = Reflect.getMetadata(
+    );
+    const pointControllers: unknown = Reflect.getMetadata(
       'controllers',
       PointsModule,
-    ) as unknown[];
+    );
 
     expect(
-      reunionProviders.filter((provider) => provider === ReunionService),
+      (Array.isArray(reunionProviders) ? reunionProviders : []).filter(
+        (provider) => provider === ReunionService,
+      ),
     ).toHaveLength(1);
     expect(
-      pointProviders.filter((provider) => provider === PointService),
+      (Array.isArray(pointProviders) ? pointProviders : []).filter(
+        (provider) => provider === PointService,
+      ),
     ).toHaveLength(1);
-    expect(reunionControllers).toEqual([ReunionController]);
-    expect(pointControllers).toEqual([PointController]);
+    expect(Array.isArray(reunionControllers) ? reunionControllers : []).toEqual(
+      [ReunionController],
+    );
+    expect(Array.isArray(pointControllers) ? pointControllers : []).toEqual([
+      PointController,
+    ]);
 
-    const reunionTokens = featureFor(ReunionsModule).providers.map(
-      (provider: any) => provider.provide,
-    );
-    const pointTokens = featureFor(PointsModule).providers.map(
-      (provider: any) => provider.provide,
-    );
+    const reunionTokens = providerTokens(featureFor(ReunionsModule));
+    const pointTokens = providerTokens(featureFor(PointsModule));
     expect(reunionTokens).toContain(getRepositoryToken(Reunion));
     expect(reunionTokens).toContain(getRepositoryToken(Content));
     expect(pointTokens).toContain(getRepositoryToken(Point));
     expect(pointTokens).toContain(getRepositoryToken(Reunion));
 
-    const appImports = Reflect.getMetadata('imports', AppModule) as unknown[];
-    expect(appImports.filter((entry) => entry === ReunionsModule)).toHaveLength(
-      1,
-    );
-    expect(appImports.filter((entry) => entry === PointsModule)).toHaveLength(
-      1,
-    );
+    const appImports: unknown = Reflect.getMetadata('imports', AppModule);
+    const appImportEntries = Array.isArray(appImports) ? appImports : [];
+    expect(
+      appImportEntries.filter((entry) => entry === ReunionsModule),
+    ).toHaveLength(1);
+    expect(
+      appImportEntries.filter((entry) => entry === PointsModule),
+    ).toHaveLength(1);
 
     expect(moduleImports(PointsModule)).not.toContain(ReunionsModule);
-    expect(moduleImports(PointsModule).some((entry) => entry?.forwardRef)).toBe(
-      false,
-    );
+    expect(moduleImports(PointsModule).some(isForwardReference)).toBe(false);
     expect(moduleImports(ReunionsModule)).toContain(ContentsModule);
-    expect(
-      moduleImports(ReunionsModule).some((entry) => entry?.forwardRef),
-    ).toBe(false);
-    expect(Reflect.getMetadata('design:paramtypes', ReunionService)[2]).toBe(
-      ContentsService,
+    expect(moduleImports(ReunionsModule).some(isForwardReference)).toBe(false);
+    const reunionDependencies: unknown = Reflect.getMetadata(
+      'design:paramtypes',
+      ReunionService,
     );
+    expect(
+      Array.isArray(reunionDependencies) ? reunionDependencies[2] : undefined,
+    ).toBe(ContentsService);
   });
 
   it('keeps Contents as the consumer for coordinated Reunion and Point writes', () => {
     const contentsImports = moduleImports(ContentsModule);
     const feature = featureFor(ContentsModule);
-    const repositoryTokens = feature.providers.map(
-      (provider: any) => provider.provide,
-    );
-    const providers = Reflect.getMetadata(
-      'providers',
-      ContentsModule,
-    ) as unknown[];
+    const repositoryTokens = providerTokens(feature);
+    const providers: unknown = Reflect.getMetadata('providers', ContentsModule);
+    const providerEntries = Array.isArray(providers) ? providers : [];
 
     expect(repositoryTokens).toContain(getRepositoryToken(Reunion));
     expect(repositoryTokens).toContain(getRepositoryToken(Point));
     expect(
-      providers.filter((provider) => provider === ContentCreationService),
+      providerEntries.filter((provider) => provider === ContentCreationService),
     ).toHaveLength(1);
     expect(
-      providers.filter((provider) => provider === ContentLifecycleService),
+      providerEntries.filter(
+        (provider) => provider === ContentLifecycleService,
+      ),
     ).toHaveLength(1);
     expect(contentsImports).not.toContain(PointsModule);
 

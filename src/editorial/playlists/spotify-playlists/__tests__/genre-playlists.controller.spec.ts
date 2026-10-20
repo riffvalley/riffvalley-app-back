@@ -13,7 +13,7 @@ import { GenrePlaylistsController } from '../genre-playlists.controller';
 
 describe('GenrePlaylistsController authorization metadata', () => {
   const handler = (method: keyof typeof GenrePlaylistsController.prototype) =>
-    GenrePlaylistsController.prototype[method] as Function;
+    GenrePlaylistsController.prototype[method];
 
   it('restricts all playlist operations to riffvalley with inherited superadmin access', () => {
     const protectedRoutes = [

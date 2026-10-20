@@ -6,20 +6,26 @@ import {
 } from 'src/integrations/wordpress-integration/wordpress.service';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
 import { ListWordPressReconciliationService } from '../list-wordpress-reconciliation.service';
+import {
+  GutenbergDiscAssignment,
+  PublishableGutenbergDiscAssignment,
+} from '../list-gutenberg-builder';
 
 describe('ListWordPressReconciliationService', () => {
   const discId = '11111111-1111-4111-8111-111111111111';
   const footer = '<!-- wp:separator {"className":"rv-generated-footer"} -->';
   const block = (id: string, content = id) =>
     `<!-- wp:group {"className":"rv-disc-${id}"} -->\n<div>${content}</div>\n<!-- /wp:group -->`;
-  const assignment = (id = discId) => ({
+  const assignment = (id = discId): PublishableGutenbergDiscAssignment => ({
     spotifyTrackId: null,
     disc: { id, name: 'Album', artist: { name: 'Artist' } },
     user: null,
   });
-  const render = (discs: any[]) =>
+  const render = (discs: GutenbergDiscAssignment[]) =>
     discs
-      .map((disc) => block(disc.disc.id, disc.description ?? disc.disc.name))
+      .map((disc) =>
+        block(disc.disc?.id ?? '', disc.description ?? disc.disc?.name ?? ''),
+      )
       .join('\n\n');
 
   const setup = (overrides: Record<string, jest.Mock> = {}) => {

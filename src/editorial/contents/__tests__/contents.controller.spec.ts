@@ -3,6 +3,8 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
+import { Test } from '@nestjs/testing';
+import { AuthGuard } from '@nestjs/passport';
 import { ContentsController } from '../contents.controller';
 import { DiscLinkMaintenanceService } from 'src/catalog/discs/maintenance/disc-link-maintenance.service';
 import { ContentsService } from '../contents.service';
@@ -12,19 +14,49 @@ import {
   roleMeetsMinimum,
   ValidRoles,
 } from 'src/identity/auth/interfaces/valid-roles';
+import { Content } from '../entities/content.entity';
+import { FindContentByMonthQueryDto } from '../dto/find-content-by-month-query.dto';
 
 describe('ContentsController daily link update authorization', () => {
-  const contentsService = {} as ContentsService;
-  const discLinkMaintenanceService = {
-    checkMissingSpotifyLinks: jest.fn(),
-  } as unknown as DiscLinkMaintenanceService;
-  const controller = new ContentsController(
-    contentsService,
-    discLinkMaintenanceService,
-  );
-  const handler = ContentsController.prototype.triggerDailyLinkUpdate;
+  const makeController = async (
+    contentsService: object = {},
+    discLinkMaintenanceService: Pick<
+      DiscLinkMaintenanceService,
+      'checkMissingSpotifyLinks'
+    > = {
+      checkMissingSpotifyLinks: jest.fn<
+        ReturnType<DiscLinkMaintenanceService['checkMissingSpotifyLinks']>,
+        Parameters<DiscLinkMaintenanceService['checkMissingSpotifyLinks']>
+      >(),
+    },
+  ) => {
+    const builder = Test.createTestingModule({
+      controllers: [ContentsController],
+      providers: [
+        { provide: ContentsService, useValue: contentsService },
+        {
+          provide: DiscLinkMaintenanceService,
+          useValue: discLinkMaintenanceService,
+        },
+      ],
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(AuthGuard())
+      .useValue({ canActivate: () => true });
+    const module = await builder.compile();
 
-  it('requires the riffvalley minimum and inherits only through the central hierarchy', () => {
+    return {
+      controller: module.get(ContentsController),
+      module,
+      discLinkMaintenanceService,
+    };
+  };
+
+  it('requires the riffvalley minimum and inherits only through the central hierarchy', async () => {
+    const { controller, module } = await makeController();
+    const handler = ContentsController.prototype.triggerDailyLinkUpdate;
+
     expect(Reflect.getMetadata(PATH_METADATA, ContentsController)).toBe(
       'contents',
     );
@@ -51,28 +83,42 @@ describe('ContentsController daily link update authorization', () => {
     expect(roleMeetsMinimum(ValidRoles.superadmin, ValidRoles.riffvalley)).toBe(
       true,
     );
+    await module.close();
+    expect(controller).toBeInstanceOf(ContentsController);
   });
 
   it('preserves the scheduler delegation and HTTP response', async () => {
-    discLinkMaintenanceService.checkMissingSpotifyLinks = jest
-      .fn()
-      .mockResolvedValue(undefined);
+    const maintenance = {
+      checkMissingSpotifyLinks: jest
+        .fn<
+          ReturnType<DiscLinkMaintenanceService['checkMissingSpotifyLinks']>,
+          Parameters<DiscLinkMaintenanceService['checkMissingSpotifyLinks']>
+        >()
+        .mockResolvedValue(undefined),
+    };
+    const { controller, module } = await makeController({}, maintenance);
 
     await expect(controller.triggerDailyLinkUpdate()).resolves.toEqual({
       message: 'Daily link update triggered',
     });
-    expect(
-      discLinkMaintenanceService.checkMissingSpotifyLinks,
-    ).toHaveBeenCalledTimes(1);
+    expect(maintenance.checkMissingSpotifyLinks).toHaveBeenCalledTimes(1);
+    await module.close();
   });
 
   it('propagates manual maintenance failures unchanged', async () => {
     const error = new Error('maintenance failed');
-    discLinkMaintenanceService.checkMissingSpotifyLinks = jest
-      .fn()
-      .mockRejectedValue(error);
+    const maintenance = {
+      checkMissingSpotifyLinks: jest
+        .fn<
+          ReturnType<DiscLinkMaintenanceService['checkMissingSpotifyLinks']>,
+          Parameters<DiscLinkMaintenanceService['checkMissingSpotifyLinks']>
+        >()
+        .mockRejectedValue(error),
+    };
+    const { controller, module } = await makeController({}, maintenance);
 
     await expect(controller.triggerDailyLinkUpdate()).rejects.toBe(error);
+    await module.close();
   });
 
   it('protects editorial Contents creation with the riffvalley minimum', () => {
@@ -94,11 +140,31 @@ describe('ContentsController daily link update authorization', () => {
 
 describe('ContentsController monthly agenda', () => {
   it('keeps the public route and forwards validated year and month unchanged', async () => {
-    const result = [{ id: 'content-id' }];
+    const result = [Object.assign(new Content(), { id: 'content-id' })];
     const contentsService = {
-      findByMonth: jest.fn().mockResolvedValue(result),
-    } as unknown as ContentsService;
-    const controller = new ContentsController(contentsService, {} as any);
+      findByMonth: jest
+        .fn<
+          ReturnType<ContentsService['findByMonth']>,
+          Parameters<ContentsService['findByMonth']>
+        >()
+        .mockResolvedValue(result),
+    };
+    const builder = Test.createTestingModule({
+      controllers: [ContentsController],
+      providers: [
+        { provide: ContentsService, useValue: contentsService },
+        {
+          provide: DiscLinkMaintenanceService,
+          useValue: { checkMissingSpotifyLinks: jest.fn() },
+        },
+      ],
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(AuthGuard())
+      .useValue({ canActivate: () => true });
+    const module = await builder.compile();
+    const controller = module.get(ContentsController);
     const handler = ContentsController.prototype.findByMonth;
 
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('by-month');
@@ -106,8 +172,14 @@ describe('ContentsController monthly agenda', () => {
     expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
 
     await expect(
-      controller.findByMonth({ year: 2026, month: 12 }),
+      controller.findByMonth(
+        Object.assign(new FindContentByMonthQueryDto(), {
+          year: 2026,
+          month: 12,
+        }),
+      ),
     ).resolves.toBe(result);
     expect(contentsService.findByMonth).toHaveBeenCalledWith(2026, 12);
+    await module.close();
   });
 });

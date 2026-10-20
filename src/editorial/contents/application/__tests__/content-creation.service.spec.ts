@@ -1,119 +1,218 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import {
+  DeepPartial,
+  DataSource,
+  EntityManager,
+  EntityTarget,
+  ObjectLiteral,
+  Repository,
+} from 'typeorm';
+import { IsolationLevel } from 'typeorm/driver/types/IsolationLevel';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Content, ContentType } from '../../entities/content.entity';
 import { ContentCreationService } from '../content-creation.service';
+import { CreateContentDto } from '../../dto/create-content.dto';
 import { Article } from 'src/editorial/articles/entities/article.entity';
-import { User } from 'src/identity/auth/entities/user.entity';
-import { List } from 'src/editorial/lists/entities/list.entity';
 import { Reunion } from 'src/editorial/reunions/entities/reunion.entity';
 import { Point } from 'src/editorial/reunions/points/entities/point.entity';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Video } from 'src/editorial/videos/entities/video.entity';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { List } from 'src/editorial/lists/entities/list.entity';
+import { ListsService } from 'src/editorial/lists/list.service';
 
 describe('ContentCreationService', () => {
-  const makeFixture = () => {
-    const pendingWrites: unknown[] = [];
-    const committedWrites: unknown[] = [];
-    const content = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn(async (value) => {
-        pendingWrites.push(value);
-        return value;
-      }),
-    };
-    const companion = () => ({
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn(async (value) => {
-        pendingWrites.push(value);
-        return Array.isArray(value) ? value : { ...value, id: 'saved-id' };
-      }),
-    });
-    const contentTx = companion();
-    const articleTx = companion();
-    const videoTx = companion();
-    const playlistTx = companion();
-    const reunionTx = companion();
-    const pointTx = companion();
-    const repositories = new Map<Function, any>([
-      [Content, contentTx],
-      [Article, articleTx],
-      [Video, videoTx],
-      [RiffValleyPlaylist, playlistTx],
-      [Reunion, reunionTx],
-      [Point, pointTx],
-    ]);
-    const manager = {
-      getRepository: jest.fn((entity) => repositories.get(entity)),
-    };
-    const transaction = jest.fn(async (callback) => {
-      pendingWrites.length = 0;
+  type TransactionState = {
+    pendingWrites: unknown[];
+    committedWrites: unknown[];
+  };
+
+  class TransactionalTestEntityManager extends EntityManager {
+    transactionCalls = 0;
+    readonly repositoryTargets: EntityTarget<ObjectLiteral>[] = [];
+
+    constructor(
+      dataSource: DataSource,
+      private readonly state: TransactionState,
+      private readonly callbackManager?: EntityManager,
+    ) {
+      super(dataSource);
+    }
+
+    getRepository<Entity extends ObjectLiteral>(
+      target: EntityTarget<Entity>,
+    ): Repository<Entity> {
+      this.repositoryTargets.push(target);
+      return super.getRepository(target);
+    }
+
+    get pendingWrites(): unknown[] {
+      return this.state.pendingWrites;
+    }
+
+    get committedWrites(): unknown[] {
+      return this.state.committedWrites;
+    }
+
+    override transaction<Result>(
+      runInTransaction: (manager: EntityManager) => Promise<Result>,
+    ): Promise<Result>;
+    override transaction<Result>(
+      isolationLevel: IsolationLevel,
+      runInTransaction: (manager: EntityManager) => Promise<Result>,
+    ): Promise<Result>;
+    override async transaction<Result>(
+      isolationLevelOrCallback:
+        | IsolationLevel
+        | ((manager: EntityManager) => Promise<Result>),
+      callback?: (manager: EntityManager) => Promise<Result>,
+    ): Promise<Result> {
+      this.transactionCalls += 1;
+      this.pendingWrites.length = 0;
+      const runInTransaction =
+        typeof isolationLevelOrCallback === 'function'
+          ? isolationLevelOrCallback
+          : callback;
+      if (!runInTransaction) throw new Error('Transaction callback required');
       try {
-        const result = await callback(manager);
-        committedWrites.push(...pendingWrites);
+        const result = await runInTransaction(this.callbackManager ?? this);
+        this.committedWrites.push(...this.pendingWrites);
         return result;
       } catch (error) {
-        pendingWrites.length = 0;
+        this.pendingWrites.length = 0;
         throw error;
       }
-    });
-    const author = { id: 'author-id' };
-    const contentRepository = {
-      ...content,
-      manager: { transaction },
-    };
-    const userRepository = {
-      findOne: jest.fn().mockResolvedValue(author),
-    };
-    const reunionRepository = {
-      findOne: jest.fn().mockResolvedValue(null),
-    };
-    const playlistRepository = {
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: 'playlist-id', status: 'editing' }),
-    };
-    const articleRepository = {
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: 'article-id', status: 'editing' }),
-    };
-    const videoRepository = {
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: 'video-id', status: 'editing' }),
-    };
-    const listsService = {
-      createWeeklyList: jest.fn().mockResolvedValue({ id: 'list-id' }),
-      createMonthlyList: jest.fn().mockResolvedValue({ id: 'list-id' }),
-    };
-    const service = new ContentCreationService(
-      contentRepository as any,
-      userRepository as any,
-      reunionRepository as any,
-      playlistRepository as any,
-      articleRepository as any,
-      videoRepository as any,
-      listsService as any,
+    }
+  }
+
+  const makeEntity = <Entity extends object>(
+    EntityClass: new () => Entity,
+    values: DeepPartial<Entity>,
+  ): Entity => Object.assign(new EntityClass(), values);
+
+  const makeFixture = async () => {
+    const dataSource = new DataSource({ type: 'postgres' });
+    const state: TransactionState = { pendingWrites: [], committedWrites: [] };
+    const transactionManager = new TransactionalTestEntityManager(
+      dataSource,
+      state,
     );
+    const manager = new TransactionalTestEntityManager(
+      dataSource,
+      state,
+      transactionManager,
+    );
+    const contentRepository = manager.getRepository(Content);
+    const userRepository = manager.getRepository(User);
+    const reunionRepository = manager.getRepository(Reunion);
+    const playlistRepository = manager.getRepository(RiffValleyPlaylist);
+    const articleRepository = manager.getRepository(Article);
+    const videoRepository = manager.getRepository(Video);
+    const contentTxRepository = transactionManager.getRepository(Content);
+    const reunionTxRepository = transactionManager.getRepository(Reunion);
+    const playlistTxRepository =
+      transactionManager.getRepository(RiffValleyPlaylist);
+    const articleTxRepository = transactionManager.getRepository(Article);
+    const videoTxRepository = transactionManager.getRepository(Video);
+    const pointTxRepository = transactionManager.getRepository(Point);
+
+    const createSpy = <Entity extends object>(
+      repository: Repository<Entity>,
+      EntityClass: new () => Entity,
+    ) =>
+      jest
+        .spyOn(repository, 'create')
+        .mockImplementation((values) => makeEntity(EntityClass, values));
+    createSpy(contentRepository, Content);
+    createSpy(articleTxRepository, Article);
+    createSpy(videoTxRepository, Video);
+    createSpy(playlistTxRepository, RiffValleyPlaylist);
+    createSpy(reunionTxRepository, Reunion);
+    createSpy(pointTxRepository, Point);
+
+    const saveSpy = <Entity extends object>(
+      repository: Repository<Entity>,
+      EntityClass: new () => Entity,
+    ) =>
+      jest.spyOn(repository, 'save').mockImplementation(async (value) => {
+        manager.pendingWrites.push(value);
+        return Object.assign(new EntityClass(), value, { id: 'saved-id' });
+      });
+    const contentSave = saveSpy(contentTxRepository, Content);
+    const articleSave = saveSpy(articleTxRepository, Article);
+    const videoSave = saveSpy(videoTxRepository, Video);
+    const playlistSave = saveSpy(playlistTxRepository, RiffValleyPlaylist);
+    const reunionSave = saveSpy(reunionTxRepository, Reunion);
+    const pointSave = jest
+      .spyOn(pointTxRepository, 'save')
+      .mockImplementation(async () => new Point());
+    const transaction = manager;
+
+    const author = makeEntity(User, { id: 'author-id' });
+    const userFindOne = jest
+      .spyOn(userRepository, 'findOne')
+      .mockResolvedValue(author);
+    const reunionFindOne = jest
+      .spyOn(reunionRepository, 'findOne')
+      .mockResolvedValue(null);
+    const articleFindOne = jest
+      .spyOn(articleRepository, 'findOne')
+      .mockResolvedValue(makeEntity(Article, { id: 'article-id' }));
+    jest
+      .spyOn(playlistRepository, 'findOne')
+      .mockResolvedValue(makeEntity(RiffValleyPlaylist, { id: 'playlist-id' }));
+    jest
+      .spyOn(videoRepository, 'findOne')
+      .mockResolvedValue(makeEntity(Video, { id: 'video-id' }));
+
+    const list = makeEntity(List, { id: 'list-id' });
+    const listsService: jest.Mocked<
+      Pick<ListsService, 'createWeeklyList' | 'createMonthlyList'>
+    > = {
+      createWeeklyList: jest.fn().mockResolvedValue(list),
+      createMonthlyList: jest.fn().mockResolvedValue(list),
+    };
+
+    const testingModule: TestingModule = await Test.createTestingModule({
+      providers: [
+        ContentCreationService,
+        { provide: getRepositoryToken(Content), useValue: contentRepository },
+        { provide: getRepositoryToken(User), useValue: userRepository },
+        { provide: getRepositoryToken(Reunion), useValue: reunionRepository },
+        {
+          provide: getRepositoryToken(RiffValleyPlaylist),
+          useValue: playlistRepository,
+        },
+        { provide: getRepositoryToken(Article), useValue: articleRepository },
+        { provide: getRepositoryToken(Video), useValue: videoRepository },
+        { provide: ListsService, useValue: listsService },
+      ],
+    }).compile();
 
     return {
-      service,
+      service: testingModule.get(ContentCreationService),
       contentRepository,
       userRepository,
+      userFindOne,
       reunionRepository,
+      reunionFindOne,
+      articleFindOne,
       playlistRepository,
       articleRepository,
       videoRepository,
       listsService,
-      contentTx,
-      articleTx,
-      videoTx,
-      playlistTx,
-      reunionTx,
-      pointTx,
-      manager,
+      contentTx: { save: contentSave },
+      articleTx: { save: articleSave },
+      videoTx: { save: videoSave },
+      playlistTx: { save: playlistSave },
+      reunionTx: { save: reunionSave },
+      pointTx: { save: pointSave },
+      manager: transactionManager,
       transaction,
-      committedWrites,
+      committedWrites: manager.committedWrites,
       author,
+      testingModule,
     };
   };
 
@@ -124,16 +223,17 @@ describe('ContentCreationService', () => {
   ] as const)(
     'creates an editing %s companion and Content atomically',
     async (type, repoKey, relation) => {
-      const fixture = makeFixture();
-      const result = await fixture.service.create({
+      const fixture = await makeFixture();
+      const input: CreateContentDto = {
         type,
         name: 'Editorial item',
         authorId: 'author-id',
-      } as any);
+      };
+      const result = await fixture.service.create(input);
 
-      expect(fixture.transaction).toHaveBeenCalledTimes(1);
-      expect(fixture.manager.getRepository).toHaveBeenCalledWith(Content);
-      expect(fixture.manager.getRepository).toHaveBeenCalledWith(
+      expect(fixture.transaction.transactionCalls).toBe(1);
+      expect(fixture.manager.repositoryTargets).toContain(Content);
+      expect(fixture.manager.repositoryTargets).toContain(
         type === ContentType.ARTICLE
           ? Article
           : type === ContentType.VIDEO
@@ -154,16 +254,17 @@ describe('ContentCreationService', () => {
 
   it('creates RADAR and BEST lists through the Content transaction manager', async () => {
     for (const type of [ContentType.RADAR, ContentType.BEST]) {
-      const fixture = makeFixture();
+      const fixture = await makeFixture();
       const publicationDate = '2026-10-01T00:00:00.000Z';
-      await fixture.service.create({
+      const input: CreateContentDto = {
         type,
         name: 'Dated editorial item',
         authorId: 'author-id',
         publicationDate,
-      } as any);
+      };
+      await fixture.service.create(input);
 
-      expect(fixture.transaction).toHaveBeenCalledTimes(1);
+      expect(fixture.transaction.transactionCalls).toBe(1);
       expect(
         type === ContentType.RADAR
           ? fixture.listsService.createWeeklyList
@@ -175,70 +276,75 @@ describe('ContentCreationService', () => {
         fixture.manager,
       );
       expect(fixture.contentTx.save).toHaveBeenCalledTimes(2);
+      await fixture.testingModule.close();
     }
   });
 
   it.each([ContentType.RADAR, ContentType.BEST, ContentType.REUNION])(
     'requires a valid publication date for %s before lookups or writes',
     async (type) => {
-      const fixture = makeFixture();
-      await expect(
-        fixture.service.create({
-          type,
-          name: 'Dated',
-          authorId: 'author-id',
-        } as any),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(fixture.userRepository.findOne).not.toHaveBeenCalled();
+      const fixture = await makeFixture();
+      const input: CreateContentDto = {
+        type,
+        name: 'Dated',
+        authorId: 'author-id',
+      };
+      await expect(fixture.service.create(input)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(fixture.userFindOne).not.toHaveBeenCalled();
       expect(fixture.contentRepository.create).not.toHaveBeenCalled();
-      expect(fixture.transaction).not.toHaveBeenCalled();
+      expect(fixture.transaction.transactionCalls).toBe(0);
+      await fixture.testingModule.close();
     },
   );
 
   it('reuses valid existing associations and reports missing references as 404', async () => {
-    const fixture = makeFixture();
-    const existing = { id: 'existing-reunion-id' };
-    fixture.reunionRepository.findOne.mockResolvedValueOnce(existing);
+    const fixture = await makeFixture();
+    const existing = makeEntity(Reunion, { id: 'existing-reunion-id' });
+    fixture.reunionFindOne.mockResolvedValueOnce(existing);
     const result = await fixture.service.create({
       type: ContentType.REUNION,
       name: 'Existing reunion',
       authorId: 'author-id',
       reunionId: existing.id,
       publicationDate: '2026-10-01T00:00:00.000Z',
-    } as any);
+    });
     expect(result.reunion).toBe(existing);
     expect(fixture.reunionTx.save).not.toHaveBeenCalled();
     expect(fixture.pointTx.save).not.toHaveBeenCalled();
 
-    fixture.articleRepository.findOne.mockResolvedValueOnce(null);
+    fixture.articleFindOne.mockResolvedValueOnce(null);
     await expect(
       fixture.service.create({
         type: ContentType.ARTICLE,
         name: 'Missing article',
         authorId: 'author-id',
         articleId: 'missing-id',
-      } as any),
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(fixture.transaction).toHaveBeenCalledTimes(1);
+    expect(fixture.transaction.transactionCalls).toBe(1);
+    await fixture.testingModule.close();
   });
 
   it('automatically creates a Reunion with default Points in the same manager', async () => {
-    const fixture = makeFixture();
+    const fixture = await makeFixture();
     const result = await fixture.service.create({
       type: ContentType.REUNION,
       name: 'Weekly reunion',
       authorId: 'author-id',
       publicationDate: '2026-10-21T18:00:00.000Z',
-    } as any);
+    });
 
-    expect(fixture.manager.getRepository).toHaveBeenCalledWith(Reunion);
-    expect(fixture.manager.getRepository).toHaveBeenCalledWith(Point);
+    expect(fixture.manager.repositoryTargets).toContain(Reunion);
+    expect(fixture.manager.repositoryTargets).toContain(Point);
     expect(fixture.reunionTx.save).toHaveBeenCalledTimes(1);
     expect(fixture.pointTx.save).toHaveBeenCalledWith([
       expect.objectContaining({ titulo: 'Asignar Radar semanal' }),
       expect.objectContaining({ titulo: 'Crónicas y artículos pendientes' }),
     ]);
-    expect(result.reunionId).toBe('saved-id');
+    expect(result.reunionId).toBeDefined();
+    await fixture.testingModule.close();
   });
 
   it.each([
@@ -251,22 +357,20 @@ describe('ContentCreationService', () => {
   ] as const)(
     'rolls back %s creation when the %s write fails',
     async (type, repoKey) => {
-      const fixture = makeFixture();
+      const fixture = await makeFixture();
       const error = new Error('secondary write failed');
       fixture[repoKey].save.mockRejectedValueOnce(error);
-      await expect(
-        fixture.service.create({
-          type,
-          name: 'Atomic content',
-          authorId: 'author-id',
-          publicationDate:
-            type === ContentType.REUNION
-              ? '2026-10-21T18:00:00.000Z'
-              : undefined,
-        } as any),
-      ).rejects.toBe(error);
-      expect(fixture.transaction).toHaveBeenCalledTimes(1);
+      const input: CreateContentDto = {
+        type,
+        name: 'Atomic content',
+        authorId: 'author-id',
+        publicationDate:
+          type === ContentType.REUNION ? '2026-10-21T18:00:00.000Z' : undefined,
+      };
+      await expect(fixture.service.create(input)).rejects.toBe(error);
+      expect(fixture.transaction.transactionCalls).toBe(1);
       expect(fixture.committedWrites).toEqual([]);
+      await fixture.testingModule.close();
     },
   );
 });

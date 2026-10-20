@@ -1,34 +1,45 @@
 import { BadRequestException } from '@nestjs/common';
-import { EntityManager, In, Not } from 'typeorm';
+import { Test } from '@nestjs/testing';
+import { DataSource, In, Not, Repository } from 'typeorm';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { List, ListStatus, ListType } from '../../entities/list.entity';
+import { CreateListDto } from '../../dto/create-list.dto';
 import { ListCrudService } from '../list-crud.service';
 import { ListsService } from '../../list.service';
 import { ListCalendarService } from '../list-calendar.service';
+import { ListContentCoordinator } from '../list-content-coordinator.service';
+import { WeeklyListPublisherService } from '../../wordpress/weekly-list-publisher.service';
+import { MonthlyListPublisherService } from '../../wordpress/monthly-list-publisher.service';
 
 describe('ListCrudService', () => {
   let service: ListCrudService;
-  let repository: {
-    create: jest.Mock;
-    save: jest.Mock;
-    findAndCount: jest.Mock;
-    findOneByOrFail: jest.Mock;
-  };
+  let repository: Repository<List>;
+  let save: jest.SpiedFunction<Repository<List>['save']>;
+  let findAndCount: jest.SpiedFunction<Repository<List>['findAndCount']>;
+  let findOneByOrFail: jest.SpiedFunction<Repository<List>['findOneByOrFail']>;
 
   beforeEach(() => {
-    repository = {
-      create: jest.fn((value) => value),
-      save: jest.fn(async (value) => value),
-      findAndCount: jest.fn().mockResolvedValue([[], 0]),
-      findOneByOrFail: jest.fn(),
-    };
-    service = new ListCrudService(repository as any);
+    const manager = new DataSource({ type: 'postgres' }).manager;
+    repository = new Repository(List, manager);
+    jest
+      .spyOn(repository, 'create')
+      .mockImplementation((value) => Object.assign(new List(), value));
+    save = jest
+      .spyOn(repository, 'save')
+      .mockImplementation(async (value) => Object.assign(new List(), value));
+    findAndCount = jest
+      .spyOn(repository, 'findAndCount')
+      .mockResolvedValue([[], 0]);
+    findOneByOrFail = jest.spyOn(repository, 'findOneByOrFail');
+    service = new ListCrudService(repository);
   });
 
   it('creates SPECIAL without adding editorial dates', async () => {
-    const dto = { name: 'Special list', type: ListType.SPECIAL };
+    const dto: CreateListDto = { name: 'Special list', type: ListType.SPECIAL };
 
-    await expect(service.create(dto as any)).resolves.toEqual(dto);
+    await expect(service.create(dto)).resolves.toEqual(
+      expect.objectContaining(dto),
+    );
     expect(repository.create).toHaveBeenCalledWith(dto);
     expect(repository.save).toHaveBeenCalledWith(dto);
   });
@@ -41,7 +52,7 @@ describe('ListCrudService', () => {
           name: 'Special list',
           type: ListType.SPECIAL,
           [field]: '2026-10-01T00:00:00.000Z',
-        } as any),
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(repository.create).not.toHaveBeenCalled();
@@ -54,7 +65,7 @@ describe('ListCrudService', () => {
     async (type) => {
       for (const releaseDate of [undefined, null, 'not-a-date']) {
         await expect(
-          service.create({ name: 'Editorial list', type, releaseDate } as any),
+          service.create({ name: 'Editorial list', type, releaseDate }),
         ).rejects.toBeInstanceOf(BadRequestException);
       }
 
@@ -72,7 +83,7 @@ describe('ListCrudService', () => {
         releaseDate: '2026-10-01T00:00:00.000Z',
       };
 
-      await service.create(dto as any);
+      await service.create(dto);
 
       expect(repository.save).toHaveBeenCalledWith(
         expect.objectContaining(dto),
@@ -81,15 +92,15 @@ describe('ListCrudService', () => {
   );
 
   it('preserves query filters, sort, pagination and response shape', async () => {
-    const lists = [{ id: 'list-1' } as List];
-    repository.findAndCount.mockResolvedValue([lists, 11]);
+    const lists = [Object.assign(new List(), { id: 'list-1' })];
+    findAndCount.mockResolvedValue([lists, 11]);
 
     await expect(
       service.findAll({
         limit: 5,
         offset: 5,
         statusExclusions: [ListStatus.NEW],
-      } as PaginationDto),
+      }),
     ).resolves.toEqual({
       totalItems: 11,
       totalPages: 3,
@@ -97,7 +108,7 @@ describe('ListCrudService', () => {
       limit: 5,
       data: lists,
     });
-    const [query] = repository.findAndCount.mock.calls[0];
+    const [query] = findAndCount.mock.calls[0];
     expect(query).toEqual({
       take: 5,
       skip: 5,
@@ -124,21 +135,19 @@ describe('ListCrudService', () => {
 
   it('propagates findAndCount repository failures', async () => {
     const error = new Error('list query failed');
-    repository.findAndCount.mockRejectedValueOnce(error);
+    findAndCount.mockRejectedValueOnce(error);
 
     await expect(service.findAll({})).rejects.toBe(error);
   });
 
   it('maps an absent record and repository read errors to the existing not-found response', async () => {
-    repository.findOneByOrFail.mockRejectedValueOnce(new Error('absent'));
+    findOneByOrFail.mockRejectedValueOnce(new Error('absent'));
     await expect(service.findOne('missing-id')).rejects.toMatchObject({
       status: 404,
       message: 'List with id missing-id not found',
     });
 
-    repository.findOneByOrFail.mockRejectedValueOnce(
-      new Error('repository unavailable'),
-    );
+    findOneByOrFail.mockRejectedValueOnce(new Error('repository unavailable'));
     await expect(service.findOne('list-id')).rejects.toMatchObject({
       status: 404,
       message: 'List with id list-id not found',
@@ -216,7 +225,7 @@ describe('ListCrudService', () => {
     async (method) => {
       for (const releaseDate of [undefined, null, new Date('invalid')]) {
         await expect(
-          service[method](releaseDate as Date),
+          Reflect.apply(service[method], service, [releaseDate]),
         ).rejects.toBeInstanceOf(BadRequestException);
       }
       expect(repository.save).not.toHaveBeenCalled();
@@ -224,10 +233,14 @@ describe('ListCrudService', () => {
   );
 
   it('saves typed list creation through the supplied transaction manager', async () => {
-    const transactionalSave = jest.fn(async (value) => value);
-    const manager = {
-      getRepository: jest.fn().mockReturnValue({ save: transactionalSave }),
-    } as unknown as EntityManager;
+    const manager = new DataSource({ type: 'postgres' }).manager;
+    const transactionalRepository = new Repository(List, manager);
+    const transactionalSave = jest
+      .spyOn(transactionalRepository, 'save')
+      .mockImplementation(async (value) => Object.assign(new List(), value));
+    const getRepository = jest
+      .spyOn(manager, 'getRepository')
+      .mockReturnValue(transactionalRepository);
 
     await service.createWeeklyList(
       new Date('2026-10-01T12:00:00.000Z'),
@@ -236,23 +249,23 @@ describe('ListCrudService', () => {
       manager,
     );
 
-    expect(manager.getRepository).toHaveBeenCalledWith(List);
+    expect(getRepository).toHaveBeenCalledWith(List);
     expect(transactionalSave).toHaveBeenCalledTimes(1);
     expect(repository.save).not.toHaveBeenCalled();
   });
 
   it('maps persistence errors to the existing HTTP errors', async () => {
-    repository.save.mockRejectedValueOnce({
+    save.mockRejectedValueOnce({
       code: '23505',
       detail: 'duplicate',
     });
     await expect(
-      service.create({ name: 'List', type: ListType.SPECIAL } as any),
+      service.create({ name: 'List', type: ListType.SPECIAL }),
     ).rejects.toMatchObject({ status: 400, message: 'duplicate' });
 
-    repository.save.mockRejectedValueOnce(new Error('database unavailable'));
+    save.mockRejectedValueOnce(new Error('database unavailable'));
     await expect(
-      service.create({ name: 'List', type: ListType.SPECIAL } as any),
+      service.create({ name: 'List', type: ListType.SPECIAL }),
     ).rejects.toMatchObject({ status: 500 });
   });
 });
@@ -267,19 +280,23 @@ describe('ListsService CRUD facade', () => {
       createWeeklyList: jest.fn().mockResolvedValue('weekly'),
       createMonthlyList: jest.fn().mockResolvedValue('monthly'),
     };
-    const facade = new ListsService(
-      crudService as any,
-      {} as ListCalendarService,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-    const dto = { name: 'List', type: ListType.SPECIAL } as any;
-    const pagination = { limit: 10 } as PaginationDto;
+    const dto: CreateListDto = { name: 'List', type: ListType.SPECIAL };
+    const pagination: PaginationDto = { limit: 10 };
     const releaseDate = new Date('2026-10-01T12:00:00.000Z');
     const listDate = new Date('2026-10-02T00:00:00.000Z');
     const closeDate = new Date('2026-10-03T00:00:00.000Z');
-    const manager = {} as EntityManager;
+    const manager = new DataSource({ type: 'postgres' }).manager;
+    const module = await Test.createTestingModule({
+      providers: [
+        ListsService,
+        { provide: ListCrudService, useValue: crudService },
+        { provide: ListCalendarService, useValue: {} },
+        { provide: ListContentCoordinator, useValue: {} },
+        { provide: WeeklyListPublisherService, useValue: {} },
+        { provide: MonthlyListPublisherService, useValue: {} },
+      ],
+    }).compile();
+    const facade = module.get(ListsService);
 
     await expect(facade.create(dto)).resolves.toBe('created');
     await expect(facade.findAll(pagination)).resolves.toBe('page');

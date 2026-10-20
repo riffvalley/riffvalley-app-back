@@ -9,10 +9,7 @@ import { Repository } from 'typeorm';
 import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
 import type { SpotifyTrack } from 'src/integrations/spotify-integration';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
-import {
-  RiffValleyPlaylist,
-  RiffValleyPlaylistType,
-} from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { SyncPlaylistArtistDto } from '../dto/sync-playlist-artist.dto';
 import {
   PlaylistArtistSelectionMode,
@@ -388,12 +385,15 @@ export class SpotifyPlaylistArtistSyncService {
         fetchedTracks.map((track) => [track.id, track]),
       );
       const selectedTracks = spotifyTrackIds.map((id) => tracksById.get(id));
-      if (selectedTracks.some((track) => !track)) {
+      const availableTracks = selectedTracks.filter(
+        (track): track is SpotifyTrack => track !== undefined,
+      );
+      if (availableTracks.length !== selectedTracks.length) {
         throw new NotFoundException(
           'Una de las canciones seleccionadas ya no está disponible en Spotify',
         );
       }
-      const tracks = (selectedTracks as SpotifyTrack[]).map((track) =>
+      const tracks = availableTracks.map((track) =>
         this.toPlaylistTrackRecord(track),
       );
 
@@ -441,7 +441,7 @@ export class SpotifyPlaylistArtistSyncService {
       }
 
       const normalizedArtist = normalizeName(artist.name);
-      const spotifyArtist = (selectedTracks as SpotifyTrack[])
+      const spotifyArtist = availableTracks
         .flatMap((track) => track.artists)
         .find((item) => normalizeName(item.name) === normalizedArtist);
       association.tracks = tracks;

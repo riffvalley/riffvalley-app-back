@@ -3,13 +3,22 @@ import {
   NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
-import { QueryFailedError } from 'typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Test } from '@nestjs/testing';
+import {
+  DeepPartial,
+  FindManyOptions,
+  FindOneOptions,
+  QueryFailedError,
+} from 'typeorm';
 import { ArticlesController } from './articles.controller';
 import { ArticlesService } from './articles.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { FindArticlesQueryDto } from './dto/find-articles-query.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { Article, ArticleStatus, ArticleType } from './entities/article.entity';
+import { ContentsService } from '../contents/contents.service';
+import { Content } from '../contents/entities/content.entity';
 
 describe('ArticlesController validation', () => {
   const articleId = 'c17ee051-1a9b-4f33-a2b4-67f1a2508a4c';
@@ -31,10 +40,11 @@ describe('ArticlesController validation', () => {
   let service: ArticlesService;
   let controller: ArticlesController;
   let repository: {
-    create: jest.Mock;
-    save: jest.Mock;
-    find: jest.Mock;
-    findOne: jest.Mock;
+    create: jest.Mock<DeepPartial<Article>, [DeepPartial<Article>]>;
+    merge: jest.Mock<Article, [Article, DeepPartial<Article>]>;
+    save: jest.Mock<Promise<Article>, [DeepPartial<Article>]>;
+    find: jest.Mock<Promise<Article[]>, [FindManyOptions<Article>?]>;
+    findOne: jest.Mock<Promise<Article | null>, [FindOneOptions<Article>]>;
   };
 
   function article(overrides: Partial<Article> = {}): Article {
@@ -119,21 +129,45 @@ describe('ArticlesController validation', () => {
     );
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     persistedArticle = article();
     repository = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn(async (entity) => {
-        persistedArticle = { ...entity, id: entity.id ?? articleId } as Article;
-        return persistedArticle;
-      }),
-      find: jest.fn(async () => []),
-      findOne: jest.fn(async () => persistedArticle),
+      create: jest.fn<DeepPartial<Article>, [DeepPartial<Article>]>(
+        (values) => ({ ...values }),
+      ),
+      merge: jest.fn<Article, [Article, DeepPartial<Article>]>(
+        (entity: Article, partial: DeepPartial<Article>) =>
+          Object.assign(entity, partial),
+      ),
+      save: jest.fn<Promise<Article>, [DeepPartial<Article>]>(
+        async (entity) => {
+          persistedArticle = {
+            ...entity,
+            id: entity.id ?? articleId,
+          } as Article;
+          return persistedArticle;
+        },
+      ),
+      find: jest.fn<Promise<Article[]>, [FindManyOptions<Article>?]>(
+        async () => [],
+      ),
+      findOne: jest.fn<Promise<Article | null>, [FindOneOptions<Article>]>(
+        async () => persistedArticle,
+      ),
     };
-    service = new ArticlesService(
-      repository as any,
-      { findOneByArticleId: jest.fn() } as any,
-    );
+    const contentsService: Pick<ContentsService, 'findOneByArticleId'> = {
+      findOneByArticleId: jest.fn<Promise<Content | null>, [string]>(
+        async () => null,
+      ),
+    };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ArticlesService,
+        { provide: getRepositoryToken(Article), useValue: repository },
+        { provide: ContentsService, useValue: contentsService },
+      ],
+    }).compile();
+    service = moduleRef.get(ArticlesService);
     controller = new ArticlesController(service);
   });
 

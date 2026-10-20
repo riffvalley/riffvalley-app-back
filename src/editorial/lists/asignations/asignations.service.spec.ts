@@ -1,10 +1,47 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { QueryFailedError } from 'typeorm';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import {
+  DataSource,
+  DeepPartial,
+  EntityManager,
+  QueryFailedError,
+  Repository,
+} from 'typeorm';
+import type { IsolationLevel } from 'typeorm/driver/types/IsolationLevel';
 import { AsignationsService } from './asignations.service';
 import { Asignation } from './entities/asignations.entity';
-import { List } from '../entities/list.entity';
+import { List, ListType } from '../entities/list.entity';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { ListsService } from '../list.service';
 
 jest.mock('sanitize-html', () => jest.fn((value: string) => value));
+
+class TransactionTestEntityManager extends EntityManager {
+  transaction<T>(
+    runInTransaction: (entityManager: EntityManager) => Promise<T>,
+  ): Promise<T>;
+  transaction<T>(
+    isolationLevel: IsolationLevel,
+    runInTransaction: (entityManager: EntityManager) => Promise<T>,
+  ): Promise<T>;
+  transaction<T>(
+    isolationOrCallback:
+      | IsolationLevel
+      | ((entityManager: EntityManager) => Promise<T>),
+    callback?: (entityManager: EntityManager) => Promise<T>,
+  ): Promise<T> {
+    const runInTransaction =
+      typeof isolationOrCallback === 'function'
+        ? isolationOrCallback
+        : callback;
+    if (!runInTransaction) {
+      return Promise.reject(new Error('A transaction callback is required'));
+    }
+    return runInTransaction(this);
+  }
+}
 
 describe('AsignationsService error classification', () => {
   const asignationId = 'c17ee051-1a9b-4f33-a2b4-67f1a2508a4c';
@@ -18,23 +55,51 @@ describe('AsignationsService error classification', () => {
   ] as const;
 
   let service: AsignationsService;
-  let asignationRepository: {
-    create: jest.Mock;
-    save: jest.Mock;
-    findOneBy: jest.Mock;
-    preload: jest.Mock;
-    delete: jest.Mock;
-    findAndCount: jest.Mock;
-    manager: { transaction: jest.Mock };
-    findOne: jest.Mock;
-    query: jest.Mock;
-  };
-  let userRepository: { findOneBy: jest.Mock };
-  let discRepository: { findOneBy: jest.Mock };
-  let listRepository: { findOneBy: jest.Mock };
-  let listsService: { syncDiscToWordPress: jest.Mock };
+  let asignationRepository: Repository<Asignation>;
+  let userRepository: Repository<User>;
+  let discRepository: Repository<Disc>;
+  let listRepository: Repository<List>;
+  let listsService: jest.Mocked<Pick<ListsService, 'syncDiscToWordPress'>>;
+  let manager: EntityManager;
+  let asignationCreate: jest.SpiedFunction<Repository<Asignation>['create']>;
+  let asignationSave: jest.SpiedFunction<Repository<Asignation>['save']>;
+  let asignationFindOneBy: jest.SpiedFunction<
+    Repository<Asignation>['findOneBy']
+  >;
+  let asignationPreload: jest.SpiedFunction<Repository<Asignation>['preload']>;
+  let asignationDelete: jest.SpiedFunction<Repository<Asignation>['delete']>;
+  let asignationFindAndCount: jest.SpiedFunction<
+    Repository<Asignation>['findAndCount']
+  >;
+  let asignationFindOne: jest.SpiedFunction<Repository<Asignation>['findOne']>;
+  let userFindOneBy: jest.SpiedFunction<Repository<User>['findOneBy']>;
+  let discFindOneBy: jest.SpiedFunction<Repository<Disc>['findOneBy']>;
+  let listFindOneBy: jest.SpiedFunction<Repository<List>['findOneBy']>;
+  let transactionQuery: jest.SpiedFunction<EntityManager['query']>;
+  let asignationQuery: jest.SpiedFunction<Repository<Asignation>['query']>;
   let groupCount = 0;
-  let transactionManager: any;
+
+  function asignationFixture(values: DeepPartial<Asignation>): Asignation {
+    return Object.assign(new Asignation(), values);
+  }
+
+  function listFixture(values: DeepPartial<List>): List {
+    return Object.assign(new List(), values);
+  }
+
+  function discFixture(id: string): Disc {
+    const disc = Object.assign(new Disc(), { id });
+    for (const property of [
+      'debut',
+      'ep',
+      'featured',
+      'pinned',
+      'verified',
+    ] as const) {
+      Object.defineProperty(disc, property, { enumerable: false });
+    }
+    return disc;
+  }
 
   function queryFailedError(
     code: string,
@@ -58,56 +123,97 @@ describe('AsignationsService error classification', () => {
       error = caught;
     }
 
-    expect(error).toBeInstanceOf(NotFoundException);
-    expect((error as NotFoundException).getStatus()).toBe(404);
-    return error as NotFoundException;
+    if (!(error instanceof NotFoundException)) {
+      throw new Error('Expected a NotFoundException');
+    }
+    expect(error.getStatus()).toBe(404);
+    return error;
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     groupCount = 0;
-    asignationRepository = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn(async (asignation) => asignation),
-      findOneBy: jest.fn(async () => ({ id: asignationId })),
-      preload: jest.fn(async () => ({ id: asignationId })),
-      delete: jest.fn(async () => ({ affected: 1 })),
-      findAndCount: jest.fn(async () => [[], 0]),
-      findOne: jest.fn(async () => ({
-        id: asignationId,
-        list: { id: listId, type: 'week' },
-        position: 2,
-        disc: { id: discId },
-      })),
-      query: jest.fn(async () => [{ count: groupCount }]),
-      manager: {
-        transaction: jest.fn(async (callback) => callback(transactionManager)),
-      },
-    };
-    userRepository = { findOneBy: jest.fn(async () => ({ id: userId })) };
-    discRepository = { findOneBy: jest.fn(async () => ({ id: discId })) };
-    listRepository = {
-      findOneBy: jest.fn(async () => ({ id: listId, type: 'week' })),
-    };
-    transactionManager = {
-      query: jest.fn(),
-      getRepository: jest.fn((entity) =>
-        entity === List ? listRepository : asignationRepository,
-      ),
-    };
-    listsService = { syncDiscToWordPress: jest.fn() };
-    service = new AsignationsService(
-      asignationRepository as any,
-      userRepository as any,
-      discRepository as any,
-      listRepository as any,
-      listsService as any,
+    jest.restoreAllMocks();
+    manager = new TransactionTestEntityManager(
+      new DataSource({ type: 'postgres' }),
     );
-    (service as any).logger.error = jest.fn();
+    asignationRepository = new Repository(Asignation, manager);
+    userRepository = new Repository(User, manager);
+    discRepository = new Repository(Disc, manager);
+    listRepository = new Repository(List, manager);
+
+    asignationCreate = jest
+      .spyOn(asignationRepository, 'create')
+      .mockImplementation((values) => Object.assign(new Asignation(), values));
+    asignationSave = jest
+      .spyOn(asignationRepository, 'save')
+      .mockImplementation(async (values) =>
+        Object.assign(new Asignation(), values),
+      );
+    asignationFindOneBy = jest
+      .spyOn(asignationRepository, 'findOneBy')
+      .mockResolvedValue(asignationFixture({ id: asignationId }));
+    asignationPreload = jest
+      .spyOn(asignationRepository, 'preload')
+      .mockImplementation(async (values) => asignationFixture(values));
+    asignationDelete = jest
+      .spyOn(asignationRepository, 'delete')
+      .mockResolvedValue({ affected: 1, raw: [] });
+    asignationFindAndCount = jest
+      .spyOn(asignationRepository, 'findAndCount')
+      .mockResolvedValue([[], 0]);
+    asignationFindOne = jest
+      .spyOn(asignationRepository, 'findOne')
+      .mockResolvedValue(
+        asignationFixture({
+          id: asignationId,
+          list: listFixture({ id: listId, type: ListType.WEEK }),
+          position: 2,
+          disc: discFixture(discId),
+        }),
+      );
+    asignationQuery = jest
+      .spyOn(asignationRepository, 'query')
+      .mockImplementation(
+        async (): Promise<Array<{ count: number }>> => [{ count: groupCount }],
+      );
+    userFindOneBy = jest
+      .spyOn(userRepository, 'findOneBy')
+      .mockResolvedValue(Object.assign(new User(), { id: userId }));
+    discFindOneBy = jest
+      .spyOn(discRepository, 'findOneBy')
+      .mockResolvedValue(discFixture(discId));
+    listFindOneBy = jest
+      .spyOn(listRepository, 'findOneBy')
+      .mockResolvedValue(listFixture({ id: listId, type: ListType.WEEK }));
+
+    transactionQuery = jest.spyOn(manager, 'query').mockResolvedValue([]);
+    jest
+      .spyOn(manager, 'getRepository')
+      .mockImplementation((target) =>
+        target === List ? listRepository : asignationRepository,
+      );
+    listsService = { syncDiscToWordPress: jest.fn() };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        AsignationsService,
+        {
+          provide: getRepositoryToken(Asignation),
+          useValue: asignationRepository,
+        },
+        { provide: getRepositoryToken(User), useValue: userRepository },
+        { provide: getRepositoryToken(Disc), useValue: discRepository },
+        { provide: getRepositoryToken(List), useValue: listRepository },
+        { provide: ListsService, useValue: listsService },
+      ],
+    }).compile();
+    service = module.get(AsignationsService);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
 
   it('returns an existing asignation without changing its payload', async () => {
-    const existing = { id: asignationId, position: 2 } as Asignation;
-    asignationRepository.findOneBy.mockResolvedValue(existing);
+    const existing = asignationFixture({ id: asignationId, position: 2 });
+    asignationFindOneBy.mockResolvedValue(existing);
 
     await expect(service.findOne(asignationId)).resolves.toBe(existing);
     expect(asignationRepository.findOneBy).toHaveBeenCalledWith({
@@ -116,22 +222,22 @@ describe('AsignationsService error classification', () => {
   });
 
   it('returns 404 for a missing asignation and propagates repository failures', async () => {
-    asignationRepository.findOneBy.mockResolvedValueOnce(null);
+    asignationFindOneBy.mockResolvedValueOnce(null);
     const notFound = await expectNotFound(service.findOne(asignationId));
     expect(notFound.message).toBe(
       `Asignation with id ${asignationId} not found`,
     );
 
     const repositoryError = new Error('database unavailable');
-    asignationRepository.findOneBy.mockRejectedValueOnce(repositoryError);
+    asignationFindOneBy.mockRejectedValueOnce(repositoryError);
     await expect(service.findOne(asignationId)).rejects.toBe(repositoryError);
   });
 
   it('creates with valid related records and preserves the response', async () => {
-    const created = { position: 2 };
-    const saved = { id: asignationId, position: 2 };
-    asignationRepository.create.mockReturnValue(created);
-    asignationRepository.save.mockResolvedValue(saved);
+    const created = asignationFixture({ position: 2 });
+    const saved = asignationFixture({ id: asignationId, position: 2 });
+    asignationCreate.mockReturnValue(created);
+    asignationSave.mockResolvedValue(saved);
 
     const result = await service.create({
       listId,
@@ -152,11 +258,13 @@ describe('AsignationsService error classification', () => {
   });
 
   it('allows the first and fourth Radar discs, rejects the fifth without saving', async () => {
-    listRepository.findOneBy.mockResolvedValue({ id: listId, type: 'week' });
+    listFindOneBy.mockResolvedValue(
+      listFixture({ id: listId, type: ListType.WEEK }),
+    );
     await expect(
       service.create({ listId, discId, position: 0 }),
     ).resolves.toBeDefined();
-    expect(asignationRepository.query).not.toHaveBeenCalled();
+    expect(asignationQuery).not.toHaveBeenCalled();
 
     const createAt = (position: number) =>
       service.create({ listId, discId, position });
@@ -166,16 +274,18 @@ describe('AsignationsService error classification', () => {
     groupCount = 3;
     await expect(createAt(1)).resolves.toBeDefined();
     groupCount = 4;
-    const previousSaves = asignationRepository.save.mock.calls.length;
+    const previousSaves = asignationSave.mock.calls.length;
     await expect(createAt(1)).rejects.toMatchObject({
       status: 400,
       message: 'Un grupo de Radar admite como máximo cuatro discos.',
     });
-    expect(asignationRepository.save).toHaveBeenCalledTimes(previousSaves);
+    expect(asignationSave).toHaveBeenCalledTimes(previousSaves);
   });
 
   it('limits nonzero negative positions as groups too', async () => {
-    listRepository.findOneBy.mockResolvedValue({ id: listId, type: 'week' });
+    listFindOneBy.mockResolvedValue(
+      listFixture({ id: listId, type: ListType.WEEK }),
+    );
     groupCount = 4;
 
     await expect(
@@ -184,33 +294,35 @@ describe('AsignationsService error classification', () => {
   });
 
   it.each([
-    ['SPECIAL', 'special'],
-    ['MONTH', 'month'],
+    ['SPECIAL', ListType.SPECIAL],
+    ['MONTH', ListType.MONTH],
   ])('does not apply the cap to %s lists', async (_name, type) => {
-    listRepository.findOneBy.mockResolvedValue({ id: listId, type });
+    listFindOneBy.mockResolvedValue(listFixture({ id: listId, type }));
     groupCount = 9;
     await expect(
       service.create({ listId, discId, position: 1 }),
     ).resolves.toBeDefined();
-    expect(asignationRepository.query).not.toHaveBeenCalled();
+    expect(asignationQuery).not.toHaveBeenCalled();
   });
 
   it('takes a transaction-scoped advisory lock before counting and saving', async () => {
-    listRepository.findOneBy.mockResolvedValue({ id: listId, type: 'week' });
+    listFindOneBy.mockResolvedValue(
+      listFixture({ id: listId, type: ListType.WEEK }),
+    );
     await service.create({ listId, discId, position: 3 });
 
-    expect(transactionManager.query).toHaveBeenCalledWith(
+    expect(transactionQuery).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`riffvalley:radar-group:${listId}:3`],
     );
-    expect(transactionManager.query.mock.invocationCallOrder[0]).toBeLessThan(
-      asignationRepository.query.mock.invocationCallOrder[0],
+    expect(transactionQuery.mock.invocationCallOrder[0]).toBeLessThan(
+      asignationQuery.mock.invocationCallOrder[0],
     );
   });
 
   it('propagates unexpected create repository failures', async () => {
     const repositoryError = new Error('database unavailable');
-    listRepository.findOneBy.mockRejectedValue(repositoryError);
+    listFindOneBy.mockRejectedValue(repositoryError);
 
     await expect(service.create({ listId })).rejects.toBe(repositoryError);
   });
@@ -222,9 +334,9 @@ describe('AsignationsService error classification', () => {
   ])(
     'returns 404 when the referenced %s does not exist',
     async (relation, id) => {
-      if (relation === 'list') listRepository.findOneBy.mockResolvedValue(null);
-      if (relation === 'user') userRepository.findOneBy.mockResolvedValue(null);
-      if (relation === 'disc') discRepository.findOneBy.mockResolvedValue(null);
+      if (relation === 'list') listFindOneBy.mockResolvedValue(null);
+      if (relation === 'user') userFindOneBy.mockResolvedValue(null);
+      if (relation === 'disc') discFindOneBy.mockResolvedValue(null);
 
       const error = await expectNotFound(
         service.create({
@@ -248,7 +360,7 @@ describe('AsignationsService error classification', () => {
         table: 'asignation',
         constraint,
       });
-      asignationRepository.save.mockRejectedValue(databaseError);
+      asignationSave.mockRejectedValue(databaseError);
 
       const error = await expectNotFound(
         service.create({ listId, userId, discId }),
@@ -272,7 +384,7 @@ describe('AsignationsService error classification', () => {
         table,
         constraint,
       });
-      asignationRepository.save.mockRejectedValue(foreignKeyError);
+      asignationSave.mockRejectedValue(foreignKeyError);
 
       await expect(service.create({ listId })).rejects.toBe(foreignKeyError);
     },
@@ -283,7 +395,7 @@ describe('AsignationsService error classification', () => {
       table: 'asignation',
       constraint: 'UQ_private_name',
     });
-    asignationRepository.save.mockRejectedValue(databaseError);
+    asignationSave.mockRejectedValue(databaseError);
 
     let error: unknown;
     try {
@@ -293,26 +405,25 @@ describe('AsignationsService error classification', () => {
     }
 
     expect(error).toBeInstanceOf(BadRequestException);
-    expect((error as BadRequestException).getStatus()).toBe(400);
-    expect((error as BadRequestException).message).toBe(
-      'Asignation conflicts with existing data',
-    );
-    expect((error as BadRequestException).message).not.toContain(
-      'UQ_private_name',
-    );
+    if (!(error instanceof BadRequestException)) {
+      throw new Error('Expected a BadRequestException');
+    }
+    expect(error.getStatus()).toBe(400);
+    expect(error.message).toBe('Asignation conflicts with existing data');
+    expect(error.message).not.toContain('UQ_private_name');
   });
 
   it('returns 404 when update cannot preload the requested asignation', async () => {
-    asignationRepository.findOne.mockResolvedValue(null);
+    asignationFindOne.mockResolvedValue(null);
 
     await expectNotFound(service.update(asignationId, { done: true }));
-    expect(asignationRepository.save).not.toHaveBeenCalled();
+    expect(asignationSave).not.toHaveBeenCalled();
   });
 
   it('updates an existing asignation with a valid user and preserves the response', async () => {
-    asignationRepository.preload.mockImplementation(async (values) => ({
-      ...values,
-    }));
+    asignationPreload.mockImplementation(async (values) =>
+      asignationFixture(values),
+    );
 
     await expect(
       service.update(asignationId, { userId, done: true }),
@@ -328,60 +439,68 @@ describe('AsignationsService error classification', () => {
 
   it('allows updates in the same group and movement into a group with space', async () => {
     groupCount = 4;
-    asignationRepository.preload.mockImplementation(async (values) => ({
-      ...values,
-    }));
+    asignationPreload.mockImplementation(async (values) =>
+      asignationFixture(values),
+    );
     await expect(
       service.update(asignationId, { done: true }),
     ).resolves.toBeDefined();
     expect(asignationRepository.save).toHaveBeenCalled();
 
-    asignationRepository.findOne.mockResolvedValueOnce({
-      id: asignationId,
-      list: { id: listId, type: 'week' },
-      position: 1,
-      disc: { id: discId },
-    });
+    asignationFindOne.mockResolvedValueOnce(
+      asignationFixture({
+        id: asignationId,
+        list: listFixture({ id: listId, type: ListType.WEEK }),
+        position: 1,
+        disc: discFixture(discId),
+      }),
+    );
     groupCount = 2;
     await expect(
       service.update(asignationId, { position: 2 }),
     ).resolves.toBeDefined();
-    expect(transactionManager.query).toHaveBeenCalledWith(
+    expect(transactionQuery).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`riffvalley:radar-group:${listId}:1`],
     );
-    expect(transactionManager.query).toHaveBeenCalledWith(
+    expect(transactionQuery).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`riffvalley:radar-group:${listId}:2`],
     );
   });
 
   it('rejects movement into a full group and preserves the existing assignment', async () => {
-    asignationRepository.findOne.mockResolvedValue({
-      id: asignationId,
-      list: { id: listId, type: 'week' },
-      position: 1,
-      disc: { id: discId },
-    });
+    asignationFindOne.mockResolvedValue(
+      asignationFixture({
+        id: asignationId,
+        list: listFixture({ id: listId, type: ListType.WEEK }),
+        position: 1,
+        disc: discFixture(discId),
+      }),
+    );
     groupCount = 4;
-    asignationRepository.save.mockClear();
+    asignationSave.mockClear();
 
     await expect(
       service.update(asignationId, { position: 2 }),
     ).rejects.toMatchObject({
       status: 400,
     });
-    expect(asignationRepository.save).not.toHaveBeenCalled();
+    expect(asignationSave).not.toHaveBeenCalled();
   });
 
   it('does not apply the cap to update destinations outside WEEK lists', async () => {
-    listRepository.findOneBy.mockResolvedValue({ id: listId, type: 'special' });
-    asignationRepository.findOne.mockResolvedValue({
-      id: asignationId,
-      list: { id: listId, type: 'special' },
-      position: 1,
-      disc: { id: discId },
-    });
+    listFindOneBy.mockResolvedValue(
+      listFixture({ id: listId, type: ListType.SPECIAL }),
+    );
+    asignationFindOne.mockResolvedValue(
+      asignationFixture({
+        id: asignationId,
+        list: listFixture({ id: listId, type: ListType.SPECIAL }),
+        position: 1,
+        disc: discFixture(discId),
+      }),
+    );
     groupCount = 8;
     await expect(
       service.update(asignationId, { position: 2 }),
@@ -393,21 +512,21 @@ describe('AsignationsService error classification', () => {
       table: 'asignation',
       constraint: 'FK_9d41fe509640ba0c786b5daf75d',
     });
-    asignationRepository.save.mockRejectedValueOnce(userForeignKeyError);
+    asignationSave.mockRejectedValueOnce(userForeignKeyError);
     await expectNotFound(service.update(asignationId, { userId }));
 
     const repositoryError = new Error('database unavailable');
-    asignationRepository.save.mockRejectedValueOnce(repositoryError);
+    asignationSave.mockRejectedValueOnce(repositoryError);
     await expect(service.update(asignationId, { done: true })).rejects.toBe(
       repositoryError,
     );
   });
 
   it('returns 404 when delete affects no asignation and preserves successful delete response', async () => {
-    asignationRepository.delete.mockResolvedValueOnce({ affected: 0 });
+    asignationDelete.mockResolvedValueOnce({ affected: 0, raw: [] });
     await expectNotFound(service.remove(asignationId));
 
-    asignationRepository.delete.mockResolvedValueOnce({ affected: 1 });
+    asignationDelete.mockResolvedValueOnce({ affected: 1, raw: [] });
     await expect(service.remove(asignationId)).resolves.toEqual({
       message: `Asignation with id ${asignationId} has been removed`,
     });
@@ -427,21 +546,19 @@ describe('AsignationsService error classification', () => {
       skip: 0,
     });
 
-    const rows = [
-      { id: 'c', list: { id: listId } },
-      { id: 'a', list: { id: listId } },
-      { id: 'd', list: { id: listId } },
-      { id: 'b', list: { id: listId } },
+    const rows: Asignation[] = [
+      asignationFixture({ id: 'c', list: listFixture({ id: listId }) }),
+      asignationFixture({ id: 'a', list: listFixture({ id: listId }) }),
+      asignationFixture({ id: 'd', list: listFixture({ id: listId }) }),
+      asignationFixture({ id: 'b', list: listFixture({ id: listId }) }),
     ];
-    asignationRepository.findAndCount.mockImplementation(
-      async ({ order, take, skip }) => {
-        expect(order).toEqual({ id: 'ASC' });
-        const ordered = [...rows].sort((left, right) =>
-          left.id.localeCompare(right.id),
-        );
-        return [ordered.slice(skip, skip + take), rows.length];
-      },
-    );
+    asignationFindAndCount.mockImplementation(async ({ order, take, skip }) => {
+      expect(order).toEqual({ id: 'ASC' });
+      const ordered = [...rows].sort((left, right) =>
+        left.id.localeCompare(right.id),
+      );
+      return [ordered.slice(skip, skip + take), rows.length];
+    });
 
     const firstPage = await service.findAll({ limit: 2, offset: 0 });
     const secondPage = await service.findAll({ limit: 2, offset: 2 });
@@ -478,23 +595,39 @@ describe('AsignationsService error classification', () => {
   });
 
   it('preserves username ordering, breaks ties by id and retains list filters and pagination', async () => {
-    const rows = [
-      { id: 'c', list: { id: listId }, user: { username: 'member' } },
-      { id: 'a', list: { id: listId }, user: { username: 'member' } },
-      { id: 'd', list: { id: listId }, user: { username: 'admin' } },
-      { id: 'b', list: { id: listId }, user: { username: 'admin' } },
-      {
+    const rows: Asignation[] = [
+      asignationFixture({
+        id: 'c',
+        list: listFixture({ id: listId }),
+        user: Object.assign(new User(), { username: 'member' }),
+      }),
+      asignationFixture({
+        id: 'a',
+        list: listFixture({ id: listId }),
+        user: Object.assign(new User(), { username: 'member' }),
+      }),
+      asignationFixture({
+        id: 'd',
+        list: listFixture({ id: listId }),
+        user: Object.assign(new User(), { username: 'admin' }),
+      }),
+      asignationFixture({
+        id: 'b',
+        list: listFixture({ id: listId }),
+        user: Object.assign(new User(), { username: 'admin' }),
+      }),
+      asignationFixture({
         id: 'outside',
-        list: { id: 'another-list' },
-        user: { username: 'member' },
-      },
+        list: listFixture({ id: 'another-list' }),
+        user: Object.assign(new User(), { username: 'member' }),
+      }),
     ];
-    asignationRepository.findAndCount.mockImplementation(
+    asignationFindAndCount.mockImplementation(
       async ({ where, order, take, skip }) => {
         expect(where).toEqual({ list: { id: listId } });
         expect(order).toEqual({ user: { username: 'ASC' }, id: 'ASC' });
         const ordered = rows
-          .filter((row) => row.list.id === where.list.id)
+          .filter((row) => row.list.id === listId)
           .sort((left, right) => {
             const usernameOrder = left.user.username.localeCompare(
               right.user.username,
@@ -546,7 +679,7 @@ describe('AsignationsService error classification', () => {
       skip: 2,
     });
 
-    asignationRepository.findAndCount.mockResolvedValueOnce([[], 0]);
+    asignationFindAndCount.mockResolvedValueOnce([[], 0]);
     await expect(
       service.findByListId(listId, { limit: 2, offset: 0 }),
     ).resolves.toEqual({
@@ -558,7 +691,7 @@ describe('AsignationsService error classification', () => {
     });
 
     const repositoryError = new Error('database unavailable');
-    asignationRepository.findAndCount.mockRejectedValueOnce(repositoryError);
+    asignationFindAndCount.mockRejectedValueOnce(repositoryError);
     await expect(service.findByListId(listId, {})).rejects.toBe(
       repositoryError,
     );

@@ -1,4 +1,10 @@
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  CanActivate,
+  Type,
+  ValidationPipe,
+} from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import {
   GUARDS_METADATA,
   METHOD_METADATA,
@@ -7,19 +13,59 @@ import {
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { PointController } from '../points.controller';
+import { CreatePointDto } from '../dto/create-points.dto';
 import { UpdatePointDto } from '../dto/update-point.dto';
+import { PointService } from '../points.service';
+import { Point } from '../entities/point.entity';
+import { Reunion } from 'src/editorial/reunions/entities/reunion.entity';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+
+const isGuardType = (value: unknown): value is Type<CanActivate> =>
+  typeof value === 'function';
+
+const guardsFor = (handlers: Array<(...args: never[]) => unknown>) =>
+  handlers.flatMap((handler) => {
+    const metadata: unknown = Reflect.getMetadata(GUARDS_METADATA, handler);
+    return Array.isArray(metadata) ? metadata.filter(isGuardType) : [];
+  });
 
 describe('PointController', () => {
-  const pointService = {
-    createPoint: jest.fn(),
-    findAll: jest.fn(),
-    findOne: jest.fn(),
-    updatePoint: jest.fn(),
-    deletePoint: jest.fn(),
+  const pointService: jest.Mocked<
+    Pick<
+      PointService,
+      'createPoint' | 'findAll' | 'findOne' | 'updatePoint' | 'deletePoint'
+    >
+  > = {
+    createPoint: jest.fn<Promise<Point>, [CreatePointDto]>(),
+    findAll: jest.fn<Promise<Point[]>, []>(),
+    findOne: jest.fn<Promise<Point>, [string]>(),
+    updatePoint: jest.fn<Promise<Point>, [string, UpdatePointDto]>(),
+    deletePoint: jest.fn<Promise<void>, [string]>(),
   };
-  const controller = new PointController(pointService as any);
+  let controller: PointController;
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const guardProviders = guardsFor([
+      PointController.prototype.create,
+      PointController.prototype.update,
+      PointController.prototype.remove,
+    ]).map((guard) => ({
+      provide: guard,
+      useValue: { canActivate: () => true },
+    }));
+    const testingModule = Test.createTestingModule({
+      controllers: [PointController],
+      providers: [
+        { provide: PointService, useValue: pointService },
+        ...guardProviders,
+      ],
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: () => true });
+    const moduleRef = await testingModule.compile();
+    controller = moduleRef.get(PointController);
+  });
 
   it('preserves route paths, methods, public reads, and protected mutations', () => {
     expect(Reflect.getMetadata(PATH_METADATA, PointController)).toBe('points');
@@ -54,51 +100,74 @@ describe('PointController', () => {
       Reflect.getMetadata(METHOD_METADATA, PointController.prototype.remove),
     ).toBe(3);
 
-    for (const method of ['create', 'update', 'remove']) {
-      const handler = PointController.prototype[method];
+    for (const handler of [
+      PointController.prototype.create,
+      PointController.prototype.update,
+      PointController.prototype.remove,
+    ]) {
       expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
         ValidRoles.riffvalley,
       );
       expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeDefined();
     }
-    for (const method of ['findAll', 'findOne']) {
-      expect(
-        Reflect.getMetadata(
-          META_MINIMUM_ROLE,
-          PointController.prototype[method],
-        ),
-      ).toBeUndefined();
+    for (const handler of [
+      PointController.prototype.findAll,
+      PointController.prototype.findOne,
+    ]) {
+      expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
     }
   });
 
   it('delegates CRUD calls and returns service responses unchanged', async () => {
-    const point = { id: 'point-id' };
-    const dto = { titulo: 'Task', reunionId: 'reunion-id' };
+    const reunion: Reunion = {
+      id: 'reunion-id',
+      titulo: 'Weekly reunion',
+      fecha: new Date('2026-10-21T18:00:00.000Z'),
+      points: [],
+      createdAt: new Date('2026-10-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-10-20T00:00:00.000Z'),
+    };
+    const point: Point = {
+      id: 'point-id',
+      titulo: 'Task',
+      content: '',
+      reunion,
+      createdAt: new Date('2026-10-20T00:00:00.000Z'),
+      done: false,
+    };
+    const dto: CreatePointDto = { titulo: 'Task', reunionId: reunion.id };
+    const updateDto: UpdatePointDto = { titulo: dto.titulo };
     pointService.createPoint.mockResolvedValueOnce(point);
     pointService.findAll.mockResolvedValueOnce([point]);
     pointService.findOne.mockResolvedValueOnce(point);
     pointService.updatePoint.mockResolvedValueOnce(point);
     pointService.deletePoint.mockResolvedValueOnce(undefined);
 
-    await expect(controller.create(dto as any)).resolves.toBe(point);
+    await expect(controller.create(dto)).resolves.toBe(point);
     await expect(controller.findAll()).resolves.toEqual([point]);
     await expect(controller.findOne('point-id')).resolves.toBe(point);
-    await expect(controller.update('point-id', dto)).resolves.toBe(point);
+    await expect(controller.update('point-id', updateDto)).resolves.toBe(point);
     await expect(controller.remove('point-id')).resolves.toBeUndefined();
 
     expect(pointService.createPoint).toHaveBeenCalledWith(dto);
     expect(pointService.findOne).toHaveBeenCalledWith('point-id');
-    expect(pointService.updatePoint).toHaveBeenCalledWith('point-id', dto);
+    expect(pointService.updatePoint).toHaveBeenCalledWith(
+      'point-id',
+      updateDto,
+    );
     expect(pointService.deletePoint).toHaveBeenCalledWith('point-id');
   });
 
   it('validates partial PATCH fields with UpdatePointDto at runtime', async () => {
-    const parameterTypes = Reflect.getMetadata(
+    const parameterTypes: unknown = Reflect.getMetadata(
       'design:paramtypes',
       PointController.prototype,
       'update',
-    ) as unknown[];
-    expect(parameterTypes[1]).toBe(UpdatePointDto);
+    );
+    const reflectedDto = Array.isArray(parameterTypes)
+      ? parameterTypes[1]
+      : undefined;
+    expect(reflectedDto).toBe(UpdatePointDto);
 
     const pipe = new ValidationPipe({
       transform: true,
@@ -110,17 +179,31 @@ describe('PointController', () => {
     };
     const validated = await pipe.transform(body, {
       type: 'body',
-      metatype: parameterTypes[1] as any,
+      metatype: UpdatePointDto,
       data: undefined,
     });
     expect(validated).toBeInstanceOf(UpdatePointDto);
     expect(validated).toMatchObject(body);
+    if (!(validated instanceof UpdatePointDto)) {
+      throw new Error('ValidationPipe did not transform the Point DTO');
+    }
     pointService.updatePoint.mockResolvedValueOnce({
       id: 'point-id',
-      reunion: { id: body.reunionId },
+      titulo: 'Task',
+      content: '',
+      reunion: {
+        id: body.reunionId,
+        titulo: 'Updated reunion',
+        fecha: new Date('2026-10-21T18:00:00.000Z'),
+        points: [],
+        createdAt: new Date('2026-10-20T00:00:00.000Z'),
+        updatedAt: new Date('2026-10-20T00:00:00.000Z'),
+      },
+      createdAt: new Date('2026-10-20T00:00:00.000Z'),
+      done: false,
     });
     await expect(
-      controller.update('point-id', validated as UpdatePointDto),
+      controller.update('point-id', validated),
     ).resolves.toMatchObject({ reunion: { id: body.reunionId } });
     expect(pointService.updatePoint).toHaveBeenCalledWith(
       'point-id',
@@ -136,7 +219,7 @@ describe('PointController', () => {
       await expect(
         pipe.transform(invalidBody, {
           type: 'body',
-          metatype: parameterTypes[1] as any,
+          metatype: UpdatePointDto,
           data: undefined,
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -147,7 +230,7 @@ describe('PointController', () => {
         { content: null, done: null },
         {
           type: 'body',
-          metatype: parameterTypes[1] as any,
+          metatype: UpdatePointDto,
           data: undefined,
         },
       ),

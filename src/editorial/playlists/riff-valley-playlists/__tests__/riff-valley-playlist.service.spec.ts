@@ -1,14 +1,95 @@
+import { NotFoundException } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
+import { Content } from 'src/editorial/contents/entities/content.entity';
+import { ContentsService } from 'src/editorial/contents/contents.service';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { CreateRiffValleyPlaylistDto } from '../dto/create-riff-valley-playlist.dto';
+import { UpdateRiffValleyPlaylistDto } from '../dto/update-riff-valley-playlist.dto';
 import {
+  RiffValleyPlaylist,
   RiffValleyPlaylistStatus,
   RiffValleyPlaylistType,
 } from '../entities/riff-valley-playlist.entity';
 import { RiffValleyPlaylistService } from '../riff-valley-playlist.service';
-import { NotFoundException } from '@nestjs/common';
 
-const unusedUserRepository = { findOneBy: jest.fn() };
+type PlaylistRepositoryMock = jest.Mocked<
+  Pick<
+    Repository<RiffValleyPlaylist>,
+    'create' | 'save' | 'findOne' | 'createQueryBuilder'
+  >
+>;
+type UserRepositoryMock = jest.Mocked<Pick<Repository<User>, 'findOneBy'>>;
+type ContentServiceMock = jest.Mocked<
+  Pick<ContentsService, 'create' | 'update' | 'remove'>
+>;
+type PlaylistQueryMock = jest.Mocked<
+  Pick<
+    SelectQueryBuilder<RiffValleyPlaylist>,
+    | 'leftJoinAndSelect'
+    | 'loadRelationCountAndMap'
+    | 'orderBy'
+    | 'take'
+    | 'skip'
+    | 'andWhere'
+    | 'getMany'
+  >
+>;
+
+const makeUser = (id: string): User => Object.assign(new User(), { id });
+
+const makePlaylist = (
+  overrides: Partial<RiffValleyPlaylist> = {},
+): RiffValleyPlaylist =>
+  Object.assign(new RiffValleyPlaylist(), {
+    id: 'playlist-id',
+    name: 'Playlist',
+    status: RiffValleyPlaylistStatus.EDITING,
+    link: 'https://open.spotify.com/playlist/playlist-id',
+    spotifyPlaylistId: null,
+    description: null,
+    isPublic: false,
+    imageUrl: null,
+    protectedTrackUris: [],
+    type: RiffValleyPlaylistType.GENERO,
+    updateDate: new Date('2026-08-20T10:00:00.000Z'),
+    createdAt: new Date('2026-08-20T10:00:00.000Z'),
+    updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+    content: null,
+    user: null,
+    playlistArtists: [],
+    ...overrides,
+  });
+
+const createService = async (
+  repository: PlaylistRepositoryMock,
+  contentsService: ContentServiceMock,
+  userRepository: UserRepositoryMock,
+): Promise<RiffValleyPlaylistService> => {
+  const moduleRef = await Test.createTestingModule({
+    providers: [
+      RiffValleyPlaylistService,
+      { provide: getRepositoryToken(RiffValleyPlaylist), useValue: repository },
+      { provide: ContentsService, useValue: contentsService },
+      { provide: getRepositoryToken(User), useValue: userRepository },
+    ],
+  }).compile();
+
+  return moduleRef.get(RiffValleyPlaylistService);
+};
+
+const unusedUserRepository: UserRepositoryMock = {
+  findOneBy: jest.fn(),
+};
+const unusedContentsService: ContentServiceMock = {
+  create: jest.fn(),
+  update: jest.fn(),
+  remove: jest.fn(),
+};
 
 describe('RiffValleyPlaylistService', () => {
-  const validCreateDto = {
+  const validCreateDto: CreateRiffValleyPlaylistDto = {
     name: 'Playlist',
     status: RiffValleyPlaylistStatus.EDITING,
     link: 'https://open.spotify.com/playlist/playlist-id',
@@ -18,15 +99,19 @@ describe('RiffValleyPlaylistService', () => {
   };
 
   it('valida el usuario antes de crear y responde 404 si no existe', async () => {
-    const repository = {
+    const repository: PlaylistRepositoryMock = {
       create: jest.fn(),
       save: jest.fn(),
+      findOne: jest.fn(),
+      createQueryBuilder: jest.fn(),
     };
-    const userRepository = { findOneBy: jest.fn().mockResolvedValue(null) };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      {} as any,
-      userRepository as any,
+    const userRepository: UserRepositoryMock = {
+      findOneBy: jest.fn().mockResolvedValue(null),
+    };
+    const service = await createService(
+      repository,
+      unusedContentsService,
+      userRepository,
     );
 
     await expect(service.create(validCreateDto)).rejects.toBeInstanceOf(
@@ -38,18 +123,21 @@ describe('RiffValleyPlaylistService', () => {
   });
 
   it('crea la playlist cuando el usuario opcional existe', async () => {
-    const user = { id: 'user-id' };
-    const entity = { id: 'playlist-id' };
-    const repository = {
+    const user = makeUser('user-id');
+    const entity = makePlaylist();
+    const repository: PlaylistRepositoryMock = {
       create: jest.fn().mockReturnValue(entity),
       save: jest.fn().mockResolvedValue(entity),
       findOne: jest.fn().mockResolvedValue(entity),
+      createQueryBuilder: jest.fn(),
     };
-    const userRepository = { findOneBy: jest.fn().mockResolvedValue(user) };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      {} as any,
-      userRepository as any,
+    const userRepository: UserRepositoryMock = {
+      findOneBy: jest.fn().mockResolvedValue(user),
+    };
+    const service = await createService(
+      repository,
+      unusedContentsService,
+      userRepository,
     );
 
     await expect(service.create(validCreateDto)).resolves.toBe(entity);
@@ -64,16 +152,20 @@ describe('RiffValleyPlaylistService', () => {
   });
 
   it('valida el usuario antes de guardar una actualización', async () => {
-    const playlist = { id: 'playlist-id', user: { id: 'previous-user' } };
-    const repository = {
-      findOne: jest.fn().mockResolvedValue(playlist),
+    const playlist = makePlaylist({ user: makeUser('previous-user') });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
       save: jest.fn(),
+      findOne: jest.fn().mockResolvedValue(playlist),
+      createQueryBuilder: jest.fn(),
     };
-    const userRepository = { findOneBy: jest.fn().mockResolvedValue(null) };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      {} as any,
-      userRepository as any,
+    const userRepository: UserRepositoryMock = {
+      findOneBy: jest.fn().mockResolvedValue(null),
+    };
+    const service = await createService(
+      repository,
+      unusedContentsService,
+      userRepository,
     );
 
     await expect(
@@ -86,23 +178,28 @@ describe('RiffValleyPlaylistService', () => {
   });
 
   it('actualiza la relación cuando el usuario existe', async () => {
-    const user = { id: 'new-user' };
-    const playlist = { id: 'playlist-id', user: { id: 'previous-user' } };
-    const repository = {
+    const user = makeUser('new-user');
+    const playlist = makePlaylist({ user: makeUser('previous-user') });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
+      save: jest.fn().mockResolvedValue(playlist),
       findOne: jest
         .fn()
         .mockResolvedValueOnce(playlist)
         .mockResolvedValue({ ...playlist, user }),
-      save: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn(),
     };
-    const userRepository = { findOneBy: jest.fn().mockResolvedValue(user) };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      {} as any,
-      userRepository as any,
+    const userRepository: UserRepositoryMock = {
+      findOneBy: jest.fn().mockResolvedValue(user),
+    };
+    const service = await createService(
+      repository,
+      unusedContentsService,
+      userRepository,
     );
 
-    await service.update('playlist-id', { userId: 'new-user' });
+    const updateDto: UpdateRiffValleyPlaylistDto = { userId: 'new-user' };
+    await service.update('playlist-id', updateDto);
 
     expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({ user }),
@@ -111,15 +208,14 @@ describe('RiffValleyPlaylistService', () => {
 
   it('conserva user, content y el recuento de artistas en el listado', async () => {
     const playlists = [
-      {
-        id: 'playlist-id',
+      makePlaylist({
         name: 'Festival',
-        user: { id: 'user-id' },
-        content: { id: 'content-id' },
+        user: makeUser('user-id'),
+        content: Object.assign(new Content(), { id: 'content-id' }),
         playlistArtistsCount: 3,
-      },
+      }),
     ];
-    const query = {
+    const query: PlaylistQueryMock = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       loadRelationCountAndMap: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
@@ -128,13 +224,16 @@ describe('RiffValleyPlaylistService', () => {
       andWhere: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue(playlists),
     };
-    const repository = {
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
+      save: jest.fn(),
+      findOne: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(query),
     };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      {} as any,
-      unusedUserRepository as any,
+    const service = await createService(
+      repository,
+      unusedContentsService,
+      unusedUserRepository,
     );
 
     await expect(
@@ -154,9 +253,7 @@ describe('RiffValleyPlaylistService', () => {
     );
     expect(query.andWhere).toHaveBeenCalledWith(
       'riffValleyPlaylist.type = :type',
-      {
-        type: 'festival',
-      },
+      { type: 'festival' },
     );
   });
 
@@ -165,13 +262,13 @@ describe('RiffValleyPlaylistService', () => {
   // el Content es ahora una acción manual explícita
   // (ContentsService.syncMediaStatus() / POST /contents/:id/sync-media).
   it('no toca Content al pasar una playlist a READY (solo exige usuario asignado)', async () => {
-    const playlist = {
-      id: 'playlist-id',
+    const playlist = makePlaylist({
       name: 'Playlist terminada',
-      status: RiffValleyPlaylistStatus.EDITING,
-      user: { id: 'user-id' },
-    };
-    const repository = {
+      user: makeUser('user-id'),
+    });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
+      save: jest.fn().mockResolvedValue(playlist),
       findOne: jest
         .fn()
         .mockResolvedValueOnce(playlist)
@@ -179,18 +276,17 @@ describe('RiffValleyPlaylistService', () => {
           ...playlist,
           status: RiffValleyPlaylistStatus.READY,
         }),
-      save: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn(),
     };
-    const contentsService = {
-      findOneByRiffValleyPlaylistId: jest.fn(),
+    const contentsService: ContentServiceMock = {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      contentsService as any,
-      unusedUserRepository as any,
+    const service = await createService(
+      repository,
+      contentsService,
+      unusedUserRepository,
     );
 
     await service.update('playlist-id', {
@@ -206,25 +302,22 @@ describe('RiffValleyPlaylistService', () => {
   });
 
   it('exige un usuario asignado para pasar a READY', async () => {
-    const playlist = {
-      id: 'playlist-id',
-      name: 'Playlist sin usuario',
-      status: RiffValleyPlaylistStatus.EDITING,
-      user: null,
-    };
-    const repository = {
-      findOne: jest.fn().mockResolvedValue(playlist),
+    const playlist = makePlaylist({ name: 'Playlist sin usuario' });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
       save: jest.fn(),
+      findOne: jest.fn().mockResolvedValue(playlist),
+      createQueryBuilder: jest.fn(),
     };
-    const contentsService = {
+    const contentsService: ContentServiceMock = {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      contentsService as any,
-      unusedUserRepository as any,
+    const service = await createService(
+      repository,
+      contentsService,
+      unusedUserRepository,
     );
 
     await expect(
@@ -238,29 +331,29 @@ describe('RiffValleyPlaylistService', () => {
     RiffValleyPlaylistStatus.IN_PROGRESS,
     RiffValleyPlaylistStatus.EDITING,
   ])('no toca Content al retroceder una playlist a %s', async (status) => {
-    const playlist = {
-      id: 'playlist-id',
+    const playlist = makePlaylist({
       name: 'Playlist terminada',
       status: RiffValleyPlaylistStatus.READY,
-      user: { id: 'user-id' },
-    };
-    const repository = {
+      user: makeUser('user-id'),
+    });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
+      save: jest.fn().mockResolvedValue(playlist),
       findOne: jest
         .fn()
         .mockResolvedValueOnce(playlist)
         .mockResolvedValue({ ...playlist, status }),
-      save: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn(),
     };
-    const contentsService = {
-      findOneByRiffValleyPlaylistId: jest.fn(),
+    const contentsService: ContentServiceMock = {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      contentsService as any,
-      unusedUserRepository as any,
+    const service = await createService(
+      repository,
+      contentsService,
+      unusedUserRepository,
     );
 
     await service.update('playlist-id', { status });
@@ -275,29 +368,29 @@ describe('RiffValleyPlaylistService', () => {
 
   it('no toca Content al asignar fecha de actualización', async () => {
     const updateDate = '2026-08-20T10:00:00.000Z';
-    const playlist = {
-      id: 'playlist-id',
+    const playlist = makePlaylist({
       name: 'Playlist terminada',
       status: RiffValleyPlaylistStatus.READY,
-      user: { id: 'user-id' },
-    };
-    const repository = {
+      user: makeUser('user-id'),
+    });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
+      save: jest.fn().mockResolvedValue(playlist),
       findOne: jest
         .fn()
         .mockResolvedValueOnce(playlist)
         .mockResolvedValue({ ...playlist, updateDate: new Date(updateDate) }),
-      save: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn(),
     };
-    const contentsService = {
-      findOneByRiffValleyPlaylistId: jest.fn(),
+    const contentsService: ContentServiceMock = {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      contentsService as any,
-      unusedUserRepository as any,
+    const service = await createService(
+      repository,
+      contentsService,
+      unusedUserRepository,
     );
 
     await service.update('playlist-id', { updateDate });
@@ -308,25 +401,26 @@ describe('RiffValleyPlaylistService', () => {
   });
 
   it('exige updateDate para pasar a PUBLISHED', async () => {
-    const playlist = {
-      id: 'playlist-id',
+    const playlist = makePlaylist({
       name: 'Playlist terminada',
       status: RiffValleyPlaylistStatus.READY,
-      user: { id: 'user-id' },
-    };
-    const repository = {
-      findOne: jest.fn().mockResolvedValue(playlist),
+      user: makeUser('user-id'),
+    });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
       save: jest.fn(),
+      findOne: jest.fn().mockResolvedValue(playlist),
+      createQueryBuilder: jest.fn(),
     };
-    const contentsService = {
+    const contentsService: ContentServiceMock = {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      contentsService as any,
-      unusedUserRepository as any,
+    const service = await createService(
+      repository,
+      contentsService,
+      unusedUserRepository,
     );
 
     await expect(
@@ -338,23 +432,25 @@ describe('RiffValleyPlaylistService', () => {
   });
 
   it('createContentForRiffValleyPlaylist crea un Content en backlog y lo enlaza', async () => {
-    const playlist = {
-      id: 'playlist-id',
+    const playlist = makePlaylist({
       name: 'Playlist terminada',
-      status: RiffValleyPlaylistStatus.EDITING,
-      user: { id: 'user-id' },
-      content: null,
-    };
-    const repository = {
+      user: makeUser('user-id'),
+    });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
+      save: jest.fn(),
       findOne: jest.fn().mockResolvedValue(playlist),
+      createQueryBuilder: jest.fn(),
     };
-    const contentsService = {
-      create: jest.fn().mockResolvedValue({ id: 'content-id' }),
+    const contentsService: ContentServiceMock = {
+      create: jest.fn().mockResolvedValue(new Content()),
+      update: jest.fn(),
+      remove: jest.fn(),
     };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      contentsService as any,
-      unusedUserRepository as any,
+    const service = await createService(
+      repository,
+      contentsService,
+      unusedUserRepository,
     );
 
     await service.createContentForRiffValleyPlaylist('playlist-id');
@@ -370,19 +466,26 @@ describe('RiffValleyPlaylistService', () => {
   });
 
   it('createContentForRiffValleyPlaylist falla si ya hay un Content asociado', async () => {
-    const playlist = {
-      id: 'playlist-id',
+    const playlist = makePlaylist({
       name: 'Playlist terminada',
-      status: RiffValleyPlaylistStatus.EDITING,
-      user: { id: 'user-id' },
-      content: { id: 'content-id' },
+      content: Object.assign(new Content(), { id: 'content-id' }),
+      user: makeUser('user-id'),
+    });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
+      save: jest.fn(),
+      findOne: jest.fn().mockResolvedValue(playlist),
+      createQueryBuilder: jest.fn(),
     };
-    const repository = { findOne: jest.fn().mockResolvedValue(playlist) };
-    const contentsService = { create: jest.fn() };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      contentsService as any,
-      unusedUserRepository as any,
+    const contentsService: ContentServiceMock = {
+      create: jest.fn(),
+      update: jest.fn(),
+      remove: jest.fn(),
+    };
+    const service = await createService(
+      repository,
+      contentsService,
+      unusedUserRepository,
     );
 
     await expect(
@@ -392,19 +495,22 @@ describe('RiffValleyPlaylistService', () => {
   });
 
   it('createContentForRiffValleyPlaylist falla si no hay usuario asignado', async () => {
-    const playlist = {
-      id: 'playlist-id',
-      name: 'Playlist terminada',
-      status: RiffValleyPlaylistStatus.EDITING,
-      user: null,
-      content: null,
+    const playlist = makePlaylist({ name: 'Playlist terminada' });
+    const repository: PlaylistRepositoryMock = {
+      create: jest.fn(),
+      save: jest.fn(),
+      findOne: jest.fn().mockResolvedValue(playlist),
+      createQueryBuilder: jest.fn(),
     };
-    const repository = { findOne: jest.fn().mockResolvedValue(playlist) };
-    const contentsService = { create: jest.fn() };
-    const service = new RiffValleyPlaylistService(
-      repository as any,
-      contentsService as any,
-      unusedUserRepository as any,
+    const contentsService: ContentServiceMock = {
+      create: jest.fn(),
+      update: jest.fn(),
+      remove: jest.fn(),
+    };
+    const service = await createService(
+      repository,
+      contentsService,
+      unusedUserRepository,
     );
 
     await expect(

@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { UpdateListDto } from '../../dto/update-list.dto';
 import { List, ListType } from '../../entities/list.entity';
 import {
   Content,
@@ -7,124 +8,165 @@ import {
 } from 'src/editorial/contents/entities/content.entity';
 import { ListContentCoordinator } from '../list-content-coordinator.service';
 
+type TrackedList = List & { deleted?: boolean };
+type TrackedContent = Content & { deleted?: boolean };
+type DateField = 'listDate' | 'releaseDate' | 'closeDate';
+
+function updateWithDate(field: DateField, value: string | null): UpdateListDto {
+  const update = new UpdateListDto();
+  update[field] = value;
+  return update;
+}
+
+function updateList(values: Partial<UpdateListDto>): UpdateListDto {
+  return Object.assign(new UpdateListDto(), values);
+}
+
 describe('ListContentCoordinator List/Content writes', () => {
-  const linkedContent = () => ({
-    id: 'content-id',
-    type: ContentType.BEST,
-    publicationDate: new Date('2026-10-01T00:00:00.000Z'),
-    closeDate: new Date('2026-10-05T00:00:00.000Z'),
-    listDate: new Date('2026-10-03T00:00:00.000Z'),
-  });
+  const linkedContent = (): TrackedContent =>
+    Object.assign(new Content(), {
+      id: 'content-id',
+      type: ContentType.BEST,
+      name: 'Editorial content',
+      publicationDate: new Date('2026-10-01T00:00:00.000Z'),
+      closeDate: new Date('2026-10-05T00:00:00.000Z'),
+      listDate: new Date('2026-10-03T00:00:00.000Z'),
+      deleted: undefined,
+    });
 
   const makeTransactionalService = (
     overrides: {
-      listSave?: jest.Mock;
-      contentSave?: jest.Mock;
-      listRemove?: jest.Mock;
-      contentRemove?: jest.Mock;
+      listSaveError?: Error;
+      contentSaveError?: Error;
+      listRemoveError?: Error;
+      contentRemoveError?: Error;
       hasContent?: boolean;
       contentType?: ContentType;
       listType?: ListType;
-      listDates?: Partial<Pick<List, 'releaseDate' | 'listDate' | 'closeDate'>>;
+      listDates?: Partial<Record<DateField, Date | null>>;
     } = {},
   ) => {
-    const list = {
+    const list: TrackedList = Object.assign(new List(), {
       id: 'list-id',
       type: overrides.listType ?? ListType.WEEK,
       name: 'Radar',
       releaseDate: new Date('2026-10-01T00:00:00.000Z'),
       closeDate: new Date('2026-10-05T00:00:00.000Z'),
       listDate: new Date('2026-10-03T00:00:00.000Z'),
-      ...overrides.listDates,
-    };
+      deleted: undefined,
+    });
+    Object.assign(list, overrides.listDates);
     const content = linkedContent();
     content.type = overrides.contentType ?? content.type;
-    const listRepository: any = {
-      preload: jest
-        .fn()
-        .mockImplementation(async (values) => ({ ...list, ...values })),
-      save: jest.fn().mockImplementation(async (value) => value),
-      findOne: jest.fn().mockResolvedValue(list),
-      remove: jest.fn().mockResolvedValue(list),
-    };
-    const contentRepository = {
-      findOne: jest
-        .fn()
-        .mockResolvedValue(overrides.hasContent === false ? null : content),
-      save: jest.fn().mockImplementation(async (value) => value),
-      remove: jest.fn().mockResolvedValue(content),
-    };
-    const txListRepository = {
-      preload: jest
-        .fn()
-        .mockImplementation(async (values) => ({ ...list, ...values })),
-      save:
-        overrides.listSave ??
-        jest.fn().mockImplementation(async (value) => {
-          Object.assign(list, value);
-          return value;
-        }),
-      findOne: jest.fn().mockResolvedValue(list),
-      remove:
-        overrides.listRemove ??
-        jest.fn().mockImplementation(async () => {
-          (list as any).deleted = true;
-          return list;
-        }),
-    };
-    const txContentRepository = {
-      findOne: jest.fn().mockResolvedValue(content),
-      save:
-        overrides.contentSave ??
-        jest.fn().mockImplementation(async (value) => {
-          Object.assign(content, value);
-          return value;
-        }),
-      remove:
-        overrides.contentRemove ??
-        jest.fn().mockImplementation(async () => {
-          (content as any).deleted = true;
-          return content;
-        }),
-    };
-    const overLimitGroups: any[] = [];
-    const manager = {
-      query: jest.fn(async (sql) =>
-        sql.includes('SELECT position FROM asignation')
-          ? overLimitGroups
-          : undefined,
-      ),
-      getRepository: jest.fn((entity) =>
-        entity === List
-          ? {
-              ...txListRepository,
-              findOneBy: jest.fn().mockResolvedValue(list),
-            }
-          : txContentRepository,
-      ),
-    };
-    const transaction = jest.fn(async (callback) => {
-      const listSnapshot = { ...list };
-      const contentSnapshot = { ...content };
+    const listSnapshot = { ...list };
+    const contentSnapshot = { ...content };
+
+    const rootManager = new DataSource({ type: 'postgres' }).manager;
+    const manager = new DataSource({ type: 'postgres' }).manager;
+    const listRepository = new Repository(List, rootManager);
+    const contentRepository = new Repository(Content, rootManager);
+    const txListRepository = new Repository(List, manager);
+    const txContentRepository = new Repository(Content, manager);
+
+    const listPreload = jest
+      .spyOn(listRepository, 'preload')
+      .mockImplementation(async (values) =>
+        Object.assign(new List(), list, values),
+      );
+    const listSave = jest
+      .spyOn(listRepository, 'save')
+      .mockImplementation(async (value) => Object.assign(new List(), value));
+    const rootListFindOne = jest
+      .spyOn(listRepository, 'findOne')
+      .mockResolvedValue(list);
+    const listRemove = jest
+      .spyOn(listRepository, 'remove')
+      .mockResolvedValue(list);
+    const rootContentFindOne = jest
+      .spyOn(contentRepository, 'findOne')
+      .mockResolvedValue(overrides.hasContent === false ? null : content);
+    const rootContentSave = jest
+      .spyOn(contentRepository, 'save')
+      .mockImplementation(async (value) => Object.assign(new Content(), value));
+    const rootContentRemove = jest
+      .spyOn(contentRepository, 'remove')
+      .mockResolvedValue(content);
+
+    const txListPreload = jest
+      .spyOn(txListRepository, 'preload')
+      .mockImplementation(async (values) =>
+        Object.assign(new List(), list, values),
+      );
+    const txListSave = jest
+      .spyOn(txListRepository, 'save')
+      .mockImplementation(async (value) => {
+        if (overrides.listSaveError) throw overrides.listSaveError;
+        Object.assign(list, value);
+        return list;
+      });
+    const txListFindOne = jest
+      .spyOn(txListRepository, 'findOne')
+      .mockResolvedValue(list);
+    const txListFindOneBy = jest
+      .spyOn(txListRepository, 'findOneBy')
+      .mockResolvedValue(list);
+    const txListRemove = jest
+      .spyOn(txListRepository, 'remove')
+      .mockImplementation(async () => {
+        if (overrides.listRemoveError) throw overrides.listRemoveError;
+        list.deleted = true;
+        return list;
+      });
+    const txContentFindOne = jest
+      .spyOn(txContentRepository, 'findOne')
+      .mockResolvedValue(content);
+    const txContentSave = jest
+      .spyOn(txContentRepository, 'save')
+      .mockImplementation(async (value) => {
+        if (overrides.contentSaveError) throw overrides.contentSaveError;
+        Object.assign(content, value);
+        return content;
+      });
+    const txContentRemove = jest
+      .spyOn(txContentRepository, 'remove')
+      .mockImplementation(async () => {
+        if (overrides.contentRemoveError) throw overrides.contentRemoveError;
+        content.deleted = true;
+        return content;
+      });
+
+    const overLimitGroups: Array<{ position: number }> = [];
+    const query = jest
+      .spyOn(manager, 'query')
+      .mockImplementation(async (sql) =>
+        sql.includes('SELECT position FROM asignation') ? overLimitGroups : [],
+      );
+    const getRepository = jest
+      .spyOn(manager, 'getRepository')
+      .mockImplementation((target) =>
+        target === List ? txListRepository : txContentRepository,
+      );
+    const transaction = jest.spyOn(rootManager, 'transaction');
+    transaction.mockImplementation(async (isolationOrCallback, callback) => {
+      const runInTransaction =
+        typeof isolationOrCallback === 'function'
+          ? isolationOrCallback
+          : callback;
+      if (!runInTransaction) throw new Error('Transaction callback required');
       try {
-        return await callback(manager);
+        return await runInTransaction(manager);
       } catch (error) {
-        for (const key of Object.keys(list)) {
-          if (!(key in listSnapshot)) delete (list as any)[key];
-        }
-        for (const key of Object.keys(content)) {
-          if (!(key in contentSnapshot)) delete (content as any)[key];
-        }
         Object.assign(list, listSnapshot);
         Object.assign(content, contentSnapshot);
+        list.deleted = listSnapshot.deleted;
+        content.deleted = contentSnapshot.deleted;
         throw error;
       }
     });
-    listRepository.manager = { transaction };
 
     const service = new ListContentCoordinator(
-      listRepository as any,
-      contentRepository as any,
+      listRepository,
+      contentRepository,
     );
 
     return {
@@ -138,6 +180,23 @@ describe('ListContentCoordinator List/Content writes', () => {
       manager,
       overLimitGroups,
       transaction,
+      query,
+      getRepository,
+      listPreload,
+      listSave,
+      rootListFindOne,
+      listRemove,
+      rootContentFindOne,
+      rootContentSave,
+      rootContentRemove,
+      txListPreload,
+      txListSave,
+      txListFindOne,
+      txListFindOneBy,
+      txListRemove,
+      txContentFindOne,
+      txContentSave,
+      txContentRemove,
     };
   };
 
@@ -151,11 +210,14 @@ describe('ListContentCoordinator List/Content writes', () => {
       transaction,
     } = makeTransactionalService();
 
-    await service.update('list-id', {
-      releaseDate: '2026-11-01T00:00:00.000Z',
-      closeDate: null,
-      listDate: null,
-    } as any);
+    await service.update(
+      'list-id',
+      updateList({
+        releaseDate: '2026-11-01T00:00:00.000Z',
+        closeDate: null,
+        listDate: null,
+      }),
+    );
 
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(manager.getRepository).toHaveBeenCalledWith(List);
@@ -173,7 +235,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     const { service, content, transaction, contentRepository } =
       makeTransactionalService();
 
-    await service.update('list-id', { name: 'Renamed' } as any);
+    await service.update('list-id', { name: 'Renamed' });
 
     expect(transaction).not.toHaveBeenCalled();
     expect(content.publicationDate).toEqual(
@@ -185,10 +247,10 @@ describe('ListContentCoordinator List/Content writes', () => {
   });
 
   it('preserves omitted dates and avoids a transaction when no Content is linked', async () => {
-    const { service, list, listRepository, contentRepository, transaction } =
+    const { service, listRepository, contentRepository, transaction } =
       makeTransactionalService({ hasContent: false });
 
-    await service.update('list-id', { name: 'Renamed' } as any);
+    await service.update('list-id', { name: 'Renamed' });
 
     expect(transaction).not.toHaveBeenCalled();
     expect(listRepository.save).toHaveBeenCalledWith(
@@ -203,7 +265,7 @@ describe('ListContentCoordinator List/Content writes', () => {
       hasContent: false,
     });
 
-    await service.update('list-id', { type: ListType.WEEK } as any);
+    await service.update('list-id', { type: ListType.WEEK });
 
     expect(manager.query).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
@@ -221,7 +283,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     overLimitGroups.push({ position: 2 });
 
     await expect(
-      service.update('list-id', { type: ListType.WEEK } as any),
+      service.update('list-id', { type: ListType.WEEK }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(listRepository.save).not.toHaveBeenCalled();
   });
@@ -232,7 +294,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     });
 
     await expect(
-      service.update('list-id', { releaseDate: null } as any),
+      service.update('list-id', updateWithDate('releaseDate', null)),
     ).rejects.toMatchObject({ status: 400 });
 
     expect(transaction).not.toHaveBeenCalled();
@@ -245,7 +307,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     });
 
     await expect(
-      service.update('list-id', { releaseDate: null } as any),
+      service.update('list-id', updateWithDate('releaseDate', null)),
     ).rejects.toMatchObject({ status: 400 });
 
     expect(transaction).not.toHaveBeenCalled();
@@ -260,7 +322,7 @@ describe('ListContentCoordinator List/Content writes', () => {
       );
 
       await expect(
-        service.update('list-id', { releaseDate: null } as any),
+        service.update('list-id', updateWithDate('releaseDate', null)),
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(listRepository.save).not.toHaveBeenCalled();
@@ -276,7 +338,7 @@ describe('ListContentCoordinator List/Content writes', () => {
         listDates: { releaseDate: null, listDate: null, closeDate: null },
       });
 
-    await service.update('list-id', { name: 'Special list' } as any);
+    await service.update('list-id', { name: 'Special list' });
 
     expect(listRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Special list' }),
@@ -299,9 +361,10 @@ describe('ListContentCoordinator List/Content writes', () => {
       );
 
       await expect(
-        service.update('list-id', {
-          [field]: '2026-10-01T00:00:00.000Z',
-        } as any),
+        service.update(
+          'list-id',
+          updateWithDate(field, '2026-10-01T00:00:00.000Z'),
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(listRepository.save).not.toHaveBeenCalled();
@@ -312,12 +375,10 @@ describe('ListContentCoordinator List/Content writes', () => {
   it('rolls the paired update back when saving List fails', async () => {
     const error = new Error('list write failed');
     const { service, txContentRepository, transaction } =
-      makeTransactionalService({
-        listSave: jest.fn().mockRejectedValue(error),
-      });
+      makeTransactionalService({ listSaveError: error });
 
     await expect(
-      service.update('list-id', { closeDate: null } as any),
+      service.update('list-id', updateWithDate('closeDate', null)),
     ).rejects.toMatchObject({ status: 500 });
 
     expect(transaction).toHaveBeenCalledTimes(1);
@@ -333,12 +394,10 @@ describe('ListContentCoordinator List/Content writes', () => {
       txListRepository,
       txContentRepository,
       transaction,
-    } = makeTransactionalService({
-      contentSave: jest.fn().mockRejectedValue(error),
-    });
+    } = makeTransactionalService({ contentSaveError: error });
 
     await expect(
-      service.update('list-id', { closeDate: null } as any),
+      service.update('list-id', updateWithDate('closeDate', null)),
     ).rejects.toMatchObject({ status: 500 });
 
     expect(transaction).toHaveBeenCalledTimes(1);
@@ -355,16 +414,14 @@ describe('ListContentCoordinator List/Content writes', () => {
   it('deletes both entities in the transaction and rejects a failed List deletion', async () => {
     const error = new Error('list delete failed');
     const { service, content, list, txContentRepository, transaction } =
-      makeTransactionalService({
-        listRemove: jest.fn().mockRejectedValue(error),
-      });
+      makeTransactionalService({ listRemoveError: error });
 
     await expect(service.removeList('list-id')).rejects.toBe(error);
 
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(txContentRepository.remove).toHaveBeenCalledTimes(1);
-    expect((content as any).deleted).toBeUndefined();
-    expect((list as any).deleted).toBeUndefined();
+    expect(content.deleted).toBeUndefined();
+    expect(list.deleted).toBeUndefined();
   });
 
   it('commits the related Content and List deletion through one manager', async () => {
@@ -373,8 +430,8 @@ describe('ListContentCoordinator List/Content writes', () => {
     await service.removeList('list-id');
 
     expect(transaction).toHaveBeenCalledTimes(1);
-    expect((content as any).deleted).toBe(true);
-    expect((list as any).deleted).toBe(true);
+    expect(content.deleted).toBe(true);
+    expect(list.deleted).toBe(true);
   });
 
   it('deletes an unlinked List directly without opening a transaction', async () => {
@@ -397,7 +454,7 @@ describe('ListContentCoordinator List/Content writes', () => {
       txListRepository,
     } = makeTransactionalService();
 
-    await service.removeList('list-id', manager as unknown as EntityManager);
+    await service.removeList('list-id', manager);
 
     expect(transaction).not.toHaveBeenCalled();
     expect(txContentRepository.remove).toHaveBeenCalledTimes(1);
@@ -407,9 +464,7 @@ describe('ListContentCoordinator List/Content writes', () => {
   it('does not delete List when deleting linked Content fails', async () => {
     const error = new Error('content delete failed');
     const { service, txContentRepository, txListRepository, transaction } =
-      makeTransactionalService({
-        contentRemove: jest.fn().mockRejectedValue(error),
-      });
+      makeTransactionalService({ contentRemoveError: error });
 
     await expect(service.removeList('list-id')).rejects.toBe(error);
 

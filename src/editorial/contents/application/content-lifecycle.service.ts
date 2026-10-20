@@ -75,6 +75,7 @@ export class ContentLifecycleService {
     Object.assign(content, rest);
 
     if (publicationDate !== undefined) {
+      const publicationDateInput: unknown = publicationDate;
       // RADAR/BEST and REUNION cannot have publicationDate removed.
       if (
         !isValidDateValue(publicationDate) &&
@@ -87,15 +88,15 @@ export class ContentLifecycleService {
         );
       }
 
-      if ((publicationDate as unknown) instanceof Date) {
-        content.publicationDate = publicationDate as unknown as Date;
+      if (publicationDateInput instanceof Date) {
+        content.publicationDate = publicationDateInput;
         content.ready = false;
       } else {
         const newDate =
-          publicationDate &&
-          typeof publicationDate === 'string' &&
-          publicationDate.trim() !== ''
-            ? new Date(publicationDate)
+          publicationDateInput &&
+          typeof publicationDateInput === 'string' &&
+          publicationDateInput.trim() !== ''
+            ? new Date(publicationDateInput)
             : null;
         content.publicationDate = newDate;
         if (newDate) {
@@ -117,23 +118,29 @@ export class ContentLifecycleService {
     }
 
     if (closeDate !== undefined) {
-      if ((closeDate as unknown) instanceof Date) {
-        content.closeDate = closeDate as unknown as Date;
+      const closeDateInput: unknown = closeDate;
+      if (closeDateInput instanceof Date) {
+        content.closeDate = closeDateInput;
       } else {
         content.closeDate =
-          closeDate && typeof closeDate === 'string' && closeDate.trim() !== ''
-            ? new Date(closeDate)
+          closeDateInput &&
+          typeof closeDateInput === 'string' &&
+          closeDateInput.trim() !== ''
+            ? new Date(closeDateInput)
             : null;
       }
     }
 
     if (listDate !== undefined) {
-      if ((listDate as unknown) instanceof Date) {
-        content.listDate = listDate as unknown as Date;
+      const listDateInput: unknown = listDate;
+      if (listDateInput instanceof Date) {
+        content.listDate = listDateInput;
       } else {
         content.listDate =
-          listDate && typeof listDate === 'string' && listDate.trim() !== ''
-            ? new Date(listDate)
+          listDateInput &&
+          typeof listDateInput === 'string' &&
+          listDateInput.trim() !== ''
+            ? new Date(listDateInput)
             : null;
       }
     }
@@ -184,20 +191,26 @@ export class ContentLifecycleService {
         if (publicationDate !== undefined) {
           listChanged =
             this.assignDateIfChanged(
-              list,
-              'releaseDate',
+              list.releaseDate,
               saved.publicationDate,
+              (date) => (list.releaseDate = date),
             ) || listChanged;
         }
         if (closeDate !== undefined) {
           listChanged =
-            this.assignDateIfChanged(list, 'closeDate', saved.closeDate) ||
-            listChanged;
+            this.assignDateIfChanged(
+              list.closeDate,
+              saved.closeDate,
+              (date) => (list.closeDate = date),
+            ) || listChanged;
         }
         if (listDate !== undefined) {
           listChanged =
-            this.assignDateIfChanged(list, 'listDate', saved.listDate) ||
-            listChanged;
+            this.assignDateIfChanged(
+              list.listDate,
+              saved.listDate,
+              (date) => (list.listDate = date),
+            ) || listChanged;
         }
 
         if (listChanged) await listRepo.save(list);
@@ -303,19 +316,18 @@ export class ContentLifecycleService {
     // and Content are fully independent now.
   }
 
-  private assignDateIfChanged<T extends object>(
-    target: T,
-    field: keyof T,
+  private assignDateIfChanged(
+    current: Date | null | undefined,
     source: Date | null | undefined,
+    assign: (date: Date | null) => void,
   ): boolean {
-    const current = target[field] as Date | null | undefined;
     const next = source == null ? null : new Date(source);
     const currentTime = current == null ? null : new Date(current).getTime();
     const nextTime = next == null ? null : next.getTime();
 
     if (currentTime === nextTime) return false;
 
-    target[field] = next as T[keyof T];
+    assign(next);
     return true;
   }
 

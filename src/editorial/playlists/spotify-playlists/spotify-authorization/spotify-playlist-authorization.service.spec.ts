@@ -1,48 +1,136 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
-import { SpotifyInvalidGrantError } from 'src/integrations/spotify-integration';
+import { BadRequestException } from '@nestjs/common';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Test, TestingModule } from '@nestjs/testing';
+import {
+  DeepPartial,
+  FindOneOptions,
+  FindOptionsWhere,
+  SelectQueryBuilder,
+} from 'typeorm';
+import { MailService } from 'src/communications/mail/mail.service';
+import {
+  SpotifyAccountApiService,
+  SpotifyConnection,
+  SpotifyInvalidGrantError,
+  SpotifyOAuthApiService,
+  TokenCryptoService,
+} from 'src/integrations/spotify-integration';
 import { SpotifyPlaylistAuthorizationService } from './spotify-playlist-authorization.service';
+
+type ConnectionQueryBuilder = Pick<
+  SelectQueryBuilder<SpotifyConnection>,
+  'addSelect' | 'where' | 'getOne'
+>;
+
+function createConnection(
+  overrides: Partial<SpotifyConnection> = {},
+): SpotifyConnection {
+  return Object.assign(new SpotifyConnection(), {
+    connectionKey: 'riff-valley',
+    spotifyUserId: null,
+    displayName: null,
+    accessToken: null,
+    refreshToken: null,
+    scope: null,
+    expiresAt: null,
+    authorizedAt: null,
+    refreshTokenExpiresAt: null,
+    authorizationInvalidatedAt: null,
+    reauthorizationReminderSentAt: null,
+    oauthStateHash: null,
+    oauthStateExpiresAt: null,
+    ...overrides,
+  });
+}
+
+function createQueryBuilder(
+  connection: SpotifyConnection | null = null,
+): jest.Mocked<ConnectionQueryBuilder> {
+  return {
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(connection),
+  };
+}
 
 const grantedScopes =
   'playlist-modify-private playlist-modify-public ugc-image-upload user-read-private';
 
 describe('SpotifyPlaylistAuthorizationService', () => {
   let service: SpotifyPlaylistAuthorizationService;
-  let connectionRepository: any;
-  let tokenCrypto: any;
-  let mailService: any;
-  let spotifyOAuthApi: any;
-  let spotifyAccountApi: any;
+  let testingModule: TestingModule;
+  let connectionRepository: {
+    create: jest.Mock<SpotifyConnection, [DeepPartial<SpotifyConnection>]>;
+    findOne: jest.Mock<
+      Promise<SpotifyConnection | null>,
+      [FindOneOptions<SpotifyConnection>]
+    >;
+    createQueryBuilder: jest.Mock<ConnectionQueryBuilder, [string]>;
+    save: jest.Mock<Promise<SpotifyConnection>, [SpotifyConnection]>;
+    delete: jest.Mock<
+      Promise<{ affected?: number }>,
+      [FindOptionsWhere<SpotifyConnection>]
+    >;
+  };
+  let tokenCrypto: jest.Mocked<
+    Pick<TokenCryptoService, 'hash' | 'encrypt' | 'decrypt'>
+  >;
+  let mailService: jest.Mocked<
+    Pick<MailService, 'sendSpotifyReauthorizationReminder'>
+  >;
+  let spotifyOAuthApi: jest.Mocked<
+    Pick<
+      SpotifyOAuthApiService,
+      'getAuthorizationUrl' | 'exchangeAuthorizationCode' | 'refreshAccessToken'
+    >
+  >;
+  let spotifyAccountApi: jest.Mocked<
+    Pick<SpotifyAccountApiService, 'getProfile'>
+  >;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     connectionRepository = {
-      create: jest.fn((value) => ({ ...value })),
+      create: jest.fn((value) => Object.assign(new SpotifyConnection(), value)),
       findOne: jest.fn(),
       createQueryBuilder: jest.fn(),
       save: jest.fn(async (value) => value),
       delete: jest.fn(),
     };
     tokenCrypto = {
-      hash: jest.fn((value) => `hash:${value}`),
-      encrypt: jest.fn((value) => `encrypted:${value}`),
-      decrypt: jest.fn((value) => `decrypted:${value}`),
+      hash: jest.fn((value: string) => `hash:${value}`),
+      encrypt: jest.fn((value: string) => `encrypted:${value}`),
+      decrypt: jest.fn((value: string) => `decrypted:${value}`),
     };
     mailService = { sendSpotifyReauthorizationReminder: jest.fn() };
     spotifyOAuthApi = {
-      getAuthorizationUrl: jest.fn((scopes, state) => ({ scopes, state })),
+      getAuthorizationUrl: jest.fn(
+        (_scopes: string[], _state: string) =>
+          'https://accounts.spotify.test/authorize',
+      ),
       exchangeAuthorizationCode: jest.fn(),
       refreshAccessToken: jest.fn(),
     };
     spotifyAccountApi = { getProfile: jest.fn() };
-    service = new SpotifyPlaylistAuthorizationService(
-      connectionRepository,
-      tokenCrypto,
-      mailService,
-      spotifyOAuthApi,
-      spotifyAccountApi,
-    );
+    testingModule = await Test.createTestingModule({
+      providers: [
+        SpotifyPlaylistAuthorizationService,
+        {
+          provide: getRepositoryToken(SpotifyConnection),
+          useValue: connectionRepository,
+        },
+        { provide: TokenCryptoService, useValue: tokenCrypto },
+        { provide: MailService, useValue: mailService },
+        { provide: SpotifyOAuthApiService, useValue: spotifyOAuthApi },
+        { provide: SpotifyAccountApiService, useValue: spotifyAccountApi },
+      ],
+    }).compile();
+    service = testingModule.get(SpotifyPlaylistAuthorizationService);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(async () => {
+    await testingModule.close();
+    jest.restoreAllMocks();
+  });
 
   it('stores a hashed, ten-minute OAuth state and requests the existing scopes', async () => {
     const result = await service.startSpotifyConnection();
@@ -67,7 +155,9 @@ describe('SpotifyPlaylistAuthorizationService', () => {
       'ugc-image-upload',
       'user-read-private',
     ]);
-    expect(result).toEqual({ authorizationUrl: { scopes, state } });
+    expect(result).toEqual({
+      authorizationUrl: 'https://accounts.spotify.test/authorize',
+    });
   });
 
   it('rejects missing, unknown, and expired OAuth state before token exchange', async () => {
@@ -75,19 +165,17 @@ describe('SpotifyPlaylistAuthorizationService', () => {
       service.completeSpotifyConnection('', 'state'),
     ).rejects.toThrow(BadRequestException);
 
-    const queryBuilder = {
-      addSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(null),
-    };
+    const queryBuilder = createQueryBuilder();
     connectionRepository.createQueryBuilder.mockReturnValue(queryBuilder);
     await expect(
       service.completeSpotifyConnection('code', 'unknown-state'),
     ).rejects.toThrow('El estado OAuth no es válido o ha caducado');
 
-    queryBuilder.getOne.mockResolvedValue({
-      oauthStateExpiresAt: new Date(Date.now() - 1),
-    });
+    queryBuilder.getOne.mockResolvedValue(
+      createConnection({
+        oauthStateExpiresAt: new Date(Date.now() - 1),
+      }),
+    );
     await expect(
       service.completeSpotifyConnection('code', 'expired-state'),
     ).rejects.toThrow(BadRequestException);
@@ -95,15 +183,11 @@ describe('SpotifyPlaylistAuthorizationService', () => {
   });
 
   it('consumes a valid state before exchanging the code, even when exchange fails', async () => {
-    const connection: any = {
+    const connection = createConnection({
       oauthStateHash: 'hash:state',
       oauthStateExpiresAt: new Date(Date.now() + 60_000),
-    };
-    const queryBuilder = {
-      addSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(connection),
-    };
+    });
+    const queryBuilder = createQueryBuilder(connection);
     connectionRepository.createQueryBuilder.mockReturnValue(queryBuilder);
     spotifyOAuthApi.exchangeAuthorizationCode.mockRejectedValue(
       new Error('Spotify token exchange failed'),
@@ -113,27 +197,25 @@ describe('SpotifyPlaylistAuthorizationService', () => {
       service.completeSpotifyConnection('code', 'state'),
     ).rejects.toThrow('Spotify token exchange failed');
 
-    expect(connection).toEqual({
-      oauthStateHash: null,
-      oauthStateExpiresAt: null,
-    });
+    expect(connection).toEqual(
+      expect.objectContaining({
+        oauthStateHash: null,
+        oauthStateExpiresAt: null,
+      }),
+    );
     expect(connectionRepository.save).toHaveBeenCalledWith(connection);
     expect(spotifyAccountApi.getProfile).not.toHaveBeenCalled();
   });
 
   it('stores encrypted tokens, granted scopes, profile, and the six-month lifetime', async () => {
-    const connection: any = {
+    const connection = createConnection({
       oauthStateHash: 'hash:state',
       oauthStateExpiresAt: new Date(Date.now() + 60_000),
       refreshToken: 'encrypted:old-refresh',
       authorizationInvalidatedAt: new Date(),
       reauthorizationReminderSentAt: new Date(),
-    };
-    const queryBuilder = {
-      addSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(connection),
-    };
+    });
+    const queryBuilder = createQueryBuilder(connection);
     connectionRepository.createQueryBuilder.mockReturnValue(queryBuilder);
     spotifyOAuthApi.exchangeAuthorizationCode.mockResolvedValue({
       access_token: 'access',
@@ -181,15 +263,17 @@ describe('SpotifyPlaylistAuthorizationService', () => {
   });
 
   it('preserves the existing status response and reports missing scopes', async () => {
-    connectionRepository.findOne.mockResolvedValue({
-      spotifyUserId: 'spotify-user',
-      displayName: 'Riff Valley',
-      scope: 'playlist-modify-private user-read-private',
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-      refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      authorizationInvalidatedAt: null,
-      authorizedAt: new Date('2026-01-01T00:00:00Z'),
-    });
+    connectionRepository.findOne.mockResolvedValue(
+      createConnection({
+        spotifyUserId: 'spotify-user',
+        displayName: 'Riff Valley',
+        scope: 'playlist-modify-private user-read-private',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        authorizationInvalidatedAt: null,
+        authorizedAt: new Date('2026-01-01T00:00:00Z'),
+      }),
+    );
 
     await expect(service.getSpotifyConnection()).resolves.toEqual({
       connected: true,
@@ -207,7 +291,7 @@ describe('SpotifyPlaylistAuthorizationService', () => {
   });
 
   it('refreshes an expiring access token and retains a refresh token omitted by Spotify', async () => {
-    const connection = {
+    const connection = createConnection({
       accessToken: 'encrypted:old-access',
       refreshToken: 'encrypted:old-refresh',
       spotifyUserId: 'spotify-user',
@@ -215,12 +299,8 @@ describe('SpotifyPlaylistAuthorizationService', () => {
       expiresAt: new Date(Date.now() + 30_000),
       refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       authorizationInvalidatedAt: null,
-    };
-    const queryBuilder = {
-      addSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(connection),
-    };
+    });
+    const queryBuilder = createQueryBuilder(connection);
     connectionRepository.createQueryBuilder.mockReturnValue(queryBuilder);
     spotifyOAuthApi.refreshAccessToken.mockResolvedValue({
       access_token: 'new-access',
@@ -246,25 +326,23 @@ describe('SpotifyPlaylistAuthorizationService', () => {
   });
 
   it('rejects missing authorization or required scopes without refreshing', async () => {
-    const queryBuilder = {
-      addSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(null),
-    };
+    const queryBuilder = createQueryBuilder();
     connectionRepository.createQueryBuilder.mockReturnValue(queryBuilder);
     await expect(service.getValidAccessToken()).rejects.toThrow(
       'El usuario no ha conectado su cuenta de Spotify',
     );
 
-    queryBuilder.getOne.mockResolvedValue({
-      accessToken: 'encrypted:access',
-      refreshToken: 'encrypted:refresh',
-      spotifyUserId: 'spotify-user',
-      scope: 'playlist-modify-private',
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-      refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      authorizationInvalidatedAt: null,
-    });
+    queryBuilder.getOne.mockResolvedValue(
+      createConnection({
+        accessToken: 'encrypted:access',
+        refreshToken: 'encrypted:refresh',
+        spotifyUserId: 'spotify-user',
+        scope: 'playlist-modify-private',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        authorizationInvalidatedAt: null,
+      }),
+    );
     await expect(
       service.getValidAccessToken(['ugc-image-upload']),
     ).rejects.toThrow('Faltan permisos de Spotify (ugc-image-upload)');
@@ -272,7 +350,7 @@ describe('SpotifyPlaylistAuthorizationService', () => {
   });
 
   it('invalidates stored tokens after invalid_grant and preserves unrelated refresh errors', async () => {
-    const connection = {
+    const connection = createConnection({
       accessToken: 'encrypted:access',
       refreshToken: 'encrypted:refresh',
       spotifyUserId: 'spotify-user',
@@ -280,12 +358,8 @@ describe('SpotifyPlaylistAuthorizationService', () => {
       expiresAt: new Date(Date.now() - 1000),
       refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       authorizationInvalidatedAt: null,
-    };
-    const queryBuilder = {
-      addSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getOne: jest.fn().mockResolvedValue(connection),
-    };
+    });
+    const queryBuilder = createQueryBuilder(connection);
     connectionRepository.createQueryBuilder.mockReturnValue(queryBuilder);
     spotifyOAuthApi.refreshAccessToken.mockRejectedValueOnce(
       new SpotifyInvalidGrantError('invalid_grant'),
@@ -313,12 +387,12 @@ describe('SpotifyPlaylistAuthorizationService', () => {
   });
 
   it('sends a single reauthorization reminder and disconnects the global account', async () => {
-    const connection = {
+    const connection = createConnection({
       spotifyUserId: 'spotify-user',
       displayName: 'Riff Valley',
       refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       reauthorizationReminderSentAt: null,
-    };
+    });
     connectionRepository.findOne.mockResolvedValue(connection);
     mailService.sendSpotifyReauthorizationReminder.mockResolvedValue(true);
 

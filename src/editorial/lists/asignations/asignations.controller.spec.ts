@@ -1,12 +1,17 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Test } from '@nestjs/testing';
 import { AsignationsController } from './asignations.controller';
 import { AsignationsService } from './asignations.service';
+import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { CreateAsignationDto } from './dto/create-asignations.dto';
 import { UpdateAsignationDto } from './dto/update-asignations.dto';
 
 jest.mock('sanitize-html', () => jest.fn((value: string) => value));
 
 describe('AsignationsController position validation', () => {
+  type DtoConstructor<T> = new (...args: never[]) => T;
+
   const listId = '5e87fa93-7b8d-48f9-983b-01dca7a54c11';
   const asignationId = 'c17ee051-1a9b-4f33-a2b4-67f1a2508a4c';
   const validationPipe = new ValidationPipe({
@@ -16,24 +21,44 @@ describe('AsignationsController position validation', () => {
     transformOptions: { enableImplicitConversion: true },
   });
 
-  const service = {
-    create: jest.fn(),
-    update: jest.fn(),
+  const service: jest.Mocked<Pick<AsignationsService, 'create' | 'update'>> = {
+    create: jest.fn<
+      ReturnType<AsignationsService['create']>,
+      Parameters<AsignationsService['create']>
+    >(),
+    update: jest.fn<
+      ReturnType<AsignationsService['update']>,
+      Parameters<AsignationsService['update']>
+    >(),
   };
-  const controller = new AsignationsController(
-    service as unknown as AsignationsService,
-  );
+  let controller: AsignationsController;
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module = await Test.createTestingModule({
+      controllers: [AsignationsController],
+      providers: [{ provide: AsignationsService, useValue: service }],
+    })
+      .overrideGuard(AuthGuard())
+      .useValue({ canActivate: () => true })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+    controller = module.get(AsignationsController);
+  });
 
   async function body<T>(
     payload: object,
-    metatype: new (...args: any[]) => T,
+    metatype: DtoConstructor<T>,
   ): Promise<T> {
-    return (await validationPipe.transform(payload, {
+    const transformed: unknown = await validationPipe.transform(payload, {
       type: 'body',
       metatype,
-    })) as T;
+    });
+    if (!(transformed instanceof metatype)) {
+      throw new Error('ValidationPipe did not transform the DTO');
+    }
+    return transformed;
   }
 
   async function create(payload: Record<string, unknown>) {

@@ -12,147 +12,267 @@ import {
   VideoType,
 } from 'src/editorial/videos/entities/video.entity';
 import { ContentCreationService } from '../application/content-creation.service';
+import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource, DeepPartial, EntityManager } from 'typeorm';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { ListsService } from 'src/editorial/lists/list.service';
+import { ContentQueryService } from '../application/content-query.service';
+import { ContentLifecycleService } from '../application/content-lifecycle.service';
+import { CreateContentDto } from '../dto/create-content.dto';
+import { UpdateContentDto } from '../dto/update-content.dto';
 
 describe('ContentsService creation facade compatibility', () => {
+  const makeCreateDto = (
+    values: Pick<CreateContentDto, 'type' | 'name' | 'authorId'> &
+      Partial<Omit<CreateContentDto, 'type' | 'name' | 'authorId'>> & {
+        publicationDate?: string | null;
+      },
+  ): CreateContentDto => {
+    const dto = new CreateContentDto();
+    Object.assign(dto, values);
+    if (values.publicationDate === null) {
+      Object.defineProperty(dto, 'publicationDate', { value: null });
+    }
+    return dto;
+  };
+
   const makeContent = (overrides: Partial<Content> = {}) =>
-    ({
+    Object.assign(new Content(), {
       id: 'content-id',
       type: ContentType.BEST,
       name: 'Monthly list',
       publicationDate: new Date('2026-10-01T00:00:00.000Z'),
       closeDate: new Date('2026-10-05T00:00:00.000Z'),
       listDate: new Date('2026-10-03T00:00:00.000Z'),
-      list: { id: 'list-id' } as List,
+      list: Object.assign(new List(), { id: 'list-id' }),
       ...overrides,
-    }) as Content;
+    });
 
-  const makeList = () => ({
-    id: 'list-id',
-    type: ListType.MONTH,
-    releaseDate: new Date('2026-10-01T00:00:00.000Z'),
-    closeDate: new Date('2026-10-05T00:00:00.000Z'),
-    listDate: new Date('2026-10-03T00:00:00.000Z'),
-  });
+  const makeList = () =>
+    Object.assign(new List(), {
+      id: 'list-id',
+      type: ListType.MONTH,
+      releaseDate: new Date('2026-10-01T00:00:00.000Z'),
+      closeDate: new Date('2026-10-05T00:00:00.000Z'),
+      listDate: new Date('2026-10-03T00:00:00.000Z'),
+    });
 
-  const makeService = (content = makeContent()) => {
+  const makeService = async (content = makeContent()) => {
+    const dataSource = new DataSource({ type: 'postgres' });
+    const transactionManager = new EntityManager(dataSource);
     const list = makeList();
     const committedWrites: unknown[] = [];
     let pendingWrites: unknown[] = [];
-    const txContentRepository = {
-      save: jest.fn().mockImplementation(async (value) => {
+    const txContentRepository = transactionManager.getRepository(Content);
+    const txContentSave = jest
+      .spyOn(txContentRepository, 'save')
+      .mockImplementation(async (value) => {
+        pendingWrites.push(value);
+        return Object.assign(new Content(), value);
+      });
+    const txContentRemove = jest
+      .spyOn(txContentRepository, 'remove')
+      .mockImplementation(async (value) => {
         pendingWrites.push(value);
         return value;
-      }),
-      remove: jest.fn().mockImplementation(async (value) => {
+      });
+    const txListRepository = transactionManager.getRepository(List);
+    const txListFindOne = jest
+      .spyOn(txListRepository, 'findOne')
+      .mockResolvedValue(list);
+    const txListSave = jest
+      .spyOn(txListRepository, 'save')
+      .mockImplementation(async (value) => {
         pendingWrites.push(value);
-        return value;
-      }),
-    };
-    const txListRepository = {
-      findOne: jest.fn().mockResolvedValue(list),
-      save: jest.fn().mockImplementation(async (value) => {
+        return Object.assign(new List(), value);
+      });
+    const txReunionRepository = transactionManager.getRepository(Reunion);
+    const txReunionCreate = jest
+      .spyOn(txReunionRepository, 'create')
+      .mockImplementation((value) => Object.assign(new Reunion(), value));
+    const txReunionSave = jest
+      .spyOn(txReunionRepository, 'save')
+      .mockImplementation(async (value) => {
         pendingWrites.push(value);
-        return value;
-      }),
-    };
-    const makeTransactionalRepository = () => ({
-      create: jest.fn((value) => value),
-      save: jest.fn().mockImplementation(async (value) => {
-        pendingWrites.push(value);
-        return value;
-      }),
-    });
-    const txReunionRepository: any = makeTransactionalRepository();
-    txReunionRepository.save.mockImplementation(async (value: any) => {
+        return Object.assign(new Reunion(), value, { id: 'reunion-id' });
+      });
+    const txReunionFindOne = jest
+      .spyOn(txReunionRepository, 'findOne')
+      .mockResolvedValue(
+        Object.assign(new Reunion(), { id: 'reunion-id', titulo: 'Old title' }),
+      );
+    const txReunionDelete = jest
+      .spyOn(txReunionRepository, 'delete')
+      .mockImplementation(async (id) => {
+        pendingWrites.push({ deleteReunion: id });
+        return { raw: [], affected: 1 };
+      });
+    const txPointRepository = transactionManager.getRepository(Point);
+    const txPointSave = jest.fn(async (value: DeepPartial<Point>[]) => {
       pendingWrites.push(value);
-      return { ...value, id: 'reunion-id' };
+      return value.map((point) => Object.assign(new Point(), point));
     });
-    txReunionRepository.findOne = jest
-      .fn()
-      .mockResolvedValue({ id: 'reunion-id', titulo: 'Old title' });
-    txReunionRepository.delete = jest.fn().mockImplementation(async (id) => {
-      pendingWrites.push({ deleteReunion: id });
-      return { affected: 1 };
-    });
-    const txPointRepository = makeTransactionalRepository();
-    const txRiffValleyPlaylistRepository = makeTransactionalRepository();
-    const txArticleRepository = makeTransactionalRepository();
-    const txVideoRepository = makeTransactionalRepository();
-    const transactionalRepositories = new Map<Function, any>([
-      [Content, txContentRepository],
-      [List, txListRepository],
-      [Reunion, txReunionRepository],
-      [Point, txPointRepository],
-      [RiffValleyPlaylist, txRiffValleyPlaylistRepository],
-      [Article, txArticleRepository],
-      [Video, txVideoRepository],
-    ]);
-    const manager = {
-      getRepository: jest.fn((entity) => transactionalRepositories.get(entity)),
-    };
-    const transaction = jest.fn(async (callback) => {
-      pendingWrites = [];
-      try {
-        const result = await callback(manager);
-        committedWrites.push(...pendingWrites);
-        return result;
-      } catch (error) {
+    Object.defineProperty(txPointRepository, 'save', { value: txPointSave });
+    const txRiffValleyPlaylistRepository =
+      transactionManager.getRepository(RiffValleyPlaylist);
+    const txRiffValleyPlaylistCreate = jest
+      .spyOn(txRiffValleyPlaylistRepository, 'create')
+      .mockImplementation((value) =>
+        Object.assign(new RiffValleyPlaylist(), value),
+      );
+    const txRiffValleyPlaylistSave = jest
+      .spyOn(txRiffValleyPlaylistRepository, 'save')
+      .mockImplementation(async (value) => {
+        pendingWrites.push(value);
+        return Object.assign(new RiffValleyPlaylist(), value);
+      });
+    const txArticleRepository = transactionManager.getRepository(Article);
+    const txArticleCreate = jest
+      .spyOn(txArticleRepository, 'create')
+      .mockImplementation((value) => Object.assign(new Article(), value));
+    const txArticleSave = jest
+      .spyOn(txArticleRepository, 'save')
+      .mockImplementation(async (value) => {
+        pendingWrites.push(value);
+        return Object.assign(new Article(), value);
+      });
+    const txVideoRepository = transactionManager.getRepository(Video);
+    const txVideoCreate = jest
+      .spyOn(txVideoRepository, 'create')
+      .mockImplementation((value) => Object.assign(new Video(), value));
+    const txVideoSave = jest
+      .spyOn(txVideoRepository, 'save')
+      .mockImplementation(async (value) => {
+        pendingWrites.push(value);
+        return Object.assign(new Video(), value);
+      });
+    const transaction = jest.fn(
+      async <Result>(
+        callback: (manager: EntityManager) => Promise<Result>,
+      ): Promise<Result> => {
         pendingWrites = [];
-        throw error;
-      }
+        try {
+          const result = await callback(transactionManager);
+          committedWrites.push(...pendingWrites);
+          return result;
+        } catch (error) {
+          pendingWrites = [];
+          throw error;
+        }
+      },
+    );
+    Object.defineProperty(dataSource.manager, 'transaction', {
+      value: transaction,
     });
-    const contentRepository = {
-      create: jest.fn().mockImplementation((value) => value),
-      save: jest.fn().mockImplementation(async (value) => value),
-      findOne: jest.fn().mockResolvedValue(content),
-      remove: jest.fn().mockResolvedValue(content),
-      manager: { transaction },
-    };
-    const userRepository = {
-      findOne: jest.fn().mockResolvedValue({ id: 'author-id' }),
-    };
-    const reunionRepository = {
-      findOne: jest.fn().mockResolvedValue(null),
-      create: jest.fn((value) => value),
-      save: jest.fn().mockResolvedValue({ id: 'reunion-id' }),
-      delete: jest.fn().mockResolvedValue({ affected: 1 }),
-    };
-    const pointRepository = {
-      save: jest.fn().mockResolvedValue([]),
-    };
-    const riffValleyPlaylistRepository = {
-      findOne: jest.fn().mockResolvedValue({
-        id: 'playlist-id',
-        status: 'editing',
-        updateDate: null,
-      }),
-      create: jest.fn((value) => value),
-      save: jest.fn().mockResolvedValue({ id: 'playlist-id' }),
-    };
-    const articleRepository = {
-      findOne: jest.fn().mockResolvedValue({
-        id: 'article-id',
-        status: 'editing',
-        updateDate: null,
-      }),
-      create: jest.fn((value) => value),
-      save: jest.fn().mockResolvedValue({ id: 'article-id' }),
-    };
-    const videoRepository = {
-      findOne: jest.fn().mockResolvedValue({
-        id: 'video-id',
-        status: VideoStatus.EDITING,
-        updateDate: null,
-      }),
-      create: jest.fn((value) => value),
-      save: jest.fn().mockResolvedValue({ id: 'video-id' }),
-    };
-    const listsService = {
+    const contentRepository = dataSource.getRepository(Content);
+    const contentCreate = jest
+      .spyOn(contentRepository, 'create')
+      .mockImplementation((value) => Object.assign(new Content(), value));
+    const contentSave = jest
+      .spyOn(contentRepository, 'save')
+      .mockImplementation(async (value) => Object.assign(new Content(), value));
+    const contentFindOne = jest
+      .spyOn(contentRepository, 'findOne')
+      .mockResolvedValue(content);
+    const contentRemove = jest
+      .spyOn(contentRepository, 'remove')
+      .mockResolvedValue(content);
+    const userRepository = dataSource.getRepository(User);
+    const author = Object.assign(new User(), { id: 'author-id' });
+    const userFindOne = jest
+      .spyOn(userRepository, 'findOne')
+      .mockResolvedValue(author);
+    const reunionRepository = dataSource.getRepository(Reunion);
+    const reunionFindOne = jest
+      .spyOn(reunionRepository, 'findOne')
+      .mockResolvedValue(null);
+    const reunionCreate = jest
+      .spyOn(reunionRepository, 'create')
+      .mockImplementation((value) => Object.assign(new Reunion(), value));
+    const reunionSave = jest
+      .spyOn(reunionRepository, 'save')
+      .mockResolvedValue(Object.assign(new Reunion(), { id: 'reunion-id' }));
+    const reunionDelete = jest
+      .spyOn(reunionRepository, 'delete')
+      .mockResolvedValue({ raw: [], affected: 1 });
+    const pointRepository = dataSource.getRepository(Point);
+    const pointSave = jest.spyOn(pointRepository, 'save');
+    const riffValleyPlaylistRepository =
+      dataSource.getRepository(RiffValleyPlaylist);
+    const riffValleyPlaylistFindOne = jest
+      .spyOn(riffValleyPlaylistRepository, 'findOne')
+      .mockResolvedValue(
+        Object.assign(new RiffValleyPlaylist(), {
+          id: 'playlist-id',
+          status: 'editing',
+          updateDate: null,
+        }),
+      );
+    const riffValleyPlaylistCreate = jest
+      .spyOn(riffValleyPlaylistRepository, 'create')
+      .mockImplementation((value) =>
+        Object.assign(new RiffValleyPlaylist(), value),
+      );
+    const riffValleyPlaylistSave = jest
+      .spyOn(riffValleyPlaylistRepository, 'save')
+      .mockResolvedValue(
+        Object.assign(new RiffValleyPlaylist(), { id: 'playlist-id' }),
+      );
+    const articleRepository = dataSource.getRepository(Article);
+    const articleFindOne = jest
+      .spyOn(articleRepository, 'findOne')
+      .mockResolvedValue(
+        Object.assign(new Article(), {
+          id: 'article-id',
+          status: 'editing',
+          updateDate: null,
+        }),
+      );
+    const articleCreate = jest
+      .spyOn(articleRepository, 'create')
+      .mockImplementation((value) => Object.assign(new Article(), value));
+    const articleSave = jest
+      .spyOn(articleRepository, 'save')
+      .mockResolvedValue(Object.assign(new Article(), { id: 'article-id' }));
+    const videoRepository = dataSource.getRepository(Video);
+    const videoFindOne = jest
+      .spyOn(videoRepository, 'findOne')
+      .mockResolvedValue(
+        Object.assign(new Video(), {
+          id: 'video-id',
+          status: VideoStatus.EDITING,
+          updateDate: null,
+        }),
+      );
+    const videoCreate = jest
+      .spyOn(videoRepository, 'create')
+      .mockImplementation((value) => Object.assign(new Video(), value));
+    const videoSave = jest
+      .spyOn(videoRepository, 'save')
+      .mockResolvedValue(Object.assign(new Video(), { id: 'video-id' }));
+    const listsService: jest.Mocked<
+      Pick<
+        ListsService,
+        'createWeeklyList' | 'createMonthlyList' | 'removeList'
+      >
+    > = {
       createWeeklyList: jest.fn().mockResolvedValue(list),
       createMonthlyList: jest.fn().mockResolvedValue(list),
       removeList: jest.fn().mockResolvedValue(list),
     };
-    const queryService = {
+    const queryService: jest.Mocked<
+      Pick<
+        ContentQueryService,
+        | 'findAll'
+        | 'findOne'
+        | 'findByMonth'
+        | 'findOneByRiffValleyPlaylistId'
+        | 'findOneByArticleId'
+        | 'findOneByVideoId'
+        | 'getDefaultAuthorId'
+      >
+    > = {
       findAll: jest.fn(),
       findOne: jest.fn().mockResolvedValue(content),
       findByMonth: jest.fn(),
@@ -161,26 +281,36 @@ describe('ContentsService creation facade compatibility', () => {
       findOneByVideoId: jest.fn(),
       getDefaultAuthorId: jest.fn(),
     };
-    const creationService = new ContentCreationService(
-      contentRepository as any,
-      userRepository as any,
-      reunionRepository as any,
-      riffValleyPlaylistRepository as any,
-      articleRepository as any,
-      videoRepository as any,
-      listsService as any,
-    );
-    const lifecycleService = {
+    const lifecycleService: jest.Mocked<
+      Pick<ContentLifecycleService, 'update' | 'remove'>
+    > = {
       update: jest.fn(),
       remove: jest.fn(),
     };
-    const service = new ContentsService(
-      queryService as any,
-      creationService,
-      lifecycleService as any,
-    );
+    const module = await Test.createTestingModule({
+      providers: [
+        ContentsService,
+        ContentCreationService,
+        { provide: ContentQueryService, useValue: queryService },
+        { provide: ContentLifecycleService, useValue: lifecycleService },
+        { provide: ListsService, useValue: listsService },
+        { provide: getRepositoryToken(Content), useValue: contentRepository },
+        { provide: getRepositoryToken(User), useValue: userRepository },
+        { provide: getRepositoryToken(Reunion), useValue: reunionRepository },
+        {
+          provide: getRepositoryToken(RiffValleyPlaylist),
+          useValue: riffValleyPlaylistRepository,
+        },
+        { provide: getRepositoryToken(Article), useValue: articleRepository },
+        { provide: getRepositoryToken(Video), useValue: videoRepository },
+      ],
+    }).compile();
+    const service = module.get(ContentsService);
+    const creationService = module.get(ContentCreationService);
 
     return {
+      module,
+      dataSource,
       service,
       creationService,
       lifecycleService,
@@ -188,14 +318,30 @@ describe('ContentsService creation facade compatibility', () => {
       list,
       contentRepository,
       txContentRepository,
+      txContentSave,
+      txContentRemove,
       txListRepository,
+      txListFindOne,
+      txListSave,
       txReunionRepository,
+      txReunionCreate,
+      txReunionSave,
+      txReunionFindOne,
+      txReunionDelete,
       txPointRepository,
+      txPointSave,
       txRiffValleyPlaylistRepository,
+      txRiffValleyPlaylistCreate,
+      txRiffValleyPlaylistSave,
       txArticleRepository,
+      txArticleCreate,
+      txArticleSave,
       txVideoRepository,
+      txVideoCreate,
+      txVideoSave,
       committedWrites,
       userRepository,
+      author,
       reunionRepository,
       pointRepository,
       riffValleyPlaylistRepository,
@@ -203,9 +349,90 @@ describe('ContentsService creation facade compatibility', () => {
       videoRepository,
       listsService,
       queryService,
-      manager,
+      manager: transactionManager,
       transaction,
+      contentCreate,
+      contentSave,
+      contentFindOne,
+      contentRemove,
+      userFindOne,
+      reunionFindOne,
+      reunionCreate,
+      reunionSave,
+      reunionDelete,
+      pointSave,
+      riffValleyPlaylistFindOne,
+      riffValleyPlaylistCreate,
+      riffValleyPlaylistSave,
+      articleFindOne,
+      articleCreate,
+      articleSave,
+      videoFindOne,
+      videoCreate,
+      videoSave,
     };
+  };
+
+  type ServiceFixture = Awaited<ReturnType<typeof makeService>>;
+
+  const mockCompanionSaveResult = (
+    fixture: ServiceFixture,
+    type: ContentType,
+    id: string,
+  ): Article | Video | RiffValleyPlaylist | Reunion => {
+    switch (type) {
+      case ContentType.ARTICLE: {
+        const saved = Object.assign(new Article(), { id });
+        fixture.txArticleSave.mockResolvedValueOnce(saved);
+        return saved;
+      }
+      case ContentType.VIDEO: {
+        const saved = Object.assign(new Video(), { id });
+        fixture.txVideoSave.mockResolvedValueOnce(saved);
+        return saved;
+      }
+      case ContentType.RIFF_VALLEY_PLAYLIST: {
+        const saved = Object.assign(new RiffValleyPlaylist(), { id });
+        fixture.txRiffValleyPlaylistSave.mockResolvedValueOnce(saved);
+        return saved;
+      }
+      case ContentType.REUNION: {
+        const saved = Object.assign(new Reunion(), { id });
+        fixture.txReunionSave.mockResolvedValueOnce(saved);
+        return saved;
+      }
+      default:
+        throw new Error(`Unsupported companion type: ${type}`);
+    }
+  };
+
+  const rejectTransactionalSave = (
+    fixture: ServiceFixture,
+    repositoryName: string,
+    error: Error,
+  ) => {
+    switch (repositoryName) {
+      case 'txArticleRepository':
+        fixture.txArticleSave.mockRejectedValueOnce(error);
+        break;
+      case 'txVideoRepository':
+        fixture.txVideoSave.mockRejectedValueOnce(error);
+        break;
+      case 'txRiffValleyPlaylistRepository':
+        fixture.txRiffValleyPlaylistSave.mockRejectedValueOnce(error);
+        break;
+      case 'txReunionRepository':
+        fixture.txReunionSave.mockRejectedValueOnce(error);
+        break;
+      case 'txPointRepository':
+        fixture.txPointSave.mockRejectedValueOnce(error);
+        break;
+      case 'txContentRepository':
+        fixture.txContentSave.mockRejectedValueOnce(error);
+        break;
+      default:
+        throw new Error(`Unknown transaction repository: ${repositoryName}`);
+    }
   };
 
   it('creates RADAR Content and its List using the same manager', async () => {
@@ -216,14 +443,16 @@ describe('ContentsService creation facade compatibility', () => {
       listsService,
       manager,
       transaction,
-    } = makeService();
+    } = await makeService();
 
-    const result = await service.create({
-      type: ContentType.RADAR,
-      name: 'Radar semanal',
-      authorId: 'author-id',
-      publicationDate: '2026-10-01T00:00:00.000Z',
-    } as any);
+    const result = await service.create(
+      makeCreateDto({
+        type: ContentType.RADAR,
+        name: 'Radar semanal',
+        authorId: 'author-id',
+        publicationDate: '2026-10-01T00:00:00.000Z',
+      }),
+    );
 
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(txContentRepository.save).toHaveBeenCalledTimes(2);
@@ -241,16 +470,18 @@ describe('ContentsService creation facade compatibility', () => {
     'rejects %s creation without a valid publicationDate before persistence',
     async (type) => {
       const { service, contentRepository, userRepository, transaction } =
-        makeService();
+        await makeService();
 
       for (const publicationDate of [undefined, null, 'not-a-date']) {
         await expect(
-          service.create({
-            type,
-            name: 'Editorial content',
-            authorId: 'author-id',
-            publicationDate,
-          } as any),
+          service.create(
+            makeCreateDto({
+              type,
+              name: 'Editorial content',
+              authorId: 'author-id',
+              publicationDate,
+            }),
+          ),
         ).rejects.toBeInstanceOf(BadRequestException);
       }
 
@@ -262,15 +493,17 @@ describe('ContentsService creation facade compatibility', () => {
 
   it('creates BEST with the supplied date and creates its List transactionally', async () => {
     const { service, listsService, txContentRepository, manager, transaction } =
-      makeService();
+      await makeService();
     const publicationDate = '2026-11-15T12:00:00.000Z';
 
-    await service.create({
-      type: ContentType.BEST,
-      name: 'Mejores de noviembre',
-      authorId: 'author-id',
-      publicationDate,
-    } as any);
+    await service.create(
+      makeCreateDto({
+        type: ContentType.BEST,
+        name: 'Mejores de noviembre',
+        authorId: 'author-id',
+        publicationDate,
+      }),
+    );
 
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(txContentRepository.save).toHaveBeenCalledTimes(2);
@@ -301,15 +534,17 @@ describe('ContentsService creation facade compatibility', () => {
   ] as const)(
     'creates Content with an existing %s reference without creating a companion',
     async (field, type, repositoryName, relation, id) => {
-      const fixture = makeService();
+      const fixture = await makeService();
       const repository = fixture[repositoryName];
 
-      const result = await fixture.service.create({
-        type,
-        name: 'Linked editorial content',
-        authorId: 'author-id',
-        [field]: id,
-      } as any);
+      const result = await fixture.service.create(
+        makeCreateDto({
+          type,
+          name: 'Linked editorial content',
+          authorId: 'author-id',
+          [field]: id,
+        }),
+      );
 
       expect(repository.findOne).toHaveBeenCalledTimes(1);
       expect(repository.findOne).toHaveBeenCalledWith({ where: { id } });
@@ -340,20 +575,42 @@ describe('ContentsService creation facade compatibility', () => {
   ] as const)(
     'preserves initial publication-date sync from an existing published %s',
     async (field, type, repositoryName) => {
-      const fixture = makeService();
+      const fixture = await makeService();
       const updateDate = new Date('2026-10-19T12:00:00.000Z');
-      fixture[repositoryName].findOne.mockResolvedValueOnce({
-        id: 'linked-id',
-        status: 'published',
-        updateDate,
-      } as any);
+      if (repositoryName === 'articleRepository') {
+        fixture.articleFindOne.mockResolvedValueOnce(
+          Object.assign(new Article(), {
+            id: 'linked-id',
+            status: 'published',
+            updateDate,
+          }),
+        );
+      } else if (repositoryName === 'videoRepository') {
+        fixture.videoFindOne.mockResolvedValueOnce(
+          Object.assign(new Video(), {
+            id: 'linked-id',
+            status: 'published',
+            updateDate,
+          }),
+        );
+      } else {
+        fixture.riffValleyPlaylistFindOne.mockResolvedValueOnce(
+          Object.assign(new RiffValleyPlaylist(), {
+            id: 'linked-id',
+            status: 'published',
+            updateDate,
+          }),
+        );
+      }
 
-      const result = await fixture.service.create({
-        type,
-        name: 'Published linked content',
-        authorId: 'author-id',
-        [field]: 'linked-id',
-      } as any);
+      const result = await fixture.service.create(
+        makeCreateDto({
+          type,
+          name: 'Published linked content',
+          authorId: 'author-id',
+          [field]: 'linked-id',
+        }),
+      );
 
       expect(result.publicationDate).toEqual(updateDate);
       expect(fixture.contentRepository.create).toHaveBeenCalledWith(
@@ -374,20 +631,30 @@ describe('ContentsService creation facade compatibility', () => {
   ] as const)(
     'returns 404 for a missing %s before creating or saving Content',
     async (field, type, repositoryName, entityName) => {
-      const fixture = makeService();
-      const repository = fixture[repositoryName];
-      repository.findOne.mockResolvedValueOnce(null);
+      const fixture = await makeService();
+      if (repositoryName === 'articleRepository') {
+        fixture.articleFindOne.mockResolvedValueOnce(null);
+      } else if (repositoryName === 'videoRepository') {
+        fixture.videoFindOne.mockResolvedValueOnce(null);
+      } else {
+        fixture.riffValleyPlaylistFindOne.mockResolvedValueOnce(null);
+      }
 
       const error = await fixture.service
-        .create({
-          type,
-          name: 'Linked editorial content',
-          authorId: 'author-id',
-          [field]: 'missing-id',
-        } as any)
-        .catch((caught) => caught);
+        .create(
+          makeCreateDto({
+            type,
+            name: 'Linked editorial content',
+            authorId: 'author-id',
+            [field]: 'missing-id',
+          }),
+        )
+        .catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(NotFoundException);
+      if (!(error instanceof NotFoundException)) {
+        throw error;
+      }
       expect(error.getStatus()).toBe(404);
       expect(error.message).toBe(`${entityName} with id missing-id not found`);
 
@@ -403,17 +670,19 @@ describe('ContentsService creation facade compatibility', () => {
   );
 
   it('propagates repository lookup failures instead of translating arbitrary errors to 404', async () => {
-    const fixture = makeService();
+    const fixture = await makeService();
     const databaseError = new Error('repository unavailable');
-    fixture.articleRepository.findOne.mockRejectedValueOnce(databaseError);
+    fixture.articleFindOne.mockRejectedValueOnce(databaseError);
 
     await expect(
-      fixture.service.create({
-        type: ContentType.ARTICLE,
-        name: 'Linked editorial content',
-        authorId: 'author-id',
-        articleId: 'article-id',
-      } as any),
+      fixture.service.create(
+        makeCreateDto({
+          type: ContentType.ARTICLE,
+          name: 'Linked editorial content',
+          authorId: 'author-id',
+          articleId: 'article-id',
+        }),
+      ),
     ).rejects.toBe(databaseError);
 
     expect(fixture.contentRepository.create).not.toHaveBeenCalled();
@@ -421,19 +690,21 @@ describe('ContentsService creation facade compatibility', () => {
   });
 
   it('reuses an explicitly supplied Reunion for a REUNION Content', async () => {
-    const fixture = makeService();
-    const existingReunion = { id: 'existing-reunion-id' };
-    fixture.reunionRepository.findOne.mockResolvedValueOnce(
-      existingReunion as any,
-    );
+    const fixture = await makeService();
+    const existingReunion = Object.assign(new Reunion(), {
+      id: 'existing-reunion-id',
+    });
+    fixture.reunionFindOne.mockResolvedValueOnce(existingReunion);
 
-    const result = await fixture.service.create({
-      type: ContentType.REUNION,
-      name: 'Existing reunion content',
-      authorId: 'author-id',
-      reunionId: existingReunion.id,
-      publicationDate: '2026-10-21T18:00:00.000Z',
-    } as any);
+    const result = await fixture.service.create(
+      makeCreateDto({
+        type: ContentType.REUNION,
+        name: 'Existing reunion content',
+        authorId: 'author-id',
+        reunionId: existingReunion.id,
+        publicationDate: '2026-10-21T18:00:00.000Z',
+      }),
+    );
 
     expect(result.reunion).toBe(existingReunion);
     expect(result.reunionId).toBe(existingReunion.id);
@@ -446,19 +717,24 @@ describe('ContentsService creation facade compatibility', () => {
   });
 
   it('returns 404 for a missing Reunion before creating REUNION Content', async () => {
-    const fixture = makeService();
+    const fixture = await makeService();
 
     const error = await fixture.service
-      .create({
-        type: ContentType.REUNION,
-        name: 'Missing reunion content',
-        authorId: 'author-id',
-        reunionId: 'missing-reunion-id',
-        publicationDate: '2026-10-21T18:00:00.000Z',
-      } as any)
-      .catch((caught) => caught);
+      .create(
+        makeCreateDto({
+          type: ContentType.REUNION,
+          name: 'Missing reunion content',
+          authorId: 'author-id',
+          reunionId: 'missing-reunion-id',
+          publicationDate: '2026-10-21T18:00:00.000Z',
+        }),
+      )
+      .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
+    if (!(error instanceof NotFoundException)) {
+      throw error;
+    }
     expect(error.getStatus()).toBe(404);
     expect(error.message).toBe('Reunion with id missing-reunion-id not found');
     expect(fixture.contentRepository.create).not.toHaveBeenCalled();
@@ -467,14 +743,16 @@ describe('ContentsService creation facade compatibility', () => {
   });
 
   it('still creates a Reunion and its default points when no reunionId is supplied', async () => {
-    const fixture = makeService();
+    const fixture = await makeService();
 
-    const result = await fixture.service.create({
-      type: ContentType.REUNION,
-      name: 'New weekly reunion',
-      authorId: 'author-id',
-      publicationDate: '2026-10-21T18:00:00.000Z',
-    } as any);
+    const result = await fixture.service.create(
+      makeCreateDto({
+        type: ContentType.REUNION,
+        name: 'New weekly reunion',
+        authorId: 'author-id',
+        publicationDate: '2026-10-21T18:00:00.000Z',
+      }),
+    );
 
     expect(fixture.txReunionRepository.create).toHaveBeenCalledWith({
       titulo: 'New weekly reunion',
@@ -500,22 +778,35 @@ describe('ContentsService creation facade compatibility', () => {
   ] as const)(
     'persists the new %s companion with Content in one transaction',
     async (type, repositoryName, relation) => {
-      const fixture = makeService();
-      const savedCompanion = { id: `${type}-id` };
-      (fixture[repositoryName] as any).save.mockResolvedValueOnce(
-        savedCompanion,
+      const fixture = await makeService();
+      const savedCompanion = mockCompanionSaveResult(
+        fixture,
+        type,
+        `${type}-id`,
       );
 
-      const result = await fixture.service.create({
-        type,
-        name: 'Atomic editorial content',
-        authorId: 'author-id',
-        publicationDate:
-          type === ContentType.REUNION ? '2026-10-21T18:00:00.000Z' : undefined,
-      } as any);
+      const result = await fixture.service.create(
+        makeCreateDto({
+          type,
+          name: 'Atomic editorial content',
+          authorId: 'author-id',
+          publicationDate:
+            type === ContentType.REUNION
+              ? '2026-10-21T18:00:00.000Z'
+              : undefined,
+        }),
+      );
 
       expect(fixture.transaction).toHaveBeenCalledTimes(1);
-      expect((fixture[repositoryName] as any).save).toHaveBeenCalledTimes(1);
+      const saveMock =
+        repositoryName === 'txArticleRepository'
+          ? fixture.txArticleSave
+          : repositoryName === 'txVideoRepository'
+            ? fixture.txVideoSave
+            : repositoryName === 'txRiffValleyPlaylistRepository'
+              ? fixture.txRiffValleyPlaylistSave
+              : fixture.txReunionSave;
+      expect(saveMock).toHaveBeenCalledTimes(1);
       expect(fixture.txContentRepository.save).toHaveBeenCalledTimes(1);
       expect(result[relation]).toBe(savedCompanion);
       expect(fixture.txContentRepository.save).toHaveBeenCalledWith(
@@ -540,20 +831,22 @@ describe('ContentsService creation facade compatibility', () => {
   ] as const)(
     'discards all pending %s writes when %s fails',
     async (type, repositoryName) => {
-      const fixture = makeService();
+      const fixture = await makeService();
       const writeError = new Error(`${repositoryName} write failed`);
-      (fixture[repositoryName] as any).save.mockRejectedValueOnce(writeError);
+      rejectTransactionalSave(fixture, repositoryName, writeError);
 
       await expect(
-        fixture.service.create({
-          type,
-          name: 'Atomic editorial content',
-          authorId: 'author-id',
-          publicationDate:
-            type === ContentType.REUNION
-              ? '2026-10-21T18:00:00.000Z'
-              : undefined,
-        } as any),
+        fixture.service.create(
+          makeCreateDto({
+            type,
+            name: 'Atomic editorial content',
+            authorId: 'author-id',
+            publicationDate:
+              type === ContentType.REUNION
+                ? '2026-10-21T18:00:00.000Z'
+                : undefined,
+          }),
+        ),
       ).rejects.toBe(writeError);
 
       expect(fixture.transaction).toHaveBeenCalledTimes(1);
@@ -566,142 +859,123 @@ describe('ContentsService creation facade compatibility', () => {
       expect(fixture.pointRepository.save).not.toHaveBeenCalled();
     },
   );
-});
+  describe('ContentsService automatic Video creation', () => {
+    it('continues creating an editing Video with the Content author and a date', async () => {
+      const fixture = await makeService();
+      const author = fixture.author;
+      const savedVideo = Object.assign(new Video(), { id: 'video-id' });
+      fixture.txVideoSave.mockResolvedValueOnce(savedVideo);
 
-describe('ContentsService automatic Video creation', () => {
-  it('continues creating an editing Video with the Content author and a date', async () => {
-    const author = { id: 'author-id' };
-    const savedVideo = { id: 'video-id' };
-    const videoRepository = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn().mockResolvedValue(savedVideo),
-    };
-    const contentRepository = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn().mockImplementation(async (content) => content),
-    };
-    const transaction = jest.fn(async (callback) =>
-      callback({
-        getRepository: (entity) =>
-          entity === Video ? videoRepository : contentRepository,
-      }),
-    );
-    contentRepository['manager' as any] = { transaction } as any;
-    const userRepository = {
-      findOne: jest.fn().mockResolvedValue(author),
-    };
-    const creationService = new ContentCreationService(
-      contentRepository as any,
-      userRepository as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      videoRepository as any,
-      {} as any,
-    );
-    const service = new ContentsService({} as any, creationService, {} as any);
+      const result = await fixture.service.create(
+        makeCreateDto({
+          type: ContentType.VIDEO,
+          name: 'Video from Content',
+          authorId: 'author-id',
+        }),
+      );
 
-    const result = await service.create({
-      type: ContentType.VIDEO,
-      name: 'Video from Content',
-      authorId: author.id,
+      expect(fixture.txVideoCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Video from Content',
+          status: VideoStatus.EDITING,
+          type: VideoType.CUSTOM,
+          updateDate: expect.any(Date),
+          user: author,
+        }),
+      );
+      expect(fixture.transaction).toHaveBeenCalledTimes(1);
+      expect(fixture.txVideoSave).toHaveBeenCalledTimes(1);
+      expect(result.video).toBe(savedVideo);
+      expect(fixture.txContentSave).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('ContentsService query facade', () => {
+    it('forwards update and remove to ContentLifecycleService', async () => {
+      const fixture = await makeService();
+      const result = makeContent();
+      fixture.lifecycleService.update.mockResolvedValue(result);
+      const updateDto = Object.assign(new UpdateContentDto(), {
+        name: 'Updated',
+      });
+
+      await expect(
+        fixture.service.update('content-id', updateDto),
+      ).resolves.toBe(result);
+      await expect(
+        fixture.service.remove('content-id'),
+      ).resolves.toBeUndefined();
+      expect(fixture.lifecycleService.update).toHaveBeenCalledWith(
+        'content-id',
+        updateDto,
+      );
+      expect(fixture.lifecycleService.remove).toHaveBeenCalledWith(
+        'content-id',
+      );
     });
 
-    expect(videoRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: 'Video from Content',
-        status: VideoStatus.EDITING,
-        type: VideoType.CUSTOM,
-        updateDate: expect.any(Date),
-        user: author,
-      }),
-    );
-    expect(transaction).toHaveBeenCalledTimes(1);
-    expect(videoRepository.save).toHaveBeenCalledTimes(1);
-    expect(result.video).toBe(savedVideo);
-    expect(contentRepository.save).toHaveBeenCalledTimes(1);
-  });
-});
+    it('forwards content creation to ContentCreationService', async () => {
+      const fixture = await makeService();
+      const result = makeContent({ id: 'new-content' });
+      jest.spyOn(fixture.creationService, 'create').mockResolvedValue(result);
+      const dto = makeCreateDto({
+        type: ContentType.ARTICLE,
+        name: 'Article',
+        authorId: 'author-id',
+      });
 
-describe('ContentsService query facade', () => {
-  it('forwards update and remove to ContentLifecycleService', async () => {
-    const result = { id: 'content-id' } as Content;
-    const lifecycleService = {
-      update: jest.fn().mockResolvedValue(result),
-      remove: jest.fn().mockResolvedValue(undefined),
-    };
-    const service = new ContentsService(
-      {} as any,
-      {} as any,
-      lifecycleService as any,
-    );
-    const updateDto = { name: 'Updated' } as any;
+      await expect(fixture.service.create(dto)).resolves.toBe(result);
+      expect(fixture.creationService.create).toHaveBeenCalledWith(dto);
+    });
 
-    await expect(service.update('content-id', updateDto)).resolves.toBe(result);
-    await expect(service.remove('content-id')).resolves.toBeUndefined();
-    expect(lifecycleService.update).toHaveBeenCalledWith(
-      'content-id',
-      updateDto,
-    );
-    expect(lifecycleService.remove).toHaveBeenCalledWith('content-id');
-  });
+    it('forwards all public query signatures to ContentQueryService', async () => {
+      const fixture = await makeService();
+      const content = makeContent();
+      fixture.queryService.findAll.mockResolvedValue([content]);
+      fixture.queryService.findOne.mockResolvedValue(content);
+      fixture.queryService.findByMonth.mockResolvedValue([content]);
+      fixture.queryService.findOneByRiffValleyPlaylistId.mockResolvedValue(
+        content,
+      );
+      fixture.queryService.findOneByArticleId.mockResolvedValue(content);
+      fixture.queryService.findOneByVideoId.mockResolvedValue(content);
+      fixture.queryService.getDefaultAuthorId.mockResolvedValue('author-id');
 
-  it('forwards content creation to ContentCreationService', async () => {
-    const result = { id: 'new-content' } as Content;
-    const creationService = { create: jest.fn().mockResolvedValue(result) };
-    const service = new ContentsService(
-      {} as any,
-      creationService as any,
-      {} as any,
-    );
-    const dto = {
-      type: ContentType.ARTICLE,
-      name: 'Article',
-      authorId: 'author-id',
-    } as any;
+      await expect(fixture.service.findAll(true, false)).resolves.toEqual([
+        content,
+      ]);
+      await expect(fixture.service.findOne('content-id')).resolves.toBe(
+        content,
+      );
+      await expect(fixture.service.findByMonth(2026, 10)).resolves.toEqual([
+        content,
+      ]);
+      await expect(
+        fixture.service.findOneByRiffValleyPlaylistId('playlist-id'),
+      ).resolves.toBe(content);
+      await expect(
+        fixture.service.findOneByArticleId('article-id'),
+      ).resolves.toBe(content);
+      await expect(fixture.service.findOneByVideoId('video-id')).resolves.toBe(
+        content,
+      );
+      await expect(fixture.service.getDefaultAuthorId()).resolves.toBe(
+        'author-id',
+      );
 
-    await expect(service.create(dto)).resolves.toBe(result);
-    expect(creationService.create).toHaveBeenCalledWith(dto);
-  });
-
-  it('forwards all public query signatures to ContentQueryService', async () => {
-    const content = { id: 'content-id' } as Content;
-    const queryService = {
-      findAll: jest.fn().mockResolvedValue([content]),
-      findOne: jest.fn().mockResolvedValue(content),
-      findByMonth: jest.fn().mockResolvedValue([content]),
-      findOneByRiffValleyPlaylistId: jest.fn().mockResolvedValue(content),
-      findOneByArticleId: jest.fn().mockResolvedValue(content),
-      findOneByVideoId: jest.fn().mockResolvedValue(content),
-      getDefaultAuthorId: jest.fn().mockResolvedValue('author-id'),
-    };
-    const creationService = { create: jest.fn() };
-    const service = new ContentsService(
-      queryService as any,
-      creationService as any,
-      {} as any,
-    );
-
-    await expect(service.findAll(true, false)).resolves.toEqual([content]);
-    await expect(service.findOne('content-id')).resolves.toBe(content);
-    await expect(service.findByMonth(2026, 10)).resolves.toEqual([content]);
-    await expect(
-      service.findOneByRiffValleyPlaylistId('playlist-id'),
-    ).resolves.toBe(content);
-    await expect(service.findOneByArticleId('article-id')).resolves.toBe(
-      content,
-    );
-    await expect(service.findOneByVideoId('video-id')).resolves.toBe(content);
-    await expect(service.getDefaultAuthorId()).resolves.toBe('author-id');
-
-    expect(queryService.findAll).toHaveBeenCalledWith(true, false);
-    expect(queryService.findOne).toHaveBeenCalledWith('content-id');
-    expect(queryService.findByMonth).toHaveBeenCalledWith(2026, 10);
-    expect(queryService.findOneByRiffValleyPlaylistId).toHaveBeenCalledWith(
-      'playlist-id',
-    );
-    expect(queryService.findOneByArticleId).toHaveBeenCalledWith('article-id');
-    expect(queryService.findOneByVideoId).toHaveBeenCalledWith('video-id');
-    expect(queryService.getDefaultAuthorId).toHaveBeenCalledTimes(1);
+      expect(fixture.queryService.findAll).toHaveBeenCalledWith(true, false);
+      expect(fixture.queryService.findOne).toHaveBeenCalledWith('content-id');
+      expect(fixture.queryService.findByMonth).toHaveBeenCalledWith(2026, 10);
+      expect(
+        fixture.queryService.findOneByRiffValleyPlaylistId,
+      ).toHaveBeenCalledWith('playlist-id');
+      expect(fixture.queryService.findOneByArticleId).toHaveBeenCalledWith(
+        'article-id',
+      );
+      expect(fixture.queryService.findOneByVideoId).toHaveBeenCalledWith(
+        'video-id',
+      );
+      expect(fixture.queryService.getDefaultAuthorId).toHaveBeenCalledTimes(1);
+    });
   });
 });

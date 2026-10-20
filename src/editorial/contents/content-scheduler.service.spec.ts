@@ -1,15 +1,58 @@
+import { MODULE_METADATA } from '@nestjs/common/constants';
+import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
+import { SCHEDULE_CRON_OPTIONS } from '@nestjs/schedule/dist/schedule.constants';
+import { ContentsService } from './contents.service';
 import { ContentSchedulerService } from './content-scheduler.service';
-import { ContentType } from './entities/content.entity';
-import { ContentsModule } from './contents.module';
+import { Content, ContentType } from './entities/content.entity';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { DiscLinkMaintenanceService } from 'src/catalog/discs/maintenance/disc-link-maintenance.service';
 import { DiscModule } from 'src/catalog/discs/discs.module';
-import { MODULE_METADATA } from '@nestjs/common/constants';
-import { SCHEDULE_CRON_OPTIONS } from '@nestjs/schedule/dist/schedule.constants';
+import { ContentsModule } from './contents.module';
 
-const cronOptions = (target: object, method: string) =>
-  Reflect.getMetadata(SCHEDULE_CRON_OPTIONS, (target as any).prototype[method]);
+const cronOptions = (target: { prototype: object }, method: string) => {
+  const implementation = Object.getOwnPropertyDescriptor(
+    target.prototype,
+    method,
+  )?.value;
+  return typeof implementation === 'function'
+    ? Reflect.getMetadata(SCHEDULE_CRON_OPTIONS, implementation)
+    : undefined;
+};
 
 describe('ContentSchedulerService weekly Content/Reunion job', () => {
+  const makeFixture = async () => {
+    const dataSource = new DataSource({ type: 'postgres' });
+    const userRepository = dataSource.getRepository(User);
+    const findOne = jest
+      .spyOn(userRepository, 'findOne')
+      .mockResolvedValue(Object.assign(new User(), { id: 'author-id' }));
+    const content = Object.assign(new Content(), { id: 'content-id' });
+    const contentsService: jest.Mocked<Pick<ContentsService, 'create'>> = {
+      create: jest
+        .fn<
+          ReturnType<ContentsService['create']>,
+          Parameters<ContentsService['create']>
+        >()
+        .mockResolvedValue(content),
+    };
+    const module = await Test.createTestingModule({
+      providers: [
+        ContentSchedulerService,
+        { provide: getRepositoryToken(User), useValue: userRepository },
+        { provide: ContentsService, useValue: contentsService },
+      ],
+    }).compile();
+
+    return {
+      scheduler: module.get(ContentSchedulerService),
+      module,
+      findOne,
+      contentsService,
+    };
+  };
+
   it('keeps the Monday schedule and Europe/Madrid timezone', () => {
     expect(cronOptions(ContentSchedulerService, 'createWeeklyContent')).toEqual(
       {
@@ -20,14 +63,7 @@ describe('ContentSchedulerService weekly Content/Reunion job', () => {
   });
 
   it('still creates weekly Reunion Content with the existing author and date', async () => {
-    const create = jest.fn().mockResolvedValue({ id: 'content-id' });
-    const userRepo = {
-      findOne: jest.fn().mockResolvedValue({ id: 'author-id' }),
-    };
-    const scheduler = new ContentSchedulerService(
-      userRepo as any,
-      { create } as any,
-    );
+    const fixture = await makeFixture();
     const monday = new Date(2026, 9, 19, 10);
     const nextWednesday = new Date(monday);
     nextWednesday.setDate(monday.getDate() + 2);
@@ -35,73 +71,91 @@ describe('ContentSchedulerService weekly Content/Reunion job', () => {
     jest.useFakeTimers().setSystemTime(monday);
 
     try {
-      await scheduler.createWeeklyContent();
+      await fixture.scheduler.createWeeklyContent();
     } finally {
       jest.useRealTimers();
     }
 
-    expect(create).toHaveBeenCalledWith({
+    expect(fixture.contentsService.create).toHaveBeenCalledWith({
       name: 'Reunion 21-10-2026',
       type: ContentType.REUNION,
       authorId: 'author-id',
       publicationDate: nextWednesday.toISOString(),
     });
+    await fixture.module.close();
   });
 
   it('does not create Content outside Monday', async () => {
-    const create = jest.fn();
-    const scheduler = new ContentSchedulerService(
-      { findOne: jest.fn() } as any,
-      { create } as any,
-    );
+    const fixture = await makeFixture();
     jest.useFakeTimers().setSystemTime(new Date(2026, 9, 20, 10));
 
     try {
-      await scheduler.createWeeklyContent();
+      await fixture.scheduler.createWeeklyContent();
     } finally {
       jest.useRealTimers();
     }
 
-    expect(create).not.toHaveBeenCalled();
+    expect(fixture.contentsService.create).not.toHaveBeenCalled();
+    expect(fixture.findOne).not.toHaveBeenCalled();
+    await fixture.module.close();
   });
 });
 
 describe('Contents/Discs scheduled-job wiring', () => {
   it('registers the daily job once in DiscModule and keeps only the weekly job in ContentsModule', () => {
-    const discProviders = Reflect.getMetadata(
+    const discProviders: unknown = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
       DiscModule,
-    ) as unknown[];
-    const contentProviders = Reflect.getMetadata(
+    );
+    const contentProviders: unknown = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
       ContentsModule,
-    ) as unknown[];
-    const contentImports = Reflect.getMetadata(
+    );
+    const contentImports: unknown = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,
       ContentsModule,
-    ) as { module?: unknown }[];
+    );
+    const discProviderList = Array.isArray(discProviders) ? discProviders : [];
+    const contentProviderList = Array.isArray(contentProviders)
+      ? contentProviders
+      : [];
+    const contentImportList = Array.isArray(contentImports)
+      ? contentImports
+      : [];
 
     expect(
-      discProviders.filter(
-        (provider) => provider === DiscLinkMaintenanceService,
+      discProviderList.filter(
+        (provider: unknown) => provider === DiscLinkMaintenanceService,
       ),
     ).toHaveLength(1);
     expect(
-      contentProviders.filter(
-        (provider) => provider === ContentSchedulerService,
+      contentProviderList.filter(
+        (provider: unknown) => provider === ContentSchedulerService,
       ),
     ).toHaveLength(1);
-    expect(contentProviders).not.toContain(DiscLinkMaintenanceService);
+    expect(contentProviderList).not.toContain(DiscLinkMaintenanceService);
     expect(
-      contentImports.some(
-        (module) => module === DiscModule || module?.module === DiscModule,
+      contentImportList.some(
+        (module: unknown) =>
+          module === DiscModule ||
+          (typeof module === 'object' &&
+            module !== null &&
+            'module' in module &&
+            module.module === DiscModule),
       ),
     ).toBe(true);
+    const discImports: unknown = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      DiscModule,
+    );
+    expect(Array.isArray(discImports) ? discImports : []).not.toContain(
+      ContentsModule,
+    );
     expect(
-      Reflect.getMetadata(MODULE_METADATA.IMPORTS, DiscModule),
-    ).not.toContain(ContentsModule);
-    expect(
-      (ContentSchedulerService.prototype as any).checkMissingSpotifyLinks,
+      Object.getOwnPropertyDescriptor(
+        ContentSchedulerService.prototype,
+        'checkMissingSpotifyLinks',
+      ),
     ).toBeUndefined();
     expect(
       cronOptions(DiscLinkMaintenanceService, 'checkMissingSpotifyLinks'),

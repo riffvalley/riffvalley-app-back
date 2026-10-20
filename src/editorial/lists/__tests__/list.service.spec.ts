@@ -1,4 +1,14 @@
-import { FindOperator } from 'typeorm';
+import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import {
+  DataSource,
+  FindOperator,
+  FindOptionsWhere,
+  Repository,
+} from 'typeorm';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { Asignation } from '../asignations/entities/asignations.entity';
+import { UpdateListDto } from '../dto/update-list.dto';
 import { List, ListType } from '../entities/list.entity';
 import { ListsService } from '../list.service';
 import { ListCalendarService } from '../application/list-calendar.service';
@@ -7,63 +17,95 @@ import { ListContentCoordinator } from '../application/list-content-coordinator.
 import { WeeklyListPublisherService } from '../wordpress/weekly-list-publisher.service';
 import { MonthlyListPublisherService } from '../wordpress/monthly-list-publisher.service';
 
-type Row = { closeDate: Date | null; releaseDate: Date | null; listDate: Date };
+type Row = Pick<List, 'closeDate' | 'releaseDate' | 'listDate'>;
+type CalendarWhere =
+  | FindOptionsWhere<List>
+  | FindOptionsWhere<List>[]
+  | undefined;
+type CalendarRepository = jest.Mocked<Pick<Repository<List>, 'find'>>;
 
-// Evaluate in memory the `where` conditions (array = OR) produced by the service.
-function matches(where: any, row: Row): boolean {
-  const conditions = Array.isArray(where) ? where : [where];
-  return conditions.some((cond: any) =>
-    Object.entries(cond).every(([field, expected]) => {
-      if (field === 'type') return true;
-      const value = (row as any)[field] as Date | null;
+function matches(where: CalendarWhere, row: Row): boolean {
+  const conditions =
+    where == null ? [{}] : Array.isArray(where) ? where : [where];
+  return conditions.some((condition) => {
+    const matchesDate = (
+      value: Date | null | undefined,
+      expected: Date | FindOperator<unknown> | null | undefined,
+    ) => {
+      if (expected === undefined) return true;
       if (!(expected instanceof FindOperator)) return value === expected;
-      const op = expected as FindOperator<any>;
-      switch (op.type) {
+      switch (expected.type) {
         case 'isNull':
           return value === null;
         case 'moreThanOrEqual':
-          return value !== null && value >= op.value;
+          return value != null && value >= expected.value;
         case 'lessThan':
-          return value !== null && value < op.value;
-        case 'between':
-          return value !== null && value >= op.value[0] && value <= op.value[1];
+          return value != null && value < expected.value;
+        case 'between': {
+          if (!Array.isArray(expected.value)) return false;
+          const [start, end] = expected.value;
+          if (!(start instanceof Date) || !(end instanceof Date)) return false;
+          return value != null && value >= start && value <= end;
+        }
         default:
-          throw new Error(`Operador no soportado: ${op.type}`);
+          throw new Error(`Operador no soportado: ${expected.type}`);
       }
-    }),
-  );
+    };
+    return (
+      matchesDate(row.closeDate, condition.closeDate) &&
+      matchesDate(row.releaseDate, condition.releaseDate) &&
+      matchesDate(row.listDate, condition.listDate)
+    );
+  });
 }
 
 describe('ListsService calendar facade', () => {
-  const radar: Row = {
+  const makeList = (row: Row): List =>
+    Object.assign(new List(), {
+      id: 'list-id',
+      name: 'List',
+      type: ListType.WEEK,
+      asignations: [],
+      ...row,
+    });
+  const radar = makeList({
     listDate: new Date(2026, 8, 18),
     releaseDate: new Date(2026, 8, 19),
     closeDate: new Date(2026, 8, 20),
-  };
-  const legacyRadar: Row = { ...radar, closeDate: null };
-  const september: Row = {
+  });
+  const legacyRadar = makeList({ ...radar, closeDate: null });
+  const september = makeList({
     listDate: new Date(2026, 8, 15),
     releaseDate: null,
     closeDate: null,
-  };
+  });
 
-  let rows: Row[];
+  let rows: List[];
   let service: ListsService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     rows = [];
-    const repo = {
+    const repository: CalendarRepository = {
       find: jest.fn(async ({ where }) =>
         rows.filter((row) => matches(where, row)),
       ),
     };
-    service = new ListsService(
-      {} as ListCrudService,
-      new ListCalendarService(repo as any),
-      {} as ListContentCoordinator,
-      {} as WeeklyListPublisherService,
-      {} as MonthlyListPublisherService,
-    );
+    const module = await Test.createTestingModule({
+      providers: [
+        ListsService,
+        {
+          provide: ListCalendarService,
+          useFactory: (repo: Repository<List>) => new ListCalendarService(repo),
+          inject: [getRepositoryToken(List)],
+        },
+        { provide: getRepositoryToken(List), useValue: repository },
+        { provide: ListCrudService, useValue: {} },
+        { provide: ListContentCoordinator, useValue: {} },
+        { provide: WeeklyListPublisherService, useValue: {} },
+        { provide: MonthlyListPublisherService, useValue: {} },
+      ],
+    }).compile();
+    service = module.get(ListsService);
     jest.useFakeTimers();
   });
 
@@ -101,39 +143,93 @@ describe('ListsService calendar facade', () => {
 });
 
 describe('ListsService business facade', () => {
-  const makeFacade = () => {
+  const makeFacade = async () => {
     const crud = {
-      findOne: jest.fn().mockResolvedValue({ asignations: [] }),
+      create: jest.fn<
+        Promise<unknown>,
+        Parameters<ListCrudService['create']>
+      >(),
+      findAll: jest.fn<
+        Promise<unknown>,
+        Parameters<ListCrudService['findAll']>
+      >(),
+      findOne: jest.fn<
+        Promise<unknown>,
+        Parameters<ListCrudService['findOne']>
+      >(),
+      createVideoList: jest.fn<
+        Promise<unknown>,
+        Parameters<ListCrudService['createVideoList']>
+      >(),
+      createWeeklyList: jest.fn<
+        Promise<unknown>,
+        Parameters<ListCrudService['createWeeklyList']>
+      >(),
+      createMonthlyList: jest.fn<
+        Promise<unknown>,
+        Parameters<ListCrudService['createMonthlyList']>
+      >(),
     };
-    const calendar = {};
     const coordinator = {
-      update: jest.fn().mockResolvedValue('updated'),
-      removeList: jest.fn().mockResolvedValue('removed'),
+      update: jest.fn<
+        Promise<unknown>,
+        Parameters<ListContentCoordinator['update']>
+      >(),
+      removeList: jest.fn<
+        Promise<unknown>,
+        Parameters<ListContentCoordinator['removeList']>
+      >(),
     };
     const weekly = {
-      generateWordPressPosts: jest.fn().mockResolvedValue('weekly-post'),
-      syncDiscToWeeklyPost: jest.fn().mockResolvedValue({ synced: true }),
+      generateWordPressPosts: jest.fn<
+        Promise<unknown>,
+        Parameters<WeeklyListPublisherService['generateWordPressPosts']>
+      >(),
+      syncDiscToWeeklyPost: jest.fn<
+        Promise<unknown>,
+        Parameters<WeeklyListPublisherService['syncDiscToWeeklyPost']>
+      >(),
     };
     const monthly = {
-      generateBestDiscsWordPressPost: jest
-        .fn()
-        .mockResolvedValue('monthly-post'),
-      syncDiscToMonthlyPost: jest.fn().mockResolvedValue({ synced: true }),
+      generateBestDiscsWordPressPost: jest.fn<
+        Promise<unknown>,
+        Parameters<
+          MonthlyListPublisherService['generateBestDiscsWordPressPost']
+        >
+      >(),
+      syncDiscToMonthlyPost: jest.fn<
+        Promise<unknown>,
+        Parameters<MonthlyListPublisherService['syncDiscToMonthlyPost']>
+      >(),
     };
-    const facade = new ListsService(
-      crud as any,
-      calendar as any,
-      coordinator as any,
-      weekly as any,
-      monthly as any,
+    crud.findOne.mockResolvedValue(
+      Object.assign(new List(), { asignations: [] }),
     );
-    return { facade, crud, coordinator, weekly, monthly };
+    const module = await Test.createTestingModule({
+      providers: [
+        ListsService,
+        { provide: ListCrudService, useValue: crud },
+        { provide: ListCalendarService, useValue: {} },
+        { provide: ListContentCoordinator, useValue: coordinator },
+        { provide: WeeklyListPublisherService, useValue: weekly },
+        { provide: MonthlyListPublisherService, useValue: monthly },
+      ],
+    }).compile();
+    return {
+      facade: module.get(ListsService),
+      crud,
+      coordinator,
+      weekly,
+      monthly,
+    };
   };
 
   it('delegates update and remove with the original arguments', async () => {
-    const { facade, coordinator } = makeFacade();
-    const update = { closeDate: null } as any;
-    const manager = {} as any;
+    const { facade, coordinator } = await makeFacade();
+    coordinator.update.mockResolvedValue('updated');
+    coordinator.removeList.mockResolvedValue('removed');
+    const update: UpdateListDto = { closeDate: null };
+    const manager = new DataSource({ type: 'postgres' }).manager;
 
     await expect(facade.update('list-id', update)).resolves.toBe('updated');
     await expect(facade.removeList('list-id', manager)).resolves.toBe(
@@ -145,27 +241,34 @@ describe('ListsService business facade', () => {
   });
 
   it('routes WordPress operations through the existing publisher by list type', async () => {
-    const { facade, crud, weekly, monthly } = makeFacade();
-    const assignment = { id: 'assignment-id', disc: { id: 'disc-id' } };
-    crud.findOne.mockResolvedValue({
-      type: ListType.WEEK,
-      asignations: [assignment],
+    const { facade, crud, weekly, monthly } = await makeFacade();
+    const assignment = Object.assign(new Asignation(), {
+      id: 'assignment-id',
+      disc: Object.assign(new Disc(), { id: 'disc-id' }),
     });
+    crud.findOne.mockResolvedValue(
+      Object.assign(new List(), {
+        type: ListType.WEEK,
+        asignations: [assignment],
+      }),
+    );
+    weekly.syncDiscToWeeklyPost.mockResolvedValue({ synced: true });
+    monthly.syncDiscToMonthlyPost.mockResolvedValue({ synced: true });
     await expect(
       facade.syncDiscToWordPress('list-id', 'assignment-id'),
-    ).resolves.toEqual({
-      synced: true,
-    });
+    ).resolves.toEqual({ synced: true });
     expect(weekly.syncDiscToWeeklyPost).toHaveBeenCalledWith(
       expect.objectContaining({ type: ListType.WEEK }),
       assignment,
     );
     expect(monthly.syncDiscToMonthlyPost).not.toHaveBeenCalled();
 
-    crud.findOne.mockResolvedValue({
-      type: ListType.MONTH,
-      asignations: [assignment],
-    });
+    crud.findOne.mockResolvedValue(
+      Object.assign(new List(), {
+        type: ListType.MONTH,
+        asignations: [assignment],
+      }),
+    );
     await facade.syncDiscToWordPress('list-id', 'assignment-id');
     expect(monthly.syncDiscToMonthlyPost).toHaveBeenCalledWith(
       expect.objectContaining({ type: ListType.MONTH }),
@@ -174,12 +277,10 @@ describe('ListsService business facade', () => {
   });
 
   it('returns the existing no-op result when no matching assignment exists', async () => {
-    const { facade, weekly, monthly } = makeFacade();
+    const { facade, weekly, monthly } = await makeFacade();
     await expect(
       facade.syncDiscToWordPress('list-id', 'missing'),
-    ).resolves.toEqual({
-      synced: false,
-    });
+    ).resolves.toEqual({ synced: false });
     expect(weekly.syncDiscToWeeklyPost).not.toHaveBeenCalled();
     expect(monthly.syncDiscToMonthlyPost).not.toHaveBeenCalled();
   });

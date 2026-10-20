@@ -3,7 +3,15 @@ import {
   NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
-import { QueryFailedError } from 'typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Test } from '@nestjs/testing';
+import {
+  DeepPartial,
+  FindManyOptions,
+  FindOneOptions,
+  FindOperator,
+  QueryFailedError,
+} from 'typeorm';
 import { VideosController } from './videos.controller';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
@@ -12,6 +20,131 @@ import { VideosService } from './videos.service';
 import { List } from 'src/editorial/lists/entities/list.entity';
 import { ListCrudService } from 'src/editorial/lists/application/list-crud.service';
 import { ListsService } from 'src/editorial/lists/list.service';
+import { ContentsService } from 'src/editorial/contents/contents.service';
+import { Content } from 'src/editorial/contents/entities/content.entity';
+import { ListCalendarService } from 'src/editorial/lists/application/list-calendar.service';
+import { ListContentCoordinator } from 'src/editorial/lists/application/list-content-coordinator.service';
+import { MonthlyListPublisherService } from 'src/editorial/lists/wordpress/monthly-list-publisher.service';
+import { WeeklyListPublisherService } from 'src/editorial/lists/wordpress/weekly-list-publisher.service';
+import { ListStatus, ListType } from 'src/editorial/lists/entities/list.entity';
+
+type VideoRepositoryMock = {
+  create: jest.Mock<DeepPartial<Video>, [DeepPartial<Video>]>;
+  merge: jest.Mock<Video, [Video, DeepPartial<Video>]>;
+  save: jest.Mock<Promise<Video>, [DeepPartial<Video>]>;
+  find: jest.Mock<Promise<Video[]>, [FindManyOptions<Video>?]>;
+  findOne: jest.Mock<Promise<Video | null>, [FindOneOptions<Video>]>;
+  manager: {
+    transaction: jest.Mock<Promise<unknown>, [TransactionCallback]>;
+  };
+};
+
+type ListRepositoryMock = {
+  create: jest.Mock<List, [DeepPartial<List>]>;
+  save: jest.Mock<Promise<List>, [DeepPartial<List>]>;
+};
+
+type VideoTransactionRepositoryMock = {
+  findOne: jest.Mock<Promise<Video | null>, [FindOneOptions<Video>]>;
+  save: jest.Mock<Promise<Video>, [Video]>;
+};
+
+type TransactionManagerMock = {
+  getRepository: jest.Mock<
+    VideoTransactionRepositoryMock | ListRepositoryMock,
+    [typeof Video | typeof List]
+  >;
+};
+
+type TransactionCallback = (
+  manager: TransactionManagerMock,
+) => Promise<unknown>;
+
+function makeList(id: string, overrides: Partial<List> = {}): List {
+  return {
+    id,
+    name: 'Video editorial',
+    type: ListType.VIDEO,
+    status: ListStatus.NEW,
+    asignations: [],
+    ...overrides,
+  };
+}
+
+function makeListFromPartial(values: DeepPartial<List>, id: string): List {
+  return makeList(id, {
+    name: typeof values.name === 'string' ? values.name : 'Video editorial',
+    type: values.type ?? ListType.VIDEO,
+    status: values.status ?? ListStatus.NEW,
+  });
+}
+
+function createListRepositoryMock(id: string): ListRepositoryMock {
+  return {
+    create: jest.fn<List, [DeepPartial<List>]>((values) =>
+      makeListFromPartial(values, id),
+    ),
+    save: jest.fn<Promise<List>, [DeepPartial<List>]>(async (values) =>
+      makeListFromPartial(values, id),
+    ),
+  };
+}
+
+async function createVideosTestService(
+  repository: VideoRepositoryMock,
+  contentsService: Pick<ContentsService, 'findOneByVideoId'>,
+  listRepository: ListRepositoryMock,
+): Promise<VideosService> {
+  const moduleRef = await Test.createTestingModule({
+    providers: [
+      VideosService,
+      ListsService,
+      ListCrudService,
+      { provide: getRepositoryToken(Video), useValue: repository },
+      { provide: getRepositoryToken(List), useValue: listRepository },
+      { provide: ContentsService, useValue: contentsService },
+      { provide: ListCalendarService, useValue: {} },
+      { provide: ListContentCoordinator, useValue: {} },
+      { provide: WeeklyListPublisherService, useValue: {} },
+      { provide: MonthlyListPublisherService, useValue: {} },
+    ],
+  }).compile();
+
+  return moduleRef.get(VideosService);
+}
+
+function filterVideosByDate(
+  options: FindManyOptions<Video>,
+  videos: Video[],
+): Video[] {
+  const where = Array.isArray(options.where) ? options.where[0] : options.where;
+  const filter = where?.updateDate;
+  if (!(filter instanceof FindOperator)) return videos;
+
+  const value: unknown = filter.value;
+  if (filter.type === 'between') {
+    if (!Array.isArray(value) || value.length !== 2) return videos;
+    const lowerBound: unknown = value[0];
+    const upperBound: unknown = value[1];
+    if (!(lowerBound instanceof Date) || !(upperBound instanceof Date)) {
+      return videos;
+    }
+
+    return videos.filter(
+      ({ updateDate }) => updateDate >= lowerBound && updateDate <= upperBound,
+    );
+  }
+
+  if (!(value instanceof Date)) return videos;
+  if (filter.type === 'moreThanOrEqual') {
+    return videos.filter(({ updateDate }) => updateDate >= value);
+  }
+  if (filter.type === 'lessThanOrEqual') {
+    return videos.filter(({ updateDate }) => updateDate <= value);
+  }
+
+  return videos;
+}
 
 describe('VideosService status requirements', () => {
   const videoId = 'c17ee051-1a9b-4f33-a2b4-67f1a2508a4c';
@@ -25,11 +158,7 @@ describe('VideosService status requirements', () => {
   });
 
   let persistedVideo: Video;
-  let repository: {
-    create: jest.Mock;
-    save: jest.Mock;
-    findOne: jest.Mock;
-  };
+  let repository: VideoRepositoryMock;
   let service: VideosService;
   let controller: VideosController;
 
@@ -78,23 +207,37 @@ describe('VideosService status requirements', () => {
     expect((error as BadRequestException).getStatus()).toBe(400);
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     persistedVideo = video();
     repository = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn(async (entity) => {
-        persistedVideo = {
-          ...entity,
-          id: entity.id ?? videoId,
-        } as Video;
+      create: jest.fn<DeepPartial<Video>, [DeepPartial<Video>]>((values) => ({
+        ...values,
+      })),
+      merge: jest.fn<Video, [Video, DeepPartial<Video>]>((entity, partial) =>
+        Object.assign(entity, partial),
+      ),
+      save: jest.fn<Promise<Video>, [DeepPartial<Video>]>(async (entity) => {
+        persistedVideo = { ...entity, id: entity.id ?? videoId } as Video;
         return persistedVideo;
       }),
-      findOne: jest.fn(async () => persistedVideo),
+      find: jest.fn<Promise<Video[]>, [FindManyOptions<Video>?]>(
+        async () => [],
+      ),
+      findOne: jest.fn<Promise<Video | null>, [FindOneOptions<Video>]>(
+        async () => persistedVideo,
+      ),
+      manager: {
+        transaction: jest.fn<Promise<unknown>, [TransactionCallback]>(),
+      },
     };
-    service = new VideosService(
-      repository as any,
-      { findOneByVideoId: jest.fn() } as any,
-      { createVideoList: jest.fn() } as any,
+    service = await createVideosTestService(
+      repository,
+      {
+        findOneByVideoId: jest.fn<Promise<Content | null>, [string]>(
+          async () => null,
+        ),
+      },
+      createListRepositoryMock(videoId),
     );
     controller = new VideosController(service);
   });
@@ -230,6 +373,95 @@ describe('VideosService status requirements', () => {
         expect(repository.save).not.toHaveBeenCalled();
       },
     );
+  });
+
+  describe('GET /videos filters', () => {
+    const desde = '2026-10-01T00:00:00.000Z';
+    const hasta = '2026-10-31T00:00:00.000Z';
+    const rows = [
+      video({ id: 'before', updateDate: new Date('2026-09-30T23:59:59.999Z') }),
+      video({ id: 'lower', updateDate: new Date(desde) }),
+      video({ id: 'middle', updateDate: new Date('2026-10-15T12:00:00.000Z') }),
+      video({ id: 'upper', updateDate: new Date(hasta) }),
+      video({ id: 'after', updateDate: new Date('2026-11-01T00:00:00.000Z') }),
+    ];
+
+    it.each([
+      [{ desde }, 'moreThanOrEqual', ['lower', 'middle', 'upper', 'after']],
+      [{ hasta }, 'lessThanOrEqual', ['before', 'lower', 'middle', 'upper']],
+    ])(
+      'keeps the inclusive %s filter when it is used alone',
+      async (filters, operator, expectedIds) => {
+        repository.find.mockImplementation(
+          async (options: FindManyOptions<Video>) =>
+            filterVideosByDate(options, rows),
+        );
+
+        const result = await service.findAll(filters);
+
+        expect(result.map(({ id }) => id)).toEqual(expectedIds);
+        const [options] = repository.find.mock.calls[0];
+        const where = Array.isArray(options.where)
+          ? options.where[0]
+          : options.where;
+        expect(where?.updateDate).toBeInstanceOf(FindOperator);
+        if (where?.updateDate instanceof FindOperator) {
+          expect(where.updateDate.type).toBe(operator);
+        }
+      },
+    );
+
+    it('applies both inclusive bounds, excludes out-of-range results, and preserves other filters', async () => {
+      repository.find.mockImplementation(
+        async (options: FindManyOptions<Video>) =>
+          filterVideosByDate(options, rows),
+      );
+
+      const result = await service.findAll({
+        limit: 250,
+        offset: 0,
+        q: ' live ',
+        status: 'ready',
+        type: ['best', 'custom'],
+        desde,
+        hasta,
+        userId,
+      });
+
+      expect(result.map(({ id }) => id)).toEqual(['lower', 'middle', 'upper']);
+      const [options] = repository.find.mock.calls[0];
+      const where = Array.isArray(options.where)
+        ? options.where[0]
+        : options.where;
+      expect(where).toMatchObject({
+        status: VideoStatus.READY,
+        user: { id: userId },
+      });
+      expect(where?.type).toBeInstanceOf(FindOperator);
+      if (where?.type instanceof FindOperator) {
+        expect(where.type.value).toEqual([VideoType.BEST, VideoType.CUSTOM]);
+      }
+      expect(where?.updateDate).toBeInstanceOf(FindOperator);
+      if (where?.updateDate instanceof FindOperator) {
+        expect(where.updateDate.type).toBe('between');
+        expect(where.updateDate.value).toEqual([
+          new Date(desde),
+          new Date(hasta),
+        ]);
+      }
+      expect(where?.name).toBeInstanceOf(FindOperator);
+      if (where?.name instanceof FindOperator) {
+        expect(where.name.type).toBe('ilike');
+        expect(where.name.value).toBe('% live %');
+      }
+      expect(options).toMatchObject({
+        order: { updatedAt: 'DESC' },
+        take: 200,
+        skip: 0,
+        relations: ['user', 'list', 'editor', 'content'],
+      });
+      expect(repository.find).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('PATCH /videos/:id', () => {
@@ -413,11 +645,7 @@ describe('VideosService relation references', () => {
     transform: true,
   });
 
-  let repository: {
-    create: jest.Mock;
-    save: jest.Mock;
-    findOne: jest.Mock;
-  };
+  let repository: VideoRepositoryMock;
   let service: VideosService;
   let controller: VideosController;
 
@@ -467,16 +695,35 @@ describe('VideosService relation references', () => {
     return controller.update(videoId, dto as UpdateVideoDto);
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     repository = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn(async (entity) => ({ ...entity, id: videoId })),
-      findOne: jest.fn(async () => video()),
+      create: jest.fn<DeepPartial<Video>, [DeepPartial<Video>]>((values) => ({
+        ...values,
+      })),
+      merge: jest.fn<Video, [Video, DeepPartial<Video>]>((entity, partial) =>
+        Object.assign(entity, partial),
+      ),
+      save: jest.fn<Promise<Video>, [DeepPartial<Video>]>(
+        async (entity) => ({ ...entity, id: videoId }) as Video,
+      ),
+      find: jest.fn<Promise<Video[]>, [FindManyOptions<Video>?]>(
+        async () => [],
+      ),
+      findOne: jest.fn<Promise<Video | null>, [FindOneOptions<Video>]>(
+        async () => video(),
+      ),
+      manager: {
+        transaction: jest.fn<Promise<unknown>, [TransactionCallback]>(),
+      },
     };
-    service = new VideosService(
-      repository as any,
-      { findOneByVideoId: jest.fn() } as any,
-      { createVideoList: jest.fn() } as any,
+    service = await createVideosTestService(
+      repository,
+      {
+        findOneByVideoId: jest.fn<Promise<Content | null>, [string]>(
+          async () => null,
+        ),
+      },
+      createListRepositoryMock(listId),
     );
     controller = new VideosController(service);
   });
@@ -693,13 +940,24 @@ describe('VideosService VIDEO list transaction', () => {
       ...overrides,
     }) as Video;
 
-  function makeHarness(
+  async function makeHarness(
     options: {
       initialVideo?: Video | null;
       listSaveError?: Error;
       videoSaveError?: Error;
     } = {},
-  ) {
+  ): Promise<{
+    service: VideosService;
+    videoRepository: VideoRepositoryMock;
+    baseListRepository: ListRepositoryMock;
+    transactionContexts: Array<{
+      manager: TransactionManagerMock;
+      videoRepository: VideoTransactionRepositoryMock;
+      listRepository: ListRepositoryMock;
+    }>;
+    getCommittedVideo: () => Video | null;
+    getCommittedLists: () => List[];
+  }> {
     let committedVideo =
       options.initialVideo === undefined
         ? makeVideo()
@@ -708,74 +966,90 @@ describe('VideosService VIDEO list transaction', () => {
           : null;
     let committedLists: List[] = [];
     const transactionContexts: Array<{
-      manager: { getRepository: jest.Mock };
-      videoRepository: { findOne: jest.Mock; save: jest.Mock };
-      listRepository: { create: jest.Mock; save: jest.Mock };
+      manager: TransactionManagerMock;
+      videoRepository: VideoTransactionRepositoryMock;
+      listRepository: ListRepositoryMock;
     }> = [];
-    const baseListRepository = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn(async (entity) => entity),
-    };
-    const listCrudService = new ListCrudService(baseListRepository as any);
-    const listsService = new ListsService(
-      listCrudService,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-    const videoRepository: any = {
-      create: jest.fn((values) => ({ ...values })),
-      save: jest.fn(),
-      findOne: jest.fn(async () => committedVideo),
+    const baseListRepository = createListRepositoryMock(listId);
+    const videoRepository: VideoRepositoryMock = {
+      create: jest.fn<DeepPartial<Video>, [DeepPartial<Video>]>((values) => ({
+        ...values,
+      })),
+      merge: jest.fn<Video, [Video, DeepPartial<Video>]>((entity, partial) =>
+        Object.assign(entity, partial),
+      ),
+      save: jest.fn<Promise<Video>, [DeepPartial<Video>]>(async () =>
+        makeVideo(),
+      ),
+      find: jest.fn<Promise<Video[]>, [FindManyOptions<Video>?]>(
+        async () => [],
+      ),
+      findOne: jest.fn<Promise<Video | null>, [FindOneOptions<Video>]>(
+        async () => committedVideo,
+      ),
       manager: {
-        transaction: jest.fn(async (callback) => {
-          const transactionState = {
-            video: committedVideo ? { ...committedVideo } : null,
-            lists: [...committedLists],
-          };
-          const transactionListRepository = {
-            create: jest.fn((values) => ({ ...values, id: listId })),
-            save: jest.fn(async (entity) => {
-              if (options.listSaveError) throw options.listSaveError;
-              transactionState.lists.push(entity);
-              return entity;
-            }),
-          };
-          const transactionVideoRepository = {
-            findOne: jest.fn(async () =>
-              transactionState.video ? { ...transactionState.video } : null,
-            ),
-            save: jest.fn(async (entity) => {
-              if (options.videoSaveError) throw options.videoSaveError;
-              transactionState.video = { ...entity };
-              return transactionState.video;
-            }),
-          };
-          const manager = {
-            getRepository: jest.fn((entity) =>
-              entity === Video
-                ? transactionVideoRepository
-                : transactionListRepository,
-            ),
-          };
-          transactionContexts.push({
-            manager,
-            videoRepository: transactionVideoRepository,
-            listRepository: transactionListRepository,
-          });
+        transaction: jest.fn<Promise<unknown>, [TransactionCallback]>(
+          async (callback) => {
+            const transactionState = {
+              video: committedVideo ? { ...committedVideo } : null,
+              lists: [...committedLists],
+            };
+            const transactionListRepository: ListRepositoryMock = {
+              create: jest.fn<List, [DeepPartial<List>]>((values) =>
+                makeListFromPartial(values, listId),
+              ),
+              save: jest.fn<Promise<List>, [DeepPartial<List>]>(
+                async (entity) => {
+                  if (options.listSaveError) throw options.listSaveError;
+                  const list = makeListFromPartial(entity, listId);
+                  transactionState.lists.push(list);
+                  return list;
+                },
+              ),
+            };
+            const transactionVideoRepository: VideoTransactionRepositoryMock = {
+              findOne: jest.fn<Promise<Video | null>, [FindOneOptions<Video>]>(
+                async () =>
+                  transactionState.video ? { ...transactionState.video } : null,
+              ),
+              save: jest.fn<Promise<Video>, [Video]>(async (entity) => {
+                if (options.videoSaveError) throw options.videoSaveError;
+                transactionState.video = { ...entity };
+                return transactionState.video;
+              }),
+            };
+            const manager: TransactionManagerMock = {
+              getRepository: jest.fn<
+                VideoTransactionRepositoryMock | ListRepositoryMock,
+                [typeof Video | typeof List]
+              >((entity) =>
+                entity === Video
+                  ? transactionVideoRepository
+                  : transactionListRepository,
+              ),
+            };
+            transactionContexts.push({
+              manager,
+              videoRepository: transactionVideoRepository,
+              listRepository: transactionListRepository,
+            });
 
-          const result = await callback(manager);
-          committedVideo = transactionState.video;
-          committedLists = transactionState.lists;
-          return result;
-        }),
+            const result = await callback(manager);
+            committedVideo = transactionState.video;
+            committedLists = transactionState.lists;
+            return result;
+          },
+        ),
       },
     };
-    const service = new VideosService(
+    const service = await createVideosTestService(
       videoRepository,
-      { findOneByVideoId: jest.fn() } as any,
-      listsService,
+      {
+        findOneByVideoId: jest.fn<Promise<Content | null>, [string]>(
+          async () => null,
+        ),
+      },
+      baseListRepository,
     );
 
     return {
@@ -789,7 +1063,7 @@ describe('VideosService VIDEO list transaction', () => {
   }
 
   it('creates and links the VIDEO List through the same transaction manager', async () => {
-    const harness = makeHarness();
+    const harness = await makeHarness();
 
     const result = await harness.service.createListForVideo(videoId);
 
@@ -827,7 +1101,7 @@ describe('VideosService VIDEO list transaction', () => {
 
   it('does not modify Video when creating the List fails', async () => {
     const error = new Error('list persistence failed');
-    const harness = makeHarness({ listSaveError: error });
+    const harness = await makeHarness({ listSaveError: error });
 
     await expect(
       harness.service.createListForVideo(videoId),
@@ -846,7 +1120,7 @@ describe('VideosService VIDEO list transaction', () => {
 
   it('rolls back the created List when saving Video fails', async () => {
     const error = new Error('video link persistence failed');
-    const harness = makeHarness({ videoSaveError: error });
+    const harness = await makeHarness({ videoSaveError: error });
 
     await expect(harness.service.createListForVideo(videoId)).rejects.toBe(
       error,
@@ -861,7 +1135,7 @@ describe('VideosService VIDEO list transaction', () => {
   });
 
   it('returns 404 for a missing Video without creating a List', async () => {
-    const harness = makeHarness({ initialVideo: null });
+    const harness = await makeHarness({ initialVideo: null });
 
     await expect(
       harness.service.createListForVideo(videoId),
@@ -879,7 +1153,7 @@ describe('VideosService VIDEO list transaction', () => {
 
   it('keeps the existing 400 response and avoids duplicates when Video already has a List', async () => {
     const existingList = { id: listId } as List;
-    const harness = makeHarness({
+    const harness = await makeHarness({
       initialVideo: makeVideo({ list: existingList }),
     });
 
@@ -897,7 +1171,7 @@ describe('VideosService VIDEO list transaction', () => {
 
   it('propagates unexpected transaction errors unchanged', async () => {
     const error = new Error('transaction failed unexpectedly');
-    const harness = makeHarness();
+    const harness = await makeHarness();
     harness.videoRepository.manager.transaction.mockRejectedValueOnce(error);
 
     await expect(harness.service.createListForVideo(videoId)).rejects.toBe(

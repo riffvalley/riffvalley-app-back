@@ -11,11 +11,15 @@ import {
 import { WpPost } from 'src/integrations/wordpress-integration/wordpress.types';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
 import { PublishedDiscRecord } from '../entities/list.entity';
-import { FOOTER_MARKER_CLASS } from './list-gutenberg-builder';
+import {
+  FOOTER_MARKER_CLASS,
+  GutenbergDiscAssignment,
+  PublishableGutenbergDiscAssignment,
+} from './list-gutenberg-builder';
 
 type DiscSectionBoundary = { discId: string; start: number; end: number };
 type DiscBlockBuilder = (
-  discs: any[],
+  discs: GutenbergDiscAssignment[],
   spotifyTrackIds: (string | null)[],
   authors: ({ name: string; link: string } | null)[],
 ) => string;
@@ -130,7 +134,9 @@ export class ListWordPressReconciliationService {
     );
   }
 
-  toPublishedDiscRecord(a: any): PublishedDiscRecord {
+  toPublishedDiscRecord(
+    a: PublishableGutenbergDiscAssignment,
+  ): PublishedDiscRecord {
     return {
       discId: a.disc.id,
       artist: a.disc?.artist?.name ?? '',
@@ -138,7 +144,9 @@ export class ListWordPressReconciliationService {
     };
   }
 
-  async resolveSpotifyTrackId(a: any): Promise<string | null> {
+  async resolveSpotifyTrackId(
+    a: PublishableGutenbergDiscAssignment,
+  ): Promise<string | null> {
     if (a.spotifyTrackId) return a.spotifyTrackId;
 
     const artistName = a.disc?.artist?.name ?? '';
@@ -161,13 +169,14 @@ export class ListWordPressReconciliationService {
 
       return (albumTracks[2] ?? albumTracks[albumTracks.length - 1]).id;
     } catch (error) {
-      this.logger.error(`findTrackForAlbum failed: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`findTrackForAlbum failed: ${message}`);
       return null;
     }
   }
 
   async resolveAuthors(
-    discs: any[],
+    discs: GutenbergDiscAssignment[],
   ): Promise<({ name: string; link: string } | null)[]> {
     const cache = new Map<string, { name: string; link: string } | null>();
 
@@ -188,7 +197,7 @@ export class ListWordPressReconciliationService {
   async syncDiscsIntoPost(
     wpPostId: number,
     currentContent: string,
-    allDiscs: any[],
+    allDiscs: PublishableGutenbergDiscAssignment[],
     publishedDiscs: PublishedDiscRecord[],
     buildSections: DiscBlockBuilder,
     useAuthors: boolean,

@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, QueryFailedError, Repository } from 'typeorm';
+import { FindOptionsWhere, ILike, QueryFailedError, Repository } from 'typeorm';
 import { Article, ArticleStatus } from './entities/article.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
 import { ContentType } from 'src/editorial/contents/entities/content.entity';
@@ -67,18 +67,19 @@ export class ArticlesService {
   async findAll(params: FindArticleParams = {}): Promise<Article[]> {
     const { limit = 50, offset = 0, q, status, userId } = params;
 
-    const baseWhere: any = {};
+    const baseWhere: FindOptionsWhere<Article> = {};
 
     if (status) baseWhere.status = status;
     if (q) baseWhere.name = ILike(`%${q}%`);
 
-    const where = userId
-      ? [
-          { ...baseWhere, user: { id: userId } },
-          { ...baseWhere, editor: { id: userId } },
-          { ...baseWhere, coauthor: { id: userId } },
-        ]
-      : baseWhere;
+    const where: FindOptionsWhere<Article> | FindOptionsWhere<Article>[] =
+      userId
+        ? [
+            { ...baseWhere, user: { id: userId } },
+            { ...baseWhere, editor: { id: userId } },
+            { ...baseWhere, coauthor: { id: userId } },
+          ]
+        : baseWhere;
 
     return this.repo.find({
       where,
@@ -114,15 +115,17 @@ export class ArticlesService {
 
     // Handle User Assignment
     if (updateArticleDto.userId) {
-      entity.user = { id: updateArticleDto.userId } as any;
+      this.repo.merge(entity, { user: { id: updateArticleDto.userId } });
     }
 
     if (updateArticleDto.coauthorId) {
-      entity.coauthor = { id: updateArticleDto.coauthorId } as any;
+      this.repo.merge(entity, {
+        coauthor: { id: updateArticleDto.coauthorId },
+      });
     }
 
     if (updateArticleDto.editorId) {
-      entity.editor = { id: updateArticleDto.editorId } as any;
+      this.repo.merge(entity, { editor: { id: updateArticleDto.editorId } });
     }
 
     // Logic for State Transitions
@@ -192,16 +195,16 @@ export class ArticlesService {
   private isArticleUserForeignKeyViolation(error: unknown): boolean {
     if (!(error instanceof QueryFailedError)) return false;
 
-    const driverError = error.driverError as Error & {
-      code?: string;
-      table?: string;
-      constraint?: string;
-    };
-
+    const driverError: unknown = error.driverError;
+    if (typeof driverError !== 'object' || driverError === null) return false;
     return (
+      'code' in driverError &&
       driverError.code === '23503' &&
+      'table' in driverError &&
       driverError.table === 'article' &&
-      ARTICLE_USER_FOREIGN_KEY_CONSTRAINTS.has(driverError.constraint ?? '')
+      'constraint' in driverError &&
+      typeof driverError.constraint === 'string' &&
+      ARTICLE_USER_FOREIGN_KEY_CONSTRAINTS.has(driverError.constraint)
     );
   }
 
@@ -243,7 +246,7 @@ export class ArticlesService {
       authorId: article.user.id,
       articleId: article.id,
       backlog: true,
-    } as any);
+    });
 
     return this.findOne(id);
   }

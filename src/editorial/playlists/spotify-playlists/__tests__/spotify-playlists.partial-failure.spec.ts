@@ -10,7 +10,79 @@ import { FestivalSetlistService } from '../setlist/festival-setlist.service';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { SyncPlaylistArtistDto } from '../dto/sync-playlist-artist.dto';
 import { UpdateSyncedPlaylistDto } from '../dto/update-synced-playlist.dto';
-import { SpotifyTrack } from 'src/integrations/spotify-integration';
+import {
+  SpotifyTrack,
+  SpotifyImage,
+} from 'src/integrations/spotify-integration';
+import { Repository, DeepPartial, UpdateResult } from 'typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Test, TestingModule } from '@nestjs/testing';
+import { Artist } from 'src/catalog/artists/entities/artist.entity';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { SpotifyPlaylistAuthorizationService } from '../spotify-authorization/spotify-playlist-authorization.service';
+import {
+  RiffValleyPlaylistArtist,
+  PlaylistArtistSelectionMode,
+  PlaylistArtistSyncStatus,
+  PlaylistTrackRecord,
+} from '../entities/riff-valley-playlist-artist.entity';
+import { CreateSyncedPlaylistDto } from '../dto/create-synced-playlist.dto';
+import {
+  RiffValleyPlaylistStatus,
+  RiffValleyPlaylistType,
+} from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+
+type PlaylistRepository = jest.Mocked<
+  Pick<Repository<RiffValleyPlaylist>, 'find' | 'findOne' | 'update'>
+> & {
+  create: jest.Mock<RiffValleyPlaylist, [DeepPartial<RiffValleyPlaylist>]>;
+  save: jest.Mock<
+    Promise<RiffValleyPlaylist>,
+    [DeepPartial<RiffValleyPlaylist>]
+  >;
+};
+type ArtistRepository = jest.Mocked<Pick<Repository<Artist>, 'findOneBy'>>;
+type PlaylistArtistRepository = jest.Mocked<
+  Pick<
+    Repository<RiffValleyPlaylistArtist>,
+    'find' | 'findOne' | 'delete' | 'remove'
+  >
+> & {
+  create: jest.Mock<
+    RiffValleyPlaylistArtist,
+    [DeepPartial<RiffValleyPlaylistArtist>]
+  >;
+  save: jest.Mock<
+    Promise<RiffValleyPlaylistArtist>,
+    [DeepPartial<RiffValleyPlaylistArtist>]
+  >;
+};
+type SpotifyAccountApi = jest.Mocked<
+  Pick<
+    SpotifyAccountApiService,
+    | 'createPlaylist'
+    | 'removePlaylistFromLibrary'
+    | 'updatePlaylist'
+    | 'uploadPlaylistImage'
+    | 'getPlaylistImages'
+    | 'getPlaylistTrackUris'
+    | 'searchTracks'
+    | 'getTracks'
+    | 'addPlaylistItems'
+    | 'removePlaylistItems'
+  >
+>;
+type SpotifyAuthorization = jest.Mocked<
+  Pick<
+    SpotifyPlaylistAuthorizationService,
+    | 'startSpotifyConnection'
+    | 'completeSpotifyConnection'
+    | 'getSpotifyConnection'
+    | 'checkSpotifyAuthorizationLifetime'
+    | 'disconnectSpotify'
+    | 'getValidAccessToken'
+  >
+>;
 
 type FestivalSetlistServiceMock = jest.Mocked<
   Pick<FestivalSetlistService, 'getTopSongs'>
@@ -27,27 +99,105 @@ const spotifyTrack = (id: string, name: string): SpotifyTrack => ({
   artists: [{ id: 'artist-id', name: 'Band' }],
 });
 
+const createPlaylistDto = (): CreateSyncedPlaylistDto =>
+  Object.assign(new CreateSyncedPlaylistDto(), {
+    name: 'Playlist',
+    public: false,
+  });
+const spotifyImage = (url: string): SpotifyImage => ({
+  url,
+  height: null,
+  width: null,
+});
+const updateResult = (): UpdateResult => ({
+  affected: 1,
+  raw: [],
+  generatedMaps: [],
+});
+
+const artistFixture = (): Artist =>
+  Object.assign(new Artist(), {
+    id: 'artist-id',
+    name: 'Band',
+    nameNormalized: 'band',
+    description: '',
+    image: '',
+    countryId: null,
+    needsReview: false,
+    updatedAt: new Date(0),
+    country: null,
+    disc: [],
+  });
+
+const playlistArtistFixture = (
+  overrides: Partial<RiffValleyPlaylistArtist> = {},
+): RiffValleyPlaylistArtist =>
+  Object.assign(new RiffValleyPlaylistArtist(), {
+    id: 'association-id',
+    riffValleyPlaylistId: 'playlist-local',
+    riffValleyPlaylist: null,
+    artistId: 'artist-id',
+    artist: artistFixture(),
+    status: PlaylistArtistSyncStatus.SYNCING,
+    selectionMode: PlaylistArtistSelectionMode.SETLIST,
+    spotifyArtistId: null,
+    setlistsAnalyzed: 0,
+    tracks: [],
+    lastError: null,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    ...overrides,
+  });
+
+const savedPlaylistArtistFixture = (
+  value: DeepPartial<RiffValleyPlaylistArtist>,
+): RiffValleyPlaylistArtist => Object.assign(playlistArtistFixture(), value);
+
+const playlistTrackFixture = (uri: string): PlaylistTrackRecord => ({
+  spotifyTrackId: uri.replace('spotify:track:', ''),
+  uri,
+  name: 'Track',
+  url: `https://open.spotify.com/track/${uri.replace('spotify:track:', '')}`,
+  plays: 1,
+});
+
 describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
   let service: SpotifyPlaylistsService;
-  let playlistRepository: any;
-  let artistRepository: any;
-  let playlistArtistRepository: any;
-  let spotifyAccountApi: any;
-  let spotifyAuthorizationService: any;
+  let testingModule: TestingModule;
+  let playlistRepository: PlaylistRepository;
+  let artistRepository: ArtistRepository;
+  let playlistArtistRepository: PlaylistArtistRepository;
+  let spotifyAccountApi: SpotifyAccountApi;
+  let spotifyAuthorizationService: SpotifyAuthorization;
   let setlistService: FestivalSetlistServiceMock;
   let playlistManagementService: SpotifyPlaylistManagementService;
-  let playlistArtistSyncService: SpotifyPlaylistArtistSyncService;
-  let playlistTrackMaintenanceService: SpotifyPlaylistTrackMaintenanceService;
-  const playlist = {
+  const playlist = Object.assign(new RiffValleyPlaylist(), {
     id: 'playlist-local',
     spotifyPlaylistId: 'playlist-remote',
     protectedTrackUris: [],
     imageUrl: 'https://image.test/old.jpg',
-  } as unknown as RiffValleyPlaylist;
+    name: 'Playlist',
+    status: RiffValleyPlaylistStatus.IN_PROGRESS,
+    link: 'https://open.spotify.com/playlist/playlist-remote',
+    description: null,
+    isPublic: false,
+    type: RiffValleyPlaylistType.FESTIVAL,
+    updateDate: new Date(0),
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    user: null,
+    content: null,
+    playlistArtists: [],
+  });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     playlistRepository = {
-      create: jest.fn((value) => ({ id: 'playlist-local', ...value })),
+      create: jest.fn((value: DeepPartial<RiffValleyPlaylist>) =>
+        Object.assign(new RiffValleyPlaylist(), {
+          id: 'playlist-local',
+          ...value,
+        }),
+      ),
       find: jest.fn(),
       findOne: jest.fn(),
       save: jest.fn(),
@@ -55,10 +205,17 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
     };
     artistRepository = { findOneBy: jest.fn() };
     playlistArtistRepository = {
-      create: jest.fn((value) => ({ id: 'association-id', ...value })),
+      create: jest.fn((value: DeepPartial<RiffValleyPlaylistArtist>) =>
+        Object.assign(new RiffValleyPlaylistArtist(), {
+          id: 'association-id',
+          ...value,
+        }),
+      ),
       find: jest.fn(),
       findOne: jest.fn(),
-      save: jest.fn(async (value) => value),
+      save: jest.fn(async (value: DeepPartial<RiffValleyPlaylistArtist>) =>
+        savedPlaylistArtistFixture(value),
+      ),
       delete: jest.fn(),
       remove: jest.fn(),
     };
@@ -82,47 +239,48 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
       disconnectSpotify: jest.fn(),
       getValidAccessToken: jest.fn(),
     };
-    playlistManagementService = new SpotifyPlaylistManagementService(
-      playlistRepository,
-      spotifyAccountApi,
-      spotifyAuthorizationService,
-    );
     setlistService = {
       getTopSongs: jest.fn<
         ReturnType<FestivalSetlistService['getTopSongs']>,
         Parameters<FestivalSetlistService['getTopSongs']>
       >(),
     };
-    playlistArtistSyncService = new SpotifyPlaylistArtistSyncService(
-      playlistRepository,
-      artistRepository,
-      playlistArtistRepository,
-      spotifyAccountApi,
-      spotifyAuthorizationService,
-      setlistService as unknown as FestivalSetlistService,
-      playlistManagementService,
-    );
-    playlistTrackMaintenanceService =
-      new SpotifyPlaylistTrackMaintenanceService(
-        playlistRepository,
-        playlistArtistRepository,
-        spotifyAccountApi,
-        spotifyAuthorizationService,
-        playlistManagementService,
-      );
-    service = new SpotifyPlaylistsService(
-      spotifyAuthorizationService,
-      setlistService as unknown as FestivalSetlistService,
-      playlistManagementService,
-      playlistArtistSyncService,
-      playlistTrackMaintenanceService,
+    testingModule = await Test.createTestingModule({
+      providers: [
+        SpotifyPlaylistsService,
+        SpotifyPlaylistManagementService,
+        SpotifyPlaylistArtistSyncService,
+        SpotifyPlaylistTrackMaintenanceService,
+        {
+          provide: getRepositoryToken(RiffValleyPlaylist),
+          useValue: playlistRepository,
+        },
+        { provide: getRepositoryToken(Artist), useValue: artistRepository },
+        {
+          provide: getRepositoryToken(RiffValleyPlaylistArtist),
+          useValue: playlistArtistRepository,
+        },
+        { provide: SpotifyAccountApiService, useValue: spotifyAccountApi },
+        {
+          provide: SpotifyPlaylistAuthorizationService,
+          useValue: spotifyAuthorizationService,
+        },
+        { provide: FestivalSetlistService, useValue: setlistService },
+      ],
+    }).compile();
+    service = testingModule.get(SpotifyPlaylistsService);
+    playlistManagementService = testingModule.get(
+      SpotifyPlaylistManagementService,
     );
     jest
       .spyOn(spotifyAuthorizationService, 'getValidAccessToken')
       .mockResolvedValue('token');
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await testingModule.close();
+  });
 
   it.each([
     ['festival', 'createFestivalPlaylist'],
@@ -155,7 +313,7 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
       );
 
       const create = service[method].bind(service);
-      const creation = create({ name: 'Playlist', public: false } as any);
+      const creation = create(createPlaylistDto());
       await expect(creation).rejects.toThrow(InternalServerErrorException);
       await expect(creation).rejects.toThrow(
         'https://open.spotify.com/playlist/id',
@@ -182,7 +340,9 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
   );
 
   it('does not compensate if the local insert committed despite returning an error', async () => {
-    const savedPlaylist = { ...playlist, type: 'festival' };
+    const savedPlaylist = Object.assign(new RiffValleyPlaylist(), playlist, {
+      type: RiffValleyPlaylistType.FESTIVAL,
+    });
     spotifyAccountApi.createPlaylist.mockResolvedValue({
       id: 'playlist-remote',
       name: 'Playlist',
@@ -194,13 +354,10 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
     playlistRepository.findOne.mockResolvedValue(savedPlaylist);
     jest
       .spyOn(playlistManagementService, 'getFestivalPlaylist')
-      .mockResolvedValue(savedPlaylist as any);
+      .mockResolvedValue(savedPlaylist);
 
     await expect(
-      service.createFestivalPlaylist({
-        name: 'Playlist',
-        public: false,
-      } as any),
+      service.createFestivalPlaylist(createPlaylistDto()),
     ).resolves.toBe(savedPlaylist);
 
     expect(spotifyAccountApi.removePlaylistFromLibrary).not.toHaveBeenCalled();
@@ -220,10 +377,7 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
       new BadGatewayException('Spotify library update failed'),
     );
 
-    const create = service.createFestivalPlaylist({
-      name: 'Playlist',
-      public: false,
-    } as any);
+    const create = service.createFestivalPlaylist(createPlaylistDto());
     await expect(create).rejects.toThrow(InternalServerErrorException);
     await expect(create).rejects.toThrow(
       'https://open.spotify.com/playlist/id',
@@ -238,10 +392,7 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
     spotifyAccountApi.createPlaylist.mockRejectedValue(spotifyError);
 
     await expect(
-      service.createFestivalPlaylist({
-        name: 'Playlist',
-        public: false,
-      } as any),
+      service.createFestivalPlaylist(createPlaylistDto()),
     ).rejects.toBe(spotifyError);
 
     expect(playlistRepository.create).not.toHaveBeenCalled();
@@ -387,6 +538,7 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
             updateDate: expect.any(Date),
           }),
         );
+        return updateResult();
       });
 
       const update = service[method].bind(service);
@@ -445,7 +597,7 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
     });
     spotifyAccountApi.getPlaylistImages.mockImplementation(async () => {
       events.push('spotify:read-images');
-      return [{ url: 'https://image.test/new.jpg' }];
+      return [spotifyImage('https://image.test/new.jpg')];
     });
     playlistRepository.update.mockImplementation(async () => {
       events.push('postgres:update-image');
@@ -470,11 +622,11 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
       .spyOn(playlistManagementService, 'getFestivalPlaylist')
       .mockResolvedValue(playlist);
     spotifyAccountApi.getPlaylistImages.mockResolvedValue([
-      { url: 'https://image.test/new.jpg' },
+      spotifyImage('https://image.test/new.jpg'),
     ]);
     playlistRepository.update
       .mockRejectedValueOnce(databaseError)
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce(updateResult());
 
     await expect(
       service.updateFestivalPlaylistImage('playlist-local', image),
@@ -495,21 +647,20 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
   });
 
   it('records FAILED with no tracks when automatic track addition fails remotely', async () => {
-    const association = {
+    const association = playlistArtistFixture({
       id: 'association-id',
-      status: 'syncing',
+      status: PlaylistArtistSyncStatus.SYNCING,
       tracks: [],
       lastError: null,
-    };
+    });
     const spotifyError = new BadGatewayException('Spotify add failed');
     playlistArtistRepository.create.mockReturnValue(association);
     playlistArtistRepository.findOne.mockResolvedValue(null);
     playlistArtistRepository.find.mockResolvedValue([]);
-    playlistArtistRepository.save.mockImplementation(async (value) => value);
-    artistRepository.findOneBy.mockResolvedValue({
-      id: 'artist-id',
-      name: 'Band',
-    });
+    playlistArtistRepository.save.mockImplementation(async (value) =>
+      savedPlaylistArtistFixture(value),
+    );
+    artistRepository.findOneBy.mockResolvedValue(artistFixture());
     jest
       .spyOn(playlistManagementService, 'getFestivalPlaylist')
       .mockResolvedValue(playlist);
@@ -543,12 +694,12 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
 
   it('keeps a FAILED association with selected tracks when Spotify add succeeds but the final local save fails', async () => {
     const events: string[] = [];
-    const association = {
+    const association = playlistArtistFixture({
       id: 'association-id',
-      status: 'syncing',
+      status: PlaylistArtistSyncStatus.SYNCING,
       tracks: [],
       lastError: null,
-    };
+    });
     const databaseError = new Error('association save failed');
     let failedSyncedSave = false;
     playlistArtistRepository.create.mockReturnValue(association);
@@ -560,12 +711,9 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
         failedSyncedSave = true;
         throw databaseError;
       }
-      return value;
+      return savedPlaylistArtistFixture(value);
     });
-    artistRepository.findOneBy.mockResolvedValue({
-      id: 'artist-id',
-      name: 'Band',
-    });
+    artistRepository.findOneBy.mockResolvedValue(artistFixture());
     jest
       .spyOn(playlistManagementService, 'getFestivalPlaylist')
       .mockResolvedValue(playlist);
@@ -605,22 +753,21 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
   });
 
   it('can retry automatic addition without duplicating a track written before a Spotify timeout', async () => {
-    const association = {
+    const association = playlistArtistFixture({
       id: 'association-id',
-      status: 'failed',
+      status: PlaylistArtistSyncStatus.FAILED,
       tracks: [],
       lastError: null,
-    };
+    });
     const remoteUris: string[] = [];
     let addCalls = 0;
     playlistArtistRepository.create.mockReturnValue(association);
     playlistArtistRepository.findOne.mockResolvedValue(association);
     playlistArtistRepository.find.mockResolvedValue([association]);
-    playlistArtistRepository.save.mockImplementation(async (value) => value);
-    artistRepository.findOneBy.mockResolvedValue({
-      id: 'artist-id',
-      name: 'Band',
-    });
+    playlistArtistRepository.save.mockImplementation(async (value) =>
+      savedPlaylistArtistFixture(value),
+    );
+    artistRepository.findOneBy.mockResolvedValue(artistFixture());
     jest
       .spyOn(playlistManagementService, 'getFestivalPlaylist')
       .mockResolvedValue(playlist);
@@ -651,7 +798,10 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
       service.addArtist('playlist-local', syncPlaylistArtistDto('artist-id')),
     ).rejects.toThrow('Spotify timed out after writing');
     expect(association).toEqual(
-      expect.objectContaining({ status: 'failed', tracks: [] }),
+      expect.objectContaining({
+        status: 'failed',
+        tracks: [],
+      }),
     );
     expect(remoteUris).toEqual(['spotify:track:track-id']);
 
@@ -671,25 +821,22 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
 
   it('leaves old local genre tracks and FAILED status when adding replacements succeeds but removing old tracks fails', async () => {
     const events: string[] = [];
-    const association = {
+    const association = playlistArtistFixture({
       id: 'association-id',
       riffValleyPlaylistId: 'playlist-local',
       artistId: 'artist-id',
-      status: 'synced',
-      tracks: [{ uri: 'spotify:track:old' }],
+      status: PlaylistArtistSyncStatus.SYNCED,
+      tracks: [playlistTrackFixture('spotify:track:old')],
       lastError: null,
-    };
+    });
     const spotifyError = new BadGatewayException('Spotify remove failed');
     playlistArtistRepository.findOne.mockResolvedValue(association);
     playlistArtistRepository.find.mockResolvedValue([association]);
     playlistArtistRepository.save.mockImplementation(async (value) => {
       events.push(`postgres:association:${value.status}`);
-      return value;
+      return savedPlaylistArtistFixture(value);
     });
-    artistRepository.findOneBy.mockResolvedValue({
-      id: 'artist-id',
-      name: 'Band',
-    });
+    artistRepository.findOneBy.mockResolvedValue(artistFixture());
     jest
       .spyOn(playlistManagementService, 'getGenrePlaylist')
       .mockResolvedValue(playlist);
@@ -737,30 +884,29 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
     expect(association).toEqual(
       expect.objectContaining({
         status: 'failed',
-        tracks: [{ uri: 'spotify:track:old' }],
+        tracks: [expect.objectContaining({ uri: 'spotify:track:old' })],
         lastError: 'Spotify remove failed',
       }),
     );
   });
 
   it('retries a genre replacement after Spotify removed old tracks before timing out', async () => {
-    const association = {
+    const association = playlistArtistFixture({
       id: 'association-id',
       riffValleyPlaylistId: 'playlist-local',
       artistId: 'artist-id',
-      status: 'synced',
-      tracks: [{ uri: 'spotify:track:old' }],
+      status: PlaylistArtistSyncStatus.SYNCED,
+      tracks: [playlistTrackFixture('spotify:track:old')],
       lastError: null,
-    };
+    });
     const remoteUris = ['spotify:track:old'];
     let removalApplied = false;
     playlistArtistRepository.findOne.mockResolvedValue(association);
     playlistArtistRepository.find.mockResolvedValue([association]);
-    playlistArtistRepository.save.mockImplementation(async (value) => value);
-    artistRepository.findOneBy.mockResolvedValue({
-      id: 'artist-id',
-      name: 'Band',
-    });
+    playlistArtistRepository.save.mockImplementation(async (value) =>
+      savedPlaylistArtistFixture(value),
+    );
+    artistRepository.findOneBy.mockResolvedValue(artistFixture());
     jest
       .spyOn(playlistManagementService, 'getGenrePlaylist')
       .mockResolvedValue(playlist);
@@ -833,14 +979,14 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
   });
 
   it('recovers a genre addition after Spotify added tracks before timing out', async () => {
-    const association = {
+    const association = playlistArtistFixture({
       id: 'association-id',
       riffValleyPlaylistId: 'playlist-local',
       artistId: 'artist-id',
-      status: 'syncing',
+      status: PlaylistArtistSyncStatus.SYNCING,
       tracks: [],
       lastError: null,
-    };
+    });
     const remoteUris: string[] = [];
     let addApplied = false;
     playlistArtistRepository.create.mockReturnValue(association);
@@ -848,11 +994,10 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue(association);
     playlistArtistRepository.find.mockResolvedValue([association]);
-    playlistArtistRepository.save.mockImplementation(async (value) => value);
-    artistRepository.findOneBy.mockResolvedValue({
-      id: 'artist-id',
-      name: 'Band',
-    });
+    playlistArtistRepository.save.mockImplementation(async (value) =>
+      savedPlaylistArtistFixture(value),
+    );
+    artistRepository.findOneBy.mockResolvedValue(artistFixture());
     jest
       .spyOn(playlistManagementService, 'getGenrePlaylist')
       .mockResolvedValue(playlist);
@@ -916,14 +1061,14 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
 
   it('records FAILED with replacement tracks if Spotify completes a genre swap but PostgreSQL save fails', async () => {
     const events: string[] = [];
-    const association = {
+    const association = playlistArtistFixture({
       id: 'association-id',
       riffValleyPlaylistId: 'playlist-local',
       artistId: 'artist-id',
-      status: 'synced',
-      tracks: [{ uri: 'spotify:track:old' }],
+      status: PlaylistArtistSyncStatus.SYNCED,
+      tracks: [playlistTrackFixture('spotify:track:old')],
       lastError: null,
-    };
+    });
     const databaseError = new Error('replacement save failed');
     let failedSyncedSave = false;
     playlistArtistRepository.findOne.mockResolvedValue(association);
@@ -934,12 +1079,9 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
         failedSyncedSave = true;
         throw databaseError;
       }
-      return value;
+      return savedPlaylistArtistFixture(value);
     });
-    artistRepository.findOneBy.mockResolvedValue({
-      id: 'artist-id',
-      name: 'Band',
-    });
+    artistRepository.findOneBy.mockResolvedValue(artistFixture());
     jest
       .spyOn(playlistManagementService, 'getGenrePlaylist')
       .mockResolvedValue(playlist);

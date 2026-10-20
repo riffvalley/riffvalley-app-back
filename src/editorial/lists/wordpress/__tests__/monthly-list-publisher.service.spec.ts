@@ -1,14 +1,58 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource, DeepPartial, Repository } from 'typeorm';
+import { ListCrudService } from '../../application/list-crud.service';
+import { ListCalendarService } from '../../application/list-calendar.service';
+import { ListContentCoordinator } from '../../application/list-content-coordinator.service';
 import { List, ListType } from '../../entities/list.entity';
 import { ListsService } from '../../list.service';
 import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
 import { ListWordPressReconciliationService } from '../list-wordpress-reconciliation.service';
 import { MonthlyListPublisherService } from '../monthly-list-publisher.service';
+import { PublishableGutenbergDiscAssignment } from '../list-gutenberg-builder';
 import { WeeklyListPublisherService } from '../weekly-list-publisher.service';
 
+type WordpressMock = jest.Mocked<
+  Pick<WordpressService, 'getPost' | 'findPostBySlug' | 'getOrCreateTag'>
+>;
+type ReconciliationMock = jest.Mocked<
+  Pick<
+    ListWordPressReconciliationService,
+    | 'resolveSpotifyTrackId'
+    | 'resolveAuthors'
+    | 'toPublishedDiscRecord'
+    | 'createPostAndReconcile'
+    | 'syncDiscsIntoPost'
+    | 'getUniqueDiscSection'
+    | 'replaceDiscSection'
+    | 'insertBeforeFooter'
+    | 'updatePostContentWithReconciliation'
+    | 'uncertainWordPressResult'
+  >
+>;
+
 describe('MonthlyListPublisherService', () => {
+  class MonthlyPublisherResultFixture {
+    readonly published = true;
+
+    get wpPostId(): number {
+      return 77;
+    }
+
+    get link(): string {
+      return 'https://wp.test/published';
+    }
+
+    get title(): string {
+      return 'Published monthly post';
+    }
+  }
+
   const discA = '11111111-1111-4111-8111-111111111111';
   const discB = '22222222-2222-4222-8222-222222222222';
   const footer = '<!-- wp:separator {"className":"rv-generated-footer"} -->';
@@ -36,10 +80,10 @@ describe('MonthlyListPublisherService', () => {
   });
 
   const makeList = (
-    asignations: any[],
+    asignations: PublishableGutenbergDiscAssignment[],
     overrides: Record<string, unknown> = {},
-  ) =>
-    ({
+  ): List =>
+    Object.assign(new List(), {
       id: 'list-id',
       type: ListType.MONTH,
       listDate: new Date('2026-10-01T00:00:00.000Z'),
@@ -48,72 +92,171 @@ describe('MonthlyListPublisherService', () => {
       wpPostUrl: null,
       wpPublishedDiscs: null,
       ...overrides,
-    }) as any;
+    });
 
-  const toPublishedRecord = (a: any) => ({
+  const toPublishedRecord = (a: PublishableGutenbergDiscAssignment) => ({
     discId: a.disc.id,
     artist: a.disc.artist.name,
     name: a.disc.name,
   });
 
-  const setup = (
+  const setup = async (
     overrides: {
-      save?: jest.Mock;
-      wordpress?: Record<string, jest.Mock>;
-      reconciliation?: Record<string, jest.Mock>;
+      save?: jest.MockedFunction<(list: DeepPartial<List>) => Promise<List>>;
+      wordpress?: Partial<WordpressMock>;
+      reconciliation?: Partial<ReconciliationMock>;
     } = {},
   ) => {
-    const repository = {
-      save:
-        overrides.save ?? jest.fn().mockImplementation(async (value) => value),
-    };
-    const wordpressService = {
+    const repository = new Repository(
+      List,
+      new DataSource({ type: 'postgres' }).manager,
+    );
+    jest
+      .spyOn(repository, 'save')
+      .mockImplementation(async (value) =>
+        overrides.save
+          ? overrides.save(value)
+          : Object.assign(new List(), value),
+      );
+    const wordpressService: WordpressMock = {
       getPost: jest
-        .fn()
+        .fn<
+          ReturnType<WordpressService['getPost']>,
+          Parameters<WordpressService['getPost']>
+        >()
         .mockResolvedValue({ content: footer, status: 'draft' }),
-      findPostBySlug: jest.fn().mockResolvedValue(null),
+      findPostBySlug: jest
+        .fn<
+          ReturnType<WordpressService['findPostBySlug']>,
+          Parameters<WordpressService['findPostBySlug']>
+        >()
+        .mockResolvedValue(null),
       getOrCreateTag: jest
-        .fn()
+        .fn<
+          ReturnType<WordpressService['getOrCreateTag']>,
+          Parameters<WordpressService['getOrCreateTag']>
+        >()
         .mockImplementation(async (value) => (value === '2026' ? 2026 : 10)),
       ...overrides.wordpress,
     };
-    const reconciliationService = {
+    const reconciliationService: ReconciliationMock = {
       resolveSpotifyTrackId: jest
-        .fn()
-        .mockImplementation(async (a) => a.spotifyTrackId ?? 'resolved-track'),
-      resolveAuthors: jest.fn().mockResolvedValue([null]),
-      toPublishedDiscRecord: jest.fn(toPublishedRecord),
-      createPostAndReconcile: jest.fn().mockResolvedValue({
-        post: { id: 42, link: 'https://wp.test/monthly' },
-        reconciled: false,
-      }),
-      syncDiscsIntoPost: jest.fn().mockResolvedValue({
-        publishedDiscs: [],
-        trackingChanged: false,
-        newCount: 0,
-        existingCount: 0,
-        removedDiscs: [],
-        notFoundForUpdate: 0,
-      }),
-      getUniqueDiscSection: jest.fn().mockReturnValue(null),
-      replaceDiscSection: jest.fn(),
-      insertBeforeFooter: jest.fn((_content, block) => `${block}\n\n${footer}`),
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['resolveSpotifyTrackId']
+          >,
+          Parameters<
+            ListWordPressReconciliationService['resolveSpotifyTrackId']
+          >
+        >()
+        .mockImplementation(
+          async (asignation) => asignation.spotifyTrackId ?? 'resolved-track',
+        ),
+      resolveAuthors: jest
+        .fn<
+          ReturnType<ListWordPressReconciliationService['resolveAuthors']>,
+          Parameters<ListWordPressReconciliationService['resolveAuthors']>
+        >()
+        .mockResolvedValue([null]),
+      toPublishedDiscRecord: jest.fn<
+        ReturnType<ListWordPressReconciliationService['toPublishedDiscRecord']>,
+        Parameters<ListWordPressReconciliationService['toPublishedDiscRecord']>
+      >(toPublishedRecord),
+      createPostAndReconcile: jest
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['createPostAndReconcile']
+          >,
+          Parameters<
+            ListWordPressReconciliationService['createPostAndReconcile']
+          >
+        >()
+        .mockResolvedValue({
+          post: {
+            id: 42,
+            link: 'https://wp.test/monthly',
+            title: { rendered: 'Monthly post' },
+            status: 'draft',
+          },
+          reconciled: false,
+        }),
+      syncDiscsIntoPost: jest
+        .fn<
+          ReturnType<ListWordPressReconciliationService['syncDiscsIntoPost']>,
+          Parameters<ListWordPressReconciliationService['syncDiscsIntoPost']>
+        >()
+        .mockResolvedValue({
+          publishedDiscs: [],
+          updatedContent: '',
+          contentChanged: false,
+          trackingChanged: false,
+          newCount: 0,
+          existingCount: 0,
+          removedDiscs: [],
+          notFoundForUpdate: 0,
+        }),
+      getUniqueDiscSection: jest
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['getUniqueDiscSection']
+          >,
+          Parameters<ListWordPressReconciliationService['getUniqueDiscSection']>
+        >()
+        .mockReturnValue(null),
+      replaceDiscSection: jest
+        .fn<
+          ReturnType<ListWordPressReconciliationService['replaceDiscSection']>,
+          Parameters<ListWordPressReconciliationService['replaceDiscSection']>
+        >()
+        .mockReturnValue(null),
+      insertBeforeFooter: jest
+        .fn<
+          ReturnType<ListWordPressReconciliationService['insertBeforeFooter']>,
+          Parameters<ListWordPressReconciliationService['insertBeforeFooter']>
+        >()
+        .mockImplementation((_content, block) => `${block}\n\n${footer}`),
       updatePostContentWithReconciliation: jest
-        .fn()
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['updatePostContentWithReconciliation']
+          >,
+          Parameters<
+            ListWordPressReconciliationService['updatePostContentWithReconciliation']
+          >
+        >()
         .mockResolvedValue(undefined),
-      uncertainWordPressResult: jest.fn((message) => new Error(message)),
+      uncertainWordPressResult: jest
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['uncertainWordPressResult']
+          >,
+          Parameters<
+            ListWordPressReconciliationService['uncertainWordPressResult']
+          >
+        >()
+        .mockImplementation(
+          (message) => new ServiceUnavailableException(message),
+        ),
       ...overrides.reconciliation,
     };
+    const module = await Test.createTestingModule({
+      providers: [
+        MonthlyListPublisherService,
+        { provide: getRepositoryToken(List), useValue: repository },
+        { provide: WordpressService, useValue: wordpressService },
+        {
+          provide: ListWordPressReconciliationService,
+          useValue: reconciliationService,
+        },
+      ],
+    }).compile();
 
     return {
-      service: new MonthlyListPublisherService(
-        repository as any,
-        wordpressService as unknown as WordpressService,
-        reconciliationService as unknown as ListWordPressReconciliationService,
-      ),
+      service: module.get(MonthlyListPublisherService),
       repository,
       wordpressService,
       reconciliationService,
+      module,
     };
   };
 
@@ -143,7 +286,7 @@ describe('MonthlyListPublisherService', () => {
     ];
     const month = makeList(discs);
     const { service, repository, wordpressService, reconciliationService } =
-      setup();
+      await setup();
 
     const result = await service.generateBestDiscsWordPressPost(month);
 
@@ -183,7 +326,7 @@ describe('MonthlyListPublisherService', () => {
   });
 
   it('rejects non-MONTH lists and MONTH lists without discs', async () => {
-    const { service, reconciliationService } = setup();
+    const { service, reconciliationService } = await setup();
     await expect(
       service.generateBestDiscsWordPressPost(
         makeList([asignation(discA, 0)], { type: ListType.WEEK }),
@@ -201,7 +344,7 @@ describe('MonthlyListPublisherService', () => {
       wpPostUrl: 'https://wp.test/monthly',
       wpPublishedDiscs: [],
     });
-    const { service, wordpressService, reconciliationService } = setup({
+    const { service, wordpressService, reconciliationService } = await setup({
       wordpress: {
         getPost: jest.fn().mockResolvedValue({ content: '', status: 'draft' }),
       },
@@ -241,16 +384,15 @@ describe('MonthlyListPublisherService', () => {
 
   it('adopts a post found by slug and stores tracking', async () => {
     const month = makeList([asignation(discA, 1)]);
-    const { service, wordpressService, reconciliationService, repository } =
-      setup({
-        wordpress: {
-          findPostBySlug: jest.fn().mockResolvedValue({
-            id: 77,
-            link: 'https://wp.test/adopted',
-            status: 'draft',
-          }),
-        },
-      });
+    const { service, reconciliationService, repository } = await setup({
+      wordpress: {
+        findPostBySlug: jest.fn().mockResolvedValue({
+          id: 77,
+          link: 'https://wp.test/adopted',
+          status: 'draft',
+        }),
+      },
+    });
 
     await expect(
       service.generateBestDiscsWordPressPost(month),
@@ -266,7 +408,7 @@ describe('MonthlyListPublisherService', () => {
   });
 
   it('does not adopt a trashed slug and recreates missing or trashed tracked posts', async () => {
-    const { service, reconciliationService } = setup({
+    const { service, reconciliationService } = await setup({
       wordpress: {
         findPostBySlug: jest.fn().mockResolvedValue({
           id: 88,
@@ -285,7 +427,7 @@ describe('MonthlyListPublisherService', () => {
         wpPostUrl: 'old',
         wpPublishedDiscs: [toPublishedRecord(asignation(discA, 1))],
       });
-      const recreation = setup({
+      const recreation = await setup({
         wordpress: {
           getPost: jest.fn().mockResolvedValue(missingPost),
         },
@@ -309,10 +451,10 @@ describe('MonthlyListPublisherService', () => {
       status: 'draft',
     };
     const save = jest
-      .fn()
+      .fn<Promise<List>, [DeepPartial<List>]>()
       .mockRejectedValueOnce(new Error('tracking save failed'))
       .mockResolvedValue(month);
-    const { service, wordpressService, reconciliationService } = setup({
+    const { service, wordpressService, reconciliationService } = await setup({
       save,
       wordpress: {
         findPostBySlug: jest
@@ -343,7 +485,7 @@ describe('MonthlyListPublisherService', () => {
       wpPublishedDiscs: [],
     });
     const { service, wordpressService, reconciliationService, repository } =
-      setup({
+      await setup({
         reconciliation: {
           resolveAuthors: jest
             .fn()
@@ -378,7 +520,7 @@ describe('MonthlyListPublisherService', () => {
       wpPostId: 42,
       wpPublishedDiscs: [existingRecord],
     });
-    const { service, repository, reconciliationService } = setup({
+    const { service, repository, reconciliationService } = await setup({
       reconciliation: {
         getUniqueDiscSection: jest.fn().mockReturnValue({ start: 0, end: 5 }),
         replaceDiscSection: jest.fn().mockReturnValue('updated remote content'),
@@ -397,7 +539,7 @@ describe('MonthlyListPublisherService', () => {
     expect(repository.save).not.toHaveBeenCalled();
 
     for (const unavailable of [null, { content: footer, status: 'trash' }]) {
-      const skipped = setup({
+      const skipped = await setup({
         wordpress: { getPost: jest.fn().mockResolvedValue(unavailable) },
       });
       await expect(
@@ -411,21 +553,46 @@ describe('MonthlyListPublisherService', () => {
 
   it('keeps the ListsService public methods and dispatches MONTH while preserving WEEK delegation', async () => {
     const month = makeList([asignation(discA, 0)]);
-    const weekly = { syncDiscToWeeklyPost: jest.fn() };
+    const weekly: jest.Mocked<
+      Pick<WeeklyListPublisherService, 'syncDiscToWeeklyPost'>
+    > = {
+      syncDiscToWeeklyPost: jest
+        .fn<
+          ReturnType<WeeklyListPublisherService['syncDiscToWeeklyPost']>,
+          Parameters<WeeklyListPublisherService['syncDiscToWeeklyPost']>
+        >()
+        .mockResolvedValue({ synced: true }),
+    };
     const monthly = {
       generateBestDiscsWordPressPost: jest
-        .fn()
-        .mockResolvedValue({ published: true }),
-      syncDiscToMonthlyPost: jest.fn().mockResolvedValue({ synced: true }),
+        .fn<
+          ReturnType<
+            MonthlyListPublisherService['generateBestDiscsWordPressPost']
+          >,
+          Parameters<
+            MonthlyListPublisherService['generateBestDiscsWordPressPost']
+          >
+        >()
+        .mockResolvedValue(new MonthlyPublisherResultFixture()),
+      syncDiscToMonthlyPost: jest
+        .fn<
+          ReturnType<MonthlyListPublisherService['syncDiscToMonthlyPost']>,
+          Parameters<MonthlyListPublisherService['syncDiscToMonthlyPost']>
+        >()
+        .mockResolvedValue({ synced: true }),
     };
-    const facade = new ListsService(
-      {} as any,
-      {} as any,
-      {} as any,
-      weekly as any,
-      monthly as any,
-    );
-    jest.spyOn(facade, 'findOne').mockResolvedValue(month);
+    const findOne = jest.fn<Promise<List>, [string]>().mockResolvedValue(month);
+    const module = await Test.createTestingModule({
+      providers: [
+        ListsService,
+        { provide: ListCrudService, useValue: { findOne } },
+        { provide: ListCalendarService, useValue: {} },
+        { provide: ListContentCoordinator, useValue: {} },
+        { provide: WeeklyListPublisherService, useValue: weekly },
+        { provide: MonthlyListPublisherService, useValue: monthly },
+      ],
+    }).compile();
+    const facade = module.get(ListsService);
 
     await expect(
       facade.generateBestDiscsWordPressPost('list-id'),
@@ -448,5 +615,6 @@ describe('MonthlyListPublisherService', () => {
       radar,
       radar.asignations[0],
     );
+    await module.close();
   });
 });

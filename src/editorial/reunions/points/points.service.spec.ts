@@ -1,38 +1,92 @@
 import { NotFoundException } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import {
+  DeepPartial,
+  DeleteResult,
+  FindManyOptions,
+  FindOneOptions,
+} from 'typeorm';
+import { Reunion } from 'src/editorial/reunions/entities/reunion.entity';
 import { Point } from './entities/point.entity';
 import { CreatePointDto } from './dto/create-points.dto';
 import { UpdatePointDto } from './dto/update-point.dto';
 import { PointService } from './points.service';
 
-describe('PointService', () => {
-  const makeFixture = () => {
-    const pointRepository = {
-      create: jest.fn((value) => ({ ...value })),
-      save: jest.fn(async (value) => value),
-      find: jest.fn(),
-      findOne: jest.fn(),
-      delete: jest.fn(),
-    };
-    const reunionRepository = { findOne: jest.fn() };
-    const service = new PointService(
-      pointRepository as any,
-      reunionRepository as any,
-    );
+type PointRepositoryMock = {
+  create: jest.Mock<Point, [DeepPartial<Point>]>;
+  save: jest.Mock<Promise<Point>, [Point]>;
+  find: jest.Mock<Promise<Point[]>, [FindManyOptions<Point>?]>;
+  findOne: jest.Mock<Promise<Point | null>, [FindOneOptions<Point>]>;
+  delete: jest.Mock<Promise<DeleteResult>, [string]>;
+};
 
-    return { service, pointRepository, reunionRepository };
+type ReunionRepositoryMock = {
+  findOne: jest.Mock<Promise<Reunion | null>, [FindOneOptions<Reunion>]>;
+};
+
+const makeReunion = (id = 'reunion-id'): Reunion => ({
+  id,
+  titulo: 'Weekly reunion',
+  fecha: new Date('2026-10-21T18:00:00.000Z'),
+  points: [],
+  createdAt: new Date('2026-10-20T00:00:00.000Z'),
+  updatedAt: new Date('2026-10-20T00:00:00.000Z'),
+});
+
+const makePoint = (
+  overrides: Partial<Point> = {},
+  reunion = makeReunion(),
+): Point => ({
+  id: 'point-id',
+  titulo: 'Task',
+  content: '',
+  reunion,
+  createdAt: new Date('2026-10-20T00:00:00.000Z'),
+  done: false,
+  ...overrides,
+});
+
+describe('PointService', () => {
+  const makeFixture = async () => {
+    const pointRepository: PointRepositoryMock = {
+      create: jest.fn<Point, [DeepPartial<Point>]>(),
+      save: jest.fn<Promise<Point>, [Point]>((point) => Promise.resolve(point)),
+      find: jest.fn<Promise<Point[]>, [FindManyOptions<Point>?]>(),
+      findOne: jest.fn<Promise<Point | null>, [FindOneOptions<Point>]>(),
+      delete: jest.fn<Promise<DeleteResult>, [string]>(),
+    };
+    const reunionRepository: ReunionRepositoryMock = {
+      findOne: jest.fn<Promise<Reunion | null>, [FindOneOptions<Reunion>]>(),
+    };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        PointService,
+        { provide: getRepositoryToken(Point), useValue: pointRepository },
+        { provide: getRepositoryToken(Reunion), useValue: reunionRepository },
+      ],
+    }).compile();
+
+    return {
+      service: moduleRef.get(PointService),
+      pointRepository,
+      reunionRepository,
+      moduleRef,
+    };
   };
 
   it('validates Reunion and saves a Point associated with it', async () => {
-    const fixture = makeFixture();
-    const reunion = { id: 'reunion-id' };
+    const fixture = await makeFixture();
+    const reunion = makeReunion();
     const dto: CreatePointDto = {
       titulo: 'Assign weekly radar',
       reunionId: reunion.id,
       content: '',
       done: false,
     };
+    const saved = makePoint({ titulo: dto.titulo }, reunion);
     fixture.reunionRepository.findOne.mockResolvedValueOnce(reunion);
-    const saved = { id: 'point-id', titulo: dto.titulo, reunion };
+    fixture.pointRepository.create.mockReturnValueOnce(saved);
     fixture.pointRepository.save.mockResolvedValueOnce(saved);
 
     await expect(fixture.service.createPoint(dto)).resolves.toBe(saved);
@@ -48,10 +102,11 @@ describe('PointService', () => {
     expect(fixture.pointRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ reunion }),
     );
+    await fixture.moduleRef.close();
   });
 
   it('returns 404 and does not save when the Reunion reference is missing', async () => {
-    const fixture = makeFixture();
+    const fixture = await makeFixture();
     fixture.reunionRepository.findOne.mockResolvedValueOnce(null);
 
     await expect(
@@ -64,11 +119,12 @@ describe('PointService', () => {
     );
     expect(fixture.pointRepository.create).not.toHaveBeenCalled();
     expect(fixture.pointRepository.save).not.toHaveBeenCalled();
+    await fixture.moduleRef.close();
   });
 
   it('lists Points with Reunion and loads Reunion on findOne', async () => {
-    const fixture = makeFixture();
-    const points = [{ id: 'point-id', reunion: { id: 'reunion-id' } }];
+    const fixture = await makeFixture();
+    const points = [makePoint()];
     fixture.pointRepository.find.mockResolvedValueOnce(points);
     fixture.pointRepository.findOne.mockResolvedValueOnce(points[0]);
 
@@ -81,58 +137,51 @@ describe('PointService', () => {
       where: { id: 'point-id' },
       relations: ['reunion'],
     });
+    await fixture.moduleRef.close();
   });
 
   it('returns 404 when findOne cannot locate a Point', async () => {
-    const fixture = makeFixture();
+    const fixture = await makeFixture();
     fixture.pointRepository.findOne.mockResolvedValueOnce(null);
 
     await expect(fixture.service.findOne('missing-id')).rejects.toThrow(
       new NotFoundException('Point with ID missing-id not found'),
     );
+    await fixture.moduleRef.close();
   });
 
   it('updates supplied fields and preserves the Reunion when reunionId is omitted', async () => {
-    const fixture = makeFixture();
-    const originalReunion = { id: 'original-reunion-id' };
-    const point = {
-      id: 'point-id',
-      titulo: 'Old title',
-      reunion: originalReunion,
-    } as Point;
+    const fixture = await makeFixture();
+    const originalReunion = makeReunion('original-reunion-id');
+    const point = makePoint({ titulo: 'Old title' }, originalReunion);
+    const update: UpdatePointDto = { titulo: 'New title' };
     jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
 
-    await expect(
-      fixture.service.updatePoint('point-id', {
-        titulo: 'New title',
-      } as UpdatePointDto),
-    ).resolves.toBe(point);
+    await expect(fixture.service.updatePoint('point-id', update)).resolves.toBe(
+      point,
+    );
 
     expect(point.titulo).toBe('New title');
     expect(point.reunion).toBe(originalReunion);
     expect(fixture.pointRepository.save).toHaveBeenCalledWith(point);
     expect(fixture.reunionRepository.findOne).not.toHaveBeenCalled();
+    await fixture.moduleRef.close();
   });
 
   it('reassigns a Point to an existing Reunion', async () => {
-    const fixture = makeFixture();
-    const originalReunion = { id: 'original-reunion-id' };
-    const destination = { id: 'destination-reunion-id' };
-    const point = {
-      id: 'point-id',
-      titulo: 'Task',
-      reunion: originalReunion,
-    } as Point;
+    const fixture = await makeFixture();
+    const originalReunion = makeReunion('original-reunion-id');
+    const destination = makeReunion('destination-reunion-id');
+    const point = makePoint({}, originalReunion);
     jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
     fixture.reunionRepository.findOne.mockResolvedValueOnce(destination);
-    fixture.pointRepository.save.mockResolvedValueOnce({
-      ...point,
-      reunion: destination,
-    });
+    fixture.pointRepository.save.mockResolvedValueOnce(
+      makePoint({}, destination),
+    );
 
     const result = await fixture.service.updatePoint('point-id', {
       reunionId: destination.id,
-    } as UpdatePointDto);
+    });
 
     expect(fixture.reunionRepository.findOne).toHaveBeenCalledWith({
       where: { id: destination.id },
@@ -142,45 +191,48 @@ describe('PointService', () => {
     );
     expect(result.reunion).toBe(destination);
     expect(result).not.toHaveProperty('reunionId');
+    await fixture.moduleRef.close();
   });
 
   it('returns 404 and does not save when the destination Reunion is missing', async () => {
-    const fixture = makeFixture();
-    const point = {
-      id: 'point-id',
-      reunion: { id: 'original-reunion-id' },
-    } as Point;
+    const fixture = await makeFixture();
+    const point = makePoint({}, makeReunion('original-reunion-id'));
     jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
     fixture.reunionRepository.findOne.mockResolvedValueOnce(null);
 
     await expect(
       fixture.service.updatePoint('point-id', {
         reunionId: 'missing-reunion-id',
-      } as UpdatePointDto),
+      }),
     ).rejects.toThrow(
       new NotFoundException('Reunion with ID missing-reunion-id not found'),
     );
-    expect(point.reunion).toEqual({ id: 'original-reunion-id' });
+    expect(point.reunion).toEqual(makeReunion('original-reunion-id'));
     expect(fixture.pointRepository.save).not.toHaveBeenCalled();
+    await fixture.moduleRef.close();
   });
 
   it('rejects null reunionId instead of querying with an empty reference', async () => {
-    const fixture = makeFixture();
-    const point = { id: 'point-id', reunion: { id: 'reunion-id' } } as Point;
+    const fixture = await makeFixture();
+    const point = makePoint();
     jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
 
     await expect(
-      fixture.service.updatePoint('point-id', { reunionId: null } as any),
+      fixture.service.updatePoint(
+        'point-id',
+        Object.assign(new UpdatePointDto(), { reunionId: null }),
+      ),
     ).rejects.toThrow('reunionId must be a UUID v4');
     expect(fixture.reunionRepository.findOne).not.toHaveBeenCalled();
     expect(fixture.pointRepository.save).not.toHaveBeenCalled();
+    await fixture.moduleRef.close();
   });
 
   it('deletes a Point and returns 404 when no row was affected', async () => {
-    const fixture = makeFixture();
+    const fixture = await makeFixture();
     fixture.pointRepository.delete
-      .mockResolvedValueOnce({ affected: 1 })
-      .mockResolvedValueOnce({ affected: 0 });
+      .mockResolvedValueOnce({ affected: 1, raw: [] })
+      .mockResolvedValueOnce({ affected: 0, raw: [] });
 
     await expect(
       fixture.service.deletePoint('point-id'),
@@ -192,5 +244,6 @@ describe('PointService', () => {
       1,
       'point-id',
     );
+    await fixture.moduleRef.close();
   });
 });

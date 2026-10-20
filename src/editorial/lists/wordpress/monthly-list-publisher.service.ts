@@ -12,6 +12,7 @@ import { ListWordPressReconciliationService } from './list-wordpress-reconciliat
 import {
   buildBestDiscsPostContent,
   buildDiscSections,
+  PublishableGutenbergDiscAssignment,
 } from './list-gutenberg-builder';
 
 @Injectable()
@@ -101,7 +102,10 @@ export class MonthlyListPublisherService {
     return this.createBestDiscsPost(list, allDiscs, title, monthName, year);
   }
 
-  async syncDiscToMonthlyPost(list: List, asignation: any) {
+  async syncDiscToMonthlyPost(
+    list: List,
+    asignation: PublishableGutenbergDiscAssignment,
+  ) {
     if (!list.wpPostId) {
       // Todavía no hay post que actualizar: se recogerá con el próximo
       // "generar/actualizar" manual.
@@ -174,7 +178,7 @@ export class MonthlyListPublisherService {
 
   private async createBestDiscsPost(
     list: List,
-    allDiscs: any[],
+    allDiscs: PublishableGutenbergDiscAssignment[],
     title: string,
     monthName: string,
     year: number,
@@ -250,7 +254,7 @@ export class MonthlyListPublisherService {
 
   private async linkListToWpPost(
     list: List,
-    publishedDiscs: any[],
+    publishedDiscs: PublishableGutenbergDiscAssignment[],
     wpPostId: number,
     wpPostUrl: string,
   ) {
@@ -264,7 +268,7 @@ export class MonthlyListPublisherService {
 
   private async appendNewDiscsToBestPost(
     list: List,
-    allDiscs: any[],
+    allDiscs: PublishableGutenbergDiscAssignment[],
     title: string,
     currentContent: string,
   ) {

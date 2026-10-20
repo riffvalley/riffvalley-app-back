@@ -8,7 +8,7 @@ import {
 import { CreateAsignationDto } from './dto/create-asignations.dto';
 import { UpdateAsignationDto } from './dto/update-asignations.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { EntityManager, QueryFailedError, Repository } from 'typeorm';
 import { Asignation } from './entities/asignations.entity';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { List, ListType } from 'src/editorial/lists/entities/list.entity';
@@ -18,6 +18,10 @@ import { ListsService } from 'src/editorial/lists/list.service';
 import sanitizeHtml = require('sanitize-html');
 
 const MAX_RADAR_DISCS_PER_GROUP = 4;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 const ASIGNATION_RELATION_FOREIGN_KEYS = new Set([
   'FK_9d41fe509640ba0c786b5daf75d', // asignation.userId -> users.id
@@ -279,6 +283,7 @@ export class AsignationsService {
           const nextAsignation = await asignationRepo.preload({
             id,
             ...restDto,
+            ...(userId ? { user: { id: userId } } : {}),
             ...(description !== undefined
               ? {
                   description: sanitizeHtml(
@@ -305,8 +310,6 @@ export class AsignationsService {
 
           if (!nextAsignation)
             throw new NotFoundException(`Asignation with id ${id} not found`);
-
-          if (userId) nextAsignation.user = { id: userId } as User;
 
           await asignationRepo.save(nextAsignation);
           return nextAsignation;
@@ -340,7 +343,7 @@ export class AsignationsService {
   }
 
   private async lockRadarGroup(
-    manager: any,
+    manager: EntityManager,
     listId: string,
     position: number,
   ): Promise<void> {
@@ -350,7 +353,10 @@ export class AsignationsService {
     );
   }
 
-  private async lockListType(manager: any, listId: string): Promise<void> {
+  private async lockListType(
+    manager: EntityManager,
+    listId: string,
+  ): Promise<void> {
     await manager.query(
       'SELECT pg_advisory_xact_lock_shared(hashtextextended($1, 0))',
       [`riffvalley:list-type:${listId}`],
@@ -362,11 +368,15 @@ export class AsignationsService {
     listId: string,
     position: number,
   ): Promise<number> {
-    const [row] = await repository.query(
+    const rows: unknown = await repository.query(
       'SELECT COUNT(*)::int AS count FROM asignation WHERE "listId" = $1 AND position = $2 AND "discId" IS NOT NULL',
       [listId, position],
     );
-    return Number(row?.count ?? 0);
+    const [row] = Array.isArray(rows) ? rows : [];
+    const count = isRecord(row) ? row.count : undefined;
+    return typeof count === 'number' || typeof count === 'string'
+      ? Number(count)
+      : 0;
   }
 
   private assertRadarGroupCapacity(existingDiscs: number): void {
@@ -405,26 +415,22 @@ export class AsignationsService {
   private isUniqueViolation(error: unknown): boolean {
     if (!(error instanceof QueryFailedError)) return false;
 
-    const driverError = error.driverError as Error & {
-      code?: string;
-      table?: string;
-    };
+    const driverError: unknown = error.driverError;
+    if (!isRecord(driverError)) return false;
     return driverError.code === '23505' && driverError.table === 'asignation';
   }
 
   private isAsignationRelationForeignKeyViolation(error: unknown): boolean {
     if (!(error instanceof QueryFailedError)) return false;
 
-    const driverError = error.driverError as Error & {
-      code?: string;
-      table?: string;
-      constraint?: string;
-    };
+    const driverError: unknown = error.driverError;
+    if (!isRecord(driverError)) return false;
 
     return (
       driverError.code === '23503' &&
       driverError.table === 'asignation' &&
-      ASIGNATION_RELATION_FOREIGN_KEYS.has(driverError.constraint ?? '')
+      typeof driverError.constraint === 'string' &&
+      ASIGNATION_RELATION_FOREIGN_KEYS.has(driverError.constraint)
     );
   }
 

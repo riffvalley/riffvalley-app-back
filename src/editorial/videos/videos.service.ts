@@ -7,14 +7,20 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  Between,
   ILike,
   LessThanOrEqual,
   MoreThanOrEqual,
+  FindOptionsWhere,
   QueryFailedError,
   Repository,
   In,
 } from 'typeorm';
-import { Video, VideoStatus as VideoStatusEnum } from './entities/video.entity';
+import {
+  Video,
+  VideoStatus as VideoStatusEnum,
+  VideoType as VideoTypeEnum,
+} from './entities/video.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
 import { ContentType } from 'src/editorial/contents/entities/content.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
@@ -46,6 +52,19 @@ const VIDEO_RELATION_FOREIGN_KEY_CONSTRAINTS = new Set([
   'FK_326eb34c48fc181639511958a19', // video.editorId -> users.id
   'FK_e7181db8200f878e3ba5fb2486c', // video.listId -> list.id
 ]);
+
+const VIDEO_STATUSES: Record<VideoStatus, VideoStatusEnum> = {
+  not_started: VideoStatusEnum.NOT_STARTED,
+  in_progress: VideoStatusEnum.IN_PROGRESS,
+  editing: VideoStatusEnum.EDITING,
+  ready: VideoStatusEnum.READY,
+  published: VideoStatusEnum.PUBLISHED,
+};
+
+const VIDEO_TYPES: Record<VideoType, VideoTypeEnum> = {
+  best: VideoTypeEnum.BEST,
+  custom: VideoTypeEnum.CUSTOM,
+};
 
 @Injectable()
 export class VideosService {
@@ -93,11 +112,22 @@ export class VideosService {
       userId,
     } = params;
 
-    const baseWhere: any = {
-      ...(status ? { status } : {}),
-      ...(type ? (Array.isArray(type) ? { type: In(type) } : { type }) : {}),
-      ...(desde ? { updateDate: MoreThanOrEqual(new Date(desde)) } : {}),
-      ...(hasta ? { updateDate: LessThanOrEqual(new Date(hasta)) } : {}),
+    const baseWhere: FindOptionsWhere<Video> = {
+      ...(status ? { status: VIDEO_STATUSES[status] } : {}),
+      ...(type
+        ? {
+            type: Array.isArray(type)
+              ? In(type.map((videoType) => VIDEO_TYPES[videoType]))
+              : VIDEO_TYPES[type],
+          }
+        : {}),
+      ...(desde && hasta
+        ? { updateDate: Between(new Date(desde), new Date(hasta)) }
+        : desde
+          ? { updateDate: MoreThanOrEqual(new Date(desde)) }
+          : hasta
+            ? { updateDate: LessThanOrEqual(new Date(hasta)) }
+            : {}),
       ...(userId ? { user: { id: userId } } : {}),
     };
 
@@ -135,22 +165,24 @@ export class VideosService {
     // null clears them. Determine the final state and User together so a
     // combined status/assignment PATCH is validated as one operation.
     if (updateVideoDto.userId !== undefined) {
-      entity.user = updateVideoDto.userId
-        ? ({ id: updateVideoDto.userId } as any)
-        : null;
+      this.repo.merge(entity, {
+        user: updateVideoDto.userId ? { id: updateVideoDto.userId } : null,
+      });
     }
 
     if (updateVideoDto.editorId !== undefined) {
-      entity.editor = updateVideoDto.editorId
-        ? ({ id: updateVideoDto.editorId } as any)
-        : null;
+      this.repo.merge(entity, {
+        editor: updateVideoDto.editorId
+          ? { id: updateVideoDto.editorId }
+          : null,
+      });
     }
 
     // Handle List Assignment
     if (updateVideoDto.listId !== undefined) {
-      entity.list = updateVideoDto.listId
-        ? ({ id: updateVideoDto.listId } as any)
-        : null;
+      this.repo.merge(entity, {
+        list: updateVideoDto.listId ? { id: updateVideoDto.listId } : null,
+      });
     }
 
     // Logic for State Transitions
@@ -259,7 +291,7 @@ export class VideosService {
       authorId: video.user.id,
       videoId: video.id,
       backlog: true,
-    } as any);
+    });
 
     return this.findOne(videoId);
   }
@@ -308,16 +340,16 @@ export class VideosService {
   private isVideoRelationForeignKeyViolation(error: unknown): boolean {
     if (!(error instanceof QueryFailedError)) return false;
 
-    const driverError = error.driverError as Error & {
-      code?: string;
-      table?: string;
-      constraint?: string;
-    };
-
+    const driverError: unknown = error.driverError;
+    if (typeof driverError !== 'object' || driverError === null) return false;
     return (
+      'code' in driverError &&
       driverError.code === '23503' &&
+      'table' in driverError &&
       driverError.table === 'video' &&
-      VIDEO_RELATION_FOREIGN_KEY_CONSTRAINTS.has(driverError.constraint ?? '')
+      'constraint' in driverError &&
+      typeof driverError.constraint === 'string' &&
+      VIDEO_RELATION_FOREIGN_KEY_CONSTRAINTS.has(driverError.constraint)
     );
   }
 }

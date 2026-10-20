@@ -1,8 +1,10 @@
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import * as request from 'supertest';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { JwtStrategy } from 'src/identity/auth/strategies/jwt.strategy';
@@ -15,32 +17,123 @@ import { BadGatewayException } from '@nestjs/common';
 import { SpotifyPlaylistManagementService } from '../management/spotify-playlist-management.service';
 import { SpotifyPlaylistTrackMaintenanceService } from '../track-maintenance/spotify-playlist-track-maintenance.service';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+import {
+  RiffValleyPlaylistStatus,
+  RiffValleyPlaylistType,
+} from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+import { Artist } from 'src/catalog/artists/entities/artist.entity';
+import { RiffValleyPlaylistArtist } from '../entities/riff-valley-playlist-artist.entity';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { SpotifyPlaylistAuthorizationService } from '../spotify-authorization/spotify-playlist-authorization.service';
+import { FestivalSetlistService } from '../setlist/festival-setlist.service';
+import { SpotifyPlaylistArtistSyncService } from '../artist-sync/spotify-playlist-artist-sync.service';
+
+type PlaylistRepository = jest.Mocked<
+  Pick<Repository<RiffValleyPlaylist>, 'findOne' | 'update'>
+> & {
+  create: jest.Mock<RiffValleyPlaylist, [DeepPartial<RiffValleyPlaylist>]>;
+  save: jest.Mock<
+    Promise<RiffValleyPlaylist>,
+    [DeepPartial<RiffValleyPlaylist>]
+  >;
+};
+type SpotifyAccountApi = jest.Mocked<
+  Pick<
+    SpotifyAccountApiService,
+    'createPlaylist' | 'removePlaylistFromLibrary' | 'updatePlaylist'
+  >
+>;
+type SpotifyAuthorization = jest.Mocked<
+  Pick<
+    SpotifyPlaylistAuthorizationService,
+    | 'startSpotifyConnection'
+    | 'completeSpotifyConnection'
+    | 'getSpotifyConnection'
+    | 'checkSpotifyAuthorizationLifetime'
+    | 'disconnectSpotify'
+    | 'getValidAccessToken'
+  >
+>;
+
+const playlistFixture = (
+  type = RiffValleyPlaylistType.FESTIVAL,
+): RiffValleyPlaylist =>
+  Object.assign(new RiffValleyPlaylist(), {
+    id: '7eb145c8-16b0-44f9-b921-dba85fb1e51c',
+    name: 'Playlist',
+    status: RiffValleyPlaylistStatus.IN_PROGRESS,
+    link: 'https://open.spotify.com/playlist/playlist-remote',
+    spotifyPlaylistId: 'playlist-remote',
+    description: null,
+    isPublic: false,
+    imageUrl: null,
+    protectedTrackUris: [],
+    type,
+    updateDate: new Date(0),
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    user: null,
+    content: null,
+    playlistArtists: [],
+  });
 
 describe('FestivalPlaylists partial failure HTTP responses', () => {
   const secret = 'festival-playlists-partial-failure-test-secret';
-  const testUser = {
+  const testUser = Object.assign(new User(), {
     id: '83f59390-5ca1-4331-90c2-3b54ca17e123',
     username: 'riff-valley-test',
     isActive: true,
     role: ValidRoles.riffvalley,
-  };
-  let app: any;
+    email: 'test@example.test',
+    password: 'test',
+    image: null,
+    dashboardConfig: null,
+    mobileDashboardConfig: null,
+    dashboardButtonsEnabled: false,
+    createdAt: new Date(0),
+    notes: null,
+    lastLogin: null,
+    rate: null,
+    favorite: null,
+    pending: null,
+    comments: [],
+    asignations: [],
+    riffValleyPlaylists: [],
+    articles: [],
+    videos: [],
+    requests: [],
+  });
+  let app: INestApplication;
   let moduleRef: TestingModule;
   let accessToken: string;
-  let service: SpotifyPlaylistsService;
-  let playlistRepository: any;
-  let spotifyAccountApi: any;
+  let playlistRepository: PlaylistRepository;
+  let spotifyAccountApi: SpotifyAccountApi;
   let playlistManagementService: SpotifyPlaylistManagementService;
-  let playlistTrackMaintenanceService: SpotifyPlaylistTrackMaintenanceService;
-  let spotifyAuthorizationService: any;
-  const userRepository = {
+  let spotifyAuthorizationService: SpotifyAuthorization;
+  const userRepository: jest.Mocked<
+    Pick<Repository<User>, 'findOneBy' | 'findOne'>
+  > = {
     findOneBy: jest.fn(),
     findOne: jest.fn(),
   };
 
+  let artistRepository: jest.Mocked<Pick<Repository<Artist>, 'findOneBy'>>;
+  let playlistArtistRepository: jest.Mocked<
+    Pick<
+      Repository<RiffValleyPlaylistArtist>,
+      'find' | 'findOne' | 'save' | 'create' | 'delete' | 'remove'
+    >
+  >;
+  let setlistService: jest.Mocked<Pick<FestivalSetlistService, 'getTopSongs'>>;
+
   beforeEach(async () => {
     playlistRepository = {
-      create: jest.fn((value) => ({ id: 'playlist-local', ...value })),
+      create: jest.fn((value: DeepPartial<RiffValleyPlaylist>) =>
+        Object.assign(new RiffValleyPlaylist(), {
+          id: 'playlist-local',
+          ...value,
+        }),
+      ),
       save: jest.fn(),
       findOne: jest.fn(),
       update: jest.fn(),
@@ -58,29 +151,19 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
       disconnectSpotify: jest.fn(),
       getValidAccessToken: jest.fn().mockResolvedValue('token'),
     };
-    playlistManagementService = new SpotifyPlaylistManagementService(
-      playlistRepository,
-      spotifyAccountApi,
-      spotifyAuthorizationService,
-    );
-    playlistTrackMaintenanceService =
-      new SpotifyPlaylistTrackMaintenanceService(
-        playlistRepository,
-        playlistRepository,
-        spotifyAccountApi,
-        spotifyAuthorizationService,
-        playlistManagementService,
-      );
-    service = new SpotifyPlaylistsService(
-      spotifyAuthorizationService,
-      {} as any,
-      playlistManagementService,
-      {} as any,
-      playlistTrackMaintenanceService,
-    );
+    artistRepository = { findOneBy: jest.fn() };
+    playlistArtistRepository = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+      remove: jest.fn(),
+    };
+    setlistService = { getTopSongs: jest.fn() };
 
     userRepository.findOneBy.mockResolvedValue(testUser);
-    userRepository.findOne.mockResolvedValue({ role: testUser.role });
+    userRepository.findOne.mockResolvedValue(testUser);
     moduleRef = await Test.createTestingModule({
       controllers: [FestivalPlaylistsController, GenrePlaylistsController],
       imports: [
@@ -88,7 +171,25 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
         JwtModule.register({ secret }),
       ],
       providers: [
-        { provide: SpotifyPlaylistsService, useValue: service },
+        SpotifyPlaylistsService,
+        SpotifyPlaylistManagementService,
+        SpotifyPlaylistTrackMaintenanceService,
+        SpotifyPlaylistArtistSyncService,
+        {
+          provide: getRepositoryToken(RiffValleyPlaylist),
+          useValue: playlistRepository,
+        },
+        {
+          provide: getRepositoryToken(RiffValleyPlaylistArtist),
+          useValue: playlistArtistRepository,
+        },
+        { provide: getRepositoryToken(Artist), useValue: artistRepository },
+        { provide: SpotifyAccountApiService, useValue: spotifyAccountApi },
+        {
+          provide: SpotifyPlaylistAuthorizationService,
+          useValue: spotifyAuthorizationService,
+        },
+        { provide: FestivalSetlistService, useValue: setlistService },
         { provide: getRepositoryToken(User), useValue: userRepository },
         { provide: ConfigService, useValue: { get: () => secret } },
         JwtStrategy,
@@ -100,6 +201,7 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
       username: testUser.username,
       role: testUser.role,
     });
+    playlistManagementService = moduleRef.get(SpotifyPlaylistManagementService);
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     await app.init();
@@ -141,10 +243,7 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
   it('returns Spotify 502 and skips the local update when remote metadata update fails', async () => {
     jest
       .spyOn(playlistManagementService, 'getFestivalPlaylist')
-      .mockResolvedValue({
-        id: '7eb145c8-16b0-44f9-b921-dba85fb1e51c',
-        spotifyPlaylistId: 'playlist-remote',
-      } as any);
+      .mockResolvedValue(playlistFixture());
     spotifyAccountApi.updatePlaylist.mockRejectedValue(
       new BadGatewayException('Spotify update failed'),
     );
@@ -160,11 +259,7 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
   });
 
   it('returns Spotify 502 for genre rename failures without updating the local row', async () => {
-    const linkedGenrePlaylist = Object.assign(new RiffValleyPlaylist(), {
-      id: '7eb145c8-16b0-44f9-b921-dba85fb1e51c',
-      spotifyPlaylistId: 'playlist-remote',
-      type: 'genero',
-    });
+    const linkedGenrePlaylist = playlistFixture(RiffValleyPlaylistType.GENERO);
     jest
       .spyOn(playlistManagementService, 'getGenrePlaylist')
       .mockResolvedValue(linkedGenrePlaylist);

@@ -4,11 +4,35 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource, DeepPartial, Repository } from 'typeorm';
 import { List, ListType } from '../../entities/list.entity';
+import { ListCrudService } from '../../application/list-crud.service';
+import { ListCalendarService } from '../../application/list-calendar.service';
+import { ListContentCoordinator } from '../../application/list-content-coordinator.service';
 import { ListsService } from '../../list.service';
 import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
 import { ListWordPressReconciliationService } from '../list-wordpress-reconciliation.service';
 import { WeeklyListPublisherService } from '../weekly-list-publisher.service';
+import { MonthlyListPublisherService } from '../monthly-list-publisher.service';
+import { PublishableGutenbergDiscAssignment } from '../list-gutenberg-builder';
+
+type WordpressMock = jest.Mocked<
+  Pick<WordpressService, 'getOrCreateTag' | 'getPost' | 'findPostBySlug'>
+>;
+type ReconciliationMock = jest.Mocked<
+  Pick<
+    ListWordPressReconciliationService,
+    | 'resolveSpotifyTrackId'
+    | 'toPublishedDiscRecord'
+    | 'createPostAndReconcile'
+    | 'syncDiscsIntoPost'
+    | 'uncertainWordPressResult'
+    | 'getUniqueDiscSection'
+    | 'insertBeforeFooter'
+    | 'replaceDiscSection'
+    | 'updatePostContentWithReconciliation'
+  >
+>;
 
 describe('WeeklyListPublisherService', () => {
   const discA = '11111111-1111-4111-8111-111111111111';
@@ -34,8 +58,11 @@ describe('WeeklyListPublisherService', () => {
     user: null,
   });
 
-  const list = (asignations: any[], overrides: Record<string, unknown> = {}) =>
-    ({
+  const list = (
+    asignations: PublishableGutenbergDiscAssignment[],
+    overrides: Record<string, unknown> = {},
+  ): List =>
+    Object.assign(new List(), {
       id: 'list-id',
       type: ListType.WEEK,
       releaseDate: new Date('2026-10-09T00:00:00.000Z'),
@@ -43,73 +70,162 @@ describe('WeeklyListPublisherService', () => {
       asignations,
       wpWeeklyPosts: [],
       ...overrides,
-    }) as any;
+    });
 
-  const publishedRecord = (a: any) => ({
+  const publishedRecord = (a: PublishableGutenbergDiscAssignment) => ({
     discId: a.disc.id,
     artist: a.disc.artist.name,
     name: a.disc.name,
   });
 
-  const setup = (
+  const setup = async (
     overrides: {
-      save?: jest.Mock;
-      wordpress?: Record<string, jest.Mock>;
-      reconciliation?: Record<string, jest.Mock>;
+      save?: jest.MockedFunction<(list: DeepPartial<List>) => Promise<List>>;
+      wordpress?: Partial<WordpressMock>;
+      reconciliation?: Partial<ReconciliationMock>;
     } = {},
   ) => {
-    const repository = {
-      save:
-        overrides.save ?? jest.fn().mockImplementation(async (value) => value),
-    };
-    const wordpressService = {
+    const repository = new Repository(
+      List,
+      new DataSource({ type: 'postgres' }).manager,
+    );
+    jest
+      .spyOn(repository, 'save')
+      .mockImplementation(async (value) =>
+        overrides.save
+          ? overrides.save(value)
+          : Object.assign(new List(), value),
+      );
+    const wordpressService: WordpressMock = {
       getOrCreateTag: jest
-        .fn()
+        .fn<
+          ReturnType<WordpressService['getOrCreateTag']>,
+          Parameters<WordpressService['getOrCreateTag']>
+        >()
         .mockImplementation(async (value) => (value === '2026' ? 2026 : 10)),
       getPost: jest
-        .fn()
+        .fn<
+          ReturnType<WordpressService['getPost']>,
+          Parameters<WordpressService['getPost']>
+        >()
         .mockResolvedValue({ content: footer, status: 'draft' }),
-      findPostBySlug: jest.fn().mockResolvedValue(null),
+      findPostBySlug: jest
+        .fn<
+          ReturnType<WordpressService['findPostBySlug']>,
+          Parameters<WordpressService['findPostBySlug']>
+        >()
+        .mockResolvedValue(null),
       ...overrides.wordpress,
     };
-    const reconciliationService = {
-      resolveSpotifyTrackId: jest.fn().mockResolvedValue(null),
-      toPublishedDiscRecord: jest.fn(publishedRecord),
-      createPostAndReconcile: jest.fn().mockResolvedValue({
-        post: { id: 100, link: 'https://wp.test/post' },
-        reconciled: false,
-      }),
+    const reconciliationService: ReconciliationMock = {
+      resolveSpotifyTrackId: jest
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['resolveSpotifyTrackId']
+          >,
+          Parameters<
+            ListWordPressReconciliationService['resolveSpotifyTrackId']
+          >
+        >()
+        .mockResolvedValue(null),
+      toPublishedDiscRecord: jest.fn<
+        ReturnType<ListWordPressReconciliationService['toPublishedDiscRecord']>,
+        Parameters<ListWordPressReconciliationService['toPublishedDiscRecord']>
+      >(publishedRecord),
+      createPostAndReconcile: jest
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['createPostAndReconcile']
+          >,
+          Parameters<
+            ListWordPressReconciliationService['createPostAndReconcile']
+          >
+        >()
+        .mockResolvedValue({
+          post: {
+            id: 100,
+            link: 'https://wp.test/post',
+            title: { rendered: 'Post title' },
+            status: 'draft',
+          },
+          reconciled: false,
+        }),
       syncDiscsIntoPost: jest
-        .fn()
+        .fn<
+          ReturnType<ListWordPressReconciliationService['syncDiscsIntoPost']>,
+          Parameters<ListWordPressReconciliationService['syncDiscsIntoPost']>
+        >()
         .mockImplementation(async (_postId, _content, discs) => ({
           publishedDiscs: discs.map(publishedRecord),
+          updatedContent: _content,
+          contentChanged: false,
           newCount: discs.length,
           existingCount: 0,
           removedDiscs: [],
           notFoundForUpdate: 0,
+          trackingChanged: false,
         })),
-      uncertainWordPressResult: jest.fn(
-        (detail) => new ServiceUnavailableException(detail),
-      ),
-      getUniqueDiscSection: jest.fn().mockReturnValue(null),
-      insertBeforeFooter: jest.fn(
-        (_content, addition) => `${addition}\n\n${footer}`,
-      ),
-      replaceDiscSection: jest.fn(),
+      uncertainWordPressResult: jest
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['uncertainWordPressResult']
+          >,
+          Parameters<
+            ListWordPressReconciliationService['uncertainWordPressResult']
+          >
+        >()
+        .mockImplementation(
+          (detail) => new ServiceUnavailableException(detail),
+        ),
+      getUniqueDiscSection: jest
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['getUniqueDiscSection']
+          >,
+          Parameters<ListWordPressReconciliationService['getUniqueDiscSection']>
+        >()
+        .mockReturnValue(null),
+      insertBeforeFooter: jest
+        .fn<
+          ReturnType<ListWordPressReconciliationService['insertBeforeFooter']>,
+          Parameters<ListWordPressReconciliationService['insertBeforeFooter']>
+        >()
+        .mockImplementation((_content, addition) => `${addition}\n\n${footer}`),
+      replaceDiscSection: jest
+        .fn<
+          ReturnType<ListWordPressReconciliationService['replaceDiscSection']>,
+          Parameters<ListWordPressReconciliationService['replaceDiscSection']>
+        >()
+        .mockImplementation((_content, _discId, replacement) => replacement),
       updatePostContentWithReconciliation: jest
-        .fn()
+        .fn<
+          ReturnType<
+            ListWordPressReconciliationService['updatePostContentWithReconciliation']
+          >,
+          Parameters<
+            ListWordPressReconciliationService['updatePostContentWithReconciliation']
+          >
+        >()
         .mockResolvedValue(undefined),
       ...overrides.reconciliation,
     };
+    const module = await Test.createTestingModule({
+      providers: [
+        WeeklyListPublisherService,
+        { provide: getRepositoryToken(List), useValue: repository },
+        { provide: WordpressService, useValue: wordpressService },
+        {
+          provide: ListWordPressReconciliationService,
+          useValue: reconciliationService,
+        },
+      ],
+    }).compile();
     return {
-      service: new WeeklyListPublisherService(
-        repository as any,
-        wordpressService as unknown as WordpressService,
-        reconciliationService as unknown as ListWordPressReconciliationService,
-      ),
+      service: module.get(WeeklyListPublisherService),
       repository,
       wordpressService,
       reconciliationService,
+      module,
     };
   };
 
@@ -141,16 +257,26 @@ describe('WeeklyListPublisherService', () => {
       { wpWeeklyPosts: [inboxTracking] },
     );
     const { service, repository, wordpressService, reconciliationService } =
-      setup({
+      await setup({
         reconciliation: {
           createPostAndReconcile: jest
             .fn()
             .mockResolvedValueOnce({
-              post: { id: 101, link: 'https://wp.test/one' },
+              post: {
+                id: 101,
+                link: 'https://wp.test/one',
+                title: { rendered: 'First Radar post' },
+                status: 'draft',
+              },
               reconciled: false,
             })
             .mockResolvedValueOnce({
-              post: { id: 202, link: 'https://wp.test/two' },
+              post: {
+                id: 202,
+                link: 'https://wp.test/two',
+                title: { rendered: 'Second Radar post' },
+                status: 'draft',
+              },
               reconciled: false,
             }),
         },
@@ -170,7 +296,7 @@ describe('WeeklyListPublisherService', () => {
 
   it('does not publish a list containing only the position 0 inbox', async () => {
     const radar = list([asignation(inboxDisc, 0)]);
-    const { service, reconciliationService, repository } = setup();
+    const { service, reconciliationService, repository } = await setup();
 
     await expect(service.generateWordPressPosts(radar)).resolves.toEqual({
       created: 0,
@@ -181,7 +307,7 @@ describe('WeeklyListPublisherService', () => {
   });
 
   it('rejects an explicit request to publish position 0', async () => {
-    const { service, reconciliationService } = setup();
+    const { service, reconciliationService } = await setup();
 
     await expect(
       service.generateWordPressPosts(list([asignation(inboxDisc, 0)]), 0),
@@ -190,7 +316,7 @@ describe('WeeklyListPublisherService', () => {
   });
 
   it('rejects non-WEEK lists at the Radar publisher boundary', async () => {
-    const { service, reconciliationService } = setup();
+    const { service, reconciliationService } = await setup();
 
     await expect(
       service.generateWordPressPosts(
@@ -206,7 +332,7 @@ describe('WeeklyListPublisherService', () => {
       asignation(discA, 1),
       asignation(inboxDisc, 0),
     ]);
-    const { service, reconciliationService, wordpressService } = setup();
+    const { service, reconciliationService, wordpressService } = await setup();
 
     await service.generateWordPressPosts(radar, 1);
 
@@ -240,7 +366,7 @@ describe('WeeklyListPublisherService', () => {
         },
       ],
     });
-    const { service, wordpressService, reconciliationService } = setup();
+    const { service, wordpressService, reconciliationService } = await setup();
 
     const result = await service.generateWordPressPosts(radar);
 
@@ -258,7 +384,7 @@ describe('WeeklyListPublisherService', () => {
       status: 'draft',
     };
     const { service, wordpressService, reconciliationService, repository } =
-      setup({
+      await setup({
         wordpress: {
           findPostBySlug: jest.fn().mockResolvedValue(existing),
         },
@@ -294,7 +420,7 @@ describe('WeeklyListPublisherService', () => {
           },
         ],
       });
-      const { service, wordpressService, reconciliationService } = setup({
+      const { service, wordpressService, reconciliationService } = await setup({
         wordpress: {
           getPost: jest.fn().mockResolvedValue(linkedPost),
         },
@@ -314,7 +440,7 @@ describe('WeeklyListPublisherService', () => {
   it('propagates an uncertain remote result without saving tracking', async () => {
     const radar = list([asignation(discA, 1)]);
     const uncertain = new ServiceUnavailableException('unknown');
-    const { service, repository } = setup({
+    const { service, repository } = await setup({
       reconciliation: {
         createPostAndReconcile: jest.fn().mockRejectedValue(uncertain),
       },
@@ -332,10 +458,10 @@ describe('WeeklyListPublisherService', () => {
       status: 'draft',
     };
     const repositorySave = jest
-      .fn()
+      .fn<Promise<List>, [DeepPartial<List>]>()
       .mockRejectedValueOnce(new Error('tracking save failed'))
       .mockResolvedValueOnce(firstRadar);
-    const { service, wordpressService, reconciliationService } = setup({
+    const { service, wordpressService, reconciliationService } = await setup({
       save: repositorySave,
       wordpress: {
         findPostBySlug: jest
@@ -360,7 +486,7 @@ describe('WeeklyListPublisherService', () => {
 
   it('does not sync position 0 and syncs a moved assignment only into its new tracked group', async () => {
     const inbox = asignation(inboxDisc, 0, 'inbox');
-    const { service, wordpressService, reconciliationService } = setup();
+    const { service, wordpressService, reconciliationService } = await setup();
     await expect(
       service.syncDiscToWeeklyPost(list([inbox]), inbox),
     ).resolves.toEqual({ synced: false });
@@ -389,14 +515,19 @@ describe('WeeklyListPublisherService', () => {
 
   it('keeps the ListsService method public and delegates after loading the list', async () => {
     const radar = list([asignation(discA, 1)]);
-    const { service: publisher } = setup();
-    const facade = new ListsService(
-      { findOne: jest.fn().mockResolvedValue(radar) } as any,
-      {} as any,
-      {} as any,
-      publisher as any,
-      {} as any,
-    );
+    const { service: publisher } = await setup();
+    const findOne = jest.fn<Promise<List>, [string]>().mockResolvedValue(radar);
+    const module = await Test.createTestingModule({
+      providers: [
+        ListsService,
+        { provide: ListCrudService, useValue: { findOne } },
+        { provide: ListCalendarService, useValue: {} },
+        { provide: ListContentCoordinator, useValue: {} },
+        { provide: WeeklyListPublisherService, useValue: publisher },
+        { provide: MonthlyListPublisherService, useValue: {} },
+      ],
+    }).compile();
+    const facade = module.get(ListsService);
     const publish = jest
       .spyOn(publisher, 'generateWordPressPosts')
       .mockResolvedValue({ created: 0, posts: [] });
@@ -406,5 +537,6 @@ describe('WeeklyListPublisherService', () => {
       posts: [],
     });
     expect(publish).toHaveBeenCalledWith(radar, 2);
+    await module.close();
   });
 });

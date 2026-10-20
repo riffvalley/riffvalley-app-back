@@ -4,38 +4,121 @@ import { FestivalSetlistService } from '../setlist/festival-setlist.service';
 import { SpotifyPlaylistManagementService } from '../management/spotify-playlist-management.service';
 import { SpotifyPlaylistArtistSyncService } from '../artist-sync/spotify-playlist-artist-sync.service';
 import { SpotifyPlaylistTrackMaintenanceService } from '../track-maintenance/spotify-playlist-track-maintenance.service';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
-import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+import {
+  RiffValleyPlaylist,
+  RiffValleyPlaylistStatus,
+  RiffValleyPlaylistType,
+} from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { RiffValleyPlaylistArtist } from '../entities/riff-valley-playlist-artist.entity';
+
+function playlistFixture(): RiffValleyPlaylist {
+  return Object.assign(new RiffValleyPlaylist(), {
+    id: 'playlist-local',
+    name: 'Playlist local',
+    status: RiffValleyPlaylistStatus.IN_PROGRESS,
+    link: 'https://open.spotify.com/playlist/playlist-local',
+    spotifyPlaylistId: 'playlist-remote',
+    description: null,
+    isPublic: false,
+    imageUrl: null,
+    protectedTrackUris: [],
+    type: RiffValleyPlaylistType.FESTIVAL,
+    updateDate: new Date('2026-01-01T00:00:00.000Z'),
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    user: undefined,
+    content: undefined,
+    playlistArtists: [],
+  });
+}
 
 describe('SpotifyPlaylistsService', () => {
   let service: SpotifyPlaylistsService;
-  let riffValleyPlaylistRepository: any;
-  let playlistArtistRepository: any;
-  let spotifyAccountApi: any;
-  let spotifyAuthorizationService: any;
+  let module: TestingModule;
+  let spotifyAuthorizationService: jest.Mocked<
+    Pick<
+      SpotifyPlaylistAuthorizationService,
+      | 'startSpotifyConnection'
+      | 'completeSpotifyConnection'
+      | 'getSpotifyConnection'
+      | 'checkSpotifyAuthorizationLifetime'
+      | 'disconnectSpotify'
+      | 'getValidAccessToken'
+    >
+  >;
   let setlistService: jest.Mocked<Pick<FestivalSetlistService, 'getTopSongs'>>;
   let playlistManagementService: SpotifyPlaylistManagementService;
   let playlistArtistSyncService: SpotifyPlaylistArtistSyncService;
   let playlistTrackMaintenanceService: SpotifyPlaylistTrackMaintenanceService;
 
-  beforeEach(() => {
-    riffValleyPlaylistRepository = {
-      create: jest.fn((value) => ({ id: 'playlist-local', ...value })),
+  beforeEach(async () => {
+    const riffValleyPlaylistRepository: Pick<
+      Repository<RiffValleyPlaylist>,
+      'find' | 'findOne' | 'update'
+    > & {
+      create: (value: DeepPartial<RiffValleyPlaylist>) => RiffValleyPlaylist;
+      save: (
+        value: DeepPartial<RiffValleyPlaylist>,
+      ) => Promise<RiffValleyPlaylist>;
+    } = {
+      create: jest.fn((value: DeepPartial<RiffValleyPlaylist>) =>
+        Object.assign(new RiffValleyPlaylist(), {
+          id: 'playlist-local',
+          ...value,
+        }),
+      ),
       find: jest.fn(),
       findOne: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
     };
-    playlistArtistRepository = {
+    const playlistArtistRepository: Pick<
+      Repository<RiffValleyPlaylistArtist>,
+      'findOne' | 'find' | 'delete' | 'remove'
+    > & {
+      create: (
+        value: DeepPartial<RiffValleyPlaylistArtist>,
+      ) => RiffValleyPlaylistArtist;
+      save: (
+        value: DeepPartial<RiffValleyPlaylistArtist>,
+      ) => Promise<RiffValleyPlaylistArtist>;
+    } = {
       findOne: jest.fn(),
       find: jest.fn(),
-      create: jest.fn((value) => ({ id: 'association-id', ...value })),
-      save: jest.fn(async (value) => value),
+      create: jest.fn((value: DeepPartial<RiffValleyPlaylistArtist>) =>
+        Object.assign(new RiffValleyPlaylistArtist(), {
+          id: 'association-id',
+          ...value,
+        }),
+      ),
+      save: jest.fn(async (value: DeepPartial<RiffValleyPlaylistArtist>) =>
+        Object.assign(new RiffValleyPlaylistArtist(), value),
+      ),
       delete: jest.fn(),
       remove: jest.fn(),
     };
-    spotifyAccountApi = {
+    const spotifyAccountApi: jest.Mocked<
+      Pick<
+        SpotifyAccountApiService,
+        | 'getProfile'
+        | 'createPlaylist'
+        | 'getPlaylist'
+        | 'updatePlaylist'
+        | 'uploadPlaylistImage'
+        | 'getPlaylistImages'
+        | 'getPlaylistTrackUris'
+        | 'searchTracks'
+        | 'getTracks'
+        | 'addPlaylistItems'
+        | 'removePlaylistItems'
+        | 'replacePlaylistTrackUris'
+      >
+    > = {
       getProfile: jest.fn(),
       createPlaylist: jest.fn(),
       getPlaylist: jest.fn(),
@@ -63,38 +146,46 @@ describe('SpotifyPlaylistsService', () => {
         Parameters<FestivalSetlistService['getTopSongs']>
       >(),
     };
-    playlistManagementService = new SpotifyPlaylistManagementService(
-      riffValleyPlaylistRepository,
-      spotifyAccountApi,
-      spotifyAuthorizationService as SpotifyPlaylistAuthorizationService,
-    );
-    playlistArtistSyncService = new SpotifyPlaylistArtistSyncService(
-      riffValleyPlaylistRepository,
-      { findOneBy: jest.fn() } as unknown as Repository<Artist>,
-      playlistArtistRepository,
-      spotifyAccountApi,
-      spotifyAuthorizationService as SpotifyPlaylistAuthorizationService,
-      setlistService as unknown as FestivalSetlistService,
-      playlistManagementService,
-    );
-    playlistTrackMaintenanceService =
-      new SpotifyPlaylistTrackMaintenanceService(
-        riffValleyPlaylistRepository,
-        playlistArtistRepository,
-        spotifyAccountApi,
-        spotifyAuthorizationService as SpotifyPlaylistAuthorizationService,
-        playlistManagementService,
-      );
-    service = new SpotifyPlaylistsService(
-      spotifyAuthorizationService as SpotifyPlaylistAuthorizationService,
-      setlistService as unknown as FestivalSetlistService,
-      playlistManagementService,
-      playlistArtistSyncService,
-      playlistTrackMaintenanceService,
+    module = await Test.createTestingModule({
+      providers: [
+        SpotifyPlaylistsService,
+        SpotifyPlaylistAuthorizationService,
+        FestivalSetlistService,
+        SpotifyPlaylistManagementService,
+        SpotifyPlaylistArtistSyncService,
+        SpotifyPlaylistTrackMaintenanceService,
+        {
+          provide: getRepositoryToken(RiffValleyPlaylist),
+          useValue: riffValleyPlaylistRepository,
+        },
+        {
+          provide: getRepositoryToken(RiffValleyPlaylistArtist),
+          useValue: playlistArtistRepository,
+        },
+        {
+          provide: getRepositoryToken(Artist),
+          useValue: { findOneBy: jest.fn() },
+        },
+        { provide: SpotifyAccountApiService, useValue: spotifyAccountApi },
+        {
+          provide: SpotifyPlaylistAuthorizationService,
+          useValue: spotifyAuthorizationService,
+        },
+        { provide: FestivalSetlistService, useValue: setlistService },
+      ],
+    }).compile();
+    service = module.get(SpotifyPlaylistsService);
+    playlistManagementService = module.get(SpotifyPlaylistManagementService);
+    playlistArtistSyncService = module.get(SpotifyPlaylistArtistSyncService);
+    playlistTrackMaintenanceService = module.get(
+      SpotifyPlaylistTrackMaintenanceService,
     );
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await module.close();
+  });
 
   it('conserva la fachada pública del ciclo de autorización y delega sus operaciones', async () => {
     const result = {
@@ -105,9 +196,22 @@ describe('SpotifyPlaylistsService', () => {
     );
     spotifyAuthorizationService.completeSpotifyConnection.mockResolvedValue({
       connected: true,
+      spotifyUserId: 'spotify-user',
+      displayName: 'Riff Valley',
+      refreshTokenExpiresAt: new Date('2027-01-01T00:00:00.000Z'),
     });
     spotifyAuthorizationService.getSpotifyConnection.mockResolvedValue({
       connected: false,
+      spotifyUserId: null,
+      displayName: null,
+      canUploadImages: false,
+      missingScopes: [],
+      authorizationStatus: 'disconnected',
+      reauthorizationRequired: false,
+      reauthorizationReason: null,
+      authorizedAt: null,
+      refreshTokenExpiresAt: null,
+      daysUntilReauthorization: null,
     });
     spotifyAuthorizationService.checkSpotifyAuthorizationLifetime.mockResolvedValue(
       undefined,
@@ -119,9 +223,13 @@ describe('SpotifyPlaylistsService', () => {
     await expect(service.startSpotifyConnection()).resolves.toBe(result);
     await expect(
       service.completeSpotifyConnection('code', 'state'),
-    ).resolves.toEqual({ connected: true });
-    await expect(service.getSpotifyConnection()).resolves.toEqual({
+    ).resolves.toMatchObject({
+      connected: true,
+      spotifyUserId: 'spotify-user',
+    });
+    await expect(service.getSpotifyConnection()).resolves.toMatchObject({
       connected: false,
+      authorizationStatus: 'disconnected',
     });
     await expect(
       service.checkSpotifyAuthorizationLifetime(),
@@ -182,7 +290,7 @@ describe('SpotifyPlaylistsService', () => {
   });
 
   it('conserva las firmas de administración en la fachada y propaga respuestas y errores', async () => {
-    const result = { id: 'playlist-local' } as any;
+    const result = playlistFixture();
     const managementError = new Error('Spotify management failed');
     const create = jest
       .spyOn(playlistManagementService, 'createFestivalPlaylist')
@@ -273,23 +381,42 @@ describe('SpotifyPlaylistsService', () => {
   });
 
   it('delega cada operación pública de artistas sin traducir sus respuestas ni errores', async () => {
-    const result = { id: 'playlist-local' } as unknown as never;
-    const methods = [
-      'addArtist',
-      'searchGenreArtistTracks',
-      'searchFestivalArtistTracks',
-      'addGenreArtist',
-      'replaceGenreArtistTracks',
-      'replaceFailedFestivalArtistTracks',
-      'removeGenreArtist',
-      'removeArtist',
-    ] as const;
-    const delegates = Object.fromEntries(
-      methods.map((method) => [
-        method,
-        jest.spyOn(playlistArtistSyncService, method).mockResolvedValue(result),
-      ]),
-    ) as Record<(typeof methods)[number], jest.SpyInstance>;
+    const result = playlistFixture();
+    const genreSearchResult = {
+      artist: { id: 'artist-id', name: 'Test Artist' },
+      query: 'query',
+      tracks: [],
+    };
+    const festivalSearchResult = {
+      ...genreSearchResult,
+      query: '',
+    };
+    const delegates = {
+      addArtist: jest
+        .spyOn(playlistArtistSyncService, 'addArtist')
+        .mockResolvedValue(result),
+      searchGenreArtistTracks: jest
+        .spyOn(playlistArtistSyncService, 'searchGenreArtistTracks')
+        .mockResolvedValue(genreSearchResult),
+      searchFestivalArtistTracks: jest
+        .spyOn(playlistArtistSyncService, 'searchFestivalArtistTracks')
+        .mockResolvedValue(festivalSearchResult),
+      addGenreArtist: jest
+        .spyOn(playlistArtistSyncService, 'addGenreArtist')
+        .mockResolvedValue(result),
+      replaceGenreArtistTracks: jest
+        .spyOn(playlistArtistSyncService, 'replaceGenreArtistTracks')
+        .mockResolvedValue(result),
+      replaceFailedFestivalArtistTracks: jest
+        .spyOn(playlistArtistSyncService, 'replaceFailedFestivalArtistTracks')
+        .mockResolvedValue(result),
+      removeGenreArtist: jest
+        .spyOn(playlistArtistSyncService, 'removeGenreArtist')
+        .mockResolvedValue(result),
+      removeArtist: jest
+        .spyOn(playlistArtistSyncService, 'removeArtist')
+        .mockResolvedValue(result),
+    };
     const error = new Error('artist synchronization failed');
     delegates.removeArtist.mockRejectedValue(error);
     const syncDto = {
@@ -304,10 +431,10 @@ describe('SpotifyPlaylistsService', () => {
     );
     await expect(
       service.searchGenreArtistTracks('genre-id', 'artist-id', 'query'),
-    ).resolves.toBe(result);
+    ).resolves.toBe(genreSearchResult);
     await expect(
       service.searchFestivalArtistTracks('festival-id', 'artist-id'),
-    ).resolves.toBe(result);
+    ).resolves.toBe(festivalSearchResult);
     await expect(
       service.addGenreArtist('genre-id', 'artist-id', trackIds),
     ).resolves.toBe(result);

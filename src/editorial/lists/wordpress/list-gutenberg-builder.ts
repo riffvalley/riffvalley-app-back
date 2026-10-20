@@ -15,6 +15,12 @@ export type GutenbergDiscAssignment = {
   } | null;
 };
 
+export type PublishableGutenbergDiscAssignment = GutenbergDiscAssignment & {
+  disc: NonNullable<GutenbergDiscAssignment['disc']>;
+  position?: number | null;
+  spotifyTrackId?: string | null;
+};
+
 export type GutenbergAuthor = { name: string; link: string } | null;
 
 export function buildPostContent(

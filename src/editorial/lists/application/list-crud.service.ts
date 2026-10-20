@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, Not, Repository } from 'typeorm';
+import { EntityManager, FindOptionsWhere, In, Not, Repository } from 'typeorm';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { CreateListDto } from '../dto/create-list.dto';
 import { List, ListStatus, ListType } from '../entities/list.entity';
@@ -14,6 +14,10 @@ import {
   assertRequiredEditorialDate,
   hasAnyEditorialDate,
 } from '../domain/list-date-rules';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 @Injectable()
 export class ListCrudService {
@@ -38,7 +42,7 @@ export class ListCrudService {
 
   async findAll(paginationDto: PaginationDto) {
     const { limit = 40, offset = 0, statusExclusions = [] } = paginationDto;
-    const whereConditions: any = {};
+    const whereConditions: FindOptionsWhere<List> = {};
 
     if (statusExclusions.length > 0) {
       whereConditions.status = Not(In(statusExclusions));
@@ -242,12 +246,15 @@ export class ListCrudService {
     }
   }
 
-  private handleDbExceptions(error: any): never {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
+  private handleDbExceptions(error: unknown): never {
+    if (isRecord(error) && error.code === '23505') {
+      throw new BadRequestException(
+        typeof error.detail === 'string' ? error.detail : undefined,
+      );
+    }
     this.logger.error(error);
-    throw new InternalServerErrorException(
-      'An unexpected error occurred',
-      error,
-    );
+    throw new InternalServerErrorException('An unexpected error occurred', {
+      cause: error,
+    });
   }
 }

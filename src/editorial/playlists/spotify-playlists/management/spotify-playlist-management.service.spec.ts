@@ -7,19 +7,89 @@ import {
 import { SpotifyPlaylistManagementService } from './spotify-playlist-management.service';
 import { SpotifyPlaylistAuthorizationService } from '../spotify-authorization/spotify-playlist-authorization.service';
 import { UpdateSyncedPlaylistDto } from '../dto/update-synced-playlist.dto';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { DeepPartial, Repository } from 'typeorm';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+import {
+  RiffValleyPlaylistStatus,
+  RiffValleyPlaylistType,
+} from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+
+function playlistFixture(
+  overrides: Partial<RiffValleyPlaylist> = {},
+): RiffValleyPlaylist {
+  return Object.assign(new RiffValleyPlaylist(), {
+    id: 'local-id',
+    name: 'Playlist local',
+    status: RiffValleyPlaylistStatus.IN_PROGRESS,
+    link: 'https://open.spotify.com/playlist/spotify-id',
+    spotifyPlaylistId: 'spotify-id',
+    description: null,
+    isPublic: false,
+    imageUrl: null,
+    protectedTrackUris: [],
+    type: RiffValleyPlaylistType.FESTIVAL,
+    updateDate: new Date('2026-01-01T00:00:00.000Z'),
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    content: undefined,
+    user: undefined,
+    playlistArtists: [],
+    ...overrides,
+  });
+}
 
 describe('SpotifyPlaylistManagementService', () => {
   let service: SpotifyPlaylistManagementService;
-  let playlistRepository: any;
-  let spotifyAccountApi: any;
-  let authorizationService: any;
+  let module: TestingModule;
+  let playlistRepository: Pick<
+    Repository<RiffValleyPlaylist>,
+    'find' | 'findOne' | 'update'
+  > & {
+    create: jest.Mock<RiffValleyPlaylist, [DeepPartial<RiffValleyPlaylist>]>;
+    save: jest.Mock<
+      Promise<RiffValleyPlaylist>,
+      [DeepPartial<RiffValleyPlaylist>]
+    >;
+    find: jest.Mock<
+      Promise<RiffValleyPlaylist[]>,
+      [Parameters<Repository<RiffValleyPlaylist>['find']>[0]]
+    >;
+    findOne: jest.Mock<
+      Promise<RiffValleyPlaylist | null>,
+      [Parameters<Repository<RiffValleyPlaylist>['findOne']>[0]]
+    >;
+    update: jest.MockedFunction<Repository<RiffValleyPlaylist>['update']>;
+  };
+  let spotifyAccountApi: jest.Mocked<
+    Pick<
+      SpotifyAccountApiService,
+      | 'createPlaylist'
+      | 'getPlaylist'
+      | 'getProfile'
+      | 'getPlaylistTrackUris'
+      | 'updatePlaylist'
+      | 'uploadPlaylistImage'
+      | 'getPlaylistImages'
+      | 'removePlaylistFromLibrary'
+    >
+  >;
+  let authorizationService: jest.Mocked<
+    Pick<SpotifyPlaylistAuthorizationService, 'getValidAccessToken'>
+  >;
 
   beforeEach(() => {
     playlistRepository = {
-      create: jest.fn((value) => ({ id: 'local-id', ...value })),
+      create: jest.fn((value: DeepPartial<RiffValleyPlaylist>) =>
+        Object.assign(new RiffValleyPlaylist(), { id: 'local-id', ...value }),
+      ),
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
-      save: jest.fn(async (value) => value),
+      save: jest.fn(async (value: DeepPartial<RiffValleyPlaylist>) =>
+        Object.assign(new RiffValleyPlaylist(), value),
+      ),
       update: jest.fn(),
     };
     spotifyAccountApi = {
@@ -41,12 +111,28 @@ describe('SpotifyPlaylistManagementService', () => {
     authorizationService = {
       getValidAccessToken: jest.fn().mockResolvedValue('access-token'),
     };
-    service = new SpotifyPlaylistManagementService(
-      playlistRepository,
-      spotifyAccountApi,
-      authorizationService as SpotifyPlaylistAuthorizationService,
-    );
+    return Test.createTestingModule({
+      providers: [
+        SpotifyPlaylistManagementService,
+        {
+          provide: getRepositoryToken(RiffValleyPlaylist),
+          useValue: playlistRepository,
+        },
+        { provide: SpotifyAccountApiService, useValue: spotifyAccountApi },
+        {
+          provide: SpotifyPlaylistAuthorizationService,
+          useValue: authorizationService,
+        },
+      ],
+    })
+      .compile()
+      .then((testingModule) => {
+        module = testingModule;
+        service = module.get(SpotifyPlaylistManagementService);
+      });
   });
+
+  afterEach(async () => module?.close());
 
   it('crea playlists Festival en Spotify antes de persistir la fila local', async () => {
     const events: string[] = [];
@@ -62,17 +148,17 @@ describe('SpotifyPlaylistManagementService', () => {
     });
     playlistRepository.save.mockImplementation(async (playlist) => {
       events.push('postgres:save');
-      return playlist;
+      return Object.assign(new RiffValleyPlaylist(), playlist);
     });
     playlistRepository.findOne.mockImplementation(async ({ where }) => {
       events.push('postgres:read');
-      return where.id
-        ? {
-            id: 'local-id',
-            spotifyPlaylistId: 'spotify-id',
-            type: 'festival',
-          }
-        : { id: 'local-id', spotifyPlaylistId: where.spotifyPlaylistId };
+      const conditions = Array.isArray(where) ? where[0] : where;
+      return playlistFixture({
+        id: 'local-id',
+        spotifyPlaylistId: conditions?.spotifyPlaylistId
+          ? String(conditions.spotifyPlaylistId)
+          : 'spotify-id',
+      });
     });
 
     await service.createFestivalPlaylist({ name: 'Playlist', public: false });
@@ -101,11 +187,7 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('mantiene la playlist Spotify si el insert fue ambiguo y la fila aparece al consultar', async () => {
-    const persisted = {
-      id: 'local-id',
-      spotifyPlaylistId: 'spotify-id',
-      type: 'genero',
-    };
+    const persisted = playlistFixture({ type: RiffValleyPlaylistType.GENERO });
     playlistRepository.save.mockRejectedValue(
       new Error('commit response lost'),
     );
@@ -146,12 +228,13 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('rechaza enlazar playlists que no pertenecen a la cuenta conectada', async () => {
-    playlistRepository.findOne.mockResolvedValue({
-      id: 'local-id',
-      link: 'https://open.spotify.com/playlist/spotifyid',
-      type: 'festival',
-      spotifyPlaylistId: null,
-    });
+    playlistRepository.findOne.mockResolvedValue(
+      playlistFixture({
+        link: 'https://open.spotify.com/playlist/spotifyid',
+        type: RiffValleyPlaylistType.FESTIVAL,
+        spotifyPlaylistId: null,
+      }),
+    );
     spotifyAccountApi.getPlaylist.mockResolvedValue({
       id: 'spotify-id',
       name: 'Playlist ajena',
@@ -162,7 +245,10 @@ describe('SpotifyPlaylistManagementService', () => {
         spotify: 'https://open.spotify.com/playlist/spotify-id',
       },
     });
-    spotifyAccountApi.getProfile.mockResolvedValue({ id: 'riff-valley' });
+    spotifyAccountApi.getProfile.mockResolvedValue({
+      id: 'riff-valley',
+      display_name: 'Riff Valley',
+    });
 
     await expect(
       service.linkExistingFestivalPlaylist('local-id'),
@@ -171,12 +257,11 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('enlaza un registro legacy y conserva las pistas remotas como protegidas', async () => {
-    const legacyPlaylist = {
-      id: 'local-id',
-      type: 'festival',
+    const legacyPlaylist = playlistFixture({
+      type: RiffValleyPlaylistType.FESTIVAL,
       link: 'https://open.spotify.com/playlist/legacyid',
       spotifyPlaylistId: null,
-    };
+    });
     playlistRepository.findOne
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(legacyPlaylist)
@@ -193,9 +278,14 @@ describe('SpotifyPlaylistManagementService', () => {
       public: true,
       owner: { id: 'riff-valley', display_name: 'Riff Valley' },
       external_urls: { spotify: 'https://open.spotify.com/playlist/legacyid' },
-      images: [{ url: 'https://image.test/cover.jpg' }],
+      images: [
+        { url: 'https://image.test/cover.jpg', height: 300, width: 300 },
+      ],
     });
-    spotifyAccountApi.getProfile.mockResolvedValue({ id: 'riff-valley' });
+    spotifyAccountApi.getProfile.mockResolvedValue({
+      id: 'riff-valley',
+      display_name: 'Riff Valley',
+    });
     spotifyAccountApi.getPlaylistTrackUris.mockResolvedValue([
       'spotify:track:protected',
     ]);
@@ -215,11 +305,10 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('crea un vínculo local para una playlist existente sin tratarla como recurso nuevo', async () => {
-    const linkedPlaylist = {
-      id: 'local-id',
+    const linkedPlaylist = playlistFixture({
       spotifyPlaylistId: 'spotifyid',
-      type: 'festival',
-    };
+      type: RiffValleyPlaylistType.FESTIVAL,
+    });
     playlistRepository.findOne
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(linkedPlaylist);
@@ -232,7 +321,10 @@ describe('SpotifyPlaylistManagementService', () => {
       external_urls: { spotify: 'https://open.spotify.com/playlist/spotifyid' },
       images: [],
     });
-    spotifyAccountApi.getProfile.mockResolvedValue({ id: 'riff-valley' });
+    spotifyAccountApi.getProfile.mockResolvedValue({
+      id: 'riff-valley',
+      display_name: 'Riff Valley',
+    });
 
     await expect(
       service.createLinkedFestivalPlaylist({
@@ -250,13 +342,7 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('conserva las relaciones incluidas al consultar una playlist enlazada', async () => {
-    const playlist = {
-      id: 'local-id',
-      spotifyPlaylistId: 'spotify-id',
-      type: 'genero',
-      user: { id: 'user-id' },
-      playlistArtists: [{ artist: { id: 'artist-id' } }],
-    };
+    const playlist = playlistFixture({ type: RiffValleyPlaylistType.GENERO });
     playlistRepository.findOne.mockResolvedValue(playlist);
 
     await expect(service.getGenrePlaylist('local-id')).resolves.toBe(playlist);
@@ -272,20 +358,19 @@ describe('SpotifyPlaylistManagementService', () => {
       service.createLinkedFestivalPlaylist({ spotifyUrl: 'invalid' }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    playlistRepository.findOne.mockResolvedValue({
-      id: 'local-id',
-      type: 'festival',
-      spotifyPlaylistId: 'spotifyid',
-      link: 'https://open.spotify.com/playlist/spotify-id',
-    });
+    playlistRepository.findOne.mockResolvedValue(
+      playlistFixture({
+        type: RiffValleyPlaylistType.FESTIVAL,
+        spotifyPlaylistId: 'spotifyid',
+      }),
+    );
     await expect(service.getGenrePlaylist('local-id')).rejects.toBeInstanceOf(
       BadRequestException,
     );
 
-    playlistRepository.findOne.mockResolvedValue({
-      id: 'existing',
-      spotifyPlaylistId: 'spotifyid',
-    });
+    playlistRepository.findOne.mockResolvedValue(
+      playlistFixture({ id: 'existing' }),
+    );
     await expect(
       service.createLinkedFestivalPlaylist({
         spotifyUrl: 'https://open.spotify.com/playlist/spotifyid',
@@ -294,11 +379,9 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('actualiza primero metadata remota y conserva los mismos campos locales', async () => {
-    playlistRepository.findOne.mockResolvedValue({
-      id: 'local-id',
-      spotifyPlaylistId: 'spotify-id',
-      type: 'festival',
-    });
+    playlistRepository.findOne.mockResolvedValue(
+      playlistFixture({ type: RiffValleyPlaylistType.FESTIVAL }),
+    );
 
     await service.updateFestivalPlaylist('local-id', {
       name: 'Actualizada',
@@ -325,11 +408,12 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('rechaza renombrar una playlist no vinculada sin pedir token ni mutar datos', async () => {
-    playlistRepository.findOne.mockResolvedValue({
-      id: 'local-id',
-      type: 'festival',
-      spotifyPlaylistId: null,
-    });
+    playlistRepository.findOne.mockResolvedValue(
+      playlistFixture({
+        type: RiffValleyPlaylistType.FESTIVAL,
+        spotifyPlaylistId: null,
+      }),
+    );
 
     await expect(
       service.updateFestivalPlaylist(
@@ -344,11 +428,9 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('no modifica el nombre local si la autorización de Spotify falla', async () => {
-    playlistRepository.findOne.mockResolvedValue({
-      id: 'local-id',
-      spotifyPlaylistId: 'spotify-id',
-      type: 'festival',
-    });
+    playlistRepository.findOne.mockResolvedValue(
+      playlistFixture({ type: RiffValleyPlaylistType.FESTIVAL }),
+    );
     const authorizationError = new UnauthorizedException(
       'Vuelve a autorizar Spotify',
     );
@@ -368,16 +450,11 @@ describe('SpotifyPlaylistManagementService', () => {
   });
 
   it('sube una portada JPEG, consulta la metadata remota y persiste su URL', async () => {
-    const playlist = {
-      id: 'local-id',
-      spotifyPlaylistId: 'spotify-id',
-      imageUrl: null,
-      type: 'festival',
-    };
+    const playlist = playlistFixture({ imageUrl: null });
     const image = Buffer.from([0xff, 0xd8, 0xff, 0x00]);
     playlistRepository.findOne.mockResolvedValue(playlist);
     spotifyAccountApi.getPlaylistImages.mockResolvedValue([
-      { url: 'https://image.test/cover.jpg' },
+      { url: 'https://image.test/cover.jpg', height: 300, width: 300 },
     ]);
 
     await expect(

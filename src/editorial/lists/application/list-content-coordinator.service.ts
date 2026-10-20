@@ -19,6 +19,10 @@ import {
   isValidDateValue,
 } from '../domain/list-date-rules';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 @Injectable()
 export class ListContentCoordinator {
   private readonly logger = new Logger('ListsService');
@@ -149,17 +153,17 @@ export class ListContentCoordinator {
           if (updateListDto.closeDate !== undefined) {
             contentChanged =
               this.assignDateIfChanged(
-                content,
-                'closeDate',
+                content.closeDate,
                 transactionalList.closeDate,
+                (date) => (content.closeDate = date),
               ) || contentChanged;
           }
           if (updateListDto.releaseDate !== undefined) {
             contentChanged =
               this.assignDateIfChanged(
-                content,
-                'publicationDate',
+                content.publicationDate,
                 transactionalList.releaseDate,
+                (date) => (content.publicationDate = date),
               ) || contentChanged;
           }
           if (
@@ -168,9 +172,9 @@ export class ListContentCoordinator {
           ) {
             contentChanged =
               this.assignDateIfChanged(
-                content,
-                'listDate',
+                content.listDate,
                 transactionalList.listDate,
+                (date) => (content.listDate = date),
               ) || contentChanged;
           }
 
@@ -293,19 +297,18 @@ export class ListContentCoordinator {
     }
   }
 
-  private assignDateIfChanged<T extends object>(
-    target: T,
-    field: keyof T,
+  private assignDateIfChanged(
+    current: Date | null | undefined,
     source: Date | null | undefined,
+    assign: (date: Date | null) => void,
   ): boolean {
-    const current = target[field] as Date | null | undefined;
     const next = source == null ? null : new Date(source);
     const currentTime = current == null ? null : new Date(current).getTime();
     const nextTime = next == null ? null : next.getTime();
 
     if (currentTime === nextTime) return false;
 
-    target[field] = next as T[keyof T];
+    assign(next);
     return true;
   }
 
@@ -326,12 +329,15 @@ export class ListContentCoordinator {
     );
   }
 
-  private handleDbExceptions(error: any): never {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
+  private handleDbExceptions(error: unknown): never {
+    if (isRecord(error) && error.code === '23505') {
+      throw new BadRequestException(
+        typeof error.detail === 'string' ? error.detail : undefined,
+      );
+    }
     this.logger.error(error);
-    throw new InternalServerErrorException(
-      'An unexpected error occurred',
-      error,
-    );
+    throw new InternalServerErrorException('An unexpected error occurred', {
+      cause: error,
+    });
   }
 }
