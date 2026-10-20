@@ -1,146 +1,131 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Guía de trabajo para el backend Riff Valley, una API REST con NestJS y TypeORM.
 
-## Project Overview
+## Entorno y comandos
 
-Riff Valley App Backend - A NestJS REST API for the Riff Valley music review/catalog platform. Uses PostgreSQL with TypeORM for data persistence, JWT authentication with Passport, and i18n for internationalization.
+El repositorio admite Node `20.18.1+` y `22.x` en `package.json`; `.nvmrc` mantiene Node 20 como referencia local. Usa Yarn `1.22.22`, fijado por `packageManager`, para las tareas del proyecto.
 
-## Common Commands
+El mínimo `20.18.1` viene de los engines de Cheerio y Undici. `sanitize-html` se fija en `2.17.5` porque `2.17.6` requiere Node `>=22.12.0`; la aplicación configura allowlists que no permiten `svg`, `math`, `textarea` ni `xmp`, etiquetas necesarias para los casos vulnerables corregidos en `2.17.6`. Antes de subir esa dependencia, revisa la compatibilidad de engines y esas opciones.
 
 ```bash
-# Development
-npm run start:dev          # Start with hot-reload (also watches i18n files)
-npm run build              # Build for production
-
-# Testing
-npm run test               # Run unit tests
-npm run test:watch         # Run tests in watch mode
-npm run test:e2e           # Run e2e tests (uses test/jest-e2e.json)
-
-# Linting
-npm run lint               # Run ESLint with auto-fix
-
-# Database Migrations
-npm run migration:generate src/migrations/MigrationName  # Generate migration from entity changes
-npm run migration:run      # Run pending migrations
-npm run migration:revert   # Revert last migration
+yarn start:dev
+yarn build
+yarn test
+yarn test:unit
+yarn test:watch
+yarn test:e2e
+yarn lint
+yarn migration:generate src/migrations/NombreMigracion
+yarn migration:run
+yarn migration:revert
+yarn test:quality-structure
+yarn quality:structure
+yarn test:quality-lint
+yarn quality:lint
+yarn test:quality-build
+yarn test:quality-tests
+yarn test:quality-typecheck
+yarn quality:typecheck
+yarn test:quality-types
+yarn quality:types
+yarn verify
 ```
 
-## Architecture
+`yarn lint` ejecuta ESLint con `--fix` y puede modificar archivos. Revisa su alcance antes de ejecutarlo. Para comprobar un archivo sin autocorrección, invoca ESLint con `--no-fix`. `yarn quality:typecheck` es el chequeo de tipos independiente: comprueba `tsconfig.json` con `noEmit` e `incremental: false`, equivalente al comando directo `yarn tsc --noEmit --incremental false`. `yarn test:quality-typecheck` prueba el control con proyectos TypeScript temporales limpios y fallidos. `yarn build` ejecuta `nest build` de forma independiente y sin baseline; también ejecuta el `postbuild` existente, que copia los recursos JSON de i18n de `src/platform/i18n/` a `dist/platform/`. `yarn test:quality-build` comprueba el BuildAction de Nest CLI con un fixture válido y otro con un error de compilación.
 
-### Module Structure
-Each feature follows a standard NestJS module pattern in `src/<feature>/`:
-- `<feature>.module.ts` - Module definition importing TypeORM entity and AuthModule
-- `<feature>.controller.ts` - REST endpoints
-- `<feature>.service.ts` - Business logic using injected TypeORM repositories
-- `entities/<feature>.entity.ts` - TypeORM entity definition
-- `dto/` - Request/response DTOs with class-validator decorators
+`yarn verify` es el control estándar completo y ejecuta, en orden, las pruebas y el validador estructural, las pruebas y el validador de tipado seguro, las pruebas y ESLint de solo lectura, las pruebas y el typecheck, las pruebas del build y `yarn build`, las pruebas del propio control Jest y todas las suites unitarias en modo serial. Cada paso se encadena con `&&`: cualquier fallo detiene la secuencia y devuelve un código no cero. Los comandos independientes siguen disponibles para trabajo focalizado. E2E permanece separado y no forma parte de `verify` porque puede requerir PostgreSQL u otros servicios reales.
 
-### Services by responsibility
+GitHub Actions ejecuta `yarn verify` en `push` y `pull_request`, con matriz Node 20/22. El workflow conserva estado de fallo y logs visibles. No configura protección de ramas ni checks obligatorios para merge; esa política se gestiona fuera de este repositorio.
 
-A service should represent a cohesive functional responsibility. When it combines distinct work such as catalog reads, writes, statistics, or external integrations, separate those responsibilities where the code and callers justify it. Do not create a class for every method or endpoint. Keep a facade when it preserves existing callers and makes an incremental migration simpler; delegate implementation without duplicating it.
+### Quality Gate de pruebas
 
-Service size is a signal for review, not a fixed extraction rule. At roughly 300–400 lines, inspect whether the service still has one cohesive responsibility. A smaller service can still mix unrelated work, and a somewhat larger service can remain cohesive; do not split based on line count alone.
+`yarn test:unit` ejecuta las suites unitarias de `src/` usando la configuración Jest de `package.json`; `yarn test:e2e` ejecuta únicamente los specs `*.e2e-spec.ts` mediante `test/jest-e2e.json`. Ambos comandos propagan el resultado de Jest: cualquier test fallido termina con código distinto de cero. No hay baseline de tests. `yarn test:quality-tests` comprueba esa conducta con un fixture Jest aprobado y otro que falla una expectativa. Las reglas y pruebas unitarias son obligatorias para código nuevo y `yarn test:unit` forma parte de `yarn verify`. E2E queda fuera del control estándar; ejecútalo solo cuando el entorno esté aislado y autorizado. No conectes tests a PostgreSQL ni servicios reales por defecto.
 
-### Organization for complex modules
+### Quality Gate de ESLint
 
-Apply this convention when a module has enough responsibilities and auxiliary services to justify it. Keep the module root limited to its main files, and organize each extracted responsibility with its own service and spec at that responsibility's root. Add `helpers/`, `loaders/`, or `__tests__/` subfolders when the amount of code or tests makes them useful:
+`yarn quality:lint` ejecuta ESLint sobre `src/` y `test/` mediante su API con `fix: false` y `cache: false`, y presenta diagnósticos agrupados por regla y ruta. No uses `yarn lint` para comprobar el gate: ese script aplica `--fix` y puede modificar archivos. Las pruebas del control son `yarn test:quality-lint`; ambos se ejecutan en `yarn verify` y son obligatorios para código nuevo.
 
-```text
-src/<module>/
-  <module>.controller.ts
-  <module>.service.ts
-  <module>.module.ts
+El baseline temporal `scripts/eslint-quality-gate.baseline.json` identifica cada diagnóstico mediante regla, ruta relativa, línea, columna y huella del diagnóstico normalizado. Se capturó con Node 20 y permite solo los 2.226 hallazgos preexistentes documentados en BC-QG2; no agregues infracciones nuevas. Cuando un diagnóstico se resuelva, elimina su entrada correspondiente. El control falla ante hallazgos nuevos, entradas obsoletas o duplicadas. `yarn verify` y CI ejecutan este gate sin autocorrección ni regeneración de baseline.
 
-  __tests__/
-    <module>.controller.spec.ts
-    <module>.service.spec.ts
+### Quality Gate de typecheck
 
-  <responsibility>/
-    <responsibility>.service.ts
-    <responsibility>.service.spec.ts
-    helpers/
-    loaders/
-    __tests__/  # when test volume justifies grouping, especially cross-piece integration
+`yarn quality:typecheck` comprueba el proyecto configurado en `tsconfig.json`, sin emitir archivos y sin depender de Nest build ni Jest. El estado inicial comprobado no tiene diagnósticos, así que no hay baseline histórico. Si una captura futura reproduce deuda preexistente, cualquier baseline temporal debe enumerar diagnósticos exactos por código TypeScript, ruta relativa, línea, columna y huella; el gate rechaza diagnósticos nuevos, entradas obsoletas y duplicadas. Las pruebas son `yarn test:quality-typecheck`. `yarn verify` y CI ejecutan ambos pasos por separado del build y de Jest.
 
-  dto/
-  entities/
-```
+## Estructura NestJS obligatoria
 
-- Keep the main controller, facade service, and module at the module root. Keep shared DTOs in `dto/` and shared entities in `entities/`.
-- Keep the main service and its spec together at the module root; keep an extracted service and its spec together at the root of its responsibility. Put tests for the main controller/facade/module in the module-root `__tests__/` when there is enough test support to justify that folder.
-- Put responsibility-exclusive helpers and loaders with that responsibility. Pure mapping, grouping, normalization, calculation, and transformation functions may live in `helpers/`; do not extract trivial expressions into helpers. Split growing helpers by coherent responsibility instead of accumulating unrelated functions in a monolithic `*.helpers.ts` file. Give non-trivial helpers direct tests or clear nearby coverage.
-- When one responsibility accumulates several independent queries, they may be organized as responsibility-specific `loaders/`. A loader is not a generic repository; do not add generic query/repository layers without a concrete shared use.
-- Do not create `shared/` in advance or use it as a catch-all. Move code there only after real reuse by at least two responsibilities.
-- Use subfolders when real code or test volume benefits from them. Avoid both very large flat folders and artificial nesting, per-endpoint folders, empty folders, or auxiliary services added only to satisfy a layout.
+Esta norma se aplica a todos los módulos NestJS, incluidos los anidados, y a cualquier código nuevo o modificado:
 
-### Characterization and incremental extraction
+- En la raíz de cada módulo solo se permiten archivos propios `*.controller.ts`, `*.module.ts` y `*.service.ts`.
+- Todos los specs (`*.spec.ts` y `*.e2e-spec.ts`) van dentro de una carpeta `__tests__/`; no hay excepciones por tipo de test ni por ubicación del código probado.
+- DTOs, entidades, interfaces, constantes, helpers y demás auxiliares van en subcarpetas coherentes con su responsabilidad, como `dto/`, `entities/` o carpetas específicas de una responsabilidad.
+- No crear capas artificiales, carpetas vacías ni carpetas por endpoint. Esta regla organiza módulos NestJS; no introduce DDD.
 
-Before moving or optimizing existing logic, add or identify tests that fix the behavior being changed. Characterize the relevant inputs, queries, payloads, errors, ordering, null versus zero/absence, relations, and side effects; cover the dimensions that apply to the operation. Build or typecheck alone does not establish behavioral equivalence.
+### Quality Gate estructural
 
-Extract incrementally: first stabilize and characterize a functional block, then move it into a cohesive service, and afterwards clean up helpers, imports, and structure. Keep these steps separate when doing so makes regressions easier to attribute. Move implementation instead of copying it, update module providers and dependency injection, and preserve existing contracts unless a contract change is explicitly decided.
+El validador `scripts/structural-quality-gate.js` descubre módulos NestJS reales —también anidados— en `src/`, `apps/`, `libs/` y `test/`, y comprueba los archivos de sus raíces y la ubicación de los specs. Sus pruebas están en `scripts/structural-quality-gate.test.js`.
 
-Move the implementation's specific tests with it to the service's adjacent spec. Keep facade specs focused on delegation and facade behavior; do not duplicate full characterizations after moving code. Place unit tests beside the piece they protect. PostgreSQL or other cross-cutting integration tests may live in `__tests__/` when they span multiple pieces. After extraction, review imports, types, exports, injected dependencies, providers, and stale references; keep cleanup separate from functional changes unless a demonstrated need requires combining them.
+Las infracciones preexistentes se permiten solo mediante rutas exactas y regla en `scripts/structural-quality-gate.baseline.json`. El baseline es temporal: no añadas entradas para código nuevo; al corregir una infracción, elimina su entrada correspondiente. El gate falla ante infracciones nuevas, entradas obsoletas o duplicadas. `yarn verify` ejecuta sus pruebas y validador; CI lo comprueba en `.github/workflows/backend-quality.yml`.
 
-### Queries and performance
+### Quality Gate de tipado seguro
 
-Optimize and measure SQL before introducing caching. Do not add indexes by intuition: tie each candidate to a real query and verify the plan with representative parameters and data using `EXPLAIN ANALYZE` before and after. Account for write and storage costs as well as read plans. A performance task may conclude with no production change when the evidence does not justify one. Avoid query rewrites or micro-optimizations that trade away clarity without a demonstrated benefit.
+Todo código TypeScript dentro de `src/`, `apps/`, `libs/` y `test/` debe evitar tipos explícitos `any`, cadenas de aserciones `expresión as unknown as Tipo` y directivas `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck` o `eslint-disable` (incluidas sus variantes por línea). El validador AST/scanner es `scripts/type-safety-quality-gate.js`; `yarn quality:types` lo ejecuta y `yarn test:quality-types` corre sus pruebas. Las pruebas Jest `expect.any(...)` no son infracciones.
 
-### Authentication & Authorization
-- JWT-based auth via `@nestjs/passport` with 24h token expiry
-- Use `@Auth()` decorator from `src/identity/auth/decorators/auth.decorator.ts` to protect routes
-- Valid roles: `admin`, `superUser`, `user`, `riffValley` (from `src/identity/auth/interfaces/valid-roles.ts`)
-- Get current user with `@GetUser()` decorator
+El baseline temporal `scripts/type-safety-quality-gate.baseline.json` permite únicamente hallazgos existentes con identificador exacto de regla, ruta, línea, columna y huella. No añadas hallazgos nuevos; elimina cada entrada en el mismo cambio que corrija su infracción. El gate falla por hallazgos nuevos, entradas obsoletas o duplicadas. No añadas excepciones para código nuevo. `yarn verify` y CI ejecutan las pruebas y el validador. Esta regla es obligatoria para código TypeScript nuevo o modificado.
 
-### Key Patterns
-- Global `ValidationPipe` with `whitelist: true` and `forbidNonWhitelisted: true` strips unknown properties
-- API prefix: `/api` (set in `main.ts`)
-- i18n: Use `x-custom-lang` header for language selection (en/es)
-- TypeORM synchronize is OFF; always use migrations for schema changes
+El inventario documentado en `roadmap/backend-cleanup.md` parte de 40 módulos y 201 infracciones del baseline: 46 en Editorial y 155 en el resto del backend. La migración debe reducir el baseline progresivamente; cuando no queden infracciones, se retirará el baseline y el validador quedará como regla estricta.
 
-### Environment Variables
-Required in `.env` (see `.env.template`):
-- `STAGE` - `dev` or `prod` (controls SSL and logging)
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
-- `JWT_SECRET`
-- `PORT` (defaults to 3000)
+## Responsabilidades y organización
 
-### Core Domain Entities
-- `Disc` - Music albums with artist relations
-- `Artist` - Musicians/bands with country/genre relations
-- `User` - Users with roles, can have rates, favorites, comments
-- `List` - Curated music lists linked to content/reunions
-- `Content` - Platform content (articles, videos, meetings)
-- `Version` - Content versions with items for workflow tracking
+Cada servicio debe tener una responsabilidad funcional coherente. Separa lecturas, escrituras, estadísticas o integraciones cuando el código y sus consumidores justifiquen responsabilidades distintas; no crees una clase por método o endpoint. Conserva una fachada cuando mantenga callers existentes o facilite una migración incremental, delegando la implementación sin duplicarla.
 
-## Contract and integration findings
+El tamaño es una señal para revisar, no una regla de extracción. Alrededor de 300–400 líneas, comprueba si el servicio mantiene una responsabilidad coherente; servicios menores también pueden mezclar responsabilidades y servicios mayores pueden seguir siendo cohesivos.
 
-During any refactor, report a contract or integration finding before changing the affected behavior if you find an unusual or inconsistent HTTP contract; an oversized payload or legacy field; eager relations consumed implicitly by the frontend; relations included accidentally in responses; frontend calls that appear to compensate for a deficient contract; backend-calculated data discarded by the frontend; complex frontend transformations caused by the API shape; similar endpoints with incompatible contracts; confusing filter semantics; historical behavior forcing a clearly suboptimal implementation; a frontend/backend dependency preventing a reasonable optimization; or a possible improvement requiring changes in both repositories.
+Mantén los servicios principales junto a los archivos propios permitidos en la raíz del módulo. Un servicio extraído puede vivir en la raíz de su subcarpeta de responsabilidad. Pon los specs en el `__tests__/` más cercano. Usa `helpers/` para transformaciones puras no triviales y relacionadas; prueba directamente los helpers relevantes o deja clara su cobertura. Usa `loaders/` cuando una responsabilidad acumule consultas independientes que se beneficien de esa organización; no crees repositorios genéricos ni capas de consulta sin un uso concreto. No crees `shared/` de antemano ni como cajón de sastre; mueve código allí cuando exista reutilización real por al menos dos responsabilidades.
 
-Do not silently change the contract or expand the current task. Describe the current behavior, why it appears problematic or inefficient, and the impact as **backend-only**, **frontend-only**, or **backend + frontend**. Explain the reasonable options and recommend one, including whether to preserve compatibility, create an independent contract task, or coordinate a backend/frontend refactor. Do not create a /v2, alternate endpoints, contract migrations, frontend adaptations, or cross-repository tasks automatically; these require an explicit decision. Detecting an oddity does not itself require creating a task: assess its relevance first, document minor findings when useful, and create future work only for a concrete improvement worth its cost.
+Antes de mover u optimizar lógica, añade o identifica pruebas que caractericen el comportamiento afectado: entradas, consultas, payloads, errores, orden, diferencias entre `null`, cero y ausencia, relaciones y efectos secundarios cuando apliquen. Extrae de forma incremental: caracteriza, mueve la implementación en vez de copiarla, actualiza providers e inyección y luego limpia imports y referencias. Mantén las pruebas de cada pieza en su `__tests__/`; las pruebas de fachada deben centrarse en delegación y comportamiento propio, sin duplicar caracterizaciones completas.
 
-Preserving the current contract is the default for an internal refactor, not a reason to build an artificial or clearly inefficient workaround. If the contract is the source of unnecessary work or complexity, report that instead of silently changing it or disguising it as an internal optimization. A coordinated backend/frontend refactor is valid when there is a concrete, justified improvement; do not choose a dual refactor for convenience. Continue the independent parts of the current task when they can be completed without deciding the finding. If it blocks a safe implementation, state that explicitly and do not perform the dependent change until a decision is made.
+## Tipado y pruebas
 
-For eager-loading findings, identify the current cost, consumers, and a possible smaller alternative such as an ID, count, or another projection. State whether the alternative requires frontend work. Do not redesign the response automatically; keep compatibility until there is an explicit decision. Treat eager relations as part of the observable response until proven otherwise. Before removing one, identify its consumers and classify any unresolved consumer as observable but unconfirmed; characterize the current payload, add explicit relation loading where consumers need it, verify response equivalence, and only then remove eager loading. If a consumer remains observable but unconfirmed, preserve the eager relation.
+- Evita `any`, `as any`, dobles casts y otros casts que eludan la comprobación estática. Prefiere tipos concretos, `Pick` para dependencias parciales, mocks de Jest tipados y narrowing explícito de `unknown`.
+- No uses `@ts-ignore`, supresiones de ESLint ni desactivaciones de reglas para ocultar errores. Si una limitación real exige una excepción, documenta la causa y mantén el alcance mínimo, sin debilitar contratos ajenos.
+- Mantén las expectativas y el comportamiento existentes durante refactors. El typecheck o el build por sí solos no demuestran equivalencia funcional.
+- No conectes pruebas con bases de datos o servicios reales salvo que la tarea lo requiera explícitamente y el entorno esté autorizado. Usa dobles locales para pruebas unitarias y contratos HTTP que no necesiten integración externa.
 
-Use this format when reporting a finding:
+## HTTP, autenticación y configuración verificada
+
+- `src/main.ts` configura el prefijo global `/api` y un `ValidationPipe` global con `whitelist`, `forbidNonWhitelisted` y `transform`.
+- Protege rutas con `@Auth()` de `src/identity/auth/decorators/auth.decorator.ts`; `@GetUser()` está en `src/identity/auth/decorators/get-user.decorator.ts`.
+- `ValidRoles` en `src/identity/auth/interfaces/valid-roles.ts` define `user`, `collaborator`, `riffvalley` y `superadmin`. El módulo de autenticación configura expiración JWT de `8h`.
+- La resolución de idioma usa el header `x-custom-lang` y el idioma alternativo configurado es `en` (`src/platform/i18n/i18n.module.ts`). No presupongas otros idiomas sin comprobar la configuración actual.
+- `src/app.module.ts` configura TypeORM con `synchronize: false`; los cambios de esquema deben gestionarse mediante migraciones.
+- `.env.template` documenta variables de base de datos (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`), `STAGE`, `JWT_SECRET`, `PORT` y credenciales de integraciones. `main.ts` usa el puerto `3000` cuando `PORT` no está definido. Comprueba el template y el código de configuración antes de afirmar que una variable concreta es obligatoria en todos los entornos.
+- Entidades representativas verificadas: `Disc`, `Artist`, `User`, `List`, `Content` y `Version`, ubicadas en las carpetas `entities/` de sus módulos. La lista no pretende ser un catálogo exhaustivo del dominio.
+
+## Consultas y rendimiento
+
+Optimiza y mide SQL antes de introducir caché. No añadas índices por intuición: vincula cada candidato a una consulta real y compara el plan con parámetros y datos representativos mediante `EXPLAIN ANALYZE`, considerando también costes de escritura y almacenamiento. Evita reescrituras o microoptimizaciones sin beneficio demostrado; puede concluirse que no hace falta un cambio de producción.
+
+## Contratos, hallazgos y cambios preexistentes
+
+Preserva por defecto los contratos observables al refactorizar. Antes de cambiar un comportamiento HTTP afectado, informa de contratos inusuales o inconsistentes, payloads costosos o legados, relaciones cargadas, semánticas de filtros o dependencias frontend/backend que impidan una mejora razonable. No amplíes el alcance, cambies contratos, crees endpoints alternativos ni adaptes otro repositorio sin una decisión explícita. Un hallazgo menor puede documentarse sin crear trabajo futuro; recomienda una tarea separada cuando la mejora concreta justifique su coste.
+
+Trata las relaciones eager como parte observable de la respuesta hasta comprobar lo contrario. Identifica coste y consumidores, incluyendo los no confirmados; caracteriza el payload y carga explícitamente las relaciones necesarias antes de retirar una carga eager. Si queda un consumidor observable sin confirmar, conserva la relación. Si una alternativa usa IDs, conteos o proyecciones, aclara si requiere cambios frontend.
+
+Al informar un hallazgo de contrato, usa este formato:
 
 ### Contract finding
 
-**Current behavior:** Brief description.
+**Current behavior:** descripción breve.
 
-**Problem:** What is unusual, costly, or hard to maintain.
+**Problem:** qué resulta inusual, costoso o difícil de mantener.
 
-**Impact:** Backend-only / frontend-only / backend + frontend.
+**Impact:** backend-only / frontend-only / backend + frontend.
 
-**Options:**
+**Options:** preservar compatibilidad; refactorizar internamente; cambiar el contrato; coordinar un refactor backend/frontend.
 
-1. Preserve compatibility.
-2. Refactor internally.
-3. Change the contract.
-4. Coordinate a backend/frontend refactor.
+**Recommendation:** opción preferida y motivo.
 
-**Recommendation:** Preferred option and reason.
+**Blocks the current task:** Yes / No, con explicación breve.
 
-**Blocks the current task:** Yes / No, with a brief explanation.
+Conserva todos los cambios locales preexistentes. Reporta los errores o hallazgos anteriores al alcance y no los corrijas como parte de otra tarea. En particular, no corrijas, suprimas ni modifiques `.impeccable/config.json` por hallazgos preexistentes, desconocidos o fuera de alcance. Evita autocorrecciones globales que oculten o reescriban ese estado; limita las comprobaciones y cambios a lo autorizado.

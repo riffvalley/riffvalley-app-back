@@ -11,6 +11,21 @@ import {
   PublishableGutenbergDiscAssignment,
 } from '../list-gutenberg-builder';
 
+type WordpressServiceMock = jest.Mocked<
+  Pick<
+    WordpressService,
+    | 'updatePostContent'
+    | 'getPost'
+    | 'createPost'
+    | 'findPostBySlug'
+    | 'findAuthorBySlug'
+  >
+>;
+
+type SpotifyPublicApiServiceMock = jest.Mocked<
+  Pick<SpotifyPublicApiService, 'getAlbumTracks' | 'getArtistSingles'>
+>;
+
 describe('ListWordPressReconciliationService', () => {
   const discId = '11111111-1111-4111-8111-111111111111';
   const footer = '<!-- wp:separator {"className":"rv-generated-footer"} -->';
@@ -28,24 +43,61 @@ describe('ListWordPressReconciliationService', () => {
       )
       .join('\n\n');
 
-  const setup = (overrides: Record<string, jest.Mock> = {}) => {
-    const wordpressService = {
-      createPost: jest.fn(),
-      findPostBySlug: jest.fn(),
-      updatePostContent: jest.fn().mockResolvedValue({}),
-      getPost: jest.fn(),
-      findAuthorBySlug: jest.fn(),
-      ...overrides,
+  const setup = async () => {
+    const post = {
+      id: 1,
+      link: 'https://example.test/post',
+      title: { rendered: 'Post' },
+      status: 'draft',
     };
-    const spotifyApiService = {
-      getAlbumTracks: jest.fn().mockResolvedValue([]),
-      getArtistSingles: jest.fn().mockResolvedValue([]),
+    const wordpressService: WordpressServiceMock = {
+      createPost: jest.fn<
+        ReturnType<WordpressService['createPost']>,
+        Parameters<WordpressService['createPost']>
+      >(),
+      findPostBySlug: jest.fn<
+        ReturnType<WordpressService['findPostBySlug']>,
+        Parameters<WordpressService['findPostBySlug']>
+      >(),
+      updatePostContent: jest
+        .fn<
+          ReturnType<WordpressService['updatePostContent']>,
+          Parameters<WordpressService['updatePostContent']>
+        >()
+        .mockResolvedValue(post),
+      getPost: jest.fn<
+        ReturnType<WordpressService['getPost']>,
+        Parameters<WordpressService['getPost']>
+      >(),
+      findAuthorBySlug: jest.fn<
+        ReturnType<WordpressService['findAuthorBySlug']>,
+        Parameters<WordpressService['findAuthorBySlug']>
+      >(),
     };
+    const spotifyApiService: SpotifyPublicApiServiceMock = {
+      getAlbumTracks: jest
+        .fn<
+          ReturnType<SpotifyPublicApiService['getAlbumTracks']>,
+          Parameters<SpotifyPublicApiService['getAlbumTracks']>
+        >()
+        .mockResolvedValue([]),
+      getArtistSingles: jest
+        .fn<
+          ReturnType<SpotifyPublicApiService['getArtistSingles']>,
+          Parameters<SpotifyPublicApiService['getArtistSingles']>
+        >()
+        .mockResolvedValue([]),
+    };
+    const module = await Test.createTestingModule({
+      providers: [
+        ListWordPressReconciliationService,
+        { provide: WordpressService, useValue: wordpressService },
+        { provide: SpotifyPublicApiService, useValue: spotifyApiService },
+      ],
+    }).compile();
+
     return {
-      service: new ListWordPressReconciliationService(
-        wordpressService as unknown as WordpressService,
-        spotifyApiService as unknown as SpotifyPublicApiService,
-      ),
+      service: module.get(ListWordPressReconciliationService),
       wordpressService,
       spotifyApiService,
     };
@@ -67,10 +119,14 @@ describe('ListWordPressReconciliationService', () => {
   });
 
   it('creates once and returns the confirmed post without a lookup', async () => {
-    const post = { id: 42, link: 'https://example.test/post', status: 'draft' };
-    const { service, wordpressService } = setup({
-      createPost: jest.fn().mockResolvedValue(post),
-    });
+    const post = {
+      id: 42,
+      link: 'https://example.test/post',
+      title: { rendered: 'Title' },
+      status: 'draft',
+    };
+    const { service, wordpressService } = await setup();
+    wordpressService.createPost.mockResolvedValue(post);
 
     await expect(
       service.createPostAndReconcile(
@@ -88,12 +144,16 @@ describe('ListWordPressReconciliationService', () => {
   });
 
   it('adopts a post by slug after an uncertain create, and rejects confirmed failures', async () => {
-    const post = { id: 42, link: 'https://example.test/post', status: 'draft' };
+    const post = {
+      id: 42,
+      link: 'https://example.test/post',
+      title: { rendered: 'Title' },
+      status: 'draft',
+    };
     const uncertain = new WordpressWriteError('socket closed', 'unknown');
-    const { service, wordpressService } = setup({
-      createPost: jest.fn().mockRejectedValue(uncertain),
-      findPostBySlug: jest.fn().mockResolvedValue(post),
-    });
+    const { service, wordpressService } = await setup();
+    wordpressService.createPost.mockRejectedValue(uncertain);
+    wordpressService.findPostBySlug.mockResolvedValue(post);
 
     await expect(
       service.createPostAndReconcile(
@@ -125,13 +185,13 @@ describe('ListWordPressReconciliationService', () => {
 
   it('does not reissue an uncertain content write and confirms it by exact reread', async () => {
     const requested = `${block(discId)}\n\n${footer}`;
-    const { service, wordpressService } = setup({
-      updatePostContent: jest
-        .fn()
-        .mockRejectedValue(new WordpressWriteError('socket closed', 'unknown')),
-      getPost: jest
-        .fn()
-        .mockResolvedValue({ content: requested, status: 'draft' }),
+    const { service, wordpressService } = await setup();
+    wordpressService.updatePostContent.mockRejectedValue(
+      new WordpressWriteError('socket closed', 'unknown'),
+    );
+    wordpressService.getPost.mockResolvedValue({
+      content: requested,
+      status: 'draft',
     });
 
     await expect(
@@ -142,13 +202,13 @@ describe('ListWordPressReconciliationService', () => {
   });
 
   it('returns an uncertain error when reread cannot verify the write', async () => {
-    const { service, wordpressService } = setup({
-      updatePostContent: jest
-        .fn()
-        .mockRejectedValue(new WordpressWriteError('socket closed', 'unknown')),
-      getPost: jest
-        .fn()
-        .mockResolvedValue({ content: footer, status: 'draft' }),
+    const { service, wordpressService } = await setup();
+    wordpressService.updatePostContent.mockRejectedValue(
+      new WordpressWriteError('socket closed', 'unknown'),
+    );
+    wordpressService.getPost.mockResolvedValue({
+      content: footer,
+      status: 'draft',
     });
 
     await expect(
@@ -161,7 +221,7 @@ describe('ListWordPressReconciliationService', () => {
     const secondId = '22222222-2222-4222-8222-222222222222';
     const foreign = block('33333333-3333-4333-8333-333333333333');
     const initial = `intro\n\n${foreign}\n\n${footer}`;
-    const { service, wordpressService } = setup();
+    const { service, wordpressService } = await setup();
 
     const result = await service.syncDiscsIntoPost(
       42,
@@ -184,7 +244,7 @@ describe('ListWordPressReconciliationService', () => {
 
   it('is idempotent after success and updates an existing owned block in place', async () => {
     const initial = `intro\n\n${block(discId, 'old')}\n\n${footer}`;
-    const { service, wordpressService } = setup();
+    const { service, wordpressService } = await setup();
     const result = await service.syncDiscsIntoPost(
       42,
       initial,
@@ -215,7 +275,7 @@ describe('ListWordPressReconciliationService', () => {
   });
 
   it('rejects duplicated, incomplete, or missing markers for tracked blocks before writing', async () => {
-    const { service, wordpressService } = setup();
+    const { service, wordpressService } = await setup();
     const duplicate = `${block(discId)}\n\n${block(discId)}`;
     await expect(
       service.syncDiscsIntoPost(
@@ -254,14 +314,17 @@ describe('ListWordPressReconciliationService', () => {
   });
 
   it('resolves Spotify fallback and reviewer authors', async () => {
-    const author = { name: 'Reviewer', link: 'https://example.test/reviewer' };
-    const { service, wordpressService, spotifyApiService } = setup({
-      findAuthorBySlug: jest.fn().mockResolvedValue(author),
-    });
+    const author = {
+      id: 7,
+      name: 'Reviewer',
+      link: 'https://example.test/reviewer',
+    };
+    const { service, wordpressService, spotifyApiService } = await setup();
+    wordpressService.findAuthorBySlug.mockResolvedValue(author);
     spotifyApiService.getAlbumTracks.mockResolvedValue([
-      { id: 'one', name: 'One' },
-      { id: 'two', name: 'Two' },
-      { id: 'third-track', name: 'Three' },
+      { id: 'one', name: 'One', trackNumber: 1 },
+      { id: 'two', name: 'Two', trackNumber: 2 },
+      { id: 'third-track', name: 'Three', trackNumber: 3 },
     ]);
 
     await expect(service.resolveSpotifyTrackId(assignment())).resolves.toBe(

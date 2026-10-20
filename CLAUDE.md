@@ -6,25 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Riff Valley App Backend - A NestJS REST API for the Riff Valley music review/catalog platform. Uses PostgreSQL with TypeORM for data persistence, JWT authentication with Passport, and i18n for internationalization.
 
+Supports Node.js 20.18.1+ and 22.x. `.nvmrc` keeps Node 20 as the local reference. Use Yarn 1.22.22 as pinned in `packageManager`.
+
 ## Common Commands
 
 ```bash
 # Development
-npm run start:dev          # Start with hot-reload (also watches i18n files)
-npm run build              # Build for production
+yarn start:dev             # Start with hot-reload (also watches i18n files)
+yarn build                 # Build for production
 
 # Testing
-npm run test               # Run unit tests
-npm run test:watch         # Run tests in watch mode
-npm run test:e2e           # Run e2e tests (uses test/jest-e2e.json)
+yarn test                  # Run unit tests
+yarn test:watch            # Run tests in watch mode
+yarn test:e2e              # Run e2e tests (uses test/jest-e2e.json)
 
 # Linting
-npm run lint               # Run ESLint with auto-fix
+yarn lint                  # Run ESLint with auto-fix
 
 # Database Migrations
-npm run migration:generate src/migrations/MigrationName  # Generate migration from entity changes
-npm run migration:run      # Run pending migrations
-npm run migration:revert   # Revert last migration
+yarn migration:generate src/migrations/MigrationName  # Generate migration from entity changes
+yarn migration:run         # Run pending migrations
+yarn migration:revert      # Revert last migration
 ```
 
 ## Architecture

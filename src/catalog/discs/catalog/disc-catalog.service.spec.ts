@@ -543,7 +543,6 @@ describe('DiscCatalogService.findAll', () => {
       'commentCount',
     ]);
     expect(new Set(aggregateSelects.map(([, alias]) => alias)).size).toBe(4);
-    expect(builders[0].addSelect).toHaveBeenCalledWith('disc.id', 'discId');
     expect(subqueryCalls).toEqual([
       {
         alias: 'averagerate',

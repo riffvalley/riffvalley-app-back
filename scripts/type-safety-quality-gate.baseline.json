@@ -1,0 +1,3862 @@
+{
+  "version": 1,
+  "violations": [
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/__tests__/artists.controller.spec.ts",
+      "line": 271,
+      "column": 27,
+      "fingerprint": "5dc31af4f7e40683313ac197cba630773bf87b23bd46b704c2f8690808320802"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/__tests__/artists.controller.spec.ts",
+      "line": 38,
+      "column": 40,
+      "fingerprint": "db8161080c26ad27e392fe4ddd5e2ec66be59357d8a9ed97c807b84754058f5b"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/__tests__/artists.module.spec.ts",
+      "line": 64,
+      "column": 20,
+      "fingerprint": "8b7e4afc4f0f3aa75e05821505f7d610b2578b003ff47dd961c7362ae8a80dff"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/__tests__/artists.module.spec.ts",
+      "line": 72,
+      "column": 24,
+      "fingerprint": "4abcda2cdd0d325a5393bac6e46803f197c0492f8c6faedb147c5374bb366b0d"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/__tests__/artists.module.spec.ts",
+      "line": 75,
+      "column": 24,
+      "fingerprint": "f2ab63bcfd1466ff96bd3d72d8ef6251134943afe9feb4ae4706aa413bbf2f83"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 28,
+      "column": 7,
+      "fingerprint": "87cde3050ba48d006c7cc54b582e22172de420124eea0fa9e3dd7b7ba444519b"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 29,
+      "column": 7,
+      "fingerprint": "eec0f9aa6e06eeeb5f3d10be94983745c416e3c7e74b7f5324c081c9dc565013"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 30,
+      "column": 7,
+      "fingerprint": "41dfc3b8aef8eb1186562ce8091a2c069c7787a5c0fef8fa644289ad3cd6ffde"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 31,
+      "column": 7,
+      "fingerprint": "a92d72217736f4fccbda5f1b57771e2970572ec0f3f25890858287e73194a7f2"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 32,
+      "column": 7,
+      "fingerprint": "1f8bb99df1c0e89c62d5d591ea599acdc8273441aa85454dc807f1fbe06e4982"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 33,
+      "column": 7,
+      "fingerprint": "875c062f56f54d9328ca145d46c3ccd67e2c1b95e240b3d8de40b469a29af268"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/countries/__tests__/countries.controller.spec.ts",
+      "line": 30,
+      "column": 7,
+      "fingerprint": "72795f366e4e184798222519bd934ce49056b335afeaed5c219d18aa56314cdf"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/countries/countries.service.spec.ts",
+      "line": 42,
+      "column": 7,
+      "fingerprint": "b544cc61c108b1911351aca30b1ccfa2c39f4dabf1c02490e83045d92624fd79"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 96,
+      "column": 26,
+      "fingerprint": "e4da746d9ef8ef98ec9587b6e1591e03f0d429ce9c4d02d83483b0d97746cba2"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 35,
+      "column": 38,
+      "fingerprint": "a8ac43ba5a8aad1633d41a4742ee883bd7c79d97409db05045c42ebbf076a5db"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 101,
+      "column": 7,
+      "fingerprint": "d13987eb084dfd8ebac395b1fe034d81c5edef74055b7b140cd448e1381a4ed2"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 102,
+      "column": 7,
+      "fingerprint": "54380729423f68cfd551449a5eebed792887749494b5b7ef2234b96c2199f635"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 186,
+      "column": 7,
+      "fingerprint": "955e2e8f38ef603fa4093e81b4be16271d0c9a830e7dfb19c585718a65fca3aa"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 187,
+      "column": 7,
+      "fingerprint": "dcb4d274ecc989408fb81da61a90b29269375a8cec1516a03d3306660701c59c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 190,
+      "column": 7,
+      "fingerprint": "d13987eb084dfd8ebac395b1fe034d81c5edef74055b7b140cd448e1381a4ed2"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 191,
+      "column": 7,
+      "fingerprint": "54380729423f68cfd551449a5eebed792887749494b5b7ef2234b96c2199f635"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 228,
+      "column": 7,
+      "fingerprint": "649953de9cf002b068a7f18ebcbd1d03d498fa08704ffc0d5d2559c58d418b5e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 262,
+      "column": 7,
+      "fingerprint": "4f0bbd2be88a89fca67e724399f6f5c17c0016c4abd2edecc26ec51f6277a3e1"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 97,
+      "column": 7,
+      "fingerprint": "955e2e8f38ef603fa4093e81b4be16271d0c9a830e7dfb19c585718a65fca3aa"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 1000,
+      "column": 7,
+      "fingerprint": "601707dddd849c285dda7d89bd143a78d09503762aaa85f2cc8724ef2269c99e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 38,
+      "column": 7,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 439,
+      "column": 7,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 807,
+      "column": 7,
+      "fingerprint": "84bf6b24ad52d4d14e77f28d8e24c3e41a146c522ed25a2fa37a90fa3166428f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 808,
+      "column": 7,
+      "fingerprint": "6d6cc8fe2596573cae65ab1a00318605e40f6bd85d49cc0a4865e532db26eb1c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 905,
+      "column": 7,
+      "fingerprint": "601707dddd849c285dda7d89bd143a78d09503762aaa85f2cc8724ef2269c99e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1024,
+      "column": 38,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1034,
+      "column": 8,
+      "fingerprint": "d6dc11c8dea9ee0fc4abcfe2898faf1e0ac8a5ebac45143d342131764dde7544"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1375,
+      "column": 7,
+      "fingerprint": "601707dddd849c285dda7d89bd143a78d09503762aaa85f2cc8724ef2269c99e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1380,
+      "column": 18,
+      "fingerprint": "cb30df955b16da3644feb804fc3165263e66d1b5b06cb3cfe9f3aa05285d1b3b"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1534,
+      "column": 18,
+      "fingerprint": "968f119950b1fa1f67b9be40bf1f7cf973092321d4944ba0a3ededd0ae43c6a3"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 401,
+      "column": 18,
+      "fingerprint": "74364aac481729836226635882d3419a9b750b1c3c352876c5515ef1347ec51a"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 43,
+      "column": 38,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 449,
+      "column": 23,
+      "fingerprint": "6e42fcd31b54e549c2976b66e21043ebfdf21a3223c2f3a62ed658e3ebb4b92f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 463,
+      "column": 23,
+      "fingerprint": "0b5cf61db36c525b9b89bb06236d01e04415d7cb321594529c4eabe017112e0d"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 58,
+      "column": 38,
+      "fingerprint": "78da542b99ad63ce6c54980d7b528845da8d193f9bf98d0debdc63b508435a07"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 608,
+      "column": 22,
+      "fingerprint": "7d0192387fba6706494ed3a6d6fa8c44c7df790ff5c3a86caa651cda538f5ae5"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 683,
+      "column": 38,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 730,
+      "column": 38,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 839,
+      "column": 38,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/helpers/map-catalog-disc.spec.ts",
+      "line": 104,
+      "column": 18,
+      "fingerprint": "4bd8d011fe127e885b323d37bb2a55bab81cd129e75d4673102c9a2dd9426dea"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/helpers/map-catalog-disc.spec.ts",
+      "line": 40,
+      "column": 18,
+      "fingerprint": "36902dbf066e790df47688de0dc759833c3d12a915f98c5066d8b39d1787bd60"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/catalog/helpers/map-catalog-disc.spec.ts",
+      "line": 7,
+      "column": 18,
+      "fingerprint": "04bfcaca6197ff66660c171a049f4a1f8419908e7d8a1458b9a73178c8221bcc"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/enrichment/disc-enrichment.service.spec.ts",
+      "line": 23,
+      "column": 41,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/enrichment/disc-enrichment.service.spec.ts",
+      "line": 99,
+      "column": 41,
+      "fingerprint": "601707dddd849c285dda7d89bd143a78d09503762aaa85f2cc8724ef2269c99e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 133,
+      "column": 7,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/home/__tests__/home-ranking.postgres.spec.ts",
+      "line": 186,
+      "column": 7,
+      "fingerprint": "56ef16466457667a911e6040e0ef561d35f5057a4fb533d60951c49d312bb39f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/home/loaders/home-global-stats.spec.ts",
+      "line": 10,
+      "column": 24,
+      "fingerprint": "9ce699fea236c36017a2490d8d8e683e7f409a74b61f5a6980b4cd73c6edd96c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/home/loaders/home-global-stats.spec.ts",
+      "line": 45,
+      "column": 24,
+      "fingerprint": "9ce699fea236c36017a2490d8d8e683e7f409a74b61f5a6980b4cd73c6edd96c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/home/loaders/home-global-stats.spec.ts",
+      "line": 55,
+      "column": 24,
+      "fingerprint": "9ce699fea236c36017a2490d8d8e683e7f409a74b61f5a6980b4cd73c6edd96c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/home/loaders/home-global-stats.spec.ts",
+      "line": 67,
+      "column": 24,
+      "fingerprint": "9ce699fea236c36017a2490d8d8e683e7f409a74b61f5a6980b4cd73c6edd96c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/maintenance/disc-link-maintenance.service.spec.ts",
+      "line": 31,
+      "column": 20,
+      "fingerprint": "00795a31803ca86381ecd80ef104b9d2902a4140b779b46e3625ec1b2a0aec44"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/maintenance/disc-link-maintenance.service.spec.ts",
+      "line": 50,
+      "column": 57,
+      "fingerprint": "a17dde177d6cb42be38e18083312a0602677ea7465d72e370df5571cd53bba6e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/spotify/disc-spotify.service.spec.ts",
+      "line": 16,
+      "column": 7,
+      "fingerprint": "601707dddd849c285dda7d89bd143a78d09503762aaa85f2cc8724ef2269c99e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/spotify/disc-spotify.service.spec.ts",
+      "line": 17,
+      "column": 7,
+      "fingerprint": "d6507da5fcb81beda60a11eae06f8f8b42368c55aa3f36cfbccd1e93c6d04ea9"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 1009,
+      "column": 7,
+      "fingerprint": "926baff765916f67ed0827aaa1ced992e66182001f69db9a3f1164369d00f0bb"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 46,
+      "column": 7,
+      "fingerprint": "601707dddd849c285dda7d89bd143a78d09503762aaa85f2cc8724ef2269c99e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 519,
+      "column": 9,
+      "fingerprint": "920e893881efd2774afec0cca2489045ac4f593b6a503f46241db3b658a1d392"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/genres/__tests__/genres.controller.spec.ts",
+      "line": 30,
+      "column": 39,
+      "fingerprint": "80ab15d24481e7cfcea99dc213347544823a7e62eea1fce26fbb5c8df83372d3"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/genres/genres.service.spec.ts",
+      "line": 32,
+      "column": 33,
+      "fingerprint": "b55ba3d6ca4d780cc12e5fa27d49b036b6d5c36e5eb4b7384c44c3b08a6c9b43"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/catalog-import.module.spec.ts",
+      "line": 101,
+      "column": 32,
+      "fingerprint": "67a57a6f5fb3461a400fdf5cb524c5e950e08eb9f0a76feef95c76fb7bfc7bd1"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/catalog-import.module.spec.ts",
+      "line": 39,
+      "column": 24,
+      "fingerprint": "cc6441bfc6f5abfce3075942eabcf9d9c3dcbcecfffc9027e4d642d046d67ce1"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/catalog-import.module.spec.ts",
+      "line": 89,
+      "column": 30,
+      "fingerprint": "07290ce21acc339b1c9e5c614f2c1620164caced4156029043e574a3088fc883"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/catalog-import.module.spec.ts",
+      "line": 94,
+      "column": 27,
+      "fingerprint": "691a7304ab3ff232c43122157e8fd2791bdad89caf3c827abb7c9c3bf635e83b"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/catalog-import.module.spec.ts",
+      "line": 97,
+      "column": 29,
+      "fingerprint": "d6d006f2faeec819cbb3fd26e42ab79567b3308b8a17d5bb9285677efcd22c03"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/excel/controller/excel.controller.spec.ts",
+      "line": 148,
+      "column": 27,
+      "fingerprint": "d855381ead81a816e8ad5a8c0f00a7ed8e885c576c3518d37b3ecfe28e04adf6"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/excel/controller/excel.controller.spec.ts",
+      "line": 170,
+      "column": 39,
+      "fingerprint": "4b9521c0c6ae9dbd40c8f06f307579ba6bcc78e426442160414fc1f31c094438"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/excel/controller/excel.controller.spec.ts",
+      "line": 197,
+      "column": 39,
+      "fingerprint": "4b9521c0c6ae9dbd40c8f06f307579ba6bcc78e426442160414fc1f31c094438"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/excel/controller/excel.controller.spec.ts",
+      "line": 53,
+      "column": 7,
+      "fingerprint": "7d300746b3ef4ee7933e93372a6c9202eb9c292517d20e5d1b08fcc961dc65e4"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/excel/controller/excel.controller.spec.ts",
+      "line": 54,
+      "column": 7,
+      "fingerprint": "e2caf14385b53843f89b497b0d260ec3e48b18bb8f96eb721b106b4e919bde3b"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/excel/import/excel-import.service.spec.ts",
+      "line": 159,
+      "column": 21,
+      "fingerprint": "5914e88a07662c4995fb853c4fb8839264a4e60d25628a5f803ef54336a840ca"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/manual/controller/catalog-import.controller.spec.ts",
+      "line": 19,
+      "column": 7,
+      "fingerprint": "8c745c79860e93c6741dc056b59b18d2da60037a9f805dc1322964e014eac1e0"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/manual/import/catalog-import.service.spec.ts",
+      "line": 102,
+      "column": 7,
+      "fingerprint": "5914e88a07662c4995fb853c4fb8839264a4e60d25628a5f803ef54336a840ca"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/manual/import/catalog-import.service.spec.ts",
+      "line": 103,
+      "column": 7,
+      "fingerprint": "6d6cc8fe2596573cae65ab1a00318605e40f6bd85d49cc0a4865e532db26eb1c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/manual/import/catalog-import.service.spec.ts",
+      "line": 104,
+      "column": 7,
+      "fingerprint": "84bf6b24ad52d4d14e77f28d8e24c3e41a146c522ed25a2fa37a90fa3166428f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/manual/import/catalog-import.service.spec.ts",
+      "line": 105,
+      "column": 7,
+      "fingerprint": "a9226025c7820eb99e58be3e5ec9360b726082d2403003956099cd00893aa122"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/manual/import/catalog-import.service.spec.ts",
+      "line": 451,
+      "column": 17,
+      "fingerprint": "c19b97109bad10c2c9756e6e48f796e587d2c147e548c3f53724edb6a2b26f03"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/manual/logging/manual-import-logger.spec.ts",
+      "line": 24,
+      "column": 57,
+      "fingerprint": "c94659d45550d3877ec4ee2eb6cb7d49f3cd96f187c6b6975a612ed3889f53c9"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/import/manual/logging/manual-import-logger.spec.ts",
+      "line": 83,
+      "column": 6,
+      "fingerprint": "74377a25680fad7cb5b4ab73f1b3b2e2ec5174bc422820bd4a43682d93f896b3"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/lastfm/lastfm.controller.spec.ts",
+      "line": 18,
+      "column": 43,
+      "fingerprint": "9aff6481c8ec8a6049f898a7563a9a179ef72bbd335601d271b2508e8d62fcd4"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/catalog/overview/__tests__/catalog.controller.spec.ts",
+      "line": 93,
+      "column": 24,
+      "fingerprint": "bc8821019810ac87cca8f2246c18c6fbba3d3eec1cf198add348cb116e669a2b"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 175,
+      "column": 18,
+      "fingerprint": "2f6ef4ffac8b14907aeb47170c10b9c9779aacdcb6a42ec50bd2f7457293df15"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 183,
+      "column": 41,
+      "fingerprint": "f08fd2df736b73a4dc82a8278e06fdd1065c47588f82f6290b1026f964a3111e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 198,
+      "column": 52,
+      "fingerprint": "1aa52ba491e43d5f558e664b1966f091ce9bc660fefe77ca112a62a3ba91374d"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 233,
+      "column": 35,
+      "fingerprint": "f08fd2df736b73a4dc82a8278e06fdd1065c47588f82f6290b1026f964a3111e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 47,
+      "column": 21,
+      "fingerprint": "ee0583dab3d04ee6aa1916d54c10a36790d193ff4de9ea2bf48d7190d17371fd"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 77,
+      "column": 35,
+      "fingerprint": "f08fd2df736b73a4dc82a8278e06fdd1065c47588f82f6290b1026f964a3111e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/rates/__tests__/rates.controller.spec.ts",
+      "line": 18,
+      "column": 31,
+      "fingerprint": "4791253d75527a41faeaf4a68ab0dee3c629db2e5c04946346c6323f410c2347"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/rates/__tests__/rates.controller.spec.ts",
+      "line": 91,
+      "column": 33,
+      "fingerprint": "e3c67da093da690fd9cf8b380b7fb2906c48695614f2b9f8b2a0d79f4baf6fd1"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/requests/__tests__/requests.module.spec.ts",
+      "line": 89,
+      "column": 21,
+      "fingerprint": "c80089e62ea0ff61cc0bc43bd19792cc10b98f1d7e5155d66c9c2770814c88d2"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts",
+      "line": 102,
+      "column": 5,
+      "fingerprint": "2ae8efeea7a68ddbcd70c313d4fefd7fe580240dbb2747031111a125e812a96a"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/instagram-integration/instagram-token-storage.service.spec.ts",
+      "line": 12,
+      "column": 5,
+      "fingerprint": "1b722b4ae408b7ca7d30a5503ba6c37399b6c8e3b92fd1f4ff82c9a6ab6508c4"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/instagram-integration/instagram.controller.spec.ts",
+      "line": 11,
+      "column": 48,
+      "fingerprint": "a3cfbd16e1ede2506e97c36d64554874cd8358ac45da51a6edb88bb6f11bbaa2"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/instagram-integration/instagram.service.spec.ts",
+      "line": 18,
+      "column": 5,
+      "fingerprint": "41f13bf53267c31ddd3d4a6f9e97f55937cf594fd6bc07c1d409dcc0cbff89ca"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/instagram-integration/instagram.service.spec.ts",
+      "line": 28,
+      "column": 7,
+      "fingerprint": "9139eec029047307b31c34649311f272f66b8c2a1c4d607b403f93619278223e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
+      "line": 18,
+      "column": 20,
+      "fingerprint": "00795a31803ca86381ecd80ef104b9d2902a4140b779b46e3625ec1b2a0aec44"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
+      "line": 29,
+      "column": 7,
+      "fingerprint": "5ee3dace12f08974c5e7151a24b3ca0ce718cb620de13730f8d693546ecbb710"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
+      "line": 91,
+      "column": 63,
+      "fingerprint": "b9394f9cf6c6c52ca8fb8f75022c268de09bc6235d7c542cc102cfb4457c4aa6"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-public-api.service.spec.ts",
+      "line": 25,
+      "column": 20,
+      "fingerprint": "00795a31803ca86381ecd80ef104b9d2902a4140b779b46e3625ec1b2a0aec44"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-public-api.service.spec.ts",
+      "line": 26,
+      "column": 27,
+      "fingerprint": "67159f4512ec36b831f87cd65d0f1d5947105c00e3c2646a3a480607d85e7a72"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/oauth/spotify-account-api.service.spec.ts",
+      "line": 11,
+      "column": 7,
+      "fingerprint": "a3b4c524db1cfd001bf252cf1548810727e5361b57259a273162f2162d2d174f"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/oauth/spotify-oauth-api.service.spec.ts",
+      "line": 15,
+      "column": 20,
+      "fingerprint": "00795a31803ca86381ecd80ef104b9d2902a4140b779b46e3625ec1b2a0aec44"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/oauth/spotify-oauth-api.service.spec.ts",
+      "line": 16,
+      "column": 20,
+      "fingerprint": "61308f5e967aca667c768e29ae0a383c5ca46c92e40bf45e6f21839ecd5448e4"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/api/tiktok-api.service.spec.ts",
+      "line": 28,
+      "column": 27,
+      "fingerprint": "3cbab4d7dd4f2ffdb57d6abe17aac8dc35dce086c1676ef2b003cbf2d344bf47"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 71,
+      "column": 7,
+      "fingerprint": "6780620136f93a8031002c2f80b00e10253fa307ded35aa0bc9ab928399d2932"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 72,
+      "column": 7,
+      "fingerprint": "260ae526f6906cfd4a3f461768ca30e56a172fda2266c93576230b7b7870d52c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/oauth/token-crypto.service.spec.ts",
+      "line": 7,
+      "column": 34,
+      "fingerprint": "aaa4cf872470e9d76c82d71d65a069c4f7f12ece451884c8f00668243f4b77ce"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 598,
+      "column": 60,
+      "fingerprint": "d1f04633623759c7352ef7f1b7a5070c0b0c49307558097796f45faa13738b84"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 74,
+      "column": 21,
+      "fingerprint": "3cbab4d7dd4f2ffdb57d6abe17aac8dc35dce086c1676ef2b003cbf2d344bf47"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/videos/tiktok-videos.service.spec.ts",
+      "line": 24,
+      "column": 7,
+      "fingerprint": "18f5067a2e875ec4d9abb4d6a0a56312243800cae1e84c821c26002fd515307c"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 104,
+      "column": 20,
+      "fingerprint": "cd0f9eb80e34232bbb5db2f5372bfa0901c7108580214f43e2b215d5ecf1f10e"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 12,
+      "column": 20,
+      "fingerprint": "793e7865eec186f97835257ebce5f58a3f04cf1a5b56c0a007e582c8d6409276"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 143,
+      "column": 20,
+      "fingerprint": "b2614bd028a75d45b1fb4c696699727c71dbd28abce2bfc51b0845f409ff323a"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 219,
+      "column": 20,
+      "fingerprint": "b2614bd028a75d45b1fb4c696699727c71dbd28abce2bfc51b0845f409ff323a"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 338,
+      "column": 20,
+      "fingerprint": "b2614bd028a75d45b1fb4c696699727c71dbd28abce2bfc51b0845f409ff323a"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 391,
+      "column": 20,
+      "fingerprint": "b2614bd028a75d45b1fb4c696699727c71dbd28abce2bfc51b0845f409ff323a"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 447,
+      "column": 20,
+      "fingerprint": "b2614bd028a75d45b1fb4c696699727c71dbd28abce2bfc51b0845f409ff323a"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 500,
+      "column": 20,
+      "fingerprint": "b2614bd028a75d45b1fb4c696699727c71dbd28abce2bfc51b0845f409ff323a"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/migrations/1791300000000-RenameRiffValleyPlaylistPersistence.spec.ts",
+      "line": 34,
+      "column": 25,
+      "fingerprint": "c71fa956c6292703cedbd5c7ad5b6e7b020c9f741d7881e1998ba8f0b2e7fda5"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/migrations/1791300000000-RenameRiffValleyPlaylistPersistence.spec.ts",
+      "line": 8,
+      "column": 25,
+      "fingerprint": "c71fa956c6292703cedbd5c7ad5b6e7b020c9f741d7881e1998ba8f0b2e7fda5"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/migrations/1791910000000-MigrateCanonicalUserRoles.spec.ts",
+      "line": 101,
+      "column": 13,
+      "fingerprint": "7fd45e3bbdbf2638b5b2d52b1de43d5900e4a30ba5c9f4b5969123258902afac"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/platform/uploads/uploads.service.spec.ts",
+      "line": 24,
+      "column": 7,
+      "fingerprint": "8ae6aa63f9fac40c2f533b3d7874a1f29bfca80e005cabd5e13f7cd84495b4bf"
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "test/excel.e2e-spec.ts",
+      "line": 39,
+      "column": 24,
+      "fingerprint": "cc6441bfc6f5abfce3075942eabcf9d9c3dcbcecfffc9027e4d642d046d67ce1"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 38,
+      "column": 39,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 39,
+      "column": 52,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/artists.service.spec.ts",
+      "line": 40,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/catalog/artist-catalog.service.spec.ts",
+      "line": 13,
+      "column": 60,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/catalog/artist-catalog.service.spec.ts",
+      "line": 20,
+      "column": 40,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/catalog/artist-catalog.service.spec.ts",
+      "line": 28,
+      "column": 61,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/details/artist-details.service.spec.ts",
+      "line": 27,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/details/artist-details.service.spec.ts",
+      "line": 28,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/details/artist-details.service.spec.ts",
+      "line": 29,
+      "column": 36,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/details/artist-details.service.spec.ts",
+      "line": 6,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/management/artist-management.service.spec.ts",
+      "line": 15,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/management/artist-management.service.spec.ts",
+      "line": 37,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/management/artist-management.service.spec.ts",
+      "line": 38,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/management/artist-management.service.spec.ts",
+      "line": 39,
+      "column": 36,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/management/artist-management.service.spec.ts",
+      "line": 40,
+      "column": 35,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/management/artist-management.service.spec.ts",
+      "line": 41,
+      "column": 31,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/orphans/artist-orphans.service.spec.ts",
+      "line": 22,
+      "column": 60,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/orphans/artist-orphans.service.spec.ts",
+      "line": 3,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/search/artist-search.service.spec.ts",
+      "line": 14,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/search/artist-search.service.spec.ts",
+      "line": 34,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/search/artist-search.service.spec.ts",
+      "line": 35,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/search/artist-search.service.ts",
+      "line": 91,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/search/artist-search.service.ts",
+      "line": 92,
+      "column": 49,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts",
+      "line": 16,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts",
+      "line": 28,
+      "column": 40,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts",
+      "line": 38,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts",
+      "line": 46,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts",
+      "line": 58,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts",
+      "line": 71,
+      "column": 60,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts",
+      "line": 79,
+      "column": 50,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts",
+      "line": 85,
+      "column": 52,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/artists/write/artist-write.service.ts",
+      "line": 65,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/countries/__tests__/countries.controller.spec.ts",
+      "line": 125,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/countries/__tests__/countries.controller.spec.ts",
+      "line": 155,
+      "column": 45,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/countries/__tests__/countries.controller.spec.ts",
+      "line": 185,
+      "column": 45,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/countries/countries.service.ts",
+      "line": 88,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 112,
+      "column": 63,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 170,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 186,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 200,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 210,
+      "column": 12,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 221,
+      "column": 12,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 242,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 268,
+      "column": 12,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/catalog-postgres.integration.spec.ts",
+      "line": 328,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs-validation.spec.ts",
+      "line": 19,
+      "column": 53,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs-validation.spec.ts",
+      "line": 23,
+      "column": 67,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 123,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 161,
+      "column": 33,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 162,
+      "column": 39,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 171,
+      "column": 39,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 43,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 57,
+      "column": 64,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 71,
+      "column": 67,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 83,
+      "column": 56,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.controller.spec.ts",
+      "line": 84,
+      "column": 39,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 100,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 103,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 124,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 125,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 126,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 127,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 128,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 129,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 130,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 132,
+      "column": 71,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 146,
+      "column": 44,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 150,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 151,
+      "column": 52,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 188,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 189,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 19,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 192,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 194,
+      "column": 40,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 195,
+      "column": 39,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 196,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 20,
+      "column": 11,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 21,
+      "column": 11,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 22,
+      "column": 11,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 225,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 226,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 227,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 229,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 23,
+      "column": 11,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 230,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 231,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 24,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 25,
+      "column": 11,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 260,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 261,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 263,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 264,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 265,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 266,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 268,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 98,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/__tests__/discs.service.spec.ts",
+      "line": 99,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 10,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 414,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 446,
+      "column": 44,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 45,
+      "column": 38,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 806,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts",
+      "line": 984,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1007,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1067,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1283,
+      "column": 53,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1307,
+      "column": 74,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 1309,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 21,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 418,
+      "column": 48,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 485,
+      "column": 48,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 525,
+      "column": 28,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 525,
+      "column": 36,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 528,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 53,
+      "column": 38,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 634,
+      "column": 48,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 664,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 670,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 687,
+      "column": 56,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 718,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 732,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 77,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 822,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 9,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 91,
+      "column": 71,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 944,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 975,
+      "column": 67,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 987,
+      "column": 50,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts",
+      "line": 995,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.ts",
+      "line": 118,
+      "column": 40,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.ts",
+      "line": 118,
+      "column": 88,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.ts",
+      "line": 216,
+      "column": 40,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.ts",
+      "line": 220,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/enrichment/disc-enrichment.service.spec.ts",
+      "line": 131,
+      "column": 57,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-global-stats.postgres.spec.ts",
+      "line": 7,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-global-stats.postgres.spec.ts",
+      "line": 74,
+      "column": 17,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-global-stats.postgres.spec.ts",
+      "line": 77,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-global-stats.postgres.spec.ts",
+      "line": 84,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 107,
+      "column": 61,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 110,
+      "column": 62,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 119,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 136,
+      "column": 54,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 167,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 17,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 207,
+      "column": 38,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 221,
+      "column": 42,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 235,
+      "column": 41,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 238,
+      "column": 41,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 246,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 247,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 250,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 257,
+      "column": 42,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 262,
+      "column": 42,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 265,
+      "column": 42,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 279,
+      "column": 42,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 331,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 337,
+      "column": 47,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 338,
+      "column": 48,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 351,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 352,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-personal-state.postgres.spec.ts",
+      "line": 354,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-ranking.postgres.spec.ts",
+      "line": 159,
+      "column": 61,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-ranking.postgres.spec.ts",
+      "line": 162,
+      "column": 62,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-ranking.postgres.spec.ts",
+      "line": 168,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-ranking.postgres.spec.ts",
+      "line": 172,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-ranking.postgres.spec.ts",
+      "line": 191,
+      "column": 50,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-ranking.postgres.spec.ts",
+      "line": 21,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-rating-distribution.postgres.spec.ts",
+      "line": 6,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-rating-distribution.postgres.spec.ts",
+      "line": 60,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-rating-distribution.postgres.spec.ts",
+      "line": 67,
+      "column": 60,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-rating-distribution.postgres.spec.ts",
+      "line": 72,
+      "column": 67,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-top-users-by-cover.postgres.spec.ts",
+      "line": 6,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-top-users-by-cover.postgres.spec.ts",
+      "line": 68,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-top-users-by-cover.postgres.spec.ts",
+      "line": 75,
+      "column": 60,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-top-users-by-cover.postgres.spec.ts",
+      "line": 80,
+      "column": 64,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-top-users-by-rates.postgres.spec.ts",
+      "line": 6,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-top-users-by-rates.postgres.spec.ts",
+      "line": 67,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-top-users-by-rates.postgres.spec.ts",
+      "line": 74,
+      "column": 60,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-top-users-by-rates.postgres.spec.ts",
+      "line": 79,
+      "column": 64,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-totals.postgres.spec.ts",
+      "line": 53,
+      "column": 17,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-totals.postgres.spec.ts",
+      "line": 56,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-totals.postgres.spec.ts",
+      "line": 6,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/__tests__/home-totals.postgres.spec.ts",
+      "line": 61,
+      "column": 59,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 166,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 167,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 253,
+      "column": 52,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 253,
+      "column": 76,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 296,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 297,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 35,
+      "column": 54,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 43,
+      "column": 14,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 44,
+      "column": 28,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts",
+      "line": 8,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/disc-home.service.ts",
+      "line": 47,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/helpers/map-home-ranked-disc.ts",
+      "line": 4,
+      "column": 56,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-rating-distribution.spec.ts",
+      "line": 11,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-rating-distribution.spec.ts",
+      "line": 31,
+      "column": 47,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-rating-distribution.spec.ts",
+      "line": 46,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-rating-distribution.ts",
+      "line": 29,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-cover.spec.ts",
+      "line": 10,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-cover.spec.ts",
+      "line": 28,
+      "column": 44,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-cover.spec.ts",
+      "line": 43,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-cover.ts",
+      "line": 26,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-rates.spec.ts",
+      "line": 10,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-rates.spec.ts",
+      "line": 28,
+      "column": 44,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-rates.spec.ts",
+      "line": 43,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-rates.ts",
+      "line": 26,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-totals.spec.ts",
+      "line": 31,
+      "column": 39,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-totals.spec.ts",
+      "line": 48,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/home/loaders/home-totals.spec.ts",
+      "line": 9,
+      "column": 50,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/maintenance/disc-link-maintenance.service.spec.ts",
+      "line": 10,
+      "column": 17,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/maintenance/disc-link-maintenance.service.spec.ts",
+      "line": 11,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/maintenance/disc-link-maintenance.service.spec.ts",
+      "line": 22,
+      "column": 33,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/maintenance/disc-link-maintenance.service.spec.ts",
+      "line": 59,
+      "column": 17,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/maintenance/disc-link-maintenance.service.spec.ts",
+      "line": 9,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 165,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 181,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 191,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 213,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 269,
+      "column": 50,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 309,
+      "column": 50,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 346,
+      "column": 50,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 371,
+      "column": 42,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 387,
+      "column": 73,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 399,
+      "column": 56,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 421,
+      "column": 59,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 425,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 440,
+      "column": 28,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 446,
+      "column": 62,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 450,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 466,
+      "column": 56,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 517,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts",
+      "line": 832,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/discs/write/disc-write.service.ts",
+      "line": 150,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/genres/genres.service.spec.ts",
+      "line": 108,
+      "column": 67,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/genres/genres.service.spec.ts",
+      "line": 71,
+      "column": 61,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/genres/genres.service.ts",
+      "line": 118,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/import/excel/template/excel-template.service.spec.ts",
+      "line": 110,
+      "column": 40,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/import/excel/template/excel-template.service.spec.ts",
+      "line": 48,
+      "column": 40,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/import/excel/template/excel-template.service.spec.ts",
+      "line": 59,
+      "column": 54,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/catalog/import/manual/controller/catalog-import.controller.spec.ts",
+      "line": 21,
+      "column": 60,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/communications/mail/mail.service.spec.ts",
+      "line": 24,
+      "column": 47,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/__tests__/comments.module.spec.ts",
+      "line": 49,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 108,
+      "column": 76,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 203,
+      "column": 70,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 208,
+      "column": 73,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 209,
+      "column": 102,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 209,
+      "column": 73,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 210,
+      "column": 74,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 222,
+      "column": 71,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 30,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 4,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 47,
+      "column": 88,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 5,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 55,
+      "column": 102,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 6,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 62,
+      "column": 78,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 66,
+      "column": 79,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 79,
+      "column": 69,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.ts",
+      "line": 292,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.ts",
+      "line": 80,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/__tests__/favorites.module.spec.ts",
+      "line": 48,
+      "column": 56,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 102,
+      "column": 64,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 197,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 21,
+      "column": 64,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 246,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 36,
+      "column": 78,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 47,
+      "column": 56,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.ts",
+      "line": 298,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts",
+      "line": 116,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 102,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 112,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 120,
+      "column": 28,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 129,
+      "column": 29,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 139,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 50,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 205,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 224,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/pendings.service.ts",
+      "line": 272,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.controller.spec.ts",
+      "line": 46,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.controller.spec.ts",
+      "line": 50,
+      "column": 45,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 40,
+      "column": 44,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 41,
+      "column": 49,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 42,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 52,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 55,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 58,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 62,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 108,
+      "column": 59,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 36,
+      "column": 59,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 7,
+      "column": 36,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 8,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 80,
+      "column": 59,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.ts",
+      "line": 110,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.ts",
+      "line": 131,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.ts",
+      "line": 69,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.ts",
+      "line": 72,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.controller.ts",
+      "line": 61,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.controller.ts",
+      "line": 62,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 10,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 103,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 105,
+      "column": 49,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 114,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 117,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 120,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 146,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 154,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 159,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 161,
+      "column": 46,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 18,
+      "column": 75,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 181,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 189,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 193,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 199,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 202,
+      "column": 62,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 212,
+      "column": 39,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 216,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 227,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 233,
+      "column": 56,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 238,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 28,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 29,
+      "column": 83,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 32,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 40,
+      "column": 65,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 42,
+      "column": 65,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 5,
+      "column": 36,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 52,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 6,
+      "column": 36,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 68,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 84,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 92,
+      "column": 78,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.ts",
+      "line": 336,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/stats/rates-stats.service.spec.ts",
+      "line": 26,
+      "column": 36,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/stats/rates-stats.service.spec.ts",
+      "line": 38,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/stats/rates-stats.service.spec.ts",
+      "line": 38,
+      "column": 66,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 134,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 135,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 136,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 137,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 138,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 208,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 209,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 210,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 211,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 212,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 256,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 257,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 258,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 259,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 260,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 39,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 40,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 41,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 42,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 43,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 86,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 87,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 88,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 89,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 90,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth-rate.consumer.spec.ts",
+      "line": 41,
+      "column": 43,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth-rate.consumer.spec.ts",
+      "line": 63,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 101,
+      "column": 74,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 110,
+      "column": 12,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 14,
+      "column": 49,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 68,
+      "column": 60,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 79,
+      "column": 30,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 10,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 138,
+      "column": 58,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 167,
+      "column": 73,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 184,
+      "column": 16,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 185,
+      "column": 31,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 206,
+      "column": 12,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 236,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 237,
+      "column": 30,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 246,
+      "column": 47,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 247,
+      "column": 30,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 266,
+      "column": 61,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 27,
+      "column": 13,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 281,
+      "column": 65,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 284,
+      "column": 55,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 68,
+      "column": 14,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 8,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 9,
+      "column": 28,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/domain-mutation-authorization.spec.ts",
+      "line": 149,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/domain-mutation-authorization.spec.ts",
+      "line": 28,
+      "column": 15,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/auth.service.ts",
+      "line": 490,
+      "column": 20,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/auth.service.ts",
+      "line": 539,
+      "column": 33,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/instagram-integration/instagram.service.ts",
+      "line": 129,
+      "column": 75,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/instagram-integration/instagram.service.ts",
+      "line": 73,
+      "column": 72,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/telegram-integration/telegram.service.spec.ts",
+      "line": 144,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 108,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 123,
+      "column": 19,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 137,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 85,
+      "column": 21,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok-integration.module.spec.ts",
+      "line": 23,
+      "column": 16,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok-integration.module.spec.ts",
+      "line": 27,
+      "column": 47,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 22,
+      "column": 29,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 23,
+      "column": 24,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 24,
+      "column": 20,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 28,
+      "column": 20,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 33,
+      "column": 20,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/migrations/1791920000000-MigrateUsersToSingleRole.spec.ts",
+      "line": 398,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/platform/seeds/seed.module.spec.ts",
+      "line": 29,
+      "column": 51,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.spec.ts",
+      "line": 13,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.spec.ts",
+      "line": 14,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.spec.ts",
+      "line": 15,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.spec.ts",
+      "line": 66,
+      "column": 26,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.ts",
+      "line": 195,
+      "column": 20,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.ts",
+      "line": 282,
+      "column": 37,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.ts",
+      "line": 55,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/suggestions/suggestions.service.ts",
+      "line": 54,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/suggestions/suggestions.service.ts",
+      "line": 72,
+      "column": 18,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.logic.spec.ts",
+      "line": 10,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.logic.spec.ts",
+      "line": 11,
+      "column": 22,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.logic.spec.ts",
+      "line": 85,
+      "column": 10,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 160,
+      "column": 23,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 162,
+      "column": 61,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 163,
+      "column": 64,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 174,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 201,
+      "column": 67,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 205,
+      "column": 39,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 248,
+      "column": 27,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 53,
+      "column": 25,
+      "fingerprint": "d6a7cd2a7371b1a15d543196979ff74fdb027023ebf187d5d329be11055c77fd"
+    }
+  ]
+}

@@ -1,0 +1,625 @@
+{
+  "version": 1,
+  "violations": [
+    {
+      "rule": "module-root-file",
+      "path": "src/catalog/artists/artists.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/catalog/countries/countries.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/catalog/genres/genres.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/catalog/import/catalog-import-transaction.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/catalog/import/catalog-import.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/catalog/lastfm/lastfm.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/catalog/lastfm/lastfm.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/catalog/lastfm/lastfm.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/communications/mail/mail.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/community/comments/comments.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/community/comments/comments.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/community/favorites/favorites.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/community/favorites/favorites.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/community/pendings/pendings.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/community/pendings/pendings.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/community/rates/rates.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/community/requests/requests.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/data-source.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/cloudflare-r2-integration/cloudflare-r2-integration.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/cloudflare-r2-integration/cloudflare-r2.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/instagram-integration/instagram-integration.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/instagram-integration/instagram-token-storage.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/instagram-integration/instagram.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/instagram-integration/instagram.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/lastfm-integration/lastfm-api.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/lastfm-integration/lastfm-api.types.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/lastfm-integration/lastfm-integration.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/smtp-integration/smtp-integration.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/smtp-integration/smtp-transport.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/spotify-integration/index.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/telegram-integration/telegram.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/telegram-integration/telegram.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/tiktok-integration/README.md"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/tiktok-integration/tiktok-integration.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/integrations/wordpress-integration/wordpress.types.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/main.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/platform/i18n/en.json"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/platform/i18n/es.json"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/platform/seeds/seed.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/platform/uploads/uploads.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/platform/uploads/uploads.module.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/platform/uploads/uploads.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/product/news/news.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/product/news/news.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/product/suggestions/suggestions.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/product/versions/versions.controller.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/product/versions/versions.logic.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/product/versions/versions.service.spec.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/standalone.ts"
+    },
+    {
+      "rule": "module-root-file",
+      "path": "src/winston.config.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/artists.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/catalog/artist-catalog.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/details/artist-details.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/dto/artist-management-query.dto.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/helpers/normalize-for-search.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/management/artist-management.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/orphans/artist-orphans.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/search/artist-search.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/artists/write/artist-write.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/countries/countries.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/calendar/disc-calendar.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/catalog/disc-catalog.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/catalog/helpers/catalog-raw-rows.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/catalog/helpers/map-catalog-disc.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/catalog/helpers/map-option-rows.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/catalog/helpers/restore-random-disc-order.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/dto/create-disc-with-artist.dto.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/dto/create-discs.dto.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/dto/update-discs.dto.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/enrichment/disc-enrichment.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/disc-home.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/helpers/home-date-range.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/helpers/home-disc-filters.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/helpers/home-personal-state.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/helpers/map-home-ranked-disc.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/loaders/home-global-stats.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/loaders/home-rating-distribution.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-cover.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/loaders/home-top-users-by-rates.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/home/loaders/home-totals.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/maintenance/disc-link-maintenance.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/shared/helpers/get-friday-week-ranges.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/spotify/disc-spotify.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/write/disc-write.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/discs/write/helpers/normalize-artist-name.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/genres/genres.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/catalog-import.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/excel/controller/excel.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/excel/import/excel-import.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/excel/parser/excel-workbook.parser.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/excel/template/excel-template.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/manual/controller/catalog-import.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/manual/dto/process-manual-data.dto.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/manual/import/catalog-import.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/manual/logging/manual-import-logger.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/manual/parser/parse-manual-album-line.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/import/manual/parser/parse-manual-date.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/lastfm/lastfm.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/lastfm/lastfm.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/catalog/lastfm/lastfm.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/communications/mail/mail.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/comments/comments.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/comments/comments.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/favorites/favorites.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/favorites/favorites.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/pendings/pendings.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/pendings/pendings.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/rates/history/rates-history.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/rates/rates.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/rates/stats/rates-stats.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/community/requests/requests.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/cloudflare-r2-integration/cloudflare-r2-integration.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/cloudflare-r2-integration/cloudflare-r2.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/instagram-integration/instagram-integration.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/instagram-integration/instagram-token-storage.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/instagram-integration/instagram.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/instagram-integration/instagram.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/lastfm-integration/lastfm-api.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/lastfm-integration/lastfm-integration.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/smtp-integration/smtp-integration.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/smtp-integration/smtp-transport.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/spotify-integration/api/spotify-public-api.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/spotify-integration/http/dto/list-spotify-artist-albums.query.dto.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/spotify-integration/http/spotify-artists.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/spotify-integration/oauth/spotify-account-api.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/spotify-integration/oauth/spotify-oauth-api.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/telegram-integration/telegram.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/telegram-integration/telegram.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/tiktok-integration/api/tiktok-api.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/tiktok-integration/http/dto/tiktok-videos-query.dto.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/tiktok-integration/oauth/token-crypto.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/tiktok-integration/tiktok-integration.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/tiktok-integration/videos/tiktok-videos.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/migrations/1791300000000-RenameRiffValleyPlaylistPersistence.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/migrations/1791910000000-MigrateCanonicalUserRoles.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/migrations/1791920000000-MigrateUsersToSingleRole.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/platform/seeds/seed.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/platform/uploads/uploads.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/platform/uploads/uploads.module.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/platform/uploads/uploads.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/product/news/news.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/product/news/news.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/product/suggestions/suggestions.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/product/versions/versions.controller.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/product/versions/versions.logic.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "src/product/versions/versions.service.spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "test/app.e2e-spec.ts"
+    },
+    {
+      "rule": "spec-outside-tests",
+      "path": "test/excel.e2e-spec.ts"
+    }
+  ]
+}

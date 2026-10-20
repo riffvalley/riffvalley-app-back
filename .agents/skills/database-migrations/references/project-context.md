@@ -12,7 +12,7 @@ Reconfirma estos datos en el repositorio cada vez que uses la skill. Se observar
 
 ## Paquete y comandos existentes
 
-El proyecto declara Yarn Classic 1.22.22 y Node 20.x. Usa Yarn, aunque instrucciones antiguas de `AGENTS.md` muestren comandos npm.
+El proyecto admite Node 20.18.1+ y 22.x; `.nvmrc` conserva Node 20 como referencia. Usa Yarn Classic 1.22.22, fijado en `packageManager`.
 
 - `yarn migration:create src/migrations/<Nombre>` crea una migración vacía.
 - `yarn migration:generate src/migrations/<Nombre>` genera diferencias de entidades contra la base indicada por `src/data-source.ts`; solo debe apuntar a una base aislada y verificada.

@@ -1,7 +1,13 @@
 # Riff Valley App API
 
+## Requisitos
+
+- Node.js `20.18.1` o posterior dentro de la línea 20, o Node.js 22.
+- Yarn `1.22.22` (fijado en `packageManager`; puede activarse con Corepack).
+- `.nvmrc` conserva Node 20 como versión de referencia local.
+
 1. Clonar proyecto
-2. `yarn install `
+2. `yarn install --frozen-lockfile`
 
 3. Levantar la base de datos
 
@@ -47,7 +53,7 @@ El método recomendado es el asistente interactivo, ejecutado desde este reposit
 bash scripts/db-migrate-heroku.sh
 ```
 
-Requiere Node 20, Heroku CLI autenticada y un release de `spammusic-back` que incluya `db:status --json`. El script comprueba app y release, muestra el attachment PostgreSQL y la lista ordenada, pide autorización, crea y verifica un backup y ejecuta `db:migrate` una sola vez. Confirma en pantalla que `Database` en `pg:info` coincide con `DB_NAME` y que el backup indica `Completed`. Si no hay pendientes, no ejecuta migraciones. No activa maintenance ni cambia dynos.
+Requiere Node 20.18.1+ o 22, Heroku CLI autenticada y un release de `spammusic-back` que incluya `db:status --json`. El script comprueba app y release, muestra el attachment PostgreSQL y la lista ordenada, pide autorización, crea y verifica un backup y ejecuta `db:migrate` una sola vez. Confirma en pantalla que `Database` en `pg:info` coincide con `DB_NAME` y que el backup indica `Completed`. Si no hay pendientes, no ejecuta migraciones. No activa maintenance ni cambia dynos.
 
 Las migraciones siguen siendo independientes del despliegue automático de Heroku. Como alternativa, puedes seguir el procedimiento manual:
 

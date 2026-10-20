@@ -4,8 +4,10 @@ import {
   PATH_METADATA,
 } from '@nestjs/common/constants';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import { ListsController } from '../list.controller';
 import { ListsService } from '../list.service';
+import { ListType } from '../entities/list.entity';
 import { CreateWeeklyListDto } from '../dto/create-weekly-list.dto';
 import { GenerateWpPostsQueryDto } from '../dto/generate-wp-posts-query.dto';
 import {
@@ -21,16 +23,19 @@ import {
 
 describe('ListsController WordPress authorization', () => {
   let controller: ListsController;
-  let listsService: {
-    generateWordPressPosts: jest.Mock;
-    generateBestDiscsWordPressPost: jest.Mock;
-    findPastWeeklyListsByMonth: jest.Mock;
-    findPastMonthListsByYear: jest.Mock;
-    findPastVideoListsByYear: jest.Mock;
-    createWeeklyList: jest.Mock;
-  };
+  let listsService: jest.Mocked<
+    Pick<
+      ListsService,
+      | 'generateWordPressPosts'
+      | 'generateBestDiscsWordPressPost'
+      | 'findPastWeeklyListsByMonth'
+      | 'findPastMonthListsByYear'
+      | 'findPastVideoListsByYear'
+      | 'createWeeklyList'
+    >
+  >;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     listsService = {
       generateWordPressPosts: jest.fn(),
       generateBestDiscsWordPressPost: jest.fn(),
@@ -39,7 +44,15 @@ describe('ListsController WordPress authorization', () => {
       findPastVideoListsByYear: jest.fn(),
       createWeeklyList: jest.fn(),
     };
-    controller = new ListsController(listsService as unknown as ListsService);
+    const moduleBuilder = Test.createTestingModule({
+      controllers: [ListsController],
+      providers: [{ provide: ListsService, useValue: listsService }],
+    });
+    const module = await moduleBuilder
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+      .compile();
+    controller = module.get(ListsController);
   });
 
   it.each([
@@ -73,7 +86,17 @@ describe('ListsController WordPress authorization', () => {
 
   it('preserves the wp-posts position argument and service response', async () => {
     const query = { position: 3 } as GenerateWpPostsQueryDto;
-    const response = [{ wpPostId: 27, link: 'https://wordpress.example/post' }];
+    const response = {
+      created: 1,
+      posts: [
+        {
+          position: 3,
+          wpPostId: 27,
+          link: 'https://wordpress.example/post',
+          title: 'Weekly list',
+        },
+      ],
+    };
     listsService.generateWordPressPosts.mockResolvedValue(response);
 
     await expect(controller.generateWpPosts('list-id', query)).resolves.toBe(
@@ -86,7 +109,11 @@ describe('ListsController WordPress authorization', () => {
   });
 
   it('preserves the wp-best-post service response', async () => {
-    const response = { wpPostId: 28, link: 'https://wordpress.example/best' };
+    const response = {
+      wpPostId: 28,
+      link: 'https://wordpress.example/best',
+      title: 'Best discs',
+    };
     listsService.generateBestDiscsWordPressPost.mockResolvedValue(response);
 
     await expect(controller.generateWpBestPost('list-id')).resolves.toBe(
@@ -139,7 +166,12 @@ describe('ListsController WordPress authorization', () => {
     const body = (await transformBody({
       releaseDate: '2026-10-01T00:00:00.000Z',
     })) as CreateWeeklyListDto;
-    const response = { id: 'weekly-list-id' };
+    const response = {
+      id: 'weekly-list-id',
+      name: 'Discos Octubre Semana 1',
+      type: ListType.WEEK,
+      asignations: [],
+    };
     listsService.createWeeklyList.mockResolvedValue(response);
 
     await expect(controller.createWeekly(body)).resolves.toBe(response);
@@ -173,7 +205,14 @@ describe('ListsController WordPress authorization', () => {
       'preserves valid %s period parameters',
       async (_route, params, month) => {
         const dto = await validateParams(params, ListYearMonthParamsDto);
-        const response = [{ id: 'list-id' }];
+        const response = [
+          {
+            id: 'list-id',
+            name: 'Discos Octubre Semana 1',
+            type: ListType.WEEK,
+            asignations: [],
+          },
+        ];
         listsService.findPastWeeklyListsByMonth.mockResolvedValue(response);
 
         await expect(controller.findPastWeeklyByMonth(dto)).resolves.toBe(
@@ -194,7 +233,14 @@ describe('ListsController WordPress authorization', () => {
       'preserves the valid %s year endpoint contract',
       async (_route, handlerName) => {
         const dto = await validateParams({ year: '2026' }, ListYearParamsDto);
-        const response = [{ id: 'list-id' }];
+        const response = [
+          {
+            id: 'list-id',
+            name: 'Lista mensual',
+            type: ListType.MONTH,
+            asignations: [],
+          },
+        ];
         listsService.findPastMonthListsByYear.mockResolvedValue(response);
         listsService.findPastVideoListsByYear.mockResolvedValue(response);
 
