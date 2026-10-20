@@ -2,6 +2,8 @@
 
 Índice local de planificación y registros de Catalog. Los documentos y la evidencia están organizados aquí tras completar el corte 1.
 
+**Estado:** Catalog completado formalmente por BC-CAT el 2026-10-20. El historial de ownership y las decisiones contractuales se conservan en [Roadmap de Catalog](catalog.md); las verificaciones de cierre están en [Backend Cleanup — Catalog](../backend-cleanup/catalog.md).
+
 ## Documentos actuales
 
 - [Roadmap de Catalog](catalog.md) — ownership, planificación de Artists, Countries, Genres, Import, Last.fm Catalog, Overview y Discs. Conserva decisiones, tareas e historial.

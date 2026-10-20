@@ -1,6 +1,5 @@
-import { Repository } from 'typeorm';
-import { Disc } from '../../entities/disc.entity';
 import { buildHomeDateRange } from '../helpers/home-date-range';
+import { HomeQueryRunner } from './home-query-runner';
 
 type HomeDiscTotals = {
   totalDiscs: number;
@@ -9,7 +8,7 @@ type HomeDiscTotals = {
 
 /** Loads the Home totals using the current optional statsDateRange semantics. */
 export async function loadHomeDiscTotals(
-  discRepository: Pick<Repository<Disc>, 'query'>,
+  discRepository: HomeQueryRunner,
   statsDateRange?: (string | Date)[],
 ): Promise<HomeDiscTotals> {
   const { condition: dateCondition, params } = buildHomeDateRange(
@@ -26,11 +25,12 @@ export async function loadHomeDiscTotals(
   `;
 
   const result = await discRepository.query(totalsQuery, params);
-  const { totalDiscs: totalDiscsValue, totalVotes: totalVotesValue } =
-    result[0] || {};
+  const row = result[0];
+  const totalDiscsValue = row?.totalDiscs;
+  const totalVotesValue = row?.totalVotes;
 
   return {
-    totalDiscs: parseInt(totalDiscsValue, 10) || 0,
-    totalVotes: parseInt(totalVotesValue, 10) || 0,
+    totalDiscs: Number.parseInt(String(totalDiscsValue ?? ''), 10) || 0,
+    totalVotes: Number.parseInt(String(totalVotesValue ?? ''), 10) || 0,
   };
 }

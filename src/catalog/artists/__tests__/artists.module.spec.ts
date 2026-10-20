@@ -61,37 +61,30 @@ describe('ArtistsModule dependency injection', () => {
   });
 
   it('connects the facade and management/orphan responsibilities through Nest DI', () => {
-    const facade = moduleRef.get(ArtistsService) as unknown as {
-      artistCatalogService: ArtistCatalogService;
-      artistWriteService: ArtistWriteService;
-      artistSearchService: ArtistSearchService;
-      artistDetailsService: ArtistDetailsService;
-      artistManagementService: ArtistManagementService;
-      artistOrphansService: ArtistOrphansService;
-    };
-    const management = moduleRef.get(ArtistManagementService) as unknown as {
-      artistOrphansService: ArtistOrphansService;
-    };
-    const controller = moduleRef.get(ArtistsController) as unknown as {
-      artistsService: ArtistsService;
-    };
+    const facade = moduleRef.get(ArtistsService);
+    const management = moduleRef.get(ArtistManagementService);
+    const controller = moduleRef.get(ArtistsController);
 
-    expect(controller.artistsService).toBe(moduleRef.get(ArtistsService));
-    expect(facade.artistCatalogService).toBe(
+    expect(Reflect.get(controller, 'artistsService')).toBe(facade);
+    expect(Reflect.get(facade, 'artistCatalogService')).toBe(
       moduleRef.get(ArtistCatalogService),
     );
-    expect(facade.artistWriteService).toBe(moduleRef.get(ArtistWriteService));
-    expect(facade.artistSearchService).toBe(moduleRef.get(ArtistSearchService));
-    expect(facade.artistDetailsService).toBe(
+    expect(Reflect.get(facade, 'artistWriteService')).toBe(
+      moduleRef.get(ArtistWriteService),
+    );
+    expect(Reflect.get(facade, 'artistSearchService')).toBe(
+      moduleRef.get(ArtistSearchService),
+    );
+    expect(Reflect.get(facade, 'artistDetailsService')).toBe(
       moduleRef.get(ArtistDetailsService),
     );
-    expect(facade.artistManagementService).toBe(
+    expect(Reflect.get(facade, 'artistManagementService')).toBe(
       moduleRef.get(ArtistManagementService),
     );
-    expect(facade.artistOrphansService).toBe(
+    expect(Reflect.get(facade, 'artistOrphansService')).toBe(
       moduleRef.get(ArtistOrphansService),
     );
-    expect(management.artistOrphansService).toBe(
+    expect(Reflect.get(management, 'artistOrphansService')).toBe(
       moduleRef.get(ArtistOrphansService),
     );
   });

@@ -4,6 +4,9 @@ import {
   PATH_METADATA,
 } from '@nestjs/common/constants';
 import { ParseUUIDPipe, ValidationPipe } from '@nestjs/common';
+import { PassportModule } from '@nestjs/passport';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { CreateGenreDto } from '../dto/create-genre.dto';
 import { CreateGenresBatchDto } from '../dto/create-genres-batch.dto';
 import { GenresQueryDto } from '../dto/genres-query.dto';
@@ -13,6 +16,7 @@ import { GenresService } from '../genres.service';
 import { META_MINIMUM_ROLE } from '../../../identity/auth/decorators/role-protected.decorator';
 import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
 import { ValidRoles } from '../../../identity/auth/interfaces/valid-roles';
+import { User } from '../../../identity/auth/entities/user.entity';
 
 describe('GenresController contract characterization', () => {
   const service = {
@@ -24,14 +28,28 @@ describe('GenresController contract characterization', () => {
     remove: jest.fn(),
   };
   let controller: GenresController;
+  let moduleRef: TestingModule;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    controller = new GenresController(service as unknown as GenresService);
+    moduleRef = await Test.createTestingModule({
+      imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
+      controllers: [GenresController],
+      providers: [
+        { provide: GenresService, useValue: service },
+        { provide: UserRoleGuard, useValue: { canActivate: jest.fn() } },
+        { provide: getRepositoryToken(User), useValue: { findOne: jest.fn() } },
+      ],
+    }).compile();
+    controller = moduleRef.get(GenresController);
+  });
+
+  afterEach(async () => {
+    await moduleRef?.close();
   });
 
   const handler = (method: keyof typeof GenresController.prototype) =>
-    GenresController.prototype[method] as Function;
+    GenresController.prototype[method];
 
   const batchValidationPipe = () =>
     new ValidationPipe({

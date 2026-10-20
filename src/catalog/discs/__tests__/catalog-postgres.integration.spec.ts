@@ -1,13 +1,19 @@
+import * as fs from 'fs';
 import * as ExcelJS from 'exceljs';
+import { PassThrough, Writable } from 'stream';
 import { randomUUID } from 'node:crypto';
 import { CatalogImportController } from '../../import/manual/controller/catalog-import.controller';
 import { CatalogImportService } from '../../import/manual/import/catalog-import.service';
 import { ManualImportLogger } from '../../import/manual/logging/manual-import-logger';
 import { ExcelController } from '../../import/excel/controller/excel.controller';
 import { ExcelImportService } from '../../import/excel/import/excel-import.service';
+import { ExcelTemplateService } from '../../import/excel/template/excel-template.service';
 import { ExcelWorkbookParser } from '../../import/excel/parser/excel-workbook.parser';
 import { InvalidExcelWorkbookError } from '../../import/excel/parser/excel-workbook.parser';
+import { ProcessManualDataDto } from '../../import/manual/dto/process-manual-data.dto';
 import { DiscWriteService } from '../write/disc-write.service';
+import { CreateDiscDto } from '../dto/create-discs.dto';
+import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
 import { Artist } from '../../artists/entities/artist.entity';
 import { Country } from '../../countries/entities/country.entity';
 import { Disc } from '../entities/disc.entity';
@@ -15,6 +21,18 @@ import { Genre } from '../../genres/entities/genre.entity';
 
 const describePostgres =
   process.env.CATALOG_POSTGRES_INTEGRATION === '1' ? describe : describe.skip;
+
+function createWriteStreamFixture() {
+  return Object.assign(
+    new Writable({ write: (_chunk, _encoding, callback) => callback() }),
+    {
+      close: jest.fn(),
+      path: 'manual_data.log',
+      bytesWritten: 0,
+      pending: false,
+    },
+  );
+}
 
 describePostgres('Catalog persistence with PostgreSQL', () => {
   let dataSource: import('typeorm').DataSource;
@@ -44,10 +62,9 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
     }
     process.env.DB_PASSWORD = process.env.CATALOG_TEST_DB_PASSWORD;
 
-    const { default: configuredDataSource } =
-      require('../../../data-source') as {
-        default: import('typeorm').DataSource;
-      };
+    const { default: configuredDataSource } = await import(
+      '../../../data-source'
+    );
     dataSource = configuredDataSource;
     dataSource.setOptions({
       installExtensions: false,
@@ -93,9 +110,15 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
     });
 
     discWriteService = new DiscWriteService(dataSource.getRepository(Disc));
-    const manualLogger = {
-      log: () => undefined,
-    } as unknown as ManualImportLogger;
+    const writeStreamSpy = jest
+      .spyOn(fs, 'createWriteStream')
+      .mockReturnValue(createWriteStreamFixture());
+    let manualLogger: ManualImportLogger;
+    try {
+      manualLogger = new ManualImportLogger();
+    } finally {
+      writeStreamSpy.mockRestore();
+    }
     manualService = new CatalogImportService(
       dataSource,
       dataSource.getRepository(Country),
@@ -109,7 +132,13 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
       new ExcelWorkbookParser(),
     );
     manualController = new CatalogImportController(manualService);
-    excelController = new ExcelController(excelService, {} as any);
+    excelController = new ExcelController(
+      excelService,
+      new ExcelTemplateService(
+        dataSource.getRepository(Genre),
+        dataSource.getRepository(Country),
+      ),
+    );
   });
 
   afterAll(async () => {
@@ -151,10 +180,6 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
     return Number(rows[0].count);
   }
 
-  async function artistByName(name: string): Promise<Artist | null> {
-    return dataSource.getRepository(Artist).findOne({ where: { name } });
-  }
-
   it('persists Disc foreign keys, creates and reuses Artist, and rolls back a newly created Artist on Disc failure', async () => {
     const explicitArtist = await dataSource.getRepository(Artist).save({
       name: `${fixturePrefix} Direct Artist`,
@@ -163,11 +188,13 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
     });
     fixtureArtists.push(explicitArtist.id);
 
-    const created = await discWriteService.create({
-      name: `${fixturePrefix} Direct Disc`,
-      artistId: explicitArtist.id,
-      genreId: genre.id,
-    } as any);
+    const created = await discWriteService.create(
+      Object.assign(new CreateDiscDto(), {
+        name: `${fixturePrefix} Direct Disc`,
+        artistId: explicitArtist.id,
+        genreId: genre.id,
+      }),
+    );
     const [persistedDirect] = (await dataSource.query(
       'SELECT "artistId", "genreId" FROM disc WHERE id = $1',
       [created.id],
@@ -178,12 +205,14 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
     });
 
     const newArtistName = `${fixturePrefix} New Artist`;
-    const withNewArtist = await discWriteService.createWithArtist({
-      artistName: newArtistName,
-      discName: `${fixturePrefix} New Artist Disc`,
-      countryId: country.id,
-      genreId: genre.id,
-    } as any);
+    const withNewArtist = await discWriteService.createWithArtist(
+      Object.assign(new CreateDiscWithArtistDto(), {
+        artistName: newArtistName,
+        discName: `${fixturePrefix} New Artist Disc`,
+        countryId: country.id,
+        genreId: genre.id,
+      }),
+    );
     expect(withNewArtist.artist.name).toBe(newArtistName);
     fixtureArtists.push(withNewArtist.artist.id);
     const persistedNew = await dataSource.getRepository(Disc).findOneOrFail({
@@ -192,33 +221,39 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
     expect(persistedNew.artist.id).toBe(withNewArtist.artist.id);
     expect(persistedNew.genre.id).toBe(genre.id);
 
-    const reusedArtist = await discWriteService.createWithArtist({
-      artistName: newArtistName,
-      discName: `${fixturePrefix} Reused Artist Disc`,
-      countryId: country.id,
-      genreId: genre.id,
-    } as any);
+    const reusedArtist = await discWriteService.createWithArtist(
+      Object.assign(new CreateDiscWithArtistDto(), {
+        artistName: newArtistName,
+        discName: `${fixturePrefix} Reused Artist Disc`,
+        countryId: country.id,
+        genreId: genre.id,
+      }),
+    );
     expect(reusedArtist.artist.id).toBe(withNewArtist.artist.id);
 
     const rolledBackArtistName = `${fixturePrefix} Rollback Artist`;
     await expect(
-      discWriteService.createWithArtist({
-        artistName: rolledBackArtistName,
-        discName: `${fixturePrefix} Invalid Genre Disc`,
-        countryId: country.id,
-        genreId: randomUUID(),
-      } as any),
+      discWriteService.createWithArtist(
+        Object.assign(new CreateDiscWithArtistDto(), {
+          artistName: rolledBackArtistName,
+          discName: `${fixturePrefix} Invalid Genre Disc`,
+          countryId: country.id,
+          genreId: randomUUID(),
+        }),
+      ),
     ).rejects.toThrow();
     expect(await artistCountByName(rolledBackArtistName)).toBe(0);
 
     const existingArtistName = explicitArtist.name;
     await expect(
-      discWriteService.createWithArtist({
-        artistName: existingArtistName,
-        discName: `${fixturePrefix} Existing Artist Rollback Disc`,
-        countryId: country.id,
-        genreId: randomUUID(),
-      } as any),
+      discWriteService.createWithArtist(
+        Object.assign(new CreateDiscWithArtistDto(), {
+          artistName: existingArtistName,
+          discName: `${fixturePrefix} Existing Artist Rollback Disc`,
+          countryId: country.id,
+          genreId: randomUUID(),
+        }),
+      ),
     ).rejects.toThrow();
     expect(await artistCountByName(existingArtistName)).toBe(1);
   });
@@ -226,7 +261,7 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
   it('imports Manual rows partially, returns data.results, preserves earlier success and rolls back a failed new Artist', async () => {
     const validLine = `${fixturePrefix} Manual Artist - ${fixturePrefix} Manual Disc`;
     const recoverableLine = `${fixturePrefix} Manual Rollback Artist - ${'x'.repeat(101)}`;
-    const response = await manualController.processManualData({
+    const manualImportDto: ProcessManualDataDto = {
       date: 'October 4, 2026',
       albums: [
         { line: validLine, genreId: genre.id, countryId: country.id },
@@ -239,7 +274,8 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
           countryId: country.id,
         },
       ],
-    } as any);
+    };
+    const response = await manualController.processManualData(manualImportDto);
 
     expect(response.data.results.map(({ status }) => status)).toEqual([
       'imported',
@@ -265,7 +301,7 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
       manualService.processManualData({
         date: 'Invalid date',
         albums: [],
-      } as any),
+      }),
     ).rejects.toThrow('La fecha debe ser válida');
   });
 
@@ -321,11 +357,20 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
     ]);
 
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-    const response = await excelController.uploadTemplate({
+    const upload: Express.Multer.File = {
+      fieldname: 'file',
       buffer,
+      stream: new PassThrough(),
       originalname: 'catalog-test.xlsx',
+      encoding: '7bit',
+      mimetype:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       size: buffer.length,
-    } as any);
+      destination: '',
+      filename: 'catalog-test.xlsx',
+      path: '',
+    };
+    const response = await excelController.uploadTemplate(upload);
 
     expect(response.data.results.map(({ status }) => status)).toEqual([
       'imported',

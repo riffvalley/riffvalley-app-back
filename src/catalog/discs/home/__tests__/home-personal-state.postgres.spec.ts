@@ -1,6 +1,10 @@
-import { Repository } from 'typeorm';
+import {
+  HomePostgresClient,
+  getHomePostgresValues,
+} from './home-postgres-types';
+import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { User } from '../../../../identity/auth/entities/user.entity';
-import { Disc } from '../../entities/disc.entity';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { DiscHomeService } from '../disc-home.service';
 
 const describePostgres =
@@ -13,16 +17,25 @@ const COUNTRY_ID = '00000000-0000-4000-8000-000000000004';
 const GENRE_ID = '00000000-0000-4000-8000-000000000005';
 const DISC_ID = '00000000-0000-4000-8000-000000000006';
 
+function homeUser(): User {
+  return Object.assign(new User(), { id: USER_ID });
+}
+
 describePostgres('home personal state with PostgreSQL fixtures', () => {
-  let client: any;
+  let client: HomePostgresClient | null = null;
+  const getClient = (): HomePostgresClient => {
+    if (!client) throw new Error('PostgreSQL client is not initialized');
+    return client;
+  };
 
   beforeAll(async () => {
-    require('dotenv').config();
+    const dotenv = await import('dotenv');
+    dotenv.config();
     if (process.env.STAGE !== 'dev') {
       throw new Error('D33 PostgreSQL tests require STAGE=dev');
     }
 
-    const { Client } = require('pg');
+    const { Client } = await import('pg');
     client = new Client({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT || 5432),
@@ -31,7 +44,7 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
-    await client.query(`
+    await getClient().query(`
       CREATE TEMP TABLE country (id uuid PRIMARY KEY, name text, "isoCode" text);
       CREATE TEMP TABLE artist (id uuid PRIMARY KEY, name text, "countryId" uuid);
       CREATE TEMP TABLE genre (id uuid PRIMARY KEY, name text, color text);
@@ -68,22 +81,22 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
   });
 
   beforeEach(async () => {
-    await client.query(
+    await getClient().query(
       'TRUNCATE comment, pending, favorite, rate, disc, genre, artist, country',
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO country (id, name, "isoCode") VALUES ($1, 'Fixtureland', 'FX')`,
       [COUNTRY_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO artist (id, name, "countryId") VALUES ($1, 'Fixture Artist', $2)`,
       [ARTIST_ID, COUNTRY_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO genre (id, name, color) VALUES ($1, 'Fixture Genre', '#000')`,
       [GENRE_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO disc
         (id, name, "releaseDate", pinned, "artistId", "genreId", description, image, verified, ep, debut, link, featured)
       VALUES ($1, 'State fixture', DATE '2022-01-01', true, $2, $3, NULL, NULL, false, false, false, NULL, false)`,
@@ -97,17 +110,25 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
     rate: number | null,
     cover: number | null,
   ) {
-    await client.query(
+    await getClient().query(
       'INSERT INTO rate (id, "discId", "userId", rate, cover) VALUES ($1, $2, $3, $4, $5)',
       [id, DISC_ID, userId, rate, cover],
     );
   }
 
   async function runHome() {
-    const queries: { sql: string; params: unknown[]; rows?: any[] }[] = [];
-    const repository = {
+    const queries: {
+      sql: string;
+      params: unknown[];
+      rows?: Record<string, unknown>[];
+    }[] = [];
+    const repository: HomeQueryRunner = {
       query: async (sql: string, params: unknown[] = []) => {
-        const call: { sql: string; params: unknown[]; rows?: any[] } = {
+        const call: {
+          sql: string;
+          params: unknown[];
+          rows?: Record<string, unknown>[];
+        } = {
           sql,
           params,
         };
@@ -116,25 +137,20 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
           sql.includes('AVG(avgRates)') ||
           sql.includes('AS "weightedScore"')
         ) {
-          call.rows = (await client.query(sql, params as any[])).rows;
+          call.rows = (
+            await getClient().query(sql, getHomePostgresValues(params))
+          ).rows;
           return call.rows;
         }
         return [];
       },
-      count: jest.fn().mockResolvedValue(0),
-      createQueryBuilder: jest.fn().mockReturnValue({
-        leftJoin: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getRawOne: jest.fn().mockResolvedValue({ totalVotes: '0' }),
-      }),
     };
-    const service = new DiscHomeService(
-      repository as unknown as Repository<Disc>,
-    );
+    const service = new DiscHomeService(repository);
     const result = await service.findTopRatedOrFeaturedAndStats(
-      { dateRange: ['2020-01-01', '2025-12-31'] } as any,
-      { id: USER_ID } as User,
+      Object.assign(new PaginationDto(), {
+        dateRange: [new Date('2020-01-01'), new Date('2025-12-31')],
+      }),
+      homeUser(),
     );
     const main = queries.find(({ sql }) => sql.includes('AS "weightedScore"'))!;
     const global = queries.find(({ sql }) => sql.includes('AVG(avgRates)'))!;
@@ -154,17 +170,17 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
       3,
       1,
     );
-    await client.query(
+    await getClient().query(
       'INSERT INTO favorite (id, "discId", "userId") VALUES ($1, $2, $3)',
       ['00000000-0000-4000-8000-000000000201', DISC_ID, OTHER_USER_ID],
     );
-    await client.query(
+    await getClient().query(
       'INSERT INTO pending (id, "discId", "userId") VALUES ($1, $2, $3)',
       ['00000000-0000-4000-8000-000000000301', DISC_ID, OTHER_USER_ID],
     );
 
     const { result, main } = await runHome();
-    const disc = result.discs[0] as any;
+    const disc = result.discs[0];
 
     expect(result.discs).toHaveLength(1);
     expect(disc.userRate).toBeNull();
@@ -204,13 +220,13 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
       3.25,
     );
     const rated = await runHome();
-    expect((rated.result.discs[0] as any).userRate).toEqual({
+    expect(rated.result.discs[0].userRate).toEqual({
       id: '00000000-0000-4000-8000-000000000102',
       rate: 4.5,
       cover: 3.25,
     });
 
-    await client.query('TRUNCATE rate');
+    await getClient().query('TRUNCATE rate');
     await insertRate(
       '00000000-0000-4000-8000-000000000103',
       USER_ID,
@@ -218,7 +234,7 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
       4.75,
     );
     const coverOnly = await runHome();
-    expect((coverOnly.result.discs[0] as any).userRate).toEqual({
+    expect(coverOnly.result.discs[0].userRate).toEqual({
       id: '00000000-0000-4000-8000-000000000103',
       rate: null,
       cover: 4.75,
@@ -226,43 +242,43 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
   });
 
   it('maps favorite, pending, and their combination to one ranked disc', async () => {
-    await client.query(
+    await getClient().query(
       'INSERT INTO favorite (id, "discId", "userId") VALUES ($1, $2, $3)',
       ['00000000-0000-4000-8000-000000000202', DISC_ID, USER_ID],
     );
     const favorite = await runHome();
     expect(favorite.result.discs).toHaveLength(1);
-    expect((favorite.result.discs[0] as any).favoriteId).toBe(
+    expect(favorite.result.discs[0].favoriteId).toBe(
       '00000000-0000-4000-8000-000000000202',
     );
-    expect((favorite.result.discs[0] as any).pendingId).toBeNull();
+    expect(favorite.result.discs[0].pendingId).toBeNull();
 
-    await client.query(
+    await getClient().query(
       'INSERT INTO pending (id, "discId", "userId") VALUES ($1, $2, $3)',
       ['00000000-0000-4000-8000-000000000302', DISC_ID, USER_ID],
     );
     const favoriteAndPending = await runHome();
     expect(favoriteAndPending.result.discs).toHaveLength(1);
-    expect((favoriteAndPending.result.discs[0] as any).userRate).toBeNull();
-    expect((favoriteAndPending.result.discs[0] as any).favoriteId).toBe(
+    expect(favoriteAndPending.result.discs[0].userRate).toBeNull();
+    expect(favoriteAndPending.result.discs[0].favoriteId).toBe(
       '00000000-0000-4000-8000-000000000202',
     );
-    expect((favoriteAndPending.result.discs[0] as any).pendingId).toBe(
+    expect(favoriteAndPending.result.discs[0].pendingId).toBe(
       '00000000-0000-4000-8000-000000000302',
     );
 
     await insertRate('00000000-0000-4000-8000-000000000104', USER_ID, 3, 2);
     const allStates = await runHome();
     expect(allStates.result.discs).toHaveLength(1);
-    expect((allStates.result.discs[0] as any).userRate).toEqual({
+    expect(allStates.result.discs[0].userRate).toEqual({
       id: '00000000-0000-4000-8000-000000000104',
       rate: 3,
       cover: 2,
     });
-    expect((allStates.result.discs[0] as any).favoriteId).toBe(
+    expect(allStates.result.discs[0].favoriteId).toBe(
       '00000000-0000-4000-8000-000000000202',
     );
-    expect((allStates.result.discs[0] as any).pendingId).toBe(
+    expect(allStates.result.discs[0].pendingId).toBe(
       '00000000-0000-4000-8000-000000000302',
     );
   });
@@ -276,7 +292,7 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
     await insertRate(rateIds[1], USER_ID, 5, 4);
 
     const { result, main } = await runHome();
-    const userRate = (result.discs[0] as any).userRate;
+    const userRate = result.discs[0].userRate;
 
     expect(result.discs).toHaveLength(1);
     expect(rateIds).toContain(userRate.id);
@@ -305,12 +321,12 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
       2,
       null,
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO disc (id, name, "releaseDate", pinned, "artistId", "genreId")
        VALUES ('00000000-0000-4000-8000-000000000009', 'Reference', DATE '2022-01-01', false, $1, $2)`,
       [ARTIST_ID, GENRE_ID],
     );
-    await client.query(
+    await getClient().query(
       'INSERT INTO rate (id, "discId", "userId", rate, cover) VALUES ($1, $2, $3, 5, NULL)',
       [
         '00000000-0000-4000-8000-000000000107',
@@ -318,7 +334,7 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
         THIRD_USER_ID,
       ],
     );
-    await client.query(
+    await getClient().query(
       `
       INSERT INTO favorite (id, "discId", "userId") VALUES
         ('00000000-0000-4000-8000-000000000203', $1, $2),
@@ -328,17 +344,17 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
     );
     const duplicateFavorites = await runHome();
     const duplicateFavoriteRows = duplicateFavorites.result.discs.filter(
-      (row: any) => row.id === DISC_ID,
+      (row) => row.id === DISC_ID,
     );
     expect(duplicateFavoriteRows).toHaveLength(1);
     expect([
       '00000000-0000-4000-8000-000000000203',
       '00000000-0000-4000-8000-000000000204',
-    ]).toContain((duplicateFavoriteRows[0] as any).favoriteId);
-    expect(Number((duplicateFavoriteRows[0] as any).voteCount)).toBe(2);
+    ]).toContain(duplicateFavoriteRows[0].favoriteId);
+    expect(Number(duplicateFavoriteRows[0].voteCount)).toBe(2);
 
-    await client.query('TRUNCATE favorite');
-    await client.query(
+    await getClient().query('TRUNCATE favorite');
+    await getClient().query(
       `
       INSERT INTO pending (id, "discId", "userId") VALUES
         ('00000000-0000-4000-8000-000000000303', $1, $2),
@@ -348,10 +364,10 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
     );
     const duplicatePendings = await runHome();
     const pendingDisc = duplicatePendings.result.discs.find(
-      (row: any) => row.id === DISC_ID,
-    ) as any;
+      (row) => row.id === DISC_ID,
+    );
     expect(
-      duplicatePendings.result.discs.filter((row: any) => row.id === DISC_ID),
+      duplicatePendings.result.discs.filter((row) => row.id === DISC_ID),
     ).toHaveLength(1);
     expect(Number(pendingDisc.voteCount)).toBe(2);
     expect(Number(pendingDisc.averageRate)).toBe(3);

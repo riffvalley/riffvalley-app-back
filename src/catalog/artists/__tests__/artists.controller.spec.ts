@@ -3,14 +3,15 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import {
-  ExecutionContext,
-  ParseUUIDPipe,
-  ValidationPipe,
-} from '@nestjs/common';
+import { ParseUUIDPipe, ValidationPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
+import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
+import { PassportModule } from '@nestjs/passport';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { ArtistManagementQueryDto } from '../dto/artist-management-query.dto';
@@ -32,14 +33,28 @@ describe('ArtistsController contract characterization', () => {
     removeOrphanArtists: jest.fn(),
   };
   let controller: ArtistsController;
+  let moduleRef: TestingModule;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    controller = new ArtistsController(service as unknown as ArtistsService);
+    moduleRef = await Test.createTestingModule({
+      imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
+      controllers: [ArtistsController],
+      providers: [
+        { provide: ArtistsService, useValue: service },
+        { provide: UserRoleGuard, useValue: { canActivate: jest.fn() } },
+        { provide: getRepositoryToken(User), useValue: { findOne: jest.fn() } },
+      ],
+    }).compile();
+    controller = moduleRef.get(ArtistsController);
+  });
+
+  afterEach(async () => {
+    await moduleRef?.close();
   });
 
   const route = (method: keyof typeof ArtistsController.prototype) =>
-    ArtistsController.prototype[method] as Function;
+    ArtistsController.prototype[method];
 
   it('maps POST /artists to create and passes the CreateArtistDto unchanged', async () => {
     const dto = { name: 'Artist', countryId: 'country-id' } as CreateArtistDto;
@@ -267,15 +282,12 @@ describe('ArtistsController contract characterization', () => {
       ArtistsController.prototype.remove,
       ArtistsController.prototype.removeOrphans,
     ]) {
-      await expect(
-        guard.canActivate({
-          getClass: () => ArtistsController,
-          getHandler: () => handler,
-          switchToHttp: () => ({
-            getRequest: () => ({ user: { id: 'user-id', username: 'admin' } }),
-          }),
-        } as unknown as ExecutionContext),
-      ).resolves.toBe(true);
+      const context = new ExecutionContextHost(
+        [{ user: { id: 'user-id', username: 'admin' } }],
+        ArtistsController,
+        handler,
+      );
+      await expect(guard.canActivate(context)).resolves.toBe(true);
     }
   });
 

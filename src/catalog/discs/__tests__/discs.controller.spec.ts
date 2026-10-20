@@ -3,24 +3,48 @@ import {
   NotFoundException,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
+import { User } from '../../../identity/auth/entities/user.entity';
+import { PaginationDto } from '../../../platform/common/dtos/pagination.dto';
+import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
+import { CreateDiscDto } from '../dto/create-discs.dto';
+import { OptionsQueryDto } from '../dto/options-query.dto';
+import { RandomQueryDto } from '../dto/random-query.dto';
+import { UpdateDiscDto } from '../dto/update-discs.dto';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
 
+type ServiceMock = {
+  create: jest.Mock<Promise<unknown>, Parameters<DiscsService['create']>>;
+  createWithArtist: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscsService['createWithArtist']>
+  >;
+  findAll: jest.Mock<Promise<unknown>, Parameters<DiscsService['findAll']>>;
+  findRandom: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscsService['findRandom']>
+  >;
+  findOptions: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscsService['findOptions']>
+  >;
+  findOne: jest.Mock<Promise<unknown>, Parameters<DiscsService['findOne']>>;
+  getSpotifyTracks: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscsService['getSpotifyTracks']>
+  >;
+  update: jest.Mock<Promise<unknown>, Parameters<DiscsService['update']>>;
+  remove: jest.Mock<Promise<unknown>, Parameters<DiscsService['remove']>>;
+};
+
 describe('DiscsController baseline', () => {
   let controller: DiscsController;
-  let discsService: {
-    create: jest.Mock;
-    createWithArtist: jest.Mock;
-    findAll: jest.Mock;
-    findRandom: jest.Mock;
-    findOptions: jest.Mock;
-    findOne: jest.Mock;
-    getSpotifyTracks: jest.Mock;
-    update: jest.Mock;
-    remove: jest.Mock;
-  };
+  let moduleRef: TestingModule;
+  let discsService: ServiceMock;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     discsService = {
       create: jest.fn(),
       createWithArtist: jest.fn(),
@@ -32,15 +56,24 @@ describe('DiscsController baseline', () => {
       update: jest.fn(),
       remove: jest.fn(),
     };
-    controller = new DiscsController(discsService as unknown as DiscsService);
+    moduleRef = await Test.createTestingModule({
+      controllers: [DiscsController],
+      providers: [{ provide: DiscsService, useValue: discsService }],
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .compile();
+    controller = moduleRef.get(DiscsController);
   });
 
+  afterEach(async () => moduleRef.close());
+
   it('delegates relation IDs on POST /discs and returns its response unchanged', async () => {
-    const dto = {
+    const dto = Object.assign(new CreateDiscDto(), {
       name: 'Album',
       artistId: 'a6f9cc5f-c3af-4a3d-9eeb-2de532320241',
       genreId: 'a6f9cc5f-c3af-4a3d-9eeb-2de532320242',
-    } as any;
+    });
     const response = {
       id: 'disc-id',
       name: 'Album',
@@ -54,7 +87,10 @@ describe('DiscsController baseline', () => {
   });
 
   it('delegates POST /discs/with-artist and returns the detail response unchanged', async () => {
-    const dto = { discName: 'Album', artistName: 'Artist' } as any;
+    const dto = Object.assign(new CreateDiscWithArtistDto(), {
+      discName: 'Album',
+      artistName: 'Artist',
+    });
     const response = {
       id: 'disc-id',
       name: 'Album',
@@ -68,7 +104,10 @@ describe('DiscsController baseline', () => {
   });
 
   it('propagates the current ambiguity error from POST /discs/with-artist', async () => {
-    const dto = { discName: 'Album', artistName: 'Duplicate' } as any;
+    const dto = Object.assign(new CreateDiscWithArtistDto(), {
+      discName: 'Album',
+      artistName: 'Duplicate',
+    });
     const error = new BadRequestException(
       'Hay 2 artistas con el nombre "Duplicate". Especifica countryId para desambiguar.',
     );
@@ -80,8 +119,11 @@ describe('DiscsController baseline', () => {
   });
 
   it('delegates query and authenticated user and returns the service response unchanged', async () => {
-    const pagination = { limit: 0, query: 'album' } as any;
-    const user = { id: 'user-id' } as any;
+    const pagination = Object.assign(new PaginationDto(), {
+      limit: 0,
+      query: 'album',
+    });
+    const user = Object.assign(new User(), { id: 'user-id' });
     const response = { totalItems: 0, data: [] };
     discsService.findAll.mockResolvedValue(response);
 
@@ -120,7 +162,7 @@ describe('DiscsController baseline', () => {
 
   it('delegates PATCH /discs/:id and returns the saved response unchanged', async () => {
     const id = 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783';
-    const dto = { name: 'Updated album' } as any;
+    const dto = Object.assign(new UpdateDiscDto(), { name: 'Updated album' });
     const response = {
       id,
       name: 'Updated album',
@@ -158,8 +200,8 @@ describe('DiscsController baseline', () => {
   });
 
   it('delegates random catalog queries with the authenticated user', async () => {
-    const dto = { limit: 3 } as any;
-    const user = { id: 'user-id' } as any;
+    const dto = Object.assign(new RandomQueryDto(), { limit: 3 });
+    const user = Object.assign(new User(), { id: 'user-id' });
     const response = [{ id: 'disc-id' }];
     discsService.findRandom.mockResolvedValue(response);
 
@@ -168,7 +210,9 @@ describe('DiscsController baseline', () => {
   });
 
   it('delegates catalog option queries and returns their response unchanged', async () => {
-    const dto = { field: 'genre' } as any;
+    const dto = Object.assign(new OptionsQueryDto(), {
+      field: 'genre' as const,
+    });
     const response = [{ id: 'genre-id', name: 'Genre' }];
     discsService.findOptions.mockResolvedValue(response);
 

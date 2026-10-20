@@ -5,6 +5,9 @@ import {
   ROUTE_ARGS_METADATA,
 } from '@nestjs/common/constants';
 import { ParseUUIDPipe, RequestMethod } from '@nestjs/common';
+import { PassportModule } from '@nestjs/passport';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { CreateCountryDto } from '../dto/create-country.dto';
 import { UpdateCountryDto } from '../dto/update-country.dto';
 import { CountriesQueryDto } from '../dto/countries-query.dto';
@@ -13,6 +16,26 @@ import { CountriesService } from '../countries.service';
 import { META_MINIMUM_ROLE } from '../../../identity/auth/decorators/role-protected.decorator';
 import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
 import { ValidRoles } from '../../../identity/auth/interfaces/valid-roles';
+import { User } from '../../../identity/auth/entities/user.entity';
+
+type RouteParameterMetadata = {
+  index: number;
+  pipes?: unknown[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isRouteParameterMetadata(
+  value: unknown,
+): value is RouteParameterMetadata {
+  return (
+    isRecord(value) &&
+    typeof value.index === 'number' &&
+    (!('pipes' in value) || Array.isArray(value.pipes))
+  );
+}
 
 describe('CountriesController contract characterization', () => {
   const service = {
@@ -23,16 +46,28 @@ describe('CountriesController contract characterization', () => {
     remove: jest.fn(),
   };
   let controller: CountriesController;
+  let moduleRef: TestingModule;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    controller = new CountriesController(
-      service as unknown as CountriesService,
-    );
+    moduleRef = await Test.createTestingModule({
+      imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
+      controllers: [CountriesController],
+      providers: [
+        { provide: CountriesService, useValue: service },
+        { provide: UserRoleGuard, useValue: { canActivate: jest.fn() } },
+        { provide: getRepositoryToken(User), useValue: { findOne: jest.fn() } },
+      ],
+    }).compile();
+    controller = moduleRef.get(CountriesController);
+  });
+
+  afterEach(async () => {
+    await moduleRef?.close();
   });
 
   const handler = (method: keyof typeof CountriesController.prototype) =>
-    CountriesController.prototype[method] as Function;
+    CountriesController.prototype[method];
 
   const routeArgs = (method: keyof typeof CountriesController.prototype) =>
     Reflect.getMetadata(
@@ -121,10 +156,11 @@ describe('CountriesController contract characterization', () => {
     expect(service.findOne).toHaveBeenCalledWith(id);
     expect(service.findOne).toHaveBeenCalledTimes(1);
 
-    const parameterMetadata = Object.values(
-      routeArgs('findOne') as Record<string, any>,
-    );
-    expect(parameterMetadata[0].pipes[0]).toBe(ParseUUIDPipe);
+    const metadata: unknown = routeArgs('findOne');
+    const parameterMetadata = isRecord(metadata)
+      ? Object.values(metadata).filter(isRouteParameterMetadata)
+      : [];
+    expect(parameterMetadata[0]?.pipes?.[0]).toBe(ParseUUIDPipe);
   });
 
   it('maps PATCH /api/countries/:id with UpdateCountryDto and returns the service value unchanged', async () => {
@@ -151,12 +187,13 @@ describe('CountriesController contract characterization', () => {
     await expect(controller.update(id, dto)).resolves.toBe(response);
     expect(service.update).toHaveBeenCalledWith(id, dto);
     expect(service.update).toHaveBeenCalledTimes(1);
-    const updateArgs = Object.values(
-      routeArgs('update') as Record<string, any>,
-    );
-    expect(updateArgs.find((argument) => argument.index === 0)?.pipes[0]).toBe(
-      ParseUUIDPipe,
-    );
+    const metadata: unknown = routeArgs('update');
+    const updateArgs = isRecord(metadata)
+      ? Object.values(metadata).filter(isRouteParameterMetadata)
+      : [];
+    expect(
+      updateArgs.find((argument) => argument.index === 0)?.pipes?.[0],
+    ).toBe(ParseUUIDPipe);
   });
 
   it('maps DELETE /api/countries/:id and returns the DeleteResult unchanged, including affected = 0', async () => {
@@ -181,10 +218,11 @@ describe('CountriesController contract characterization', () => {
     await expect(controller.remove(id)).resolves.toBe(response);
     expect(service.remove).toHaveBeenCalledWith(id);
     expect(service.remove).toHaveBeenCalledTimes(1);
-    const removeArgs = Object.values(
-      routeArgs('remove') as Record<string, any>,
-    );
-    expect(removeArgs[0].pipes[0]).toBe(ParseUUIDPipe);
+    const metadata: unknown = routeArgs('remove');
+    const removeArgs = isRecord(metadata)
+      ? Object.values(metadata).filter(isRouteParameterMetadata)
+      : [];
+    expect(removeArgs[0]?.pipes?.[0]).toBe(ParseUUIDPipe);
   });
 
   it('protects writes at riffvalley while keeping catalog reads public', () => {

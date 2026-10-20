@@ -1,10 +1,7 @@
 import { Disc } from '../../entities/disc.entity';
 import { CatalogRawRow } from './catalog-raw-rows';
 
-export function mapCatalogDisc(
-  disc: Disc,
-  raw: CatalogRawRow,
-) {
+export function mapCatalogDisc(disc: Disc, raw: CatalogRawRow) {
   return {
     ...disc,
     artist: {

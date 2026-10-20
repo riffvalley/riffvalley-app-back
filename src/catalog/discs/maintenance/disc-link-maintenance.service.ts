@@ -212,7 +212,7 @@ export class DiscLinkMaintenanceService {
 
       if (firstResult.length > 0) {
         const linkElement = firstResult.find('a').first();
-        let linkUrl = linkElement.attr('href');
+        const linkUrl = linkElement.attr('href');
 
         if (linkUrl) {
           // Get image and upgrade to high-res (1200x1200) by replacing suffix with _10

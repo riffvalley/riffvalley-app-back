@@ -147,9 +147,25 @@ export class DiscWriteService {
     );
   }
 
-  private handleDbExceptions(error: any) {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
+  private handleDbExceptions(error: unknown) {
+    if (isPostgresUniqueViolation(error)) {
+      throw new BadRequestException(error.detail);
+    }
     this.logger.error(error);
     throw new InternalServerErrorException('An unexpected error occurred');
   }
+}
+
+function isPostgresUniqueViolation(
+  error: unknown,
+): error is { code: '23505'; detail?: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505' &&
+    (!('detail' in error) ||
+      error.detail === undefined ||
+      typeof error.detail === 'string')
+  );
 }

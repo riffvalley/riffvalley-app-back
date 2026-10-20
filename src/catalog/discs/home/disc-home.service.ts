@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { User } from '../../../identity/auth/entities/user.entity';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { Disc } from '../entities/disc.entity';
@@ -11,32 +10,35 @@ import { loadHomeTopUsersByCover } from './loaders/home-top-users-by-cover';
 import { loadHomeRatingDistribution } from './loaders/home-rating-distribution';
 import { buildHomeDiscFilters } from './helpers/home-disc-filters';
 import { mapHomeRankedDisc } from './helpers/map-home-ranked-disc';
+import { HomeQueryRunner } from './loaders/home-query-runner';
+
+export interface DiscHomeResult {
+  discs: ReturnType<typeof mapHomeRankedDisc>[];
+  totalDiscs: number;
+  totalVotes: number;
+  topUsersByRates: {
+    user: { id: string; username: string };
+    rateCount: number;
+  }[];
+  topUsersByCover: {
+    user: { id: string; username: string };
+    totalCover: number;
+  }[];
+  ratingDistribution: { rate: number; count: number }[];
+}
 
 @Injectable()
 export class DiscHomeService {
   constructor(
     @InjectRepository(Disc)
-    private readonly discRepository: Repository<Disc>,
+    private readonly discRepository: HomeQueryRunner,
   ) {}
 
   async findTopRatedOrFeaturedAndStats(
     paginationDto: PaginationDto,
     user: User,
     genreId?: string,
-  ): Promise<{
-    discs: Disc[];
-    totalDiscs: number;
-    totalVotes: number;
-    topUsersByRates: {
-      user: { id: number; username: string };
-      rateCount: number;
-    }[];
-    topUsersByCover: {
-      user: { id: number; username: string };
-      totalCover: number;
-    }[];
-    ratingDistribution: { rate: number; count: number }[];
-  }> {
+  ): Promise<DiscHomeResult> {
     const userId = user.id;
     const {
       dateRange,
@@ -44,7 +46,7 @@ export class DiscHomeService {
       countryId,
       statsDateRange,
       distributionDateRange,
-    } = paginationDto as any;
+    } = paginationDto;
     const today = new Date();
     const homeDiscFilters = buildHomeDiscFilters({
       userId,

@@ -2100,3 +2100,11 @@ Se conservan íntegros los hallazgos contractuales previos del roadmap, incluido
 - **E2E conocidos, fuera del cierre:** `test/excel.e2e-spec.ts` no compila el fixture por falta de `DataSource` para `NationalReleaseRepository`; `test/app.e2e-spec.ts` no carga el ESM de `sanitize-html/htmlparser2` en Jest. No se modificaron producción ni fixtures para corregirlos.
 - **Findings contractuales y de infraestructura:** permanecen documentados en C1–C4 y fuera del criterio de cierre; no se modificó `.impeccable/config.json`.
 
+#### Aclaración arquitectónica C5 (2026-10-20)
+
+Se conserva arriba el criterio y la evidencia histórica de 2026-10-04. La verificación posterior del grafo Nest actual confirma que `AppModule` importa directamente los siete módulos funcionales de `src/catalog/`, que sus dependencias cruzadas están resueltas por exports explícitos y que las rutas públicas permanecen independientes. La ausencia de `src/catalog/catalog.module.ts` no impide los objetivos funcionales de C5; no se crea un agregador artificial sin necesidad de composición compartida. `CatalogModule` se entiende como una posibilidad de composición interna, no como API pública ni requisito funcional. Esta aclaración resuelve la discrepancia arquitectónica, pero no cambia por sí sola el estado global de Catalog ni registra su cierre formal.
+
+#### Cierre formal BC-CAT (2026-10-20)
+
+BC-CAT queda formalmente cerrado: QG-1–QG-18 completadas, cero infracciones de Catalog en los tres baselines, `yarn verify` aprobado y composición C5 confirmada. Esta decisión posterior formaliza el estado global de Catalog; conserva sin alterar el criterio y la evidencia histórica de C5 del 2026-10-04 y la aclaración arquitectónica posterior. DIS-F5 y D5 continúan como decisiones contractuales preservadas, sin cambio de comportamiento ni bloqueo del cierre. Para las evidencias y límites de `yarn verify`, véase [el registro de cierre backend](../backend-cleanup/catalog.md).
+

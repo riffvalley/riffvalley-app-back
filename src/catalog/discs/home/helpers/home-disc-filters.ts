@@ -23,7 +23,10 @@ export function buildHomeDiscFilters({
   countryId,
   today,
 }: HomeDiscFilterInput): HomeDiscFilters {
-  const predicates: { sql: (firstParameter: number) => string; values: unknown[] }[] = [];
+  const predicates: {
+    sql: (firstParameter: number) => string;
+    values: unknown[];
+  }[] = [];
   const countryFilter = country || countryId;
 
   if (dateRange && dateRange.length === 2) {
@@ -47,7 +50,10 @@ export function buildHomeDiscFilters({
   }
 
   if (countryFilter) {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+    const isUUID =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        countryFilter,
+      );
     predicates.push({
       sql: (firstParameter) =>
         `${isUUID ? 'c.id' : 'c.name'} = $${firstParameter}`,

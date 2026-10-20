@@ -13,10 +13,18 @@ export class LastfmService {
     return this.lastfmApiService.getArtistInfo(artist);
   }
 
-  async fillWeeklyImages(month: number, year: number, week?: number): Promise<{ updated: number; notFound: string[] }> {
+  async fillWeeklyImages(
+    month: number,
+    year: number,
+    week?: number,
+  ): Promise<{ updated: number; notFound: string[] }> {
     this.lastfmApiService.assertConfigured();
 
-    const discs = await this.discsService.findWeeklyWithoutImage(month, year, week);
+    const discs = await this.discsService.findWeeklyWithoutImage(
+      month,
+      year,
+      week,
+    );
     if (!discs.length) return { updated: 0, notFound: [] };
 
     const notFound: string[] = [];

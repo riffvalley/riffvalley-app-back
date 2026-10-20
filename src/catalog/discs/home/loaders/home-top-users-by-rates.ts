@@ -1,10 +1,9 @@
-import { Repository } from 'typeorm';
-import { Disc } from '../../entities/disc.entity';
 import { buildHomeDateRange } from '../helpers/home-date-range';
+import { HomeQueryRunner } from './home-query-runner';
 
 /** Loads the Home ranking of users with the most non-NULL rates. */
 export async function loadHomeTopUsersByRates(
-  discRepository: Pick<Repository<Disc>, 'query'>,
+  discRepository: HomeQueryRunner,
   statsDateRange?: (string | Date)[],
 ) {
   const { condition: dateCondition, params } = buildHomeDateRange(
@@ -23,11 +22,11 @@ export async function loadHomeTopUsersByRates(
   `;
   const rows = await discRepository.query(topUsersByRatesQuery, params);
 
-  return rows.map((row: any) => ({
+  return rows.map((row) => ({
     user: {
-      id: row.userId,
-      username: row.username,
+      id: String(row.userId),
+      username: String(row.username),
     },
-    rateCount: parseInt(row.rateCount, 10),
+    rateCount: Number.parseInt(String(row.rateCount), 10),
   }));
 }

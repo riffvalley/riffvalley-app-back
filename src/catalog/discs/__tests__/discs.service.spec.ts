@@ -1,31 +1,129 @@
 import { NotFoundException } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
 import { User } from '../../../identity/auth/entities/user.entity';
+import { PaginationDto } from '../../../platform/common/dtos/pagination.dto';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
 import { DiscCatalogService } from '../catalog/disc-catalog.service';
 import { DiscCalendarService } from '../calendar/disc-calendar.service';
 import { DiscEnrichmentService } from '../enrichment/disc-enrichment.service';
+import { DiscHomeService } from '../home/disc-home.service';
+import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
+import { CreateDiscDto } from '../dto/create-discs.dto';
+import { OptionsQueryDto } from '../dto/options-query.dto';
+import { RandomQueryDto } from '../dto/random-query.dto';
+import { UpdateDiscDto } from '../dto/update-discs.dto';
 import { DiscsService } from '../discs.service';
-import { DiscWriteService } from '../write/disc-write.service';
 import { DiscSpotifyService } from '../spotify/disc-spotify.service';
+import { DiscWriteService } from '../write/disc-write.service';
+
+type AsyncMethod<Method extends (...args: never[]) => unknown> = jest.Mock<
+  Promise<unknown>,
+  Parameters<Method>
+>;
+
+type ServiceMocks = {
+  spotifyApiService: {
+    resolveAlbum: AsyncMethod<SpotifyPublicApiService['resolveAlbum']>;
+    getAlbumDetails: AsyncMethod<SpotifyPublicApiService['getAlbumDetails']>;
+  };
+  discCatalogService: {
+    findAll: AsyncMethod<DiscCatalogService['findAll']>;
+    findRandom: AsyncMethod<DiscCatalogService['findRandom']>;
+    findOptions: AsyncMethod<DiscCatalogService['findOptions']>;
+    findOne: AsyncMethod<DiscCatalogService['findOne']>;
+  };
+  discCalendarService: {
+    findAllByDate: AsyncMethod<DiscCalendarService['findAllByDate']>;
+    findAllByDatePublic: AsyncMethod<
+      DiscCalendarService['findAllByDatePublic']
+    >;
+    getPublicFilters: AsyncMethod<DiscCalendarService['getPublicFilters']>;
+    findWeekly: AsyncMethod<DiscCalendarService['findWeekly']>;
+  };
+  discEnrichmentService: {
+    findWeeklyWithoutImage: AsyncMethod<
+      DiscEnrichmentService['findWeeklyWithoutImage']
+    >;
+    updateImage: AsyncMethod<DiscEnrichmentService['updateImage']>;
+  };
+  discWriteService: {
+    create: AsyncMethod<DiscWriteService['create']>;
+    createWithArtist: AsyncMethod<DiscWriteService['createWithArtist']>;
+    update: AsyncMethod<DiscWriteService['update']>;
+    remove: AsyncMethod<DiscWriteService['remove']>;
+  };
+  discSpotifyService: {
+    getSpotifyTracks: AsyncMethod<DiscSpotifyService['getSpotifyTracks']>;
+  };
+  discHomeService: {
+    findTopRatedOrFeaturedAndStats: AsyncMethod<
+      DiscHomeService['findTopRatedOrFeaturedAndStats']
+    >;
+  };
+};
+
+function createServiceMocks(): ServiceMocks {
+  return {
+    spotifyApiService: {
+      resolveAlbum: jest.fn(),
+      getAlbumDetails: jest.fn(),
+    },
+    discCatalogService: {
+      findAll: jest.fn(),
+      findRandom: jest.fn(),
+      findOptions: jest.fn(),
+      findOne: jest.fn(),
+    },
+    discCalendarService: {
+      findAllByDate: jest.fn(),
+      findAllByDatePublic: jest.fn(),
+      getPublicFilters: jest.fn(),
+      findWeekly: jest.fn(),
+    },
+    discEnrichmentService: {
+      findWeeklyWithoutImage: jest.fn(),
+      updateImage: jest.fn(),
+    },
+    discWriteService: {
+      create: jest.fn(),
+      createWithArtist: jest.fn(),
+      update: jest.fn(),
+      remove: jest.fn(),
+    },
+    discSpotifyService: { getSpotifyTracks: jest.fn() },
+    discHomeService: { findTopRatedOrFeaturedAndStats: jest.fn() },
+  };
+}
+
+async function createTestingModule(
+  mocks: ServiceMocks,
+): Promise<TestingModule> {
+  return Test.createTestingModule({
+    providers: [
+      DiscsService,
+      { provide: SpotifyPublicApiService, useValue: mocks.spotifyApiService },
+      { provide: DiscCatalogService, useValue: mocks.discCatalogService },
+      { provide: DiscCalendarService, useValue: mocks.discCalendarService },
+      { provide: DiscEnrichmentService, useValue: mocks.discEnrichmentService },
+      { provide: DiscWriteService, useValue: mocks.discWriteService },
+      { provide: DiscSpotifyService, useValue: mocks.discSpotifyService },
+      { provide: DiscHomeService, useValue: mocks.discHomeService },
+    ],
+  }).compile();
+}
 
 describe('DiscsService Spotify album operations', () => {
-  const spotifyApiService = {
-    resolveAlbum: jest.fn(),
-    getAlbumDetails: jest.fn(),
-  };
-  const discSpotifyService = { getSpotifyTracks: jest.fn() };
+  let moduleRef: TestingModule;
+  let service: DiscsService;
+  let mocks: ServiceMocks;
 
-  const service = new DiscsService(
-    spotifyApiService as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    discSpotifyService as any,
-    {} as any,
-  );
+  beforeEach(async () => {
+    mocks = createServiceMocks();
+    moduleRef = await createTestingModule(mocks);
+    service = moduleRef.get(DiscsService);
+  });
 
-  beforeEach(() => jest.clearAllMocks());
+  afterEach(async () => moduleRef.close());
 
   it('resuelve un álbum por nombre y artista', async () => {
     const album = {
@@ -34,19 +132,19 @@ describe('DiscsService Spotify album operations', () => {
       listenUrl: 'https://open.spotify.com/album/id',
       coverUrl: 'https://images.spotify.test/cover.jpg',
     };
-    spotifyApiService.resolveAlbum.mockResolvedValue(album);
+    mocks.spotifyApiService.resolveAlbum.mockResolvedValue(album);
 
     await expect(service.resolveSpotifyAlbum('Álbum', 'Banda')).resolves.toBe(
       album,
     );
-    expect(spotifyApiService.resolveAlbum).toHaveBeenCalledWith(
+    expect(mocks.spotifyApiService.resolveAlbum).toHaveBeenCalledWith(
       'Banda',
       'Álbum',
     );
   });
 
   it('responde como no encontrado cuando Spotify no encuentra el álbum', async () => {
-    spotifyApiService.resolveAlbum.mockResolvedValue(null);
+    mocks.spotifyApiService.resolveAlbum.mockResolvedValue(null);
 
     await expect(
       service.resolveSpotifyAlbum('Desconocido', 'Banda'),
@@ -55,56 +153,41 @@ describe('DiscsService Spotify album operations', () => {
 
   it('obtiene el detalle por ID Spotify', async () => {
     const details = { spotifyId: 'spotify-album-id', tracks: [] };
-    spotifyApiService.getAlbumDetails.mockResolvedValue(details);
+    mocks.spotifyApiService.getAlbumDetails.mockResolvedValue(details);
 
     await expect(
       service.getSpotifyAlbumDetails('spotify-album-id'),
     ).resolves.toBe(details);
-    expect(spotifyApiService.getAlbumDetails).toHaveBeenCalledWith(
+    expect(mocks.spotifyApiService.getAlbumDetails).toHaveBeenCalledWith(
       'spotify-album-id',
     );
   });
 
   it('delega la consulta de tracks Spotify y devuelve el payload sin cambios', async () => {
     const payload = [{ id: 'track-id', name: 'Track' }];
-    discSpotifyService.getSpotifyTracks.mockResolvedValue(payload);
+    mocks.discSpotifyService.getSpotifyTracks.mockResolvedValue(payload);
 
     await expect(service.getSpotifyTracks('disc-id')).resolves.toBe(payload);
-    expect(discSpotifyService.getSpotifyTracks).toHaveBeenCalledWith('disc-id');
+    expect(mocks.discSpotifyService.getSpotifyTracks).toHaveBeenCalledWith(
+      'disc-id',
+    );
   });
 });
 
-describe('DiscsService baseline', () => {
+describe('DiscsService facade', () => {
+  let moduleRef: TestingModule;
   let service: DiscsService;
-  let discSpotifyService: { getSpotifyTracks: jest.Mock };
-  let discWriteService: {
-    create: jest.Mock;
-    createWithArtist: jest.Mock;
-    update: jest.Mock;
-    remove: jest.Mock;
-  };
+  let mocks: ServiceMocks;
 
-  beforeEach(() => {
-    discSpotifyService = { getSpotifyTracks: jest.fn() };
-    discWriteService = {
-      create: jest.fn(),
-      createWithArtist: jest.fn(),
-      update: jest.fn(),
-      remove: jest.fn(),
-    };
-
-    service = new DiscsService(
-      {} as unknown as SpotifyPublicApiService,
-      {} as any,
-      {} as any,
-      {} as any,
-      discWriteService as unknown as DiscWriteService,
-      discSpotifyService as unknown as DiscSpotifyService,
-      {} as any,
-    );
+  beforeEach(async () => {
+    mocks = createServiceMocks();
+    moduleRef = await createTestingModule(mocks);
+    service = moduleRef.get(DiscsService);
   });
 
-  it('can be instantiated with its repositories and service dependencies', () => {
+  afterEach(async () => moduleRef.close());
+
+  it('can be instantiated with its providers', () => {
     expect(service).toBeInstanceOf(DiscsService);
   });
 
@@ -117,46 +200,40 @@ describe('DiscsService baseline', () => {
       topUsersByCover: [],
       ratingDistribution: [],
     };
-    const home = {
-      findTopRatedOrFeaturedAndStats: jest.fn().mockResolvedValue(payload),
-    };
-    service = new DiscsService(
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      home as any,
+    mocks.discHomeService.findTopRatedOrFeaturedAndStats.mockResolvedValue(
+      payload,
     );
-    const pagination = { dateRange: ['2020-01-01', '2024-12-31'] } as any;
-    const user = { id: 'user-id' } as User;
+    const pagination = new PaginationDto();
+    pagination.dateRange = [new Date('2020-01-01'), new Date('2024-12-31')];
+    const user = Object.assign(new User(), { id: 'user-id' });
 
     await expect(
       service.findTopRatedOrFeaturedAndStats(pagination, user, 'genre-id'),
     ).resolves.toBe(payload);
-    expect(home.findTopRatedOrFeaturedAndStats).toHaveBeenCalledWith(
-      pagination,
-      user,
-      'genre-id',
-    );
+    expect(
+      mocks.discHomeService.findTopRatedOrFeaturedAndStats,
+    ).toHaveBeenCalledWith(pagination, user, 'genre-id');
   });
 
   it('delegates all public write operations and returns their results unchanged', async () => {
-    const createDto = { name: 'Album' } as any;
-    const createWithArtistDto = {
+    const createDto = Object.assign(new CreateDiscDto(), { name: 'Album' });
+    const createWithArtistDto = Object.assign(new CreateDiscWithArtistDto(), {
       discName: 'Album',
       artistName: 'Artist',
-    } as any;
-    const updateDto = { name: 'Updated album' } as any;
+    });
+    const updateDto = Object.assign(new UpdateDiscDto(), {
+      name: 'Updated album',
+    });
     const createdDisc = { id: 'created-id' };
     const createdWithArtist = { id: 'created-with-artist-id' };
     const updatedDisc = { id: 'updated-id' };
     const removedDisc = { message: 'removed' };
-    discWriteService.create.mockResolvedValue(createdDisc);
-    discWriteService.createWithArtist.mockResolvedValue(createdWithArtist);
-    discWriteService.update.mockResolvedValue(updatedDisc);
-    discWriteService.remove.mockResolvedValue(removedDisc);
+    mocks.discWriteService.create.mockResolvedValue(createdDisc);
+    mocks.discWriteService.createWithArtist.mockResolvedValue(
+      createdWithArtist,
+    );
+    mocks.discWriteService.update.mockResolvedValue(updatedDisc);
+    mocks.discWriteService.remove.mockResolvedValue(removedDisc);
 
     await expect(service.create(createDto)).resolves.toBe(createdDisc);
     await expect(service.createWithArtist(createWithArtistDto)).resolves.toBe(
@@ -167,69 +244,58 @@ describe('DiscsService baseline', () => {
     );
     await expect(service.remove('disc-id')).resolves.toBe(removedDisc);
 
-    expect(discWriteService.create).toHaveBeenCalledWith(createDto);
-    expect(discWriteService.createWithArtist).toHaveBeenCalledWith(
+    expect(mocks.discWriteService.create).toHaveBeenCalledWith(createDto);
+    expect(mocks.discWriteService.createWithArtist).toHaveBeenCalledWith(
       createWithArtistDto,
     );
-    expect(discWriteService.update).toHaveBeenCalledWith('disc-id', updateDto);
-    expect(discWriteService.remove).toHaveBeenCalledWith('disc-id');
+    expect(mocks.discWriteService.update).toHaveBeenCalledWith(
+      'disc-id',
+      updateDto,
+    );
+    expect(mocks.discWriteService.remove).toHaveBeenCalledWith('disc-id');
   });
 
   it('delegates catalog methods and returns their results unchanged', async () => {
-    const catalog = {
-      findAll: jest.fn().mockResolvedValue({ data: ['all'] }),
-      findRandom: jest.fn().mockResolvedValue(['random']),
-      findOptions: jest.fn().mockResolvedValue(['options']),
-      findOne: jest.fn().mockResolvedValue({ id: 'disc-id', name: 'Album' }),
-    };
-    service = new DiscsService(
-      {} as unknown as SpotifyPublicApiService,
-      catalog as unknown as DiscCatalogService,
-      {} as any,
-      {} as any,
-      discWriteService as unknown as DiscWriteService,
-      discSpotifyService as unknown as DiscSpotifyService,
-      {} as any,
-    );
-    const pagination = { limit: 2 } as any;
-    const randomDto = { limit: 3 } as any;
-    const optionsDto = { field: 'genre' } as any;
+    const allResult = { data: ['all'] };
+    const randomResult = ['random'];
+    const optionsResult = ['options'];
     const discId = 'disc-id';
     const detail = { id: discId, name: 'Album' };
-    catalog.findOne.mockResolvedValue(detail);
-    const user = { id: 'user-id' } as User;
+    mocks.discCatalogService.findAll.mockResolvedValue(allResult);
+    mocks.discCatalogService.findRandom.mockResolvedValue(randomResult);
+    mocks.discCatalogService.findOptions.mockResolvedValue(optionsResult);
+    mocks.discCatalogService.findOne.mockResolvedValue(detail);
+    const pagination = Object.assign(new PaginationDto(), { limit: 2 });
+    const randomDto = Object.assign(new RandomQueryDto(), { limit: 3 });
+    const optionsDto = Object.assign(new OptionsQueryDto(), { field: 'genre' });
+    const user = Object.assign(new User(), { id: 'user-id' });
 
-    await expect(service.findAll(pagination, user)).resolves.toEqual({
-      data: ['all'],
-    });
-    await expect(service.findRandom(randomDto, user)).resolves.toEqual([
-      'random',
-    ]);
-    await expect(service.findOptions(optionsDto)).resolves.toEqual(['options']);
+    await expect(service.findAll(pagination, user)).resolves.toBe(allResult);
+    await expect(service.findRandom(randomDto, user)).resolves.toBe(
+      randomResult,
+    );
+    await expect(service.findOptions(optionsDto)).resolves.toBe(optionsResult);
     await expect(service.findOne(discId)).resolves.toBe(detail);
-    expect(catalog.findAll).toHaveBeenCalledWith(pagination, user);
-    expect(catalog.findRandom).toHaveBeenCalledWith(randomDto, user);
-    expect(catalog.findOptions).toHaveBeenCalledWith(optionsDto);
-    expect(catalog.findOne).toHaveBeenCalledWith(discId);
+    expect(mocks.discCatalogService.findAll).toHaveBeenCalledWith(
+      pagination,
+      user,
+    );
+    expect(mocks.discCatalogService.findRandom).toHaveBeenCalledWith(
+      randomDto,
+      user,
+    );
+    expect(mocks.discCatalogService.findOptions).toHaveBeenCalledWith(
+      optionsDto,
+    );
+    expect(mocks.discCatalogService.findOne).toHaveBeenCalledWith(discId);
   });
-});
 
-describe('DiscsService enrichment facade', () => {
   it('delegates image candidate lookup and image update unchanged', async () => {
     const candidates = [{ id: 'disc-id', artistName: 'Artist', name: 'Album' }];
-    const enrichment = {
-      findWeeklyWithoutImage: jest.fn().mockResolvedValue(candidates),
-      updateImage: jest.fn().mockResolvedValue(undefined),
-    };
-    const service = new DiscsService(
-      {} as any,
-      {} as any,
-      {} as any,
-      enrichment as unknown as DiscEnrichmentService,
-      {} as any,
-      {} as any,
-      {} as any,
+    mocks.discEnrichmentService.findWeeklyWithoutImage.mockResolvedValue(
+      candidates,
     );
+    mocks.discEnrichmentService.updateImage.mockResolvedValue(undefined);
 
     await expect(service.findWeeklyWithoutImage(5, 2024, 3)).resolves.toBe(
       candidates,
@@ -237,36 +303,31 @@ describe('DiscsService enrichment facade', () => {
     await expect(
       service.updateImage('disc-id', 'https://image.test/album.jpg'),
     ).resolves.toBeUndefined();
-    expect(enrichment.findWeeklyWithoutImage).toHaveBeenCalledWith(5, 2024, 3);
-    expect(enrichment.updateImage).toHaveBeenCalledWith(
+    expect(
+      mocks.discEnrichmentService.findWeeklyWithoutImage,
+    ).toHaveBeenCalledWith(5, 2024, 3);
+    expect(mocks.discEnrichmentService.updateImage).toHaveBeenCalledWith(
       'disc-id',
       'https://image.test/album.jpg',
     );
   });
-});
 
-describe('DiscsService calendar facade', () => {
-  it('delegates both calendar methods and returns their results unchanged', async () => {
+  it('delegates calendar methods and returns their results unchanged', async () => {
     const authenticatedResult = { data: [{ releaseDate: '2025-01-01' }] };
     const publicResult = { data: [{ releaseDate: '2025-01-02' }] };
     const weeklyResult = [{ week: 2, label: '10-16 may', discs: [] }];
-    const calendar = {
-      findAllByDate: jest.fn().mockResolvedValue(authenticatedResult),
-      findAllByDatePublic: jest.fn().mockResolvedValue(publicResult),
-      getPublicFilters: jest.fn(),
-      findWeekly: jest.fn().mockResolvedValue(weeklyResult),
-    };
-    const service = new DiscsService(
-      {} as any,
-      {} as any,
-      calendar as unknown as DiscCalendarService,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
+    mocks.discCalendarService.findAllByDate.mockResolvedValue(
+      authenticatedResult,
     );
-    const pagination = { limit: 2, offset: 4 } as any;
-    const user = { id: 'user-id' } as User;
+    mocks.discCalendarService.findAllByDatePublic.mockResolvedValue(
+      publicResult,
+    );
+    mocks.discCalendarService.findWeekly.mockResolvedValue(weeklyResult);
+    const pagination = Object.assign(new PaginationDto(), {
+      limit: 2,
+      offset: 4,
+    });
+    const user = Object.assign(new User(), { id: 'user-id' });
 
     await expect(service.findAllByDate(pagination, user)).resolves.toBe(
       authenticatedResult,
@@ -275,13 +336,22 @@ describe('DiscsService calendar facade', () => {
       publicResult,
     );
     await expect(service.findWeekly(5, 2024, 2)).resolves.toBe(weeklyResult);
-    expect(calendar.findAllByDate).toHaveBeenCalledWith(pagination, user);
-    expect(calendar.findAllByDatePublic).toHaveBeenCalledWith(pagination);
-    expect(calendar.findWeekly).toHaveBeenCalledWith(5, 2024, 2);
+    expect(mocks.discCalendarService.findAllByDate).toHaveBeenCalledWith(
+      pagination,
+      user,
+    );
+    expect(mocks.discCalendarService.findAllByDatePublic).toHaveBeenCalledWith(
+      pagination,
+    );
+    expect(mocks.discCalendarService.findWeekly).toHaveBeenCalledWith(
+      5,
+      2024,
+      2,
+    );
 
     const filterResult = { genres: [], countries: [] };
-    calendar.getPublicFilters.mockResolvedValue(filterResult);
+    mocks.discCalendarService.getPublicFilters.mockResolvedValue(filterResult);
     await expect(service.getPublicFilters()).resolves.toBe(filterResult);
-    expect(calendar.getPublicFilters).toHaveBeenCalledTimes(1);
+    expect(mocks.discCalendarService.getPublicFilters).toHaveBeenCalledTimes(1);
   });
 });

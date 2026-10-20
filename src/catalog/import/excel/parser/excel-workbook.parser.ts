@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PassThrough } from 'stream';
 import * as ExcelJS from 'exceljs';
 
 export interface ParsedExcelRow {
@@ -58,8 +59,7 @@ export class ExcelWorkbookParser {
 
     const workbook = new ExcelJS.Workbook();
     // ExcelJS sometimes fails to read a raw multer Buffer directly through load().
-    const stream = require('stream');
-    const bufferStream = new stream.PassThrough();
+    const bufferStream = new PassThrough();
     bufferStream.end(fileBuffer);
     try {
       await workbook.xlsx.read(bufferStream);

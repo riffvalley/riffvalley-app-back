@@ -1,18 +1,29 @@
+import {
+  HomePostgresClient,
+  getHomePostgresValues,
+} from './home-postgres-types';
+import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { buildHomeDiscFilters } from '../helpers/home-disc-filters';
 import { loadHomeGlobalStats } from '../loaders/home-global-stats';
 
-const describePostgres = process.env.D31_POSTGRES_TEST === '1' ? describe : describe.skip;
+const describePostgres =
+  process.env.D31_POSTGRES_TEST === '1' ? describe : describe.skip;
 
 describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
-  let client: any;
+  let client: HomePostgresClient | null = null;
+  const getClient = (): HomePostgresClient => {
+    if (!client) throw new Error('PostgreSQL client is not initialized');
+    return client;
+  };
 
   beforeAll(async () => {
-    require('dotenv').config();
+    const dotenv = await import('dotenv');
+    dotenv.config();
     if (process.env.STAGE !== 'dev') {
       throw new Error('D31 PostgreSQL tests require STAGE=dev');
     }
 
-    const { Client } = require('pg');
+    const { Client } = await import('pg');
     client = new Client({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT || 5432),
@@ -21,7 +32,7 @@ describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
-    await client.query(`
+    await getClient().query(`
       CREATE TEMP TABLE disc (
         id integer PRIMARY KEY,
         "releaseDate" date,
@@ -39,8 +50,8 @@ describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
   });
 
   beforeEach(async () => {
-    await client.query('TRUNCATE rate, disc, artist, country');
-    await client.query(`
+    await getClient().query('TRUNCATE rate, disc, artist, country');
+    await getClient().query(`
       INSERT INTO country (id, name) VALUES (1, 'Fixtureland'), (2, 'Otherland');
       INSERT INTO artist (id, "countryId") VALUES (1, 1), (2, 2);
       INSERT INTO disc (id, "releaseDate", "genreId", "artistId") VALUES
@@ -71,17 +82,20 @@ describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
       country: 'Fixtureland',
       today: new Date(`${today}T00:00:00.000Z`),
     });
-    let rawRow: any;
-    const repository = {
+    let rawRow: Record<string, unknown> = {};
+    const repository: HomeQueryRunner = {
       query: async (sql: string, params: unknown[]) => {
-        const result = await client.query(sql, params as any[]);
+        const result = await getClient().query(
+          sql,
+          getHomePostgresValues(params),
+        );
         rawRow = result.rows[0];
         return result.rows;
       },
     };
 
     const stats = await loadHomeGlobalStats(
-      repository as any,
+      repository,
       filters.globalWhere,
       filters.globalParams,
     );
@@ -116,8 +130,8 @@ describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
   });
 
   it('preserves continuous median output followed by the current integer conversion and fallback', async () => {
-    await client.query('TRUNCATE rate, disc');
-    await client.query(`
+    await getClient().query('TRUNCATE rate, disc');
+    await getClient().query(`
       INSERT INTO disc (id, "releaseDate", "genreId", "artistId") VALUES
         (1, DATE '2023-01-01', 'g', 1),
         (2, DATE '2023-01-01', 'g', 1);

@@ -22,7 +22,11 @@ export function getFridayWeekRanges(
   // Remaining weeks: each starts on a Friday, runs 7 days
   let start = firstFriday + 7;
   while (start <= daysInMonth) {
-    weeks.push({ week: weekNum++, from: start, to: Math.min(start + 6, daysInMonth) });
+    weeks.push({
+      week: weekNum++,
+      from: start,
+      to: Math.min(start + 6, daysInMonth),
+    });
     start += 7;
   }
 

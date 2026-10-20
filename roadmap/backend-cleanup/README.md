@@ -70,7 +70,7 @@ La secuencia se amplía después de cada dominio; no constituye una orden para a
 
 | Orden | Dominio                   | Módulos previstos                                                                                                                | Estado                                                                                                                                                                  |
 | ----- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                 | Artists, Countries, Genres, CatalogImport, CatalogOverview y LastfmCatalog completados; Discs en cleanup                                                                |
+| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                 | **Completado** por BC-CAT (2026-10-20); QG-1–QG-18 completadas, cero entradas Catalog en los tres baselines y `yarn verify` aprobado                                    |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                   | Pendiente                                                                                                                                                               |
 | 3     | Editorial                 | Articles, Asignations, Contents, SpotifyPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | **Completado** por BC-ED-0; diez módulos activos completados, Links retirado por BC-LNK-1, BC-ED-1–10 completados y cero infracciones editoriales en los tres baselines |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                      | Pendiente                                                                                                                                                               |
@@ -88,7 +88,7 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Catalog                   | Artists             | completado |
 | Catalog                   | Countries           | completado |
 | Catalog                   | Genres              | completado |
-| Catalog                   | Discs               | en cleanup |
+| Catalog                   | Discs               | completado |
 | Catalog                   | CatalogImport       | completado |
 | Catalog                   | CatalogOverview     | completado |
 | Catalog                   | LastfmCatalog       | completado |
@@ -125,3 +125,5 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Platform / Infrastructure | Seeds               | pendiente  |
 | Platform / Infrastructure | Uploads             | pendiente  |
 | Communications            | Mail                | pendiente  |
+
+**Composición y cierre de Catalog (2026-10-20):** `AppModule` importa directamente sus siete módulos funcionales: `ArtistsModule`, `CountriesModule`, `GenresModule`, `DiscModule`, `CatalogImportModule`, `CommonModule` (overview) y `LastfmModule`. Esta composición satisface C5; no se necesita un `CatalogModule` agregador. Las dependencias cruzadas de servicios se expresan mediante imports/exports Nest concretos, en particular `DiscModule` para Last.fm, Editorial Contents y el bootstrap standalone. BC-CAT cerró formalmente Catalog después de completar QG-1–QG-18 y verificar los tres baselines y `yarn verify`; véase el [registro de cierre](catalog.md).

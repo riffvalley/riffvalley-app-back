@@ -19,7 +19,7 @@ import { Genre } from '../../../genres/entities/genre.entity';
 import {
   CatalogImportTransactionError,
   runCatalogImportTransaction,
-} from '../../catalog-import-transaction';
+} from '../../transaction/catalog-import-transaction';
 import {
   CatalogImportFailedResult,
   CatalogImportResultItem,

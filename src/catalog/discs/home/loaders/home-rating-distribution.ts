@@ -1,6 +1,5 @@
-import { Repository } from 'typeorm';
-import { Disc } from '../../entities/disc.entity';
 import { buildHomeDateRange } from '../helpers/home-date-range';
+import { HomeQueryRunner } from './home-query-runner';
 
 type HomeRatingDistributionItem = {
   rate: number;
@@ -9,7 +8,7 @@ type HomeRatingDistributionItem = {
 
 /** Loads the independent Home rating distribution and maps SQL values to numbers. */
 export async function loadHomeRatingDistribution(
-  discRepository: Pick<Repository<Disc>, 'query'>,
+  discRepository: HomeQueryRunner,
   distributionDateRange?: (string | Date)[],
 ): Promise<HomeRatingDistributionItem[]> {
   const { condition: dateCondition, params } = buildHomeDateRange(
@@ -26,8 +25,8 @@ export async function loadHomeRatingDistribution(
   `;
   const result = await discRepository.query(ratingDistributionQuery, params);
 
-  return result.map((row: any) => ({
-    rate: parseFloat(row.rateValue),
-    count: parseInt(row.count, 10),
+  return result.map((row) => ({
+    rate: Number.parseFloat(String(row.rateValue)),
+    count: Number.parseInt(String(row.count), 10),
   }));
 }
