@@ -124,7 +124,7 @@ test('preserves exact positions for suppression directives in CRLF comments', ()
   });
 });
 
-test('emits deterministic exact identifiers with rule, path, location, and fingerprint', () => {
+test('emits deterministic stable identifiers with rule, path, context fingerprint, and occurrence', () => {
   withRepository((repositoryRoot) => {
     writeFile(repositoryRoot, 'src/feature.ts', 'const value: any;\n');
 
@@ -138,18 +138,57 @@ test('emits deterministic exact identifiers with rule, path, location, and finge
       'line',
       'column',
       'fingerprint',
+      'occurrence',
     ]);
-    assert.match(violationKey(first[0]), /^explicit-any:src\/feature\.ts:1:14:/);
+    assert.match(violationKey(first[0]), /^explicit-any:src\/feature\.ts:[a-f0-9]{64}:0$/);
   });
 });
 
-test('rejects new, stale, and duplicate exact baseline entries', () => {
+test('keeps identity stable when unrelated lines are inserted before a finding', () => {
+  withRepository((repositoryRoot) => {
+    writeFile(repositoryRoot, 'src/feature.ts', 'const value: any;\n');
+    const baseline = collectViolations(repositoryRoot, ['src']);
+    writeFile(repositoryRoot, 'src/feature.ts', '// unrelated\n\nconst value: any;\n');
+
+    const current = collectViolations(repositoryRoot, ['src']);
+    assert.equal(current[0].line, 3);
+    assert.equal(current[0].fingerprint, baseline[0].fingerprint);
+    assert.equal(current[0].occurrence, baseline[0].occurrence);
+    assert.deepEqual(compareBaseline(current, baseline), {
+      newViolations: [],
+      staleEntries: [],
+      duplicateEntries: [],
+    });
+  });
+});
+
+test('assigns distinct stable occurrences to identical findings', () => {
+  withRepository((repositoryRoot) => {
+    writeFile(repositoryRoot, 'src/feature.ts', 'const first: any, second: any;\n');
+    const baseline = collectViolations(repositoryRoot, ['src']);
+    writeFile(repositoryRoot, 'src/feature.ts', '// unrelated\nconst first: any, second: any;\n');
+
+    const current = collectViolations(repositoryRoot, ['src']);
+    assert.equal(baseline.length, 2);
+    assert.equal(baseline[0].fingerprint, baseline[1].fingerprint);
+    assert.deepEqual(baseline.map(({ occurrence }) => occurrence).sort(), [0, 1]);
+    assert.deepEqual(current.map(({ occurrence }) => occurrence).sort(), [0, 1]);
+    assert.deepEqual(compareBaseline(current, baseline), {
+      newViolations: [],
+      staleEntries: [],
+      duplicateEntries: [],
+    });
+  });
+});
+
+test('rejects new, stale, and duplicate stable baseline entries', () => {
   const existing = {
     rule: 'explicit-any',
     path: 'src/old.ts',
     line: 1,
     column: 10,
     fingerprint: 'fingerprint-old',
+    occurrence: 0,
   };
   const introduced = {
     rule: 'double-type-assertion',
@@ -157,6 +196,7 @@ test('rejects new, stale, and duplicate exact baseline entries', () => {
     line: 4,
     column: 18,
     fingerprint: 'fingerprint-new',
+    occurrence: 0,
   };
   const baseline = [existing, existing];
 
@@ -165,4 +205,39 @@ test('rejects new, stale, and duplicate exact baseline entries', () => {
   assert.deepEqual(comparison.newViolations, [introduced]);
   assert.deepEqual(comparison.staleEntries, baseline);
   assert.deepEqual(comparison.duplicateEntries, [existing]);
+});
+
+test('identifies a new code-context finding without dropping existing findings', () => {
+  withRepository((repositoryRoot) => {
+    writeFile(repositoryRoot, 'src/feature.ts', 'const value: any;\n');
+    const baseline = collectViolations(repositoryRoot, ['src']);
+    writeFile(
+      repositoryRoot,
+      'src/feature.ts',
+      'const value: any;\nconst added: any;\n',
+    );
+
+    const current = collectViolations(repositoryRoot, ['src']);
+    const comparison = compareBaseline(current, baseline);
+
+    assert.equal(comparison.newViolations.length, 1);
+    assert.equal(comparison.newViolations[0].line, 2);
+    assert.deepEqual(comparison.staleEntries, []);
+    assert.deepEqual(comparison.duplicateEntries, []);
+  });
+});
+
+test('reports a corrected fixture finding as a stale baseline entry', () => {
+  withRepository((repositoryRoot) => {
+    writeFile(repositoryRoot, 'src/feature.ts', 'const value: any;\n');
+    const baseline = collectViolations(repositoryRoot, ['src']);
+    writeFile(repositoryRoot, 'src/feature.ts', 'const value: unknown;\n');
+
+    const current = collectViolations(repositoryRoot, ['src']);
+    const comparison = compareBaseline(current, baseline);
+
+    assert.deepEqual(comparison.newViolations, []);
+    assert.deepEqual(comparison.staleEntries, baseline);
+    assert.deepEqual(comparison.duplicateEntries, []);
+  });
 });

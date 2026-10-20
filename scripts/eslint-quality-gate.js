@@ -9,57 +9,95 @@ function toPosixPath(filePath) {
   return filePath.split(path.sep).join('/');
 }
 
-function fingerprint(diagnostic) {
+function fingerprint(diagnostic, sourceLine) {
   const normalized = JSON.stringify({
-    rule: diagnostic.ruleId,
+    rule: diagnostic.ruleId ?? 'eslint',
     severity: diagnostic.severity,
     message: diagnostic.message.replace(/\s+/g, ' ').trim(),
-    line: diagnostic.line,
-    column: diagnostic.column,
-    endLine: diagnostic.endLine ?? null,
-    endColumn: diagnostic.endColumn ?? null,
+    nodeType: diagnostic.nodeType ?? null,
+    messageId: diagnostic.messageId ?? null,
+    sourceLine: sourceLine ?? null,
   });
   return crypto.createHash('sha256').update(normalized).digest('hex');
 }
 
 function collectViolations(repositoryRoot, eslintResults) {
-  return eslintResults
-    .flatMap((result) =>
-      result.messages.map((diagnostic) => ({
-        rule: diagnostic.ruleId ?? 'eslint',
-        path: toPosixPath(path.relative(repositoryRoot, result.filePath)),
-        line: diagnostic.line ?? 1,
-        column: diagnostic.column ?? 1,
-        fingerprint: fingerprint(diagnostic),
-      })),
-    )
-    .sort((left, right) => violationKey(left).localeCompare(violationKey(right)));
+  const violations = eslintResults.flatMap((result) => {
+    const occurrences = new Map();
+    const sourceLines = (result.source ?? fs.readFileSync(result.filePath, 'utf8')).split(/\r?\n/);
+    return result.messages
+      .map((diagnostic) => {
+        const sourceLine = diagnostic.line ? sourceLines[diagnostic.line - 1] : undefined;
+        const fingerprintValue = fingerprint(diagnostic, sourceLine);
+        const signature = `${diagnostic.ruleId ?? 'eslint'}:${fingerprintValue}`;
+        const occurrence = occurrences.get(signature) ?? 0;
+        occurrences.set(signature, occurrence + 1);
+        return {
+          rule: diagnostic.ruleId ?? 'eslint',
+          path: toPosixPath(path.relative(repositoryRoot, result.filePath)),
+          line: diagnostic.line ?? 1,
+          column: diagnostic.column ?? 1,
+          fingerprint: fingerprintValue,
+          occurrence,
+        };
+      });
+  });
+  return violations.sort((left, right) =>
+    [left.rule, left.path, left.line, left.column, left.fingerprint]
+      .join(':')
+      .localeCompare([right.rule, right.path, right.line, right.column, right.fingerprint].join(':')),
+  );
 }
 
 function violationKey(violation) {
   return [
     violation.rule,
     violation.path,
-    violation.line,
-    violation.column,
     violation.fingerprint,
+    violation.occurrence,
   ].join(':');
 }
 
 function compareBaseline(violations, baselineEntries) {
-  const currentKeys = new Set(violations.map(violationKey));
-  const baselineKeys = new Set();
+  const currentCounts = new Map();
+  const baselineCounts = new Map();
   const duplicateEntries = [];
+
+  for (const violation of violations) {
+    const key = violationKey(violation);
+    currentCounts.set(key, (currentCounts.get(key) ?? 0) + 1);
+  }
 
   for (const entry of baselineEntries) {
     const key = violationKey(entry);
-    if (baselineKeys.has(key)) duplicateEntries.push(entry);
-    baselineKeys.add(key);
+    if (baselineCounts.has(key)) duplicateEntries.push(entry);
+    baselineCounts.set(key, (baselineCounts.get(key) ?? 0) + 1);
+  }
+
+  const currentSeen = new Map();
+  const baselineSeen = new Map();
+  const newViolations = [];
+  const staleEntries = [];
+  for (const violation of violations) {
+    const key = violationKey(violation);
+    const seen = currentSeen.get(key) ?? 0;
+    if (seen >= (baselineCounts.get(key) ?? 0)) {
+      newViolations.push(violation);
+    }
+    currentSeen.set(key, seen + 1);
+  }
+  for (const entry of baselineEntries) {
+    const key = violationKey(entry);
+    const seen = baselineSeen.get(key) ?? 0;
+    if (seen >= (currentCounts.get(key) ?? 0)) {
+      staleEntries.push(entry);
+    }
+    baselineSeen.set(key, seen + 1);
   }
 
   return {
-    newViolations: violations.filter((entry) => !baselineKeys.has(violationKey(entry))),
-    staleEntries: baselineEntries.filter((entry) => !currentKeys.has(violationKey(entry))),
+    newViolations,
+    staleEntries,
     duplicateEntries,
   };
 }
@@ -75,8 +113,8 @@ async function main() {
 
   try {
     const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
-    if (baseline.version !== 1 || !Array.isArray(baseline.violations)) {
-      throw new Error('Unsupported or malformed baseline (expected version 1 and violations array).');
+    if (baseline.version !== 2 || !Array.isArray(baseline.violations)) {
+      throw new Error('Unsupported or malformed baseline (expected version 2 and violations array).');
     }
 
     const results = await runEslint(repositoryRoot);
@@ -120,4 +158,4 @@ async function main() {
 
 if (require.main === module) main();
 
-module.exports = { collectViolations, compareBaseline, violationKey };
+module.exports = { collectViolations, compareBaseline, fingerprint, violationKey };

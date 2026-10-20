@@ -30,19 +30,23 @@ function listTypeScriptFiles(directory) {
   return files;
 }
 
-function fingerprint(value) {
-  const normalized = value.replace(/\s+/g, ' ').trim();
+function fingerprint(value, sourceLine) {
+  const normalized = JSON.stringify({
+    value: value.replace(/\s+/g, ' ').trim(),
+    sourceLine: sourceLine.replace(/\s+/g, ' ').trim(),
+  });
   return crypto.createHash('sha256').update(normalized).digest('hex');
 }
 
 function makeViolation(rule, repositoryRoot, filePath, sourceFile, position, text) {
   const { line, character } = sourceFile.getLineAndCharacterOfPosition(position);
+  const sourceLine = sourceFile.text.split(/\r\n|\n|\r/)[line] ?? '';
   return {
     rule,
     path: toPosixPath(path.relative(repositoryRoot, filePath)),
     line: line + 1,
     column: character + 1,
-    fingerprint: fingerprint(text),
+    fingerprint: fingerprint(text, sourceLine),
   };
 }
 
@@ -162,35 +166,77 @@ function violationKey(violation) {
   return [
     violation.rule,
     violation.path,
-    violation.line,
-    violation.column,
     violation.fingerprint,
+    violation.occurrence,
   ].join(':');
 }
 
 function collectViolations(repositoryRoot, sourceRoots = DEFAULT_SOURCE_ROOTS) {
-  return sourceRoots
+  const violations = sourceRoots
     .flatMap((sourceRoot) =>
       listTypeScriptFiles(path.resolve(repositoryRoot, sourceRoot)),
     )
     .flatMap((filePath) => collectFileViolations(repositoryRoot, filePath))
-    .sort((left, right) => violationKey(left).localeCompare(violationKey(right)));
+    .sort(
+      (left, right) =>
+        left.path.localeCompare(right.path) ||
+        left.line - right.line ||
+        left.column - right.column ||
+        left.rule.localeCompare(right.rule),
+    );
+
+  const occurrences = new Map();
+  const identified = violations.map((violation) => {
+    const signature = `${violation.rule}:${violation.path}:${violation.fingerprint}`;
+    const occurrence = occurrences.get(signature) ?? 0;
+    occurrences.set(signature, occurrence + 1);
+    return { ...violation, occurrence };
+  });
+  return identified.sort((left, right) =>
+    [left.rule, left.path, left.line, left.column, left.fingerprint]
+      .join(':')
+      .localeCompare(
+        [right.rule, right.path, right.line, right.column, right.fingerprint].join(':'),
+      ),
+  );
 }
 
 function compareBaseline(violations, baselineEntries) {
-  const currentKeys = new Set(violations.map(violationKey));
-  const baselineKeys = new Set();
+  const currentCounts = new Map();
+  const baselineCounts = new Map();
   const duplicates = [];
+
+  for (const violation of violations) {
+    const key = violationKey(violation);
+    currentCounts.set(key, (currentCounts.get(key) ?? 0) + 1);
+  }
 
   for (const entry of baselineEntries) {
     const key = violationKey(entry);
-    if (baselineKeys.has(key)) duplicates.push(entry);
-    baselineKeys.add(key);
+    if (baselineCounts.has(key)) duplicates.push(entry);
+    baselineCounts.set(key, (baselineCounts.get(key) ?? 0) + 1);
+  }
+
+  const currentSeen = new Map();
+  const baselineSeen = new Map();
+  const newViolations = [];
+  const staleEntries = [];
+  for (const violation of violations) {
+    const key = violationKey(violation);
+    const seen = currentSeen.get(key) ?? 0;
+    if (seen >= (baselineCounts.get(key) ?? 0)) newViolations.push(violation);
+    currentSeen.set(key, seen + 1);
+  }
+  for (const entry of baselineEntries) {
+    const key = violationKey(entry);
+    const seen = baselineSeen.get(key) ?? 0;
+    if (seen >= (currentCounts.get(key) ?? 0)) staleEntries.push(entry);
+    baselineSeen.set(key, seen + 1);
   }
 
   return {
-    newViolations: violations.filter((entry) => !baselineKeys.has(violationKey(entry))),
-    staleEntries: baselineEntries.filter((entry) => !currentKeys.has(violationKey(entry))),
+    newViolations,
+    staleEntries,
     duplicateEntries: duplicates,
   };
 }
@@ -201,8 +247,8 @@ function main() {
 
   try {
     const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
-    if (baseline.version !== 1 || !Array.isArray(baseline.violations)) {
-      throw new Error('Unsupported or malformed baseline (expected version 1 and violations array).');
+    if (baseline.version !== 2 || !Array.isArray(baseline.violations)) {
+      throw new Error('Unsupported or malformed baseline (expected version 2 and violations array).');
     }
 
     const violations = collectViolations(repositoryRoot);
