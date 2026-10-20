@@ -3,8 +3,8 @@ import {
   MODULE_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { RiffValleyPlaylistController } from './riff-valley-playlist.controller';
-import { RiffValleyPlaylistModule } from './riff-valley-playlist.module';
+import { RiffValleyPlaylistController } from '../riff-valley-playlist.controller';
+import { RiffValleyPlaylistModule } from '../riff-valley-playlist.module';
 import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 import { SpotifyArtistsController } from 'src/integrations/spotify-integration/http/spotify-artists.controller';
 import { SpotifyAlbumsController } from 'src/integrations/spotify-integration/http/spotify-albums.controller';

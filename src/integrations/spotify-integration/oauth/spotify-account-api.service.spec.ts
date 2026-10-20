@@ -168,4 +168,14 @@ describe('SpotifyAccountApiService', () => {
       { method: 'POST', body: JSON.stringify({ uris: uris.slice(200) }) },
     );
   });
+
+  it('retira de la biblioteca únicamente la playlist identificada por su URI', async () => {
+    await service.removePlaylistFromLibrary('access', 'new-playlist-id');
+
+    expect(oauthApi.request).toHaveBeenCalledWith(
+      '/me/library?uris=spotify%3Aplaylist%3Anew-playlist-id',
+      'access',
+      { method: 'DELETE' },
+    );
+  });
 });

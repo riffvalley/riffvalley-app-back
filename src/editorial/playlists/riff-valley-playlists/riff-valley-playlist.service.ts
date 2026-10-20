@@ -5,10 +5,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { User } from 'src/identity/auth/entities/user.entity';
 import {
   RiffValleyPlaylist,
   RiffValleyPlaylistStatus as RiffValleyPlaylistStatusEnum,
-  RiffValleyPlaylistStatus,
   RiffValleyPlaylistType,
 } from './entities/riff-valley-playlist.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
@@ -46,17 +46,21 @@ export class RiffValleyPlaylistService {
     @InjectRepository(RiffValleyPlaylist)
     private readonly repo: Repository<RiffValleyPlaylist>,
     private readonly contentsService: ContentsService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async create(
     createRiffValleyPlaylistDto: CreateRiffValleyPlaylistDto,
   ): Promise<RiffValleyPlaylist> {
+    const user = createRiffValleyPlaylistDto.userId
+      ? await this.findUser(createRiffValleyPlaylistDto.userId)
+      : undefined;
+
     const entity = this.repo.create({
       ...createRiffValleyPlaylistDto,
       updateDate: new Date(createRiffValleyPlaylistDto.updateDate),
-      user: createRiffValleyPlaylistDto.userId
-        ? { id: createRiffValleyPlaylistDto.userId }
-        : undefined,
+      user,
     });
     const savedEntity = await this.repo.save(entity);
 
@@ -150,6 +154,48 @@ export class RiffValleyPlaylistService {
     updateRiffValleyPlaylistDto: UpdateRiffValleyPlaylistDto,
   ): Promise<RiffValleyPlaylist> {
     const entity = await this.findOne(id);
+    const isSpotifyLinked = Boolean(entity.spotifyPlaylistId);
+
+    if (
+      isSpotifyLinked &&
+      updateRiffValleyPlaylistDto.name !== undefined &&
+      updateRiffValleyPlaylistDto.name !== entity.name
+    ) {
+      throw new BadRequestException(
+        'No se puede cambiar el nombre de una playlist vinculada desde el PATCH editorial. Usa la operación de renombre sincronizado.',
+      );
+    }
+
+    if (
+      isSpotifyLinked &&
+      updateRiffValleyPlaylistDto.link !== undefined &&
+      updateRiffValleyPlaylistDto.link !== entity.link
+    ) {
+      throw new BadRequestException(
+        'No se puede cambiar el enlace de una playlist vinculada desde el PATCH editorial.',
+      );
+    }
+
+    if (
+      isSpotifyLinked &&
+      updateRiffValleyPlaylistDto.type !== undefined &&
+      updateRiffValleyPlaylistDto.type !== entity.type
+    ) {
+      const genreTypes: RiffValleyPlaylistType[] = [
+        RiffValleyPlaylistType.GENERO,
+        RiffValleyPlaylistType.ESPECIAL,
+        RiffValleyPlaylistType.OTRAS,
+      ];
+      const remainsInGenreFamily =
+        genreTypes.includes(entity.type) &&
+        genreTypes.includes(updateRiffValleyPlaylistDto.type);
+
+      if (!remainsInGenreFamily) {
+        throw new BadRequestException(
+          'No se puede cambiar el tipo de una playlist vinculada entre festival y género.',
+        );
+      }
+    }
 
     // Update simple fields
     if (updateRiffValleyPlaylistDto.name)
@@ -164,7 +210,7 @@ export class RiffValleyPlaylistService {
 
     // Handle User Assignment
     if (updateRiffValleyPlaylistDto.userId) {
-      entity.user = { id: updateRiffValleyPlaylistDto.userId } as any;
+      entity.user = await this.findUser(updateRiffValleyPlaylistDto.userId);
     }
 
     // Logic for State Transitions
@@ -250,5 +296,11 @@ export class RiffValleyPlaylistService {
     } as any);
 
     return this.findOne(id);
+  }
+
+  private async findUser(userId: string): Promise<User> {
+    const user = await this.userRepository.findOneBy({ id: userId });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
   }
 }

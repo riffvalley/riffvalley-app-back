@@ -9,7 +9,7 @@ import {
   roleMeetsMinimum,
   ValidRoles,
 } from 'src/identity/auth/interfaces/valid-roles';
-import { FestivalPlaylistsController } from './festival-playlists.controller';
+import { FestivalPlaylistsController } from '../festival-playlists.controller';
 
 describe('FestivalPlaylistsController authorization metadata', () => {
   const handler = (

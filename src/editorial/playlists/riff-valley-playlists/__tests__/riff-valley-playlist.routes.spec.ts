@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -8,8 +9,8 @@ import { User } from 'src/identity/auth/entities/user.entity';
 import { JwtStrategy } from 'src/identity/auth/strategies/jwt.strategy';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
-import { RiffValleyPlaylistController } from './riff-valley-playlist.controller';
-import { RiffValleyPlaylistService } from './riff-valley-playlist.service';
+import { RiffValleyPlaylistController } from '../riff-valley-playlist.controller';
+import { RiffValleyPlaylistService } from '../riff-valley-playlist.service';
 
 describe('RiffValleyPlaylist Nest HTTP routes', () => {
   let app;
@@ -69,6 +70,21 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
 
   afterEach(async () => {
     if (app) await app.close();
+  });
+
+  it('preserves user, content, and playlistArtistsCount in list responses', async () => {
+    const playlist = {
+      id: 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783',
+      name: 'Festival',
+      user: { id: testUser.id },
+      content: { id: 'content-id' },
+      playlistArtistsCount: 3,
+    };
+    service.findAll.mockResolvedValue([playlist]);
+
+    await request(app.getHttpServer())
+      .get('/api/riff-valley-playlists')
+      .expect(200, [playlist]);
   });
 
   it('routes lists, festival/genre filters, and random genre lookup', async () => {
@@ -147,5 +163,66 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(201, { id: 'content-id', riffValleyPlaylistId: id });
     expect(service.createContentForRiffValleyPlaylist).toHaveBeenCalledWith(id);
+  });
+
+  it('rejects empty names and returns 404 when a referenced user does not exist', async () => {
+    const createDto = {
+      name: '',
+      status: 'editing',
+      link: 'https://open.spotify.com/playlist/playlist-id',
+      type: 'genero',
+      updateDate: '2026-10-05T00:00:00.000Z',
+      userId: testUser.id,
+    };
+
+    await request(app.getHttpServer())
+      .post('/api/riff-valley-playlists')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send(createDto)
+      .expect(400);
+    expect(service.create).not.toHaveBeenCalled();
+
+    await request(app.getHttpServer())
+      .patch('/api/riff-valley-playlists/c5dce76c-04b2-4b2b-8ca4-bb7365e86783')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: '' })
+      .expect(400);
+    expect(service.update).not.toHaveBeenCalled();
+
+    service.create.mockRejectedValueOnce(
+      new NotFoundException('User not found'),
+    );
+    await request(app.getHttpServer())
+      .post('/api/riff-valley-playlists')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ ...createDto, name: 'Valid name' })
+      .expect(404);
+    expect(service.create).toHaveBeenCalledWith({
+      ...createDto,
+      name: 'Valid name',
+    });
+  });
+
+  it('preserves the clear 400 error for an editorial update rejected by consistency rules', async () => {
+    const id = 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783';
+    service.update.mockRejectedValueOnce(
+      new BadRequestException(
+        'No se puede cambiar el enlace de una playlist vinculada desde el PATCH editorial.',
+      ),
+    );
+
+    await request(app.getHttpServer())
+      .patch(`/api/riff-valley-playlists/${id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ link: 'https://open.spotify.com/playlist/otro-id' })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.message).toBe(
+          'No se puede cambiar el enlace de una playlist vinculada desde el PATCH editorial.',
+        );
+      });
+    expect(service.update).toHaveBeenCalledWith(id, {
+      link: 'https://open.spotify.com/playlist/otro-id',
+    });
   });
 });

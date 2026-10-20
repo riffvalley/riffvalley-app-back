@@ -9,7 +9,7 @@ import {
   roleMeetsMinimum,
   ValidRoles,
 } from 'src/identity/auth/interfaces/valid-roles';
-import { GenrePlaylistsController } from './genre-playlists.controller';
+import { GenrePlaylistsController } from '../genre-playlists.controller';
 
 describe('GenrePlaylistsController authorization metadata', () => {
   const handler = (method: keyof typeof GenrePlaylistsController.prototype) =>

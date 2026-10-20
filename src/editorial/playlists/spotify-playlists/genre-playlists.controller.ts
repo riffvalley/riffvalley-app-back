@@ -24,30 +24,30 @@ import {
   SelectPlaylistArtistTracksDto,
 } from './dto/select-playlist-artist-tracks.dto';
 import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
-import { FestivalPlaylistsService } from './festival-playlists.service';
+import { SpotifyPlaylistsService } from './spotify-playlists.service';
 
 @Controller('genre-playlists')
 @Auth(ValidRoles.riffvalley)
 export class GenrePlaylistsController {
   constructor(
-    private readonly festivalPlaylistsService: FestivalPlaylistsService,
+    private readonly spotifyPlaylistsService: SpotifyPlaylistsService,
   ) {}
 
   @Post()
   create(@Body() dto: CreateSyncedPlaylistDto) {
-    return this.festivalPlaylistsService.createGenrePlaylist(dto);
+    return this.spotifyPlaylistsService.createGenrePlaylist(dto);
   }
 
   @Post('link')
   createLinked(@Body() dto: LinkSpotifyPlaylistDto) {
-    return this.festivalPlaylistsService.createLinkedGenrePlaylist(dto);
+    return this.spotifyPlaylistsService.createLinkedGenrePlaylist(dto);
   }
 
   @Post(':riffValleyPlaylistId/link')
   linkExisting(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
-    return this.festivalPlaylistsService.linkExistingGenrePlaylist(
+    return this.spotifyPlaylistsService.linkExistingGenrePlaylist(
       riffValleyPlaylistId,
     );
   }
@@ -56,7 +56,7 @@ export class GenrePlaylistsController {
   getPlaylist(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
-    return this.festivalPlaylistsService.getGenrePlaylist(riffValleyPlaylistId);
+    return this.spotifyPlaylistsService.getGenrePlaylist(riffValleyPlaylistId);
   }
 
   @Patch(':riffValleyPlaylistId')
@@ -64,7 +64,7 @@ export class GenrePlaylistsController {
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: UpdateSyncedPlaylistDto,
   ) {
-    return this.festivalPlaylistsService.updateGenrePlaylist(
+    return this.spotifyPlaylistsService.updateGenrePlaylist(
       riffValleyPlaylistId,
       dto,
     );
@@ -90,7 +90,7 @@ export class GenrePlaylistsController {
     @UploadedFile() image: Express.Multer.File,
   ) {
     if (!image) throw new BadRequestException('Falta la imagen de portada');
-    return this.festivalPlaylistsService.updateGenrePlaylistImage(
+    return this.spotifyPlaylistsService.updateGenrePlaylistImage(
       riffValleyPlaylistId,
       image.buffer,
     );
@@ -102,7 +102,7 @@ export class GenrePlaylistsController {
     @Param('artistId', ParseUUIDPipe) artistId: string,
     @Query() query: SearchSpotifyTracksQueryDto,
   ) {
-    return this.festivalPlaylistsService.searchGenreArtistTracks(
+    return this.spotifyPlaylistsService.searchGenreArtistTracks(
       riffValleyPlaylistId,
       artistId,
       query.q,
@@ -114,7 +114,7 @@ export class GenrePlaylistsController {
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: SelectPlaylistArtistTracksDto,
   ) {
-    return this.festivalPlaylistsService.addGenreArtist(
+    return this.spotifyPlaylistsService.addGenreArtist(
       riffValleyPlaylistId,
       dto.artistId,
       dto.spotifyTrackIds,
@@ -127,7 +127,7 @@ export class GenrePlaylistsController {
     @Param('artistId', ParseUUIDPipe) artistId: string,
     @Body() dto: ReplacePlaylistArtistTracksDto,
   ) {
-    return this.festivalPlaylistsService.replaceGenreArtistTracks(
+    return this.spotifyPlaylistsService.replaceGenreArtistTracks(
       riffValleyPlaylistId,
       artistId,
       dto.spotifyTrackIds,
@@ -139,7 +139,7 @@ export class GenrePlaylistsController {
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
   ) {
-    return this.festivalPlaylistsService.removeGenreArtist(
+    return this.spotifyPlaylistsService.removeGenreArtist(
       riffValleyPlaylistId,
       artistId,
     );
@@ -149,7 +149,7 @@ export class GenrePlaylistsController {
   clear(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
-    return this.festivalPlaylistsService.clearGenrePlaylist(
+    return this.spotifyPlaylistsService.clearGenrePlaylist(
       riffValleyPlaylistId,
     );
   }
@@ -158,7 +158,7 @@ export class GenrePlaylistsController {
   shuffle(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
-    return this.festivalPlaylistsService.shuffleGenrePlaylist(
+    return this.spotifyPlaylistsService.shuffleGenrePlaylist(
       riffValleyPlaylistId,
     );
   }

@@ -1,10 +1,123 @@
-import { RiffValleyPlaylistStatus } from './entities/riff-valley-playlist.entity';
-import { RiffValleyPlaylistService } from './riff-valley-playlist.service';
+import {
+  RiffValleyPlaylistStatus,
+  RiffValleyPlaylistType,
+} from '../entities/riff-valley-playlist.entity';
+import { RiffValleyPlaylistService } from '../riff-valley-playlist.service';
+import { NotFoundException } from '@nestjs/common';
+
+const unusedUserRepository = { findOneBy: jest.fn() };
 
 describe('RiffValleyPlaylistService', () => {
-  it('incluye el número de artistas sin cargar la relación completa', async () => {
+  const validCreateDto = {
+    name: 'Playlist',
+    status: RiffValleyPlaylistStatus.EDITING,
+    link: 'https://open.spotify.com/playlist/playlist-id',
+    type: RiffValleyPlaylistType.GENERO,
+    updateDate: '2026-08-20T10:00:00.000Z',
+    userId: 'user-id',
+  };
+
+  it('valida el usuario antes de crear y responde 404 si no existe', async () => {
+    const repository = {
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+    const userRepository = { findOneBy: jest.fn().mockResolvedValue(null) };
+    const service = new RiffValleyPlaylistService(
+      repository as any,
+      {} as any,
+      userRepository as any,
+    );
+
+    await expect(service.create(validCreateDto)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(userRepository.findOneBy).toHaveBeenCalledWith({ id: 'user-id' });
+    expect(repository.create).not.toHaveBeenCalled();
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('crea la playlist cuando el usuario opcional existe', async () => {
+    const user = { id: 'user-id' };
+    const entity = { id: 'playlist-id' };
+    const repository = {
+      create: jest.fn().mockReturnValue(entity),
+      save: jest.fn().mockResolvedValue(entity),
+      findOne: jest.fn().mockResolvedValue(entity),
+    };
+    const userRepository = { findOneBy: jest.fn().mockResolvedValue(user) };
+    const service = new RiffValleyPlaylistService(
+      repository as any,
+      {} as any,
+      userRepository as any,
+    );
+
+    await expect(service.create(validCreateDto)).resolves.toBe(entity);
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...validCreateDto,
+        updateDate: new Date(validCreateDto.updateDate),
+        user,
+      }),
+    );
+    expect(repository.save).toHaveBeenCalledWith(entity);
+  });
+
+  it('valida el usuario antes de guardar una actualización', async () => {
+    const playlist = { id: 'playlist-id', user: { id: 'previous-user' } };
+    const repository = {
+      findOne: jest.fn().mockResolvedValue(playlist),
+      save: jest.fn(),
+    };
+    const userRepository = { findOneBy: jest.fn().mockResolvedValue(null) };
+    const service = new RiffValleyPlaylistService(
+      repository as any,
+      {} as any,
+      userRepository as any,
+    );
+
+    await expect(
+      service.update('playlist-id', { userId: 'missing-user' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(userRepository.findOneBy).toHaveBeenCalledWith({
+      id: 'missing-user',
+    });
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('actualiza la relación cuando el usuario existe', async () => {
+    const user = { id: 'new-user' };
+    const playlist = { id: 'playlist-id', user: { id: 'previous-user' } };
+    const repository = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(playlist)
+        .mockResolvedValue({ ...playlist, user }),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    const userRepository = { findOneBy: jest.fn().mockResolvedValue(user) };
+    const service = new RiffValleyPlaylistService(
+      repository as any,
+      {} as any,
+      userRepository as any,
+    );
+
+    await service.update('playlist-id', { userId: 'new-user' });
+
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ user }),
+    );
+  });
+
+  it('conserva user, content y el recuento de artistas en el listado', async () => {
     const playlists = [
-      { id: 'playlist-id', name: 'Festival', playlistArtistsCount: 3 },
+      {
+        id: 'playlist-id',
+        name: 'Festival',
+        user: { id: 'user-id' },
+        content: { id: 'content-id' },
+        playlistArtistsCount: 3,
+      },
     ];
     const query = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -18,7 +131,11 @@ describe('RiffValleyPlaylistService', () => {
     const repository = {
       createQueryBuilder: jest.fn().mockReturnValue(query),
     };
-    const service = new RiffValleyPlaylistService(repository as any, {} as any);
+    const service = new RiffValleyPlaylistService(
+      repository as any,
+      {} as any,
+      unusedUserRepository as any,
+    );
 
     await expect(
       service.findAll({ type: 'festival', limit: 50 }),
@@ -30,6 +147,10 @@ describe('RiffValleyPlaylistService', () => {
     expect(query.leftJoinAndSelect).toHaveBeenCalledWith(
       'riffValleyPlaylist.content',
       'content',
+    );
+    expect(query.leftJoinAndSelect).toHaveBeenCalledWith(
+      'riffValleyPlaylist.user',
+      'user',
     );
     expect(query.andWhere).toHaveBeenCalledWith(
       'riffValleyPlaylist.type = :type',
@@ -69,6 +190,7 @@ describe('RiffValleyPlaylistService', () => {
     const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
+      unusedUserRepository as any,
     );
 
     await service.update('playlist-id', {
@@ -102,6 +224,7 @@ describe('RiffValleyPlaylistService', () => {
     const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
+      unusedUserRepository as any,
     );
 
     await expect(
@@ -137,6 +260,7 @@ describe('RiffValleyPlaylistService', () => {
     const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
+      unusedUserRepository as any,
     );
 
     await service.update('playlist-id', { status });
@@ -173,6 +297,7 @@ describe('RiffValleyPlaylistService', () => {
     const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
+      unusedUserRepository as any,
     );
 
     await service.update('playlist-id', { updateDate });
@@ -201,6 +326,7 @@ describe('RiffValleyPlaylistService', () => {
     const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
+      unusedUserRepository as any,
     );
 
     await expect(
@@ -228,6 +354,7 @@ describe('RiffValleyPlaylistService', () => {
     const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
+      unusedUserRepository as any,
     );
 
     await service.createContentForRiffValleyPlaylist('playlist-id');
@@ -255,6 +382,7 @@ describe('RiffValleyPlaylistService', () => {
     const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
+      unusedUserRepository as any,
     );
 
     await expect(
@@ -276,6 +404,7 @@ describe('RiffValleyPlaylistService', () => {
     const service = new RiffValleyPlaylistService(
       repository as any,
       contentsService as any,
+      unusedUserRepository as any,
     );
 
     await expect(

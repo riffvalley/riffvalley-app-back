@@ -5,6 +5,7 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  IsNotEmpty,
   MaxLength,
 } from 'class-validator';
 import {
@@ -14,6 +15,7 @@ import {
 
 export class CreateRiffValleyPlaylistDto {
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
   name: string;
 

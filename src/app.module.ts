@@ -37,7 +37,7 @@ import { LastfmModule } from './catalog/lastfm/lastfm.module';
 import { SuggestionsModule } from './product/suggestions/suggestions.module';
 import { AccessRequestsModule } from './identity/access-requests/access-requests.module';
 import { InstagramIntegrationModule } from './integrations/instagram-integration/instagram-integration.module';
-import { FestivalPlaylistsModule } from './editorial/playlists/festival-playlists/festival-playlists.module';
+import { SpotifyPlaylistsModule } from './editorial/playlists/spotify-playlists/spotify-playlists.module';
 import { TiktokIntegrationModule } from './integrations/tiktok-integration/tiktok-integration.module';
 
 @Module({
@@ -95,7 +95,7 @@ import { TiktokIntegrationModule } from './integrations/tiktok-integration/tikto
     SuggestionsModule,
     AccessRequestsModule,
     InstagramIntegrationModule,
-    FestivalPlaylistsModule,
+    SpotifyPlaylistsModule,
     TiktokIntegrationModule,
   ],
 })

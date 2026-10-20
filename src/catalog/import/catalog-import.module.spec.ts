@@ -10,7 +10,7 @@ import { Disc } from '../discs/entities/disc.entity';
 import { Genre } from '../genres/entities/genre.entity';
 import { Rate } from '../../community/rates/entities/rate.entity';
 import { NationalRelease } from '../../editorial/national-releases/entities/national-release.entity';
-import { RiffValleyPlaylistArtist } from '../../editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from '../../editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
 import { UserAccessLog } from '../../identity/auth/entities/user-access-log.entity';
 import { User } from '../../identity/auth/entities/user.entity';
 import { SpotifyConnection } from '../../integrations/spotify-integration';

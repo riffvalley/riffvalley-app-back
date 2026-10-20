@@ -2,7 +2,7 @@ import { DataSource, getMetadataArgsStorage } from 'typeorm';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { ContentType } from 'src/editorial/contents/entities/content.entity';
-import { RiffValleyPlaylistArtist } from 'src/editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from 'src/editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
 import { RiffValleyPlaylist } from './riff-valley-playlist.entity';
 
 describe('RiffValleyPlaylist ORM metadata', () => {

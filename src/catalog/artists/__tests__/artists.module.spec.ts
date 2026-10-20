@@ -6,7 +6,7 @@ import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { NationalRelease } from 'src/editorial/national-releases/entities/national-release.entity';
-import { RiffValleyPlaylistArtist } from 'src/editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from 'src/editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
 import { Artist } from '../entities/artist.entity';
 import { ArtistCatalogService } from '../catalog/artist-catalog.service';
 import { ArtistDetailsService } from '../details/artist-details.service';

@@ -27,19 +27,19 @@ import { ReplaceFailedFestivalArtistTracksDto } from './dto/select-playlist-arti
 import { SyncPlaylistArtistDto } from './dto/sync-playlist-artist.dto';
 import { TopSongsQueryDto } from './dto/top-songs-query.dto';
 import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
-import { FestivalPlaylistsService } from './festival-playlists.service';
+import { SpotifyPlaylistsService } from './spotify-playlists.service';
 
 @Controller('festival-playlists')
 export class FestivalPlaylistsController {
   constructor(
-    private readonly festivalPlaylistsService: FestivalPlaylistsService,
+    private readonly spotifyPlaylistsService: SpotifyPlaylistsService,
     private readonly configService: ConfigService,
   ) {}
 
   @Post('spotify/connect')
   @Auth(ValidRoles.riffvalley)
   connectSpotify() {
-    return this.festivalPlaylistsService.startSpotifyConnection();
+    return this.spotifyPlaylistsService.startSpotifyConnection();
   }
 
   @Get('spotify/callback')
@@ -53,7 +53,7 @@ export class FestivalPlaylistsController {
       if (oauthError)
         throw new HttpException(`Spotify OAuth: ${oauthError}`, 400);
       const result =
-        await this.festivalPlaylistsService.completeSpotifyConnection(
+        await this.spotifyPlaylistsService.completeSpotifyConnection(
           code,
           state,
         );
@@ -70,19 +70,19 @@ export class FestivalPlaylistsController {
   @Get('spotify/connection')
   @Auth(ValidRoles.riffvalley)
   getSpotifyConnection() {
-    return this.festivalPlaylistsService.getSpotifyConnection();
+    return this.spotifyPlaylistsService.getSpotifyConnection();
   }
 
   @Delete('spotify/connection')
   @Auth(ValidRoles.riffvalley)
   disconnectSpotify() {
-    return this.festivalPlaylistsService.disconnectSpotify();
+    return this.spotifyPlaylistsService.disconnectSpotify();
   }
 
   @Get('artists/top-songs')
   @Auth()
   getTopSongs(@Query() query: TopSongsQueryDto) {
-    return this.festivalPlaylistsService.getTopSongs(
+    return this.spotifyPlaylistsService.getTopSongs(
       query.artist,
       query.limit,
       query.recentSetlists,
@@ -92,13 +92,13 @@ export class FestivalPlaylistsController {
   @Post()
   @Auth(ValidRoles.riffvalley)
   createFestivalPlaylist(@Body() dto: CreateSyncedPlaylistDto) {
-    return this.festivalPlaylistsService.createFestivalPlaylist(dto);
+    return this.spotifyPlaylistsService.createFestivalPlaylist(dto);
   }
 
   @Post('link')
   @Auth(ValidRoles.riffvalley)
   createLinkedFestivalPlaylist(@Body() dto: LinkSpotifyPlaylistDto) {
-    return this.festivalPlaylistsService.createLinkedFestivalPlaylist(dto);
+    return this.spotifyPlaylistsService.createLinkedFestivalPlaylist(dto);
   }
 
   @Post(':riffValleyPlaylistId/link')
@@ -106,7 +106,7 @@ export class FestivalPlaylistsController {
   linkExistingFestivalPlaylist(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
-    return this.festivalPlaylistsService.linkExistingFestivalPlaylist(
+    return this.spotifyPlaylistsService.linkExistingFestivalPlaylist(
       riffValleyPlaylistId,
     );
   }
@@ -117,7 +117,7 @@ export class FestivalPlaylistsController {
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: UpdateSyncedPlaylistDto,
   ) {
-    return this.festivalPlaylistsService.updateFestivalPlaylist(
+    return this.spotifyPlaylistsService.updateFestivalPlaylist(
       riffValleyPlaylistId,
       dto,
     );
@@ -144,7 +144,7 @@ export class FestivalPlaylistsController {
     @UploadedFile() image: Express.Multer.File,
   ) {
     if (!image) throw new BadRequestException('Falta la imagen de portada');
-    return this.festivalPlaylistsService.updateFestivalPlaylistImage(
+    return this.spotifyPlaylistsService.updateFestivalPlaylistImage(
       riffValleyPlaylistId,
       image.buffer,
     );
@@ -155,7 +155,7 @@ export class FestivalPlaylistsController {
   getFestivalPlaylist(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
-    return this.festivalPlaylistsService.getFestivalPlaylist(
+    return this.spotifyPlaylistsService.getFestivalPlaylist(
       riffValleyPlaylistId,
     );
   }
@@ -166,7 +166,7 @@ export class FestivalPlaylistsController {
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Body() dto: SyncPlaylistArtistDto,
   ) {
-    return this.festivalPlaylistsService.addArtist(riffValleyPlaylistId, dto);
+    return this.spotifyPlaylistsService.addArtist(riffValleyPlaylistId, dto);
   }
 
   @Get(':riffValleyPlaylistId/artists/:artistId/tracks')
@@ -176,7 +176,7 @@ export class FestivalPlaylistsController {
     @Param('artistId', ParseUUIDPipe) artistId: string,
     @Query() query: SearchSpotifyTracksQueryDto,
   ) {
-    return this.festivalPlaylistsService.searchFestivalArtistTracks(
+    return this.spotifyPlaylistsService.searchFestivalArtistTracks(
       riffValleyPlaylistId,
       artistId,
       query.q,
@@ -190,7 +190,7 @@ export class FestivalPlaylistsController {
     @Param('artistId', ParseUUIDPipe) artistId: string,
     @Body() dto: ReplaceFailedFestivalArtistTracksDto,
   ) {
-    return this.festivalPlaylistsService.replaceFailedFestivalArtistTracks(
+    return this.spotifyPlaylistsService.replaceFailedFestivalArtistTracks(
       riffValleyPlaylistId,
       artistId,
       dto.spotifyTrackIds,
@@ -202,7 +202,7 @@ export class FestivalPlaylistsController {
   clearFestivalPlaylist(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
   ) {
-    return this.festivalPlaylistsService.clearFestivalPlaylist(
+    return this.spotifyPlaylistsService.clearFestivalPlaylist(
       riffValleyPlaylistId,
     );
   }
@@ -213,7 +213,7 @@ export class FestivalPlaylistsController {
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
   ) {
-    return this.festivalPlaylistsService.removeArtist(
+    return this.spotifyPlaylistsService.removeArtist(
       riffValleyPlaylistId,
       artistId,
     );
