@@ -16,4 +16,4 @@ Destinos actuales tras el corte 1: `roadmap/catalog/catalog.md`, `roadmap/catalo
 
 - [Auditorías de Catalog en Backend Cleanup](../backend-cleanup/catalog.md) — evidencia técnica por módulo, complementaria a este roadmap.
 - [Índice Backend Cleanup](../backend-cleanup/README.md) — método, inventario global y navegación a Catalog y Editorial.
-- [Quality Gates de Backend Cleanup](../backend-cleanup/quality-gates.md) — norma estructural y registro BC-QG2; Editorial permanece abierto.
+- [Quality Gates de Backend Cleanup](../backend-cleanup/quality-gates.md) — norma estructural y registro BC-QG2; Editorial se completó por BC-ED-0, con cero infracciones editoriales en los baselines.

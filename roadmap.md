@@ -21,12 +21,13 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 - [Integrations](roadmap/integrations/README.md) — agrupación e inventario progresivo de integraciones externas bajo `src/integrations/`.
 - [Integrations Cleanup](roadmap/integrations/README.md#integrations-cleanup) — auditoría interna y saneamiento progresivo de las ocho integraciones.
 - [Backend Architecture](roadmap/backend-architecture.md) — inventario global de módulos, ownership propuesto, árbol objetivo y plan futuro de reorganización física sin cambios de comportamiento.
-- [Backend Cleanup](roadmap/backend-cleanup/README.md) — reglas, inventario global y auditorías de Catalog y Editorial; [Quality Gates](roadmap/backend-cleanup/quality-gates.md) conserva la norma estructural y BC-QG2. Editorial permanece abierto.
+- [Backend Cleanup](roadmap/backend-cleanup/README.md) — reglas, inventario global y auditorías de Catalog y Editorial; [Quality Gates](roadmap/backend-cleanup/quality-gates.md) conserva la norma estructural y BC-QG2. Editorial quedó completado por BC-ED-0 (2026-10-20).
 
 ## Estado de alto nivel
 
 - **Catalog:** C5 declara cerrada la fase de ownership de Catalog (2026-10-04). La planificación detallada de Discs permanece en su documento; su última nota de cierre deja D48 pendiente.
 - **Community:** cerrada (2026-10-05). Migración estructural y saneamiento G.1–G.7 completados; regresión backend y regresión manual frontend completadas sin incidencias. No quedan subtareas pendientes en su roadmap; los desacoplamientos Catalog ↔ Community y Auth → Rate siguen aplazados.
+- **Editorial:** completado por BC-ED-0 (2026-10-20). BC-ED-1–10 completados, sin bloqueos activos; Links retirado por BC-LNK-1. Véase el [cierre formal](roadmap/backend-cleanup/editorial/closure.md).
 - **Roles:** roadmap funcional completado. Backend y frontend desplegados, PostgreSQL usa `users.role` y la secuencia de producción quedó verificada; las comprobaciones adicionales de permisos con cuentas editoriales y administrativas se conservan como observaciones, no como fases obligatorias. Véase [cierre de roles](roadmap/roles/roles.md).
 - **Fase 4 — Lists:** administración de listas, integración WordPress y sincronización/publicación de discos; considerar primero los efectos externos.
 - **Fase 5 — Festival Playlists:** reglas de playlist e integración externa; revisar selección y sincronización de discos y manejo de errores.

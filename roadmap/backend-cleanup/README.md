@@ -10,9 +10,9 @@ Este índice conserva el objetivo, las reglas, el procedimiento y el inventario 
 - [Videos y Contents](editorial/videos-contents.md) — BC-LNK-1 y auditorías de Videos y Contents.
 - [Reunions, Points y Playlists](editorial/reunions-playlists.md) — auditorías y ownership de estas capacidades editoriales.
 - [National Releases](editorial/national-releases.md) — auditoría BC-NR e historial asociado.
-- [Cierre de Editorial](editorial/closure.md) — BC-ED-0, BC-ED-9, BC-ED-10 y trabajo pendiente; Editorial permanece abierto. La sección transversal de Quality Gate queda aquí temporalmente hasta el corte 7.
+- [Cierre de Editorial](editorial/closure.md) — BC-ED-0, BC-ED-9 y BC-ED-10; Editorial completado formalmente tras confirmar que no hay bloqueos pendientes.
 
-Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gates.md). La reorganización documental no modifica estados técnicos; Editorial permanece abierto.
+Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gates.md). BC-ED-0 cierra Editorial sin cambiar el estado de otros dominios.
 
 ## Objetivo y alcance
 
@@ -66,18 +66,18 @@ Un módulo queda **completado** solo después de cerrar todas las tareas aprobad
 
 ## Orden inicial y estado
 
-La secuencia se ampliará después de cada dominio; no constituye una orden para auditar todos los módulos ahora. Los 40 módulos funcionales identificados por Backend Architecture aparecen aquí como pendientes, excepto Artists, cuya auditoría se registra abajo. AppModule y archivos de arranque no se consideran módulos funcionales.
+La secuencia se amplía después de cada dominio; no constituye una orden para auditar todos los módulos a la vez. Los 40 módulos funcionales identificados por Backend Architecture aparecen con su estado actual en las tablas siguientes y en los cierres enlazados. AppModule y archivos de arranque no se consideran módulos funcionales.
 
-| Orden | Dominio                   | Módulos previstos                                                                                                                 | Estado                                                                                                   |
-| ----- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                  | Artists, Countries, Genres, CatalogImport, CatalogOverview y LastfmCatalog completados; Discs en cleanup |
-| 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                    | Pendiente                                                                                                |
-| 3     | Editorial                 | Articles, Asignations, Contents, SpotifyPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | Módulos activos completados; Links retirado por BC-LNK-1; BC-ED-8a y BC-ED-9 completados; cero infracciones estructurales editoriales; Editorial sigue abierto por deudas independientes documentadas en BC-ED-0/8a |
-| 4     | Product                   | News, Suggestions, Versions                                                                                                       | Pendiente                                                                                                |
-| 5     | Identity                  | Auth, AccessRequests                                                                                                              | Pendiente                                                                                                |
-| 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                            | Pendiente                                                                                                |
-| 7     | Platform / Infrastructure | I18n, Seeds, Uploads                                                                                                              | Pendiente                                                                                                |
-| 8     | Communications            | Mail                                                                                                                              | Pendiente                                                                                                |
+| Orden | Dominio                   | Módulos previstos                                                                                                                | Estado                                                                                                                                                                  |
+| ----- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                 | Artists, Countries, Genres, CatalogImport, CatalogOverview y LastfmCatalog completados; Discs en cleanup                                                                |
+| 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                   | Pendiente                                                                                                                                                               |
+| 3     | Editorial                 | Articles, Asignations, Contents, SpotifyPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | **Completado** por BC-ED-0; diez módulos activos completados, Links retirado por BC-LNK-1, BC-ED-1–10 completados y cero infracciones editoriales en los tres baselines |
+| 4     | Product                   | News, Suggestions, Versions                                                                                                      | Pendiente                                                                                                                                                               |
+| 5     | Identity                  | Auth, AccessRequests                                                                                                             | Pendiente                                                                                                                                                               |
+| 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                           | Pendiente                                                                                                                                                               |
+| 7     | Platform / Infrastructure | I18n, Seeds, Uploads                                                                                                             | Pendiente                                                                                                                                                               |
+| 8     | Communications            | Mail                                                                                                                             | Pendiente                                                                                                                                                               |
 
 ### Estado detallado por módulo
 
