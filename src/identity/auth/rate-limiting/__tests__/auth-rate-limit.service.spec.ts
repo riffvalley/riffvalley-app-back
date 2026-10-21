@@ -59,6 +59,26 @@ describe('AuthRateLimitService', () => {
     expect(JSON.stringify(parameters)).not.toContain('192.0.2.3');
   });
 
+  it('accepts an existing 25-byte JWT secret for HMAC rate-limit keys', async () => {
+    const query = jest.fn().mockResolvedValueOnce([]);
+    const service = new AuthRateLimitService(
+      { query } as never,
+      new ConfigService({ JWT_SECRET: 'A7d4f9K2m6Q8v3R5s1T0x9B4c' }),
+    );
+
+    await expect(
+      service.consume([
+        {
+          scope: 'login_ip',
+          subject: '192.0.2.3',
+          limit: 30,
+          windowSeconds: 900,
+        },
+      ]),
+    ).resolves.toBeNull();
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   it('fails closed when PostgreSQL cannot persist the decision', async () => {
     const service = createService(jest.fn().mockRejectedValue(new Error('db')));
 
