@@ -1,7 +1,8 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { CreateRequestDto } from '../dto/create-request.dto';
+import { UpdateRequestDto } from '../dto/update-request.dto';
 
-describe('CreateRequestDto current validation contract', () => {
+describe('Request DTO validation', () => {
   const validationPipe = new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,
@@ -9,7 +10,7 @@ describe('CreateRequestDto current validation contract', () => {
     transformOptions: { enableImplicitConversion: true },
   });
 
-  function transformBody(value: Record<string, unknown>) {
+  function transformCreateBody(value: Record<string, unknown>) {
     return validationPipe.transform(value, {
       type: 'body',
       metatype: CreateRequestDto,
@@ -17,75 +18,100 @@ describe('CreateRequestDto current validation contract', () => {
     });
   }
 
-  it('accepts omitted/null optional fields and null Catalog references', async () => {
-    const dto = await transformBody({
-      discName: 'Record',
-      artistName: 'Band',
+  function transformUpdateBody(value: Record<string, unknown>) {
+    return validationPipe.transform(value, {
+      type: 'body',
+      metatype: UpdateRequestDto,
+      data: undefined,
+    });
+  }
+
+  const requestFields = { discName: 'Record', artistName: 'Band' };
+
+  it('accepts an omitted/null releaseDate and omitted/null Catalog references', async () => {
+    const omitted = await transformCreateBody(requestFields);
+    expect(omitted.releaseDate).toBeUndefined();
+
+    const cleared = await transformCreateBody({
+      ...requestFields,
       releaseDate: null,
       genreId: null,
       countryId: null,
     });
-
-    expect(dto).toMatchObject({
-      discName: 'Record',
-      artistName: 'Band',
+    expect(cleared).toMatchObject({
+      releaseDate: null,
       genreId: null,
       countryId: null,
     });
-    expect(dto.releaseDate).toBeNull();
-
-    const omittedDate = await transformBody({
-      discName: 'Record',
-      artistName: 'Band',
-    });
-    expect(omittedDate.releaseDate).toBeUndefined();
   });
 
-  it('converts valid ISO date input and accepts UUID v4 Catalog references', async () => {
-    const dto = await transformBody({
-      discName: 'Record',
-      artistName: 'Band',
-      releaseDate: '2025-04-02',
-      genreId: '123e4567-e89b-42d3-a456-426614174000',
-      countryId: '123e4567-e89b-42d3-a456-426614174001',
-    });
-
-    expect(dto.releaseDate).toBeInstanceOf(Date);
-    expect(dto.releaseDate?.toISOString()).toBe('2025-04-02T00:00:00.000Z');
-    expect(dto.genreId).toBe('123e4567-e89b-42d3-a456-426614174000');
-    expect(dto.countryId).toBe('123e4567-e89b-42d3-a456-426614174001');
-
-    const timestampDto = await transformBody({
-      discName: 'Record',
-      artistName: 'Band',
-      releaseDate: '2025-04-02T10:30:00.000Z',
-    });
-    expect(timestampDto.releaseDate?.toISOString()).toBe(
-      '2025-04-02T10:30:00.000Z',
-    );
+  it.each([
+    ['date-only', '2025-04-02'],
+    ['ISO timestamp', '2025-04-02T10:30:00.000Z'],
+    ['ISO timestamp with offset', '2025-04-02T10:30:00+02:00'],
+  ])('accepts a valid %s releaseDate', async (_label, releaseDate) => {
+    const dto = await transformCreateBody({ ...requestFields, releaseDate });
+    expect(dto.releaseDate).toBe(releaseDate);
   });
 
-  it('does not reject an invalid releaseDate format at the validation boundary', async () => {
-    const dto = await transformBody({
-      discName: 'Record',
-      artistName: 'Band',
-      releaseDate: 'not-a-date',
-    });
+  it.each([
+    '',
+    'not-a-date',
+    '2025-02-30',
+    '2025-02-30T10:30:00Z',
+    '2025-13-01',
+    '2025-W14-3',
+    '2025-092',
+    '2025-04-02 10:30:00',
+    '2025-04-02T25:61:61Z',
+  ])(
+    'rejects invalid creation releaseDate %p with HTTP 400',
+    async (releaseDate) => {
+      await expect(
+        transformCreateBody({ ...requestFields, releaseDate }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    },
+  );
 
-    expect(dto.releaseDate).toBeInstanceOf(Date);
-    expect(Number.isNaN(dto.releaseDate?.getTime())).toBe(true);
+  it('keeps PATCH omission, null clearing, and valid date values distinct', async () => {
+    const omitted = await transformUpdateBody({});
+    expect(omitted.releaseDate).toBeUndefined();
+
+    const cleared = await transformUpdateBody({ releaseDate: null });
+    expect(cleared.releaseDate).toBeNull();
+
+    const updated = await transformUpdateBody({ releaseDate: '2025-04-02' });
+    expect(updated.releaseDate).toBe('2025-04-02');
+  });
+
+  it.each(['', '2025-02-30', 'not-a-date'])(
+    'rejects invalid PATCH releaseDate %p with HTTP 400',
+    async (releaseDate) => {
+      await expect(transformUpdateBody({ releaseDate })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    },
+  );
+
+  it('accepts omitted and null Catalog references on create and PATCH', async () => {
+    await expect(transformCreateBody(requestFields)).resolves.toBeDefined();
+    await expect(
+      transformCreateBody({ ...requestFields, genreId: null, countryId: null }),
+    ).resolves.toBeDefined();
+    await expect(transformUpdateBody({})).resolves.toBeDefined();
+    await expect(
+      transformUpdateBody({ genreId: null, countryId: null }),
+    ).resolves.toBeDefined();
   });
 
   it.each(['', 'not-a-uuid', '123e4567-e89b-12d3-a456-426614174000'])(
-    'rejects supplied genreId/countryId value %p because only UUID v4 is accepted',
+    'rejects non-v4 Catalog reference %p with HTTP 400',
     async (id) => {
       await expect(
-        transformBody({
-          discName: 'Record',
-          artistName: 'Band',
-          genreId: id,
-          countryId: id,
-        }),
+        transformCreateBody({ ...requestFields, genreId: id, countryId: id }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        transformUpdateBody({ genreId: id, countryId: id }),
       ).rejects.toBeInstanceOf(BadRequestException);
     },
   );

@@ -34,8 +34,16 @@ export class RequestsService {
   ) {}
 
   async create(dto: CreateRequestDto, user: User): Promise<DiscRequest> {
+    await Promise.all([
+      this.assertGenreExists(dto.genreId),
+      this.assertCountryExists(dto.countryId),
+    ]);
+    const { releaseDate, ...requestFields } = dto;
     const request = this.requestRepo.create({
-      ...dto,
+      ...requestFields,
+      ...(releaseDate !== undefined
+        ? { releaseDate: releaseDate === null ? null : new Date(releaseDate) }
+        : {}),
       user,
       genre: dto.genreId ? ({ id: dto.genreId } as Genre) : null,
       country: dto.countryId ? ({ id: dto.countryId } as Country) : null,
@@ -69,7 +77,11 @@ export class RequestsService {
       );
     }
 
-    const { genreId, countryId, ...rest } = dto;
+    const { genreId, countryId, releaseDate, ...rest } = dto;
+    await Promise.all([
+      genreId === undefined ? undefined : this.assertGenreExists(genreId),
+      countryId === undefined ? undefined : this.assertCountryExists(countryId),
+    ]);
 
     Object.assign(request, rest);
 
@@ -78,6 +90,9 @@ export class RequestsService {
     }
     if (countryId !== undefined) {
       request.country = countryId ? ({ id: countryId } as Country) : null;
+    }
+    if (releaseDate !== undefined) {
+      request.releaseDate = releaseDate === null ? null : new Date(releaseDate);
     }
 
     return this.requestRepo.save(request);
@@ -150,5 +165,23 @@ export class RequestsService {
     request.status = RequestStatus.PENDING;
     request.adminNotes = null;
     return this.requestRepo.save(request);
+  }
+
+  private async assertGenreExists(
+    genreId: string | null | undefined,
+  ): Promise<void> {
+    if (!genreId) return;
+    const genre = await this.genreRepo.findOneBy({ id: genreId });
+    if (!genre)
+      throw new NotFoundException(`No se encontró el género ${genreId}`);
+  }
+
+  private async assertCountryExists(
+    countryId: string | null | undefined,
+  ): Promise<void> {
+    if (!countryId) return;
+    const country = await this.countryRepo.findOneBy({ id: countryId });
+    if (!country)
+      throw new NotFoundException(`No se encontró el país ${countryId}`);
   }
 }

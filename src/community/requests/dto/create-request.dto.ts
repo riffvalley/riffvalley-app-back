@@ -1,9 +1,11 @@
 import {
   IsBoolean,
+  IsDateString,
   IsOptional,
   IsString,
   IsUrl,
   IsUUID,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -20,7 +22,11 @@ export class CreateRequestDto {
   artistName: string;
 
   @IsOptional()
-  releaseDate?: Date;
+  @Matches(
+    /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?$/,
+  )
+  @IsDateString({ strict: true, strictSeparator: true })
+  releaseDate?: string | null;
 
   @IsBoolean()
   @IsOptional()
@@ -45,9 +51,9 @@ export class CreateRequestDto {
 
   @IsUUID('4')
   @IsOptional()
-  genreId?: string;
+  genreId?: string | null;
 
   @IsUUID('4')
   @IsOptional()
-  countryId?: string;
+  countryId?: string | null;
 }

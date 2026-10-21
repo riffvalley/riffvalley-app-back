@@ -10,6 +10,11 @@ import {
   Repository,
   getMetadataArgsStorage,
 } from 'typeorm';
+import {
+  BadRequestException,
+  NotFoundException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
@@ -18,6 +23,7 @@ import { User } from 'src/identity/auth/entities/user.entity';
 import { CreateRequestDto } from '../dto/create-request.dto';
 import { DiscRequest, RequestStatus } from '../entities/disc-request.entity';
 import { RequestsService } from '../requests.service';
+import { RequestsController } from '../requests.controller';
 
 function repositoryMock<T extends ObjectLiteral, M extends object>(
   entity: EntityTarget<T>,
@@ -39,17 +45,56 @@ function createService(
   requestRepo: Repository<DiscRequest>,
   artistRepo: Repository<Artist> = repositoryMock(Artist, {}),
   discRepo: Repository<Disc> = repositoryMock(Disc, {}),
+  genreRepo: Repository<Genre> = repositoryMock(Genre, {}),
+  countryRepo: Repository<Country> = repositoryMock(Country, {}),
 ): RequestsService {
   return new RequestsService(
     requestRepo,
     artistRepo,
     discRepo,
-    repositoryMock(Genre, {}),
-    repositoryMock(Country, {}),
+    genreRepo,
+    countryRepo,
   );
 }
 
 describe('RequestsService characterization', () => {
+  it('rejects invalid create input before controller persistence can run', async () => {
+    const requestRepo = repositoryMock(DiscRequest, {
+      create: jest.fn<DiscRequest, [DeepPartial<DiscRequest>]>(),
+      save: jest.fn<Promise<DiscRequest>, [DiscRequest]>(),
+    });
+    const service = createService(requestRepo);
+    const controller = new RequestsController(service);
+    const validationPipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    });
+    const user = Object.assign(new User(), { id: 'user-id' });
+
+    await expect(
+      (async () => {
+        const dto = await validationPipe.transform(
+          {
+            discName: 'Record',
+            artistName: 'Band',
+            releaseDate: '2025-02-30',
+          },
+          {
+            type: 'body',
+            metatype: CreateRequestDto,
+            data: undefined,
+          },
+        );
+        return controller.create(dto, user);
+      })(),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(requestRepo.create).not.toHaveBeenCalled();
+    expect(requestRepo.save).not.toHaveBeenCalled();
+  });
+
   it('preserves eager request relations and createdAt-descending read order', async () => {
     const eagerPayload = requestFixture({
       id: 'request-id',
@@ -109,13 +154,20 @@ describe('RequestsService characterization', () => {
 
   it('creates a request linked to the authenticated user and optional Catalog references', async () => {
     const user = Object.assign(new User(), { id: 'user-id' });
+    const genre = Object.assign(new Genre(), { id: 'genre-id' });
+    const country = Object.assign(new Country(), { id: 'country-id' });
     const dto = Object.assign(new CreateRequestDto(), {
       discName: 'Record',
       artistName: 'Band',
+      releaseDate: '2025-04-02',
       genreId: 'genre-id',
       countryId: 'country-id',
     });
-    const request = Object.assign(new DiscRequest(), { ...dto, user });
+    const request = Object.assign(new DiscRequest(), {
+      ...dto,
+      releaseDate: new Date('2025-04-02T00:00:00.000Z'),
+      user,
+    });
     const requestRepo = repositoryMock(DiscRequest, {
       create: jest
         .fn<DiscRequest, [DeepPartial<DiscRequest>]>()
@@ -124,15 +176,34 @@ describe('RequestsService characterization', () => {
         .fn<Promise<DiscRequest>, [DiscRequest]>()
         .mockResolvedValue(request),
     });
-    const service = createService(requestRepo);
+    const genreRepo = repositoryMock(Genre, {
+      findOneBy: jest
+        .fn<Promise<Genre | null>, [FindOptionsWhere<Genre>]>()
+        .mockResolvedValue(genre),
+    });
+    const countryRepo = repositoryMock(Country, {
+      findOneBy: jest
+        .fn<Promise<Country | null>, [FindOptionsWhere<Country>]>()
+        .mockResolvedValue(country),
+    });
+    const service = createService(
+      requestRepo,
+      undefined,
+      undefined,
+      genreRepo,
+      countryRepo,
+    );
 
     await expect(service.create(dto, user)).resolves.toBe(request);
     expect(requestRepo.create).toHaveBeenCalledWith({
       ...dto,
+      releaseDate: new Date('2025-04-02T00:00:00.000Z'),
       user,
       genre: { id: 'genre-id' },
       country: { id: 'country-id' },
     });
+    expect(genreRepo.findOneBy).toHaveBeenCalledWith({ id: 'genre-id' });
+    expect(countryRepo.findOneBy).toHaveBeenCalledWith({ id: 'country-id' });
     expect(requestRepo.save).toHaveBeenCalledWith(request);
   });
 
@@ -161,6 +232,250 @@ describe('RequestsService characterization', () => {
       genre: null,
       country: null,
     });
+  });
+
+  it('does not query Catalog for omitted or null relations on creation', async () => {
+    const user = Object.assign(new User(), { id: 'user-id' });
+    const dto = Object.assign(new CreateRequestDto(), {
+      discName: 'Record',
+      artistName: 'Band',
+      genreId: null,
+      countryId: null,
+    });
+    const requestRepo = repositoryMock(DiscRequest, {
+      create: jest
+        .fn<DiscRequest, [DeepPartial<DiscRequest>]>()
+        .mockImplementation((values) =>
+          Object.assign(new DiscRequest(), values),
+        ),
+      save: jest
+        .fn<Promise<DiscRequest>, [DiscRequest]>()
+        .mockImplementation(async (request) => request),
+    });
+    const genreRepo = repositoryMock(Genre, { findOneBy: jest.fn() });
+    const countryRepo = repositoryMock(Country, { findOneBy: jest.fn() });
+    const service = createService(
+      requestRepo,
+      undefined,
+      undefined,
+      genreRepo,
+      countryRepo,
+    );
+
+    await service.create(dto, user);
+
+    expect(genreRepo.findOneBy).not.toHaveBeenCalled();
+    expect(countryRepo.findOneBy).not.toHaveBeenCalled();
+    expect(requestRepo.save).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['genre', 'country'] as const)(
+    'returns 404 and performs no writes when the requested %s does not exist',
+    async (reference) => {
+      const user = Object.assign(new User(), { id: 'user-id' });
+      const dto = Object.assign(new CreateRequestDto(), {
+        discName: 'Record',
+        artistName: 'Band',
+        ...(reference === 'genre'
+          ? { genreId: 'genre-id' }
+          : { countryId: 'country-id' }),
+      });
+      const requestRepo = repositoryMock(DiscRequest, {
+        create: jest.fn<DiscRequest, [DeepPartial<DiscRequest>]>(),
+        save: jest.fn<Promise<DiscRequest>, [DiscRequest]>(),
+      });
+      const genreRepo = repositoryMock(Genre, {
+        findOneBy: jest
+          .fn<Promise<Genre | null>, [FindOptionsWhere<Genre>]>()
+          .mockResolvedValue(null),
+      });
+      const countryRepo = repositoryMock(Country, {
+        findOneBy: jest
+          .fn<Promise<Country | null>, [FindOptionsWhere<Country>]>()
+          .mockResolvedValue(null),
+      });
+      const service = createService(
+        requestRepo,
+        undefined,
+        undefined,
+        genreRepo,
+        countryRepo,
+      );
+
+      await expect(service.create(dto, user)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(requestRepo.create).not.toHaveBeenCalled();
+      expect(requestRepo.save).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps omitted update fields unchanged and skips Catalog lookups', async () => {
+    const request = requestFixture({
+      id: 'request-id',
+      releaseDate: new Date('2025-04-02T00:00:00.000Z'),
+      genre: Object.assign(new Genre(), { id: 'genre-id' }),
+      country: Object.assign(new Country(), { id: 'country-id' }),
+      status: RequestStatus.PENDING,
+    });
+    const requestRepo = repositoryMock(DiscRequest, {
+      findOneBy: jest
+        .fn<Promise<DiscRequest | null>, [FindOptionsWhere<DiscRequest>]>()
+        .mockResolvedValue(request),
+      save: jest
+        .fn<Promise<DiscRequest>, [DiscRequest]>()
+        .mockResolvedValue(request),
+    });
+    const genreRepo = repositoryMock(Genre, { findOneBy: jest.fn() });
+    const countryRepo = repositoryMock(Country, { findOneBy: jest.fn() });
+    const service = createService(
+      requestRepo,
+      undefined,
+      undefined,
+      genreRepo,
+      countryRepo,
+    );
+    const originalDate = request.releaseDate;
+    const originalGenre = request.genre;
+    const originalCountry = request.country;
+
+    await service.update(request.id, {});
+
+    expect(request.releaseDate).toBe(originalDate);
+    expect(request.genre).toBe(originalGenre);
+    expect(request.country).toBe(originalCountry);
+    expect(genreRepo.findOneBy).not.toHaveBeenCalled();
+    expect(countryRepo.findOneBy).not.toHaveBeenCalled();
+    expect(requestRepo.save).toHaveBeenCalledWith(request);
+  });
+
+  it('clears nullable update fields without querying Catalog', async () => {
+    const request = requestFixture({
+      id: 'request-id',
+      releaseDate: new Date('2025-04-02T00:00:00.000Z'),
+      genre: Object.assign(new Genre(), { id: 'genre-id' }),
+      country: Object.assign(new Country(), { id: 'country-id' }),
+      status: RequestStatus.PENDING,
+    });
+    const requestRepo = repositoryMock(DiscRequest, {
+      findOneBy: jest
+        .fn<Promise<DiscRequest | null>, [FindOptionsWhere<DiscRequest>]>()
+        .mockResolvedValue(request),
+      save: jest
+        .fn<Promise<DiscRequest>, [DiscRequest]>()
+        .mockResolvedValue(request),
+    });
+    const genreRepo = repositoryMock(Genre, { findOneBy: jest.fn() });
+    const countryRepo = repositoryMock(Country, { findOneBy: jest.fn() });
+    const service = createService(
+      requestRepo,
+      undefined,
+      undefined,
+      genreRepo,
+      countryRepo,
+    );
+
+    await service.update(request.id, {
+      releaseDate: null,
+      genreId: null,
+      countryId: null,
+    });
+
+    expect(request.releaseDate).toBeNull();
+    expect(request.genre).toBeNull();
+    expect(request.country).toBeNull();
+    expect(genreRepo.findOneBy).not.toHaveBeenCalled();
+    expect(countryRepo.findOneBy).not.toHaveBeenCalled();
+  });
+
+  it('updates valid dates and existing Catalog references', async () => {
+    const request = requestFixture({
+      id: 'request-id',
+      status: RequestStatus.PENDING,
+    });
+    const genre = Object.assign(new Genre(), { id: 'genre-id' });
+    const country = Object.assign(new Country(), { id: 'country-id' });
+    const requestRepo = repositoryMock(DiscRequest, {
+      findOneBy: jest
+        .fn<Promise<DiscRequest | null>, [FindOptionsWhere<DiscRequest>]>()
+        .mockResolvedValue(request),
+      save: jest
+        .fn<Promise<DiscRequest>, [DiscRequest]>()
+        .mockResolvedValue(request),
+    });
+    const genreRepo = repositoryMock(Genre, {
+      findOneBy: jest
+        .fn<Promise<Genre | null>, [FindOptionsWhere<Genre>]>()
+        .mockResolvedValue(genre),
+    });
+    const countryRepo = repositoryMock(Country, {
+      findOneBy: jest
+        .fn<Promise<Country | null>, [FindOptionsWhere<Country>]>()
+        .mockResolvedValue(country),
+    });
+    const service = createService(
+      requestRepo,
+      undefined,
+      undefined,
+      genreRepo,
+      countryRepo,
+    );
+
+    await service.update(request.id, {
+      releaseDate: '2025-04-02T10:30:00.000Z',
+      genreId: 'genre-id',
+      countryId: 'country-id',
+    });
+
+    expect(request.releaseDate?.toISOString()).toBe('2025-04-02T10:30:00.000Z');
+    expect(request.genre).toEqual({ id: 'genre-id' });
+    expect(request.country).toEqual({ id: 'country-id' });
+    expect(requestRepo.save).toHaveBeenCalledWith(request);
+  });
+
+  it('returns 404 without saving an update when a Catalog reference is missing', async () => {
+    const request = requestFixture({
+      id: 'request-id',
+      artistName: 'Band',
+      releaseDate: new Date('2025-04-02T00:00:00.000Z'),
+      status: RequestStatus.PENDING,
+    });
+    const requestRepo = repositoryMock(DiscRequest, {
+      findOneBy: jest
+        .fn<Promise<DiscRequest | null>, [FindOptionsWhere<DiscRequest>]>()
+        .mockResolvedValue(request),
+      save: jest
+        .fn<Promise<DiscRequest>, [DiscRequest]>()
+        .mockResolvedValue(request),
+    });
+    const genreRepo = repositoryMock(Genre, {
+      findOneBy: jest
+        .fn<Promise<Genre | null>, [FindOptionsWhere<Genre>]>()
+        .mockResolvedValue(null),
+    });
+    const countryRepo = repositoryMock(Country, { findOneBy: jest.fn() });
+    const originalArtistName = request.artistName;
+    const originalDate = request.releaseDate;
+    const service = createService(
+      requestRepo,
+      undefined,
+      undefined,
+      genreRepo,
+      countryRepo,
+    );
+
+    await expect(
+      service.update(request.id, {
+        artistName: 'Changed Band',
+        releaseDate: '2025-04-03',
+        genreId: 'missing-genre-id',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(request.artistName).toBe(originalArtistName);
+    expect(request.releaseDate).toBe(originalDate);
+    expect(requestRepo.save).not.toHaveBeenCalled();
+    expect(countryRepo.findOneBy).not.toHaveBeenCalled();
   });
 
   it('approves a pending request by materializing Artist and Disc through Catalog repositories', async () => {
