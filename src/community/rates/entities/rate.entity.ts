@@ -1,4 +1,11 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { User } from '../../../identity/auth/entities/user.entity';
 import { Disc } from '../../../catalog/discs/entities/disc.entity';
 
@@ -19,7 +26,10 @@ export class Rate {
   @Column('decimal', { precision: 4, scale: 2, nullable: true })
   cover: number;
 
-  @ManyToOne(() => User, (user) => user.rate, { eager: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.rate, {
+    eager: true,
+    onDelete: 'CASCADE',
+  })
   user: User;
 
   @ManyToOne(() => Disc, (disc) => disc.rates, {

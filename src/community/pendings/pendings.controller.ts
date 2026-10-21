@@ -3,7 +3,6 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Delete,
   ParseUUIDPipe,
@@ -38,11 +37,9 @@ export class PendingsController {
     return this.pendingsService.findOne(id, user);
   }
 
-
   @Delete(':id')
   @Auth()
   remove(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.pendingsService.remove(id, user);
   }
-
 }

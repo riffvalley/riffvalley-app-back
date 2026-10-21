@@ -1,4 +1,10 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 
@@ -13,7 +19,10 @@ export class Pending {
   @UpdateDateColumn({ nullable: true })
   editedAt: Date;
 
-  @ManyToOne(() => User, (user) => user.pending, { eager: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.pending, {
+    eager: true,
+    onDelete: 'CASCADE',
+  })
   user: User;
 
   @ManyToOne(() => Disc, (disc) => disc.pendings, {

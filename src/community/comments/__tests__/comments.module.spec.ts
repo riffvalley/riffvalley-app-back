@@ -1,4 +1,4 @@
-import { RequestMethod } from '@nestjs/common';
+import { RequestMethod, Type } from '@nestjs/common';
 import {
   GUARDS_METADATA,
   METHOD_METADATA,
@@ -46,10 +46,10 @@ describe('CommentsModule characterization', () => {
 
   it('resolves the controller, service and Comment repository through the module', () => {
     expect(moduleRef.get(CommentsController)).toBeDefined();
-    const service = moduleRef.get(CommentsService) as any;
+    const service = moduleRef.get(CommentsService);
     expect(service).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Comment))).toBe(commentRepository);
-    expect(service.commentRepository).toBe(commentRepository);
+    expect(service).toHaveProperty('commentRepository', commentRepository);
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
 
     const imports = Reflect.getMetadata(
@@ -90,7 +90,7 @@ describe('CommentsModule characterization', () => {
 
   it('preserves Comment relations and eager metadata', () => {
     const relations = getMetadataArgsStorage().relations;
-    const relation = (target: Function, propertyName: string) =>
+    const relation = (target: Type<unknown>, propertyName: string) =>
       relations.find(
         (entry) =>
           entry.target === target && entry.propertyName === propertyName,

@@ -25,7 +25,7 @@ export class RatesController {
     private readonly ratesService: RatesService,
     private readonly ratesStatsService: RatesStatsService,
     private readonly ratesHistoryService: RatesHistoryService,
-  ) { }
+  ) {}
 
   // ==========================================
   // 1. RUTAS ESTÁTICAS Y ESPECÍFICAS (Arriba)
@@ -58,8 +58,8 @@ export class RatesController {
       from && to ? ([new Date(from), new Date(to)] as [Date, Date]) : undefined;
 
     return this.ratesHistoryService.findUserActionHistoryPaginatedQB(userId, {
-      type: (type as any) ?? 'both',
-      order: (order as any) ?? 'DESC',
+      type: type ?? 'both',
+      order: order ?? 'DESC',
       limit: limit ? parseInt(limit, 10) : 20,
       offset: offset ? parseInt(offset, 10) : 0,
       dateRange,

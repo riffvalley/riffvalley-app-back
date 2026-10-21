@@ -77,7 +77,7 @@ export class CommentsService {
       genre,
       country,
       type,
-    } = paginationDto as any;
+    } = paginationDto;
     const userId = user.id;
 
     let startDate: Date | undefined;
@@ -138,7 +138,9 @@ export class CommentsService {
 
     if (country) {
       queryBuilder.andWhere('artist.countryId = :country', { country });
-      totalItemsQueryBuilder.andWhere('artist.countryId = :country', { country });
+      totalItemsQueryBuilder.andWhere('artist.countryId = :country', {
+        country,
+      });
     }
 
     queryBuilder
@@ -289,15 +291,27 @@ export class CommentsService {
     }
   }
 
-  private handleDbExceptions(error: any) {
+  private handleDbExceptions(error: unknown) {
     if (error instanceof HttpException) {
       throw error;
     }
     // Ejemplo: error.code === '23505' en Postgres para entradas duplicadas
-    if (error.code === '23505') {
+    if (isUniqueConstraintError(error)) {
       throw new BadRequestException(error.detail);
     }
     this.logger.error(error);
     throw new InternalServerErrorException('An unexpected error occurred');
   }
+}
+
+function isUniqueConstraintError(
+  error: unknown,
+): error is { code: '23505'; detail?: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505' &&
+    (!('detail' in error) || typeof error.detail === 'string')
+  );
 }
