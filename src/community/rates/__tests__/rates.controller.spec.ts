@@ -1,4 +1,4 @@
-import { Type } from '@nestjs/common';
+import { BadRequestException, Type, ValidationPipe } from '@nestjs/common';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
   GUARDS_METADATA,
@@ -15,6 +15,26 @@ import { RatesController } from '../rates.controller';
 import { RatesService } from '../rates.service';
 import { RatesStatsService } from '../stats/rates-stats.service';
 import { RatesHistoryService } from '../history/rates-history.service';
+import { RatesHistoryQueryDto } from '../dto/rates-history-query.dto';
+
+async function validateHistoryQuery(
+  query: Record<string, unknown>,
+): Promise<RatesHistoryQueryDto> {
+  const result: unknown = await new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    transformOptions: { enableImplicitConversion: true },
+  }).transform(query, {
+    type: 'query',
+    metatype: RatesHistoryQueryDto,
+  });
+
+  if (!(result instanceof RatesHistoryQueryDto)) {
+    throw new Error('ValidationPipe did not return the history query DTO');
+  }
+  return result;
+}
 
 function createRateRepository(): Repository<Rate> {
   const dataSource = new DataSource({
@@ -109,7 +129,7 @@ describe('RatesController home insights route', () => {
 });
 
 describe('RatesController history route', () => {
-  it('delegates parsed history options directly and ignores a partial date range', async () => {
+  it('uses the existing defaults when query parameters are omitted', async () => {
     const ratesService = new RatesService(createRateRepository());
     const ratesStatsService = new RatesStatsService(
       createRateRepository(),
@@ -134,14 +154,8 @@ describe('RatesController history route', () => {
       ratesHistoryService,
     );
 
-    await controller.getUserHistoryQB(
-      'user-1',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      '2025-01-01',
-    );
+    const query = await validateHistoryQuery({});
+    await controller.getUserHistoryQB('user-1', query);
 
     expect(findHistory).toHaveBeenCalledWith('user-1', {
       type: 'both',
@@ -153,15 +167,15 @@ describe('RatesController history route', () => {
 
     const from = '2025-01-01';
     const to = '2025-01-31';
-    await controller.getUserHistoryQB(
-      'user-2',
-      'cover',
-      'ASC',
-      '10',
-      '4',
+    const validQuery = await validateHistoryQuery({
+      type: 'cover',
+      order: 'ASC',
+      limit: '10',
+      offset: '4',
       from,
       to,
-    );
+    });
+    await controller.getUserHistoryQB('user-2', validQuery);
     expect(findHistory).toHaveBeenLastCalledWith('user-2', {
       type: 'cover',
       order: 'ASC',
@@ -171,7 +185,7 @@ describe('RatesController history route', () => {
     });
   });
 
-  it('keeps the public history route defaults and current permissive parsing behavior', async () => {
+  it('accepts every supported type and order without changing the public route', async () => {
     const ratesService = new RatesService(createRateRepository());
     const ratesStatsService = new RatesStatsService(
       createRateRepository(),
@@ -202,40 +216,94 @@ describe('RatesController history route', () => {
     );
     expect(guards).toBeUndefined();
 
-    await controller.getUserHistoryQB('public-user-id');
-    expect(findHistory).toHaveBeenLastCalledWith('public-user-id', {
-      type: 'both',
-      order: 'DESC',
-      limit: 20,
-      offset: 0,
-      dateRange: undefined,
+    for (const type of ['rate', 'cover', 'both'] as const) {
+      for (const order of ['ASC', 'DESC'] as const) {
+        const query = await validateHistoryQuery({ type, order });
+        await controller.getUserHistoryQB('public-user-id', query);
+        expect(findHistory).toHaveBeenLastCalledWith(
+          'public-user-id',
+          expect.objectContaining({ type, order }),
+        );
+      }
+    }
+  });
+
+  it.each([
+    ['type', 'unexpected'],
+    ['order', 'sideways'],
+    ['limit', '12items'],
+    ['limit', '1.5'],
+    ['limit', '-1'],
+    ['limit', '0'],
+    ['offset', '4items'],
+    ['offset', '1.5'],
+    ['offset', '-1'],
+    ['from', '2025-02-30'],
+    ['from', 'not-a-date'],
+    ['to', '2025/01/31'],
+  ])('rejects invalid %s=%s with HTTP 400 validation', async (key, value) => {
+    await expect(validateHistoryQuery({ [key]: value })).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+
+  it('rejects partial date ranges with HTTP 400', async () => {
+    const ratesHistoryService = new RatesHistoryService(createRateRepository());
+    const controller = new RatesController(
+      new RatesService(createRateRepository()),
+      new RatesStatsService(createRateRepository(), createUserRepository()),
+      ratesHistoryService,
+    );
+
+    expect(() =>
+      controller.getUserHistoryQB(
+        'public-user-id',
+        Object.assign(new RatesHistoryQueryDto(), { from: '2025-01-01' }),
+      ),
+    ).toThrow(BadRequestException);
+
+    expect(() =>
+      controller.getUserHistoryQB(
+        'public-user-id',
+        Object.assign(new RatesHistoryQueryDto(), { to: '2025-01-31' }),
+      ),
+    ).toThrow(BadRequestException);
+  });
+
+  it('accepts real ISO dates and keeps an inclusive date range as Dates for the service', async () => {
+    const ratesHistoryService = new RatesHistoryService(createRateRepository());
+    const findHistory = jest
+      .spyOn(ratesHistoryService, 'findUserActionHistoryPaginatedQB')
+      .mockResolvedValue({
+        userId: 'user-1',
+        type: 'both',
+        order: 'DESC',
+        totalItems: 0,
+        totalPages: 0,
+        currentPage: 1,
+        limit: 20,
+        data: [],
+      });
+    const controller = new RatesController(
+      new RatesService(createRateRepository()),
+      new RatesStatsService(createRateRepository(), createUserRepository()),
+      ratesHistoryService,
+    );
+    const query = await validateHistoryQuery({
+      from: '2025-01-01',
+      to: '2025-01-31',
+      limit: '100',
+      offset: '0',
     });
 
-    const invalidFrom = 'not-a-date';
-    const invalidTo = 'also-not-a-date';
-    await Reflect.apply(controller.getUserHistoryQB, controller, [
-      'public-user-id',
-      'unexpected-type',
-      'sideways',
-      '12items',
-      '-3',
-      invalidFrom,
-      invalidTo,
-    ]);
+    await controller.getUserHistoryQB('public-user-id', query);
 
-    expect(findHistory).toHaveBeenLastCalledWith(
-      'public-user-id',
-      expect.objectContaining({
-        type: 'unexpected-type',
-        order: 'sideways',
-        limit: 12,
-        offset: -3,
-        dateRange: expect.any(Array),
-      }),
-    );
-    const invalidRange = findHistory.mock.calls[1]?.[1].dateRange;
-    expect(invalidRange).toBeDefined();
-    expect(Number.isNaN(invalidRange?.[0].getTime())).toBe(true);
-    expect(Number.isNaN(invalidRange?.[1].getTime())).toBe(true);
+    expect(findHistory).toHaveBeenCalledWith('public-user-id', {
+      type: 'both',
+      order: 'DESC',
+      limit: 100,
+      offset: 0,
+      dateRange: [new Date('2025-01-01'), new Date('2025-01-31')],
+    });
   });
 });

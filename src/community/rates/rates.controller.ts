@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  BadRequestException,
   ParseUUIDPipe,
   Query,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { RatesStatsService } from './stats/rates-stats.service';
 import { RatesHistoryService } from './history/rates-history.service';
 import { CreateRateDto } from './dto/create-rates.dto';
 import { UpdateRateDto } from './dto/update-rates.dto';
+import { RatesHistoryQueryDto } from './dto/rates-history-query.dto';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
@@ -47,21 +49,22 @@ export class RatesController {
   @Get('user/:userId/history')
   getUserHistoryQB(
     @Param('userId') userId: string,
-    @Query('type') type?: 'rate' | 'cover' | 'both',
-    @Query('order') order?: 'ASC' | 'DESC',
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
+    @Query() query: RatesHistoryQueryDto,
   ) {
+    if (Boolean(query.from) !== Boolean(query.to)) {
+      throw new BadRequestException('from and to must be provided together');
+    }
+
     const dateRange =
-      from && to ? ([new Date(from), new Date(to)] as [Date, Date]) : undefined;
+      query.from && query.to
+        ? ([new Date(query.from), new Date(query.to)] as [Date, Date])
+        : undefined;
 
     return this.ratesHistoryService.findUserActionHistoryPaginatedQB(userId, {
-      type: type ?? 'both',
-      order: order ?? 'DESC',
-      limit: limit ? parseInt(limit, 10) : 20,
-      offset: offset ? parseInt(offset, 10) : 0,
+      type: query.type,
+      order: query.order,
+      limit: Number(query.limit),
+      offset: Number(query.offset),
       dateRange,
     });
   }
