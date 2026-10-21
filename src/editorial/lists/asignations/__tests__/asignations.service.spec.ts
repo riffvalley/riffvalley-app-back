@@ -477,7 +477,7 @@ describe('AsignationsService error classification', () => {
     expect(asignationFindOne).toHaveBeenCalledWith({
       where: { id: asignationId },
       relations: ['list', 'disc'],
-      lock: { mode: 'pessimistic_write', tables: ['Asignation'] },
+      lock: { mode: 'pessimistic_write', tables: ['asignation'] },
     });
   });
 
