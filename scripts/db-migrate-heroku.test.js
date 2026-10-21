@@ -14,7 +14,7 @@ const test = require('node:test');
 
 const script = path.resolve(__dirname, 'db-migrate-heroku.sh');
 const database = 'riffvalley_test';
-const migrationList = 'AddOne1700000000000,AddTwo1700000000001';
+const migrationList = 'RemoveFreeFromList1791930000000,RemoveEditorialLinks1791940000000,CreateAuthSessionPersistence1791950000000,AddRefreshOperationFingerprint1791960000000,AddSessionCleanupIndex1791970000000';
 const destinationAck = `DESTINO ${database}`;
 const authorization = `AUTORIZO MIGRAR spammusic-back ${database} ${migrationList} COMPATIBLE_O_VENTANA_COORDINADA`;
 const backupAck = `BACKUP COMPLETED b123 ${database}`;
@@ -29,7 +29,21 @@ case "\${1-}" in
     printf 'developer@example.invalid\n'
     ;;
   apps:info)
-    printf '{"name":"%s"}\n' "$FAKE_APP_NAME"
+    case "\${FAKE_APP_INFO_MODE:-valid}" in
+      valid)
+        printf '{"app":{"name":"%s"}}\n' "$FAKE_APP_NAME"
+        ;;
+      invalid)
+        printf '{"app":}\n'
+        ;;
+      missing)
+        printf '{"app":{}}\n'
+        ;;
+      *)
+        printf 'unexpected app info mode\n' >&2
+        exit 97
+        ;;
+    esac
     ;;
   releases)
     printf '=== spammusic-back Releases\n v999 Deploy\n'
@@ -37,8 +51,41 @@ case "\${1-}" in
   config:get)
     printf '%s\n' "$FAKE_DB_NAME"
     ;;
-  pg:info)
-    printf '=== DATABASE\nDatabase: %s\n' "$FAKE_PG_DATABASE"
+  pg:psql)
+    case "\${FAKE_ATTACHMENT_MODE:-valid}" in
+      valid)
+        count=0
+        [[ ! -f "$FAKE_STATUS_COUNT" ]] || count="$(cat "$FAKE_STATUS_COUNT")"
+        ledger_rows=91
+        distinct_names=91
+        orphan_count=1
+        if [[ "$count" -ge 3 ]]; then
+          ledger_rows=96
+          distinct_names=96
+          if [[ "\${FAKE_POST_PENDING:-0}" == 1 ]]; then
+            ledger_rows=95
+            distinct_names=95
+          fi
+        fi
+        distinct_names="\${FAKE_LEDGER_DISTINCT_NAMES:-$distinct_names}"
+        orphan_count="\${FAKE_LEGACY_ORPHAN_COUNT:-$orphan_count}"
+        printf '{"database":"%s","ledgerRows":%s,"distinctNames":%s,"knownLegacyOrphanCount":%s}\n' "$FAKE_PG_CURRENT_DATABASE" "$ledger_rows" "$distinct_names" "$orphan_count"
+        ;;
+      missing)
+        printf '{"ledgerRows":91,"distinctNames":91,"knownLegacyOrphanCount":1}\n'
+        ;;
+      invalid)
+        printf 'not-json\n'
+        ;;
+      ambiguous)
+        printf '{"database":"%s","ledgerRows":91,"distinctNames":91,"knownLegacyOrphanCount":1}\n' "$FAKE_PG_CURRENT_DATABASE"
+        printf '{"database":"%s","ledgerRows":91,"distinctNames":91,"knownLegacyOrphanCount":1}\n' "$FAKE_PG_CURRENT_DATABASE"
+        ;;
+      *)
+        printf 'unexpected attachment mode\n' >&2
+        exit 96
+        ;;
+    esac
     ;;
   pg:backups:capture)
     if [[ "\${FAKE_BACKUP_FAIL:-0}" == 1 ]]; then
@@ -57,17 +104,26 @@ case "\${1-}" in
         [[ ! -f "$FAKE_STATUS_COUNT" ]] || count="$(cat "$FAKE_STATUS_COUNT")"
         count=$((count + 1))
         printf '%s\n' "$count" > "$FAKE_STATUS_COUNT"
-        pending='["AddOne1700000000000","AddTwo1700000000001"]'
+        pending='["RemoveFreeFromList1791930000000","RemoveEditorialLinks1791940000000","CreateAuthSessionPersistence1791950000000","AddRefreshOperationFingerprint1791960000000","AddSessionCleanupIndex1791970000000"]'
         if [[ "\${FAKE_NO_PENDING:-0}" == 1 ]]; then
           pending='[]'
+        elif [[ "\${FAKE_EXTRA_PENDING:-0}" == 1 ]]; then
+          pending='["Unexpected1700000000000","RemoveFreeFromList1791930000000","RemoveEditorialLinks1791940000000","CreateAuthSessionPersistence1791950000000","AddRefreshOperationFingerprint1791960000000","AddSessionCleanupIndex1791970000000"]'
         elif [[ "\${FAKE_CHANGE_LIST:-0}" == 1 && "$count" -ge 2 ]]; then
           pending='["Changed1700000000002"]'
         elif [[ "\${FAKE_POST_PENDING:-0}" == 1 && "$count" -ge 3 ]]; then
-          pending='["StillPending1700000000003"]'
+          pending='["StillPending1791980000000"]'
         elif [[ "$count" -ge 3 ]]; then
           pending='[]'
         fi
-        printf '{"formatVersion":1,"stage":"prod","database":"%s","ledgerExists":true,"ledgerTable":"migrations","compiledMigrations":2,"appliedCount":0,"pending":%s}\n' "$FAKE_STATUS_DATABASE" "$pending"
+        applied_count=91
+        [[ "$count" -lt 3 ]] || applied_count=96
+        if [[ "\${FAKE_CHANGE_LIST:-0}" == 1 && "$count" -ge 2 ]]; then
+          applied_count=95
+        elif [[ "\${FAKE_POST_PENDING:-0}" == 1 && "$count" -ge 3 ]]; then
+          applied_count=95
+        fi
+        printf '{"formatVersion":1,"stage":"prod","database":"%s","ledgerExists":true,"ledgerTable":"migrations","compiledMigrations":95,"appliedCount":%s,"pending":%s}\n' "$FAKE_STATUS_DATABASE" "$applied_count" "$pending"
         ;;
       *'yarn db:migrate --confirm'*)
         if [[ "\${FAKE_MIGRATE_FAIL:-0}" == 1 ]]; then
@@ -116,6 +172,7 @@ function runScenario(overrides = {}, input = authorizedInput) {
     FAKE_DB_NAME: database,
     FAKE_STATUS_DATABASE: database,
     FAKE_PG_DATABASE: database,
+    FAKE_PG_CURRENT_DATABASE: database,
     FAKE_BACKUP_STATUS: 'Completed',
     ...overrides,
   };
@@ -212,15 +269,48 @@ test('a mismatch between DB_NAME and the TypeORM datasource stops safely', () =>
   assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
 });
 
-test('an ambiguous PostgreSQL attachment cannot be confirmed as the destination', () => {
-  const result = runScenario(
-    { FAKE_PG_DATABASE: 'different_database' },
-    'NO CONFIRMO DESTINO\n',
-  );
+test('a different current_database() from the attachment is rejected before backup', () => {
+  const result = runScenario({ FAKE_PG_CURRENT_DATABASE: 'different_database' });
 
   assert.notEqual(result.status, 0);
+  assert.match(result.output, /destino PostgreSQL o el inventario/);
+  assert.equal(countCalls(result.calls, 'pg:psql'), 1);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
   assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+});
+
+test('missing or unverifiable attachment identity stops before backup', () => {
+  for (const mode of ['missing', 'invalid', 'ambiguous']) {
+    const result = runScenario({ FAKE_ATTACHMENT_MODE: mode });
+
+    assert.notEqual(result.status, 0, mode);
+    assert.match(result.output, /No se pudo verificar mediante SELECT/);
+    assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
+    assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  }
+});
+
+test('an unexpected pending migration is rejected before backup', () => {
+  const result = runScenario({ FAKE_EXTRA_PENDING: '1' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /inventario de migraciones no coincide/);
+  assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
+  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+});
+
+test('duplicate or unrecognized ledger inventory is rejected before backup', () => {
+  for (const overrides of [
+    { FAKE_LEDGER_DISTINCT_NAMES: '90' },
+    { FAKE_LEGACY_ORPHAN_COUNT: '0' },
+  ]) {
+    const result = runScenario(overrides);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /inventario de migraciones no coincide/);
+    assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
+    assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  }
 });
 
 test('a wrong Heroku application is rejected before database operations', () => {
@@ -231,7 +321,25 @@ test('a wrong Heroku application is rejected before database operations', () => 
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
 });
 
-test('successful simulation executes once with the exact ordered confirmation', () => {
+test('invalid Heroku app JSON is rejected before database operations', () => {
+  const result = runScenario({ FAKE_APP_INFO_MODE: 'invalid' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /La aplicación devuelta por Heroku no es spammusic-back/);
+  assert.equal(countCalls(result.calls, 'yarn db:status'), 0);
+  assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
+});
+
+test('missing Heroku app identity is rejected before database operations', () => {
+  const result = runScenario({ FAKE_APP_INFO_MODE: 'missing' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /La aplicación devuelta por Heroku no es spammusic-back/);
+  assert.equal(countCalls(result.calls, 'yarn db:status'), 0);
+  assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
+});
+
+test('valid nested Heroku app info allows the exact ordered simulation', () => {
   const result = runScenario();
 
   assert.equal(result.status, 0, result.output);
@@ -242,6 +350,7 @@ test('successful simulation executes once with the exact ordered confirmation', 
     ),
   );
   assert.equal(countCalls(result.calls, 'yarn db:status --json'), 3);
+  assert.equal(countCalls(result.calls, 'pg:psql'), 3);
   assert.equal(countCalls(result.calls, 'yarn db:check'), 1);
   assert.match(result.output, /Migraciones y ledger verificados/);
 });

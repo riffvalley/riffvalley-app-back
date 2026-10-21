@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 readonly APP="spammusic-back"
 readonly DATABASE_ATTACHMENT="DATABASE"
+readonly EXPECTED_PENDING_CSV="RemoveFreeFromList1791930000000,RemoveEditorialLinks1791940000000,CreateAuthSessionPersistence1791950000000,AddRefreshOperationFingerprint1791960000000,AddSessionCleanupIndex1791970000000"
+readonly LEGACY_LEDGER_ONLY_MIGRATION="UpdateListStatusEnum1766066905027"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -12,14 +14,30 @@ fail() {
 require_tools() {
   command -v heroku >/dev/null 2>&1 || fail 'No se encontró Heroku CLI.'
   command -v node >/dev/null 2>&1 || fail 'Se necesita Node.js para leer las respuestas JSON.'
+  command -v psql >/dev/null 2>&1 || fail 'Se necesita psql para verificar el attachment PostgreSQL con una consulta de solo lectura.'
 
   heroku auth:whoami >/dev/null || fail 'Heroku CLI no está autenticada.'
 
   local app_json
   app_json="$(heroku apps:info --app "$APP" --json)" || fail "No se pudo consultar la aplicación $APP."
   printf '%s' "$app_json" | node -e '
-    const app = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
-    if (app.name !== process.argv[1]) process.exit(1);
+    let response;
+    try {
+      response = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+    } catch {
+      process.exit(1);
+    }
+    if (
+      !response ||
+      typeof response !== "object" ||
+      Array.isArray(response) ||
+      !response.app ||
+      typeof response.app !== "object" ||
+      Array.isArray(response.app) ||
+      response.app.name !== process.argv[1]
+    ) {
+      process.exit(1);
+    }
   ' "$APP" || fail "La aplicación devuelta por Heroku no es $APP."
 }
 
@@ -53,6 +71,77 @@ parse_status_output() {
     }
     process.exit(1);
   '
+}
+
+parse_attachment_status() {
+  node -e '
+    const lines = require("node:fs").readFileSync(0, "utf8").split(/\r?\n/);
+    const results = [];
+    for (const line of lines) {
+      let value;
+      try {
+        value = JSON.parse(line.trim());
+      } catch {
+        continue;
+      }
+      if (
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        Object.keys(value).length === 4 &&
+        typeof value.database === "string" &&
+        value.database.length > 0 &&
+        Number.isSafeInteger(value.ledgerRows) &&
+        Number.isSafeInteger(value.distinctNames) &&
+        Number.isSafeInteger(value.knownLegacyOrphanCount)
+      ) {
+        results.push(value);
+      }
+    }
+    if (results.length !== 1) process.exit(1);
+    process.stdout.write(JSON.stringify(results[0]));
+  '
+}
+
+fetch_attachment_status() {
+  local output
+  output="$(heroku pg:psql "$DATABASE_ATTACHMENT" --app "$APP" --command "SELECT json_build_object('database', current_database(), 'ledgerRows', (SELECT count(*) FROM migrations), 'distinctNames', (SELECT count(DISTINCT name) FROM migrations), 'knownLegacyOrphanCount', (SELECT count(*) FROM migrations WHERE name = '$LEGACY_LEDGER_ONLY_MIGRATION'))::text;")" || return 1
+  ATTACHMENT_STATUS_JSON="$(printf '%s\n' "$output" | parse_attachment_status)" || return 1
+}
+
+validate_migration_inventory() {
+  local status_json="$1"
+  local attachment_json="$2"
+  local phase="$3"
+  node -e '
+    const [statusText, attachmentText, phase, expectedPendingCsv] = process.argv.slice(1);
+    const status = JSON.parse(statusText);
+    const attachment = JSON.parse(attachmentText);
+    const expectedPending = expectedPendingCsv.split(",");
+    const expected = phase === "post" ? [] : expectedPending;
+    const matchedCompiled = status.compiledMigrations - status.pending.length;
+    const matchedLedger = attachment.distinctNames - attachment.knownLegacyOrphanCount;
+    if (
+      status.pending.length !== expected.length ||
+      status.pending.some((name, index) => name !== expected[index]) ||
+      status.database !== attachment.database ||
+      status.appliedCount !== attachment.ledgerRows ||
+      attachment.ledgerRows !== attachment.distinctNames ||
+      attachment.knownLegacyOrphanCount !== 1 ||
+      matchedCompiled !== matchedLedger
+    ) {
+      process.exit(1);
+    }
+  ' "$status_json" "$attachment_json" "$phase" "$EXPECTED_PENDING_CSV"
+}
+
+same_attachment_snapshot() {
+  node -e '
+    const [before, after] = process.argv.slice(1).map((value) => JSON.parse(value));
+    for (const key of ["database", "ledgerRows", "distinctNames", "knownLegacyOrphanCount"]) {
+      if (before[key] !== after[key]) process.exit(1);
+    }
+  ' "$1" "$2"
 }
 
 fetch_status() {
@@ -150,14 +239,21 @@ database_name="$(heroku config:get DB_NAME --app "$APP")" || fail 'No se pudo co
 
 printf 'Destino del runner (DB_NAME): %s\n' "$database_name"
 printf 'Attachment que se respaldará: %s\n' "$DATABASE_ATTACHMENT"
-printf 'Identidad del attachment (revisión manual; no se muestran URLs):\n'
-pg_info="$(heroku pg:info "$DATABASE_ATTACHMENT" --app "$APP")" || fail 'No se pudo consultar el attachment PostgreSQL.'
-printf '%s\n' "$pg_info"
+if ! fetch_attachment_status; then
+  fail 'No se pudo verificar mediante SELECT la identidad del attachment y su ledger.'
+fi
+ATTACHMENT_STATUS_INITIAL="$ATTACHMENT_STATUS_JSON"
+if ! validate_migration_inventory "$STATUS_INITIAL" "$ATTACHMENT_STATUS_INITIAL" pre; then
+  fail 'El destino PostgreSQL o el inventario de migraciones no coincide con el estado esperado.'
+fi
+attachment_database="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).database);' "$ATTACHMENT_STATUS_INITIAL")"
+printf 'Base del attachment verificada por SELECT current_database(): %s\n' "$attachment_database"
+printf 'Ledger: %s filas distintas; registro histórico conocido fuera del código compilado: %s.\n' "$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).ledgerRows));' "$ATTACHMENT_STATUS_INITIAL")" "$LEGACY_LEDGER_ONLY_MIGRATION"
 printf 'Migraciones pendientes, en orden:\n'
 show_status "$STATUS_INITIAL"
 
 destination_ack="DESTINO $database_name"
-prompt_exact "Verifica que Database en pg:info coincida exactamente con DB_NAME. Escribe '$destination_ack': " "$destination_ack"
+prompt_exact "Confirma que current_database() del attachment coincide exactamente con DB_NAME. Escribe '$destination_ack': " "$destination_ack"
 
 pending_csv="$(json_pending_csv "$STATUS_INITIAL")"
 for role_migration in MigrateCanonicalUserRoles1791910000000 MigrateUsersToSingleRole1791920000000; do
@@ -206,6 +302,9 @@ fi
 if ! json_ledger_exists "$STATUS_JSON" || ! same_pending_snapshot "$STATUS_INITIAL" "$STATUS_JSON"; then
   fail 'Cambió el ledger, la base o la lista/orden de migraciones; no se ejecutó db:migrate.'
 fi
+if ! fetch_attachment_status || ! validate_migration_inventory "$STATUS_JSON" "$ATTACHMENT_STATUS_JSON" pre || ! same_attachment_snapshot "$ATTACHMENT_STATUS_INITIAL" "$ATTACHMENT_STATUS_JSON"; then
+  fail 'Cambió la identidad PostgreSQL o el inventario del ledger; no se ejecutó db:migrate.'
+fi
 
 printf 'Revalidación correcta. Ejecutando db:migrate una única vez.\n'
 if migration_output="$(heroku run --app "$APP" --no-tty --exit-code -- yarn db:migrate --confirm "$confirmation")"; then
@@ -220,7 +319,7 @@ verification_ok=1
 if fetch_status; then
   STATUS_AFTER="$STATUS_JSON"
   show_status "$STATUS_AFTER"
-  if ! json_ledger_exists "$STATUS_AFTER" || [[ "$(json_pending_count "$STATUS_AFTER")" != "0" ]]; then
+  if ! json_ledger_exists "$STATUS_AFTER" || ! fetch_attachment_status || ! validate_migration_inventory "$STATUS_AFTER" "$ATTACHMENT_STATUS_JSON" post; then
     printf 'db:status detectó un ledger ausente o migraciones pendientes.\n' >&2
     verification_ok=0
   fi
