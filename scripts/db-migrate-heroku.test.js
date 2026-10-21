@@ -14,7 +14,7 @@ const test = require('node:test');
 
 const script = path.resolve(__dirname, 'db-migrate-heroku.sh');
 const database = 'riffvalley_test';
-const migrationList = 'RemoveFreeFromList1791930000000,RemoveEditorialLinks1791940000000,CreateAuthSessionPersistence1791950000000,AddRefreshOperationFingerprint1791960000000,AddSessionCleanupIndex1791970000000';
+const migrationList = 'CreateAuthRateLimitWindows1791980000000';
 const destinationAck = `DESTINO ${database}`;
 const authorization = `AUTORIZO MIGRAR spammusic-back ${database} ${migrationList} COMPATIBLE_O_VENTANA_COORDINADA`;
 const backupAck = `BACKUP COMPLETED b123 ${database}`;
@@ -56,15 +56,15 @@ case "\${1-}" in
       valid)
         count=0
         [[ ! -f "$FAKE_STATUS_COUNT" ]] || count="$(cat "$FAKE_STATUS_COUNT")"
-        ledger_rows=91
-        distinct_names=91
+        ledger_rows=96
+        distinct_names=96
         orphan_count=1
         if [[ "$count" -ge 3 ]]; then
-          ledger_rows=96
-          distinct_names=96
+          ledger_rows=97
+          distinct_names=97
           if [[ "\${FAKE_POST_PENDING:-0}" == 1 ]]; then
-            ledger_rows=95
-            distinct_names=95
+            ledger_rows=96
+            distinct_names=96
           fi
         fi
         distinct_names="\${FAKE_LEDGER_DISTINCT_NAMES:-$distinct_names}"
@@ -72,14 +72,14 @@ case "\${1-}" in
         printf '{"database":"%s","ledgerRows":%s,"distinctNames":%s,"knownLegacyOrphanCount":%s}\n' "$FAKE_PG_CURRENT_DATABASE" "$ledger_rows" "$distinct_names" "$orphan_count"
         ;;
       missing)
-        printf '{"ledgerRows":91,"distinctNames":91,"knownLegacyOrphanCount":1}\n'
+        printf '{"ledgerRows":96,"distinctNames":96,"knownLegacyOrphanCount":1}\n'
         ;;
       invalid)
         printf 'not-json\n'
         ;;
       ambiguous)
-        printf '{"database":"%s","ledgerRows":91,"distinctNames":91,"knownLegacyOrphanCount":1}\n' "$FAKE_PG_CURRENT_DATABASE"
-        printf '{"database":"%s","ledgerRows":91,"distinctNames":91,"knownLegacyOrphanCount":1}\n' "$FAKE_PG_CURRENT_DATABASE"
+        printf '{"database":"%s","ledgerRows":96,"distinctNames":96,"knownLegacyOrphanCount":1}\n' "$FAKE_PG_CURRENT_DATABASE"
+        printf '{"database":"%s","ledgerRows":96,"distinctNames":96,"knownLegacyOrphanCount":1}\n' "$FAKE_PG_CURRENT_DATABASE"
         ;;
       *)
         printf 'unexpected attachment mode\n' >&2
@@ -104,11 +104,11 @@ case "\${1-}" in
         [[ ! -f "$FAKE_STATUS_COUNT" ]] || count="$(cat "$FAKE_STATUS_COUNT")"
         count=$((count + 1))
         printf '%s\n' "$count" > "$FAKE_STATUS_COUNT"
-        pending='["RemoveFreeFromList1791930000000","RemoveEditorialLinks1791940000000","CreateAuthSessionPersistence1791950000000","AddRefreshOperationFingerprint1791960000000","AddSessionCleanupIndex1791970000000"]'
+        pending='["CreateAuthRateLimitWindows1791980000000"]'
         if [[ "\${FAKE_NO_PENDING:-0}" == 1 ]]; then
           pending='[]'
         elif [[ "\${FAKE_EXTRA_PENDING:-0}" == 1 ]]; then
-          pending='["Unexpected1700000000000","RemoveFreeFromList1791930000000","RemoveEditorialLinks1791940000000","CreateAuthSessionPersistence1791950000000","AddRefreshOperationFingerprint1791960000000","AddSessionCleanupIndex1791970000000"]'
+          pending='["Unexpected1700000000","CreateAuthRateLimitWindows1791980000000"]'
         elif [[ "\${FAKE_CHANGE_LIST:-0}" == 1 && "$count" -ge 2 ]]; then
           pending='["Changed1700000000002"]'
         elif [[ "\${FAKE_POST_PENDING:-0}" == 1 && "$count" -ge 3 ]]; then
@@ -116,21 +116,21 @@ case "\${1-}" in
         elif [[ "$count" -ge 3 ]]; then
           pending='[]'
         fi
-        applied_count=91
-        [[ "$count" -lt 3 ]] || applied_count=96
+        applied_count=96
+        [[ "$count" -lt 3 ]] || applied_count=97
         if [[ "\${FAKE_CHANGE_LIST:-0}" == 1 && "$count" -ge 2 ]]; then
-          applied_count=95
+          applied_count=96
         elif [[ "\${FAKE_POST_PENDING:-0}" == 1 && "$count" -ge 3 ]]; then
-          applied_count=95
+          applied_count=96
         fi
-        printf '{"formatVersion":1,"stage":"prod","database":"%s","ledgerExists":true,"ledgerTable":"migrations","compiledMigrations":95,"appliedCount":%s,"pending":%s}\n' "$FAKE_STATUS_DATABASE" "$applied_count" "$pending"
+        printf '{"formatVersion":1,"stage":"prod","database":"%s","ledgerExists":true,"ledgerTable":"migrations","compiledMigrations":96,"appliedCount":%s,"pending":%s}\n' "$FAKE_STATUS_DATABASE" "$applied_count" "$pending"
         ;;
       *'yarn db:migrate --confirm'*)
         if [[ "\${FAKE_MIGRATE_FAIL:-0}" == 1 ]]; then
           printf 'migration failed\n' >&2
           exit 13
         fi
-        printf 'Applied: AddOne1700000000000\nApplied: AddTwo1700000000001\n'
+        printf 'Applied: CreateAuthRateLimitWindows1791980000000\n'
         ;;
       *'yarn db:check'*)
         if [[ "\${FAKE_CHECK_FAIL:-0}" == 1 ]]; then
