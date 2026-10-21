@@ -74,7 +74,7 @@ No fijar `Domain`, `Path`, prefijo `__Host-`, nombres ni `SameSite` global hasta
 ### Checklist previo a habilitar cada cliente/entorno
 
 1. Obtener orígenes exactos desplegados de API, App y Wiki desde configuración de despliegue autorizada; no leer secretos ni asumir staging/prod.
-2. Clasificar cada par por scheme/host/port/site, verificar HTTPS/certificados y conocer proxy TLS. Confirmar que Nest confía solo en el proxy efectivo antes de usar `X-Forwarded-Proto`.
+2. Clasificar cada par por scheme/host/port/site y verificar HTTPS/certificados. Para Heroku, confirmar la regla de aserción privada edge y el rechazo del origin directo; no inferir TLS desde `X-Forwarded-Proto`.
 3. Probar `Set-Cookie`, envío, `SameSite`, credenciales cross-origin, expiración y borrado en navegadores objetivo; incluir cookies de terceros bloqueadas.
 4. Verificar allowlist exacta, CORS credentials, `Vary: Origin`, preflight `OPTIONS`, header `X-CSRF-Token`, Fetch Metadata y rechazo de origen no permitido.
 5. Verificar redacción de Cookie/Set-Cookie/Authorization/cuerpos en API, Heroku/router/APM/logging vigente sin enviar valores sensibles a logs.

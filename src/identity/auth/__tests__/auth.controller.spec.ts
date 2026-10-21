@@ -3,13 +3,17 @@ import {
   PATH_METADATA,
   METHOD_METADATA,
 } from '@nestjs/common/constants';
-import { ForbiddenException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { AuthController } from '../auth.controller';
 import { META_MINIMUM_ROLE } from '../decorators/role-protected.decorator';
 import { ValidRoles } from '../interfaces/valid-roles';
 import { UserRoleGuard } from '../guards/user-role/user-role.guard';
+import { AUTH_SESSION_MODE } from '../dto/session-auth-contract.dto';
 
 describe('AuthController role contract', () => {
   const prototype = AuthController.prototype;
@@ -184,6 +188,93 @@ describe('AuthController role contract', () => {
     ).resolves.toBe(response);
     expect(activityService.recordLoginAccess).toHaveBeenCalledWith('user-1');
   });
+
+  it('keeps an explicitly negotiated session login unavailable when its gate is off', async () => {
+    const authService = {
+      login: jest.fn(),
+      loginWithSession: jest.fn(),
+      resolveSessionLoginClient: jest.fn().mockImplementation(() => {
+        throw new ServiceUnavailableException('Session login is not available');
+      }),
+    };
+    const activityService = { recordLoginAccess: jest.fn() };
+    const controller = new AuthController(
+      authService as never,
+      {} as never,
+      activityService as never,
+    );
+
+    await expect(
+      controller.login(
+        { username: 'listener', password: 'Password1' },
+        AUTH_SESSION_MODE,
+        'https://app.example.test',
+      ),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(authService.login).not.toHaveBeenCalled();
+    expect(authService.loginWithSession).not.toHaveBeenCalled();
+    expect(activityService.recordLoginAccess).not.toHaveBeenCalled();
+  });
+
+  it('rejects a session login request from an unapproved origin', async () => {
+    const authService = {
+      login: jest.fn(),
+      loginWithSession: jest.fn(),
+      resolveSessionLoginClient: jest.fn().mockImplementation(() => {
+        throw new ForbiddenException('Origin is not allowed');
+      }),
+    };
+    const controller = new AuthController(
+      authService as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      controller.login(
+        { username: 'listener', password: 'Password1' },
+        AUTH_SESSION_MODE,
+        'https://evil.example.test',
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(authService.login).not.toHaveBeenCalled();
+    expect(authService.loginWithSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['app', 'https://app.example.test'],
+    ['wiki', 'https://wiki.example.test'],
+  ] as const)(
+    'validates the server-selected %s origin but keeps session issuance blocked until cookie transport is ready',
+    async (clientType, origin) => {
+      const authService = {
+        login: jest.fn(),
+        loginWithSession: jest.fn(),
+        resolveSessionLoginClient: jest.fn().mockReturnValue(clientType),
+      };
+      const activityService = { recordLoginAccess: jest.fn() };
+      const controller = new AuthController(
+        authService as never,
+        {} as never,
+        activityService as never,
+      );
+
+      await expect(
+        controller.login(
+          { username: 'listener', password: 'Password1' },
+          AUTH_SESSION_MODE,
+          origin,
+        ),
+      ).rejects.toMatchObject({ status: 503 });
+      expect(authService.resolveSessionLoginClient).toHaveBeenCalledWith({
+        mode: AUTH_SESSION_MODE,
+        origin,
+      });
+      expect(authService.login).not.toHaveBeenCalled();
+      expect(authService.loginWithSession).not.toHaveBeenCalled();
+      expect(activityService.recordLoginAccess).not.toHaveBeenCalled();
+    },
+  );
 
   const authorizationCases = [
     [ValidRoles.riffvalley, 'findAllRv', ValidRoles.riffvalley, true],

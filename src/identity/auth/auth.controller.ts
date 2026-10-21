@@ -7,10 +7,16 @@ import {
   Delete,
   Patch,
   Query,
+  Headers,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
+import {
+  AUTH_SESSION_MODE,
+  AUTH_SESSION_MODE_HEADER,
+} from './dto/session-auth-contract.dto';
 import { GetUser } from './decorators/get-user.decorator';
 import { User } from './entities/user.entity';
 import { ValidRoles } from './interfaces/valid-roles';
@@ -34,8 +40,25 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() LoginUserDto: LoginUserDto) {
-    const response = await this.authService.login(LoginUserDto);
+  async login(
+    @Body() loginUserDto: LoginUserDto,
+    @Headers(AUTH_SESSION_MODE_HEADER) sessionMode?: string,
+    @Headers('origin') origin?: string,
+  ) {
+    if (sessionMode !== undefined) {
+      this.authService.resolveSessionLoginClient({
+        mode: sessionMode,
+        origin,
+      });
+
+      // Do not create a session until this route can deliver refresh only via
+      // a protected HttpOnly cookie. The legacy request remains unaffected.
+      throw new ServiceUnavailableException(
+        `Session login transport is not available for ${AUTH_SESSION_MODE}`,
+      );
+    }
+
+    const response = await this.authService.login(loginUserDto);
     await this.activityService.recordLoginAccess(response.id);
     return response;
   }

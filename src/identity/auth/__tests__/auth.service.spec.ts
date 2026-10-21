@@ -1,5 +1,10 @@
 import * as bcrypt from 'bcrypt';
-import { Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from '../auth.service';
 import { User } from '../entities/user.entity';
 import { JwtPayload } from '../interfaces/jwt-payload.interface';
@@ -140,6 +145,38 @@ describe('AuthService authentication', () => {
     ).rejects.toMatchObject({ status: 401 });
     expect(usersService.recordLogin).not.toHaveBeenCalled();
     expect(jwtService.sign).not.toHaveBeenCalled();
+  });
+
+  it('resolves only the two exact configured client origins after the gate opens', () => {
+    const context = { mode: 'refresh-v1', origin: 'https://app.example.test' };
+    expect(() => service.resolveSessionLoginClient(context)).toThrow(
+      ServiceUnavailableException,
+    );
+
+    configValues.AUTH_SESSION_MODE_ENABLED = 'true';
+    configValues.AUTH_SESSION_APP_ORIGIN = 'https://app.example.test';
+    configValues.AUTH_SESSION_WIKI_ORIGIN = 'https://wiki.example.test';
+
+    expect(service.resolveSessionLoginClient(context)).toBe('app');
+    expect(
+      service.resolveSessionLoginClient({
+        mode: 'refresh-v1',
+        origin: 'https://wiki.example.test',
+      }),
+    ).toBe('wiki');
+    expect(() =>
+      service.resolveSessionLoginClient({
+        mode: 'refresh-v1',
+        origin: 'https://evil.example.test',
+      }),
+    ).toThrow(ForbiddenException);
+    expect(() =>
+      service.resolveSessionLoginClient({
+        mode: 'other-mode',
+        origin: 'https://app.example.test',
+      }),
+    ).toThrow(ServiceUnavailableException);
+    expect(sessionsService.createSession).not.toHaveBeenCalled();
   });
 
   it('keeps the internal session flow unavailable unless explicitly enabled', async () => {

@@ -208,7 +208,7 @@ class TypeOrmSessionsUnitOfWork implements SessionsUnitOfWork {
     return this.manager.getRepository(AuthSession).find({
       where: { user: { id: userId }, revokedAt: IsNull() },
       order: { id: 'ASC' },
-      lock: { mode: 'pessimistic_write' },
+      lock: { mode: 'pessimistic_write', tables: ['auth_sessions'] },
     });
   }
 

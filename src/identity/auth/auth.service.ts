@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -8,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
+import { AUTH_SESSION_MODE } from './dto/session-auth-contract.dto';
 import { User } from './entities/user.entity';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { UsersService } from '../users/users.service';
@@ -115,6 +117,27 @@ export class AuthService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Validates HTTP negotiation without authenticating or creating a session.
+   * The HTTP adapter remains unavailable until it can safely set the refresh
+   * cookie and enforce the corresponding CSRF/CORS controls.
+   */
+  resolveSessionLoginClient(context: SessionLoginContext): SessionClientType {
+    if (
+      this.configService.get<string>('AUTH_SESSION_MODE_ENABLED') !== 'true' ||
+      context.mode !== AUTH_SESSION_MODE
+    ) {
+      throw new ServiceUnavailableException('Session login is not available');
+    }
+
+    const clientType = this.resolveSessionClient(context);
+    if (!clientType) {
+      throw new ForbiddenException('Origin is not allowed');
+    }
+
+    return clientType;
   }
 
   private async authenticateActiveUser(
