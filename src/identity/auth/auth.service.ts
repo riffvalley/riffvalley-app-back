@@ -1,5 +1,6 @@
 import {
   ForbiddenException,
+  ConflictException,
   Injectable,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -7,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { AUTH_SESSION_MODE } from './dto/session-auth-contract.dto';
@@ -16,6 +18,13 @@ import { UsersService } from '../users/users.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { SessionClientType } from '../sessions/entities/auth-session.entity';
 import { SessionCredential } from '../sessions/sessions.service';
+import {
+  InvalidSessionCredentialError,
+  RefreshOperationAlreadyProcessedError,
+  RefreshTokenReuseDetectedError,
+} from '../sessions/errors/sessions.errors';
+
+let dummyPasswordHash: string | undefined;
 
 export type SessionLoginContext = {
   mode: string | undefined;
@@ -27,6 +36,12 @@ export type SessionLoginResult = {
     User,
     'password' | 'checkFieldsBeforeInsert' | 'checkFieldsBeforeUpdate'
   >;
+  accessToken: string;
+  refreshCredential: SessionCredential;
+};
+
+export type SessionRefreshResult = {
+  user: SessionLoginResult['user'];
   accessToken: string;
   refreshCredential: SessionCredential;
 };
@@ -55,7 +70,7 @@ export class AuthService {
   async login(loginUserDto: LoginUserDto) {
     const { password, username } = loginUserDto;
     const user = await this.usersService.findCredentialsByUsername(username);
-    if (!user || !bcrypt.compareSync(password, user.password)) {
+    if (!this.passwordMatchesUser(password, user)) {
       throw new UnauthorizedException('Credentials are not valid!');
     }
 
@@ -74,8 +89,8 @@ export class AuthService {
   }
 
   /**
-   * Internal composition for the future negotiated HTTP flow. No controller
-   * calls this method until the cookie, CSRF, CORS and capacity gates are met.
+   * Composes an authenticated renewable login after the HTTP controller has
+   * validated edge transport, Origin, content type, Fetch Metadata and CSRF.
    */
   async loginWithSession(
     loginUserDto: LoginUserDto,
@@ -119,10 +134,52 @@ export class AuthService {
     }
   }
 
+  async refreshWithSession(
+    refreshToken: string,
+    operationId: string,
+    context: SessionLoginContext,
+  ): Promise<SessionRefreshResult> {
+    const clientType = this.resolveSessionLoginClient(context);
+
+    let refreshCredential: SessionCredential;
+    try {
+      refreshCredential = await this.sessionsService.rotateRefreshToken({
+        refreshToken,
+        operationId,
+        clientType,
+      });
+    } catch (error) {
+      if (error instanceof RefreshOperationAlreadyProcessedError) {
+        throw new ConflictException('Refresh operation is not available');
+      }
+      if (
+        error instanceof InvalidSessionCredentialError ||
+        error instanceof RefreshTokenReuseDetectedError
+      ) {
+        throw new UnauthorizedException('Session is not available');
+      }
+      throw error;
+    }
+
+    const user = await this.usersService.findById(refreshCredential.userId);
+    if (!user?.isActive) {
+      throw new UnauthorizedException('Session is not available');
+    }
+
+    return {
+      user: this.withoutPassword(user),
+      accessToken: this.getSessionJwtToken({
+        username: user.username,
+        id: user.id,
+        role: user.role,
+      }),
+      refreshCredential,
+    };
+  }
+
   /**
-   * Validates HTTP negotiation without authenticating or creating a session.
-   * The HTTP adapter remains unavailable until it can safely set the refresh
-   * cookie and enforce the corresponding CSRF/CORS controls.
+   * Resolves the negotiated client from the exact configured Origin. The
+   * controller remains responsible for cookie and request security controls.
    */
   resolveSessionLoginClient(context: SessionLoginContext): SessionClientType {
     if (
@@ -146,7 +203,7 @@ export class AuthService {
     const user = await this.usersService.findCredentialsByUsername(
       loginUserDto.username,
     );
-    if (!user || !bcrypt.compareSync(loginUserDto.password, user.password)) {
+    if (!this.passwordMatchesUser(loginUserDto.password, user)) {
       throw new UnauthorizedException('Credentials are not valid!');
     }
 
@@ -155,6 +212,17 @@ export class AuthService {
       throw new UnauthorizedException('Credentials are not valid!');
     }
     return user;
+  }
+
+  private passwordMatchesUser(password: string, user: User | null): boolean {
+    if (user) return bcrypt.compareSync(password, user.password);
+
+    dummyPasswordHash ??= bcrypt.hashSync(
+      randomBytes(32).toString('base64url'),
+      10,
+    );
+    bcrypt.compareSync(password, dummyPasswordHash);
+    return false;
   }
 
   private resolveSessionClient(

@@ -101,6 +101,26 @@ export function createSessionCsrfVerifier(
     });
 }
 
+/** Verifies a signed logout token when no refresh cookie can identify its session. */
+export function createClientLogoutCsrfVerifier(
+  secret: string | undefined,
+  now = Date.now(),
+): SessionCsrfVerifier {
+  return (token, clientType) => {
+    const binding = readSessionCsrfBinding(token);
+    return (
+      binding !== null &&
+      verifyClaims(secret, token, {
+        operation: 'logout',
+        clientType,
+        binding,
+        maxLifetimeMs: MAX_SESSION_CSRF_LIFETIME_MS,
+        now,
+      })
+    );
+  };
+}
+
 function signClaims(
   secret: string | undefined,
   claims: SessionCsrfClaims,
@@ -159,6 +179,20 @@ function verifyClaims(
     parsed.expiresAt > expected.now &&
     parsed.expiresAt - expected.now <= expected.maxLifetimeMs
   );
+}
+
+function readSessionCsrfBinding(token: string): string | null {
+  const parts = token.split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (!isSessionCsrfClaims(parsed) || !parsed.binding) return null;
+  return parsed.binding;
 }
 
 function deriveKey(secret: string | undefined): Buffer | null {

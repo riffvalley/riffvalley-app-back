@@ -5,6 +5,7 @@ import {
   createSessionRefreshCookiePolicy,
   readSessionCookieRequestMetadata,
   resolveSessionClientFromOrigin,
+  resolveAuthRateLimitClientAddress,
   SESSION_HTTP_TRUST_PROXY,
   SESSION_EDGE_SECRET_CONFIG_KEY,
   SESSION_TRUSTED_EDGE_HEADER,
@@ -26,6 +27,55 @@ function createConfigService(secret?: string): ConfigService {
 describe('session HTTP security helpers', () => {
   it('keeps Express proxy trust disabled because forwarded protocol is ambiguous', () => {
     expect(SESSION_HTTP_TRUST_PROXY).toBe(false);
+  });
+
+  describe('rate limit client address', () => {
+    it('uses Cloudflare client IP only with a valid private edge assertion', () => {
+      expect(
+        resolveAuthRateLimitClientAddress(
+          {
+            socket: { remoteAddress: '10.0.0.8' },
+            headers: {
+              [SESSION_TRUSTED_EDGE_HEADER]: edgeSecret,
+              'cf-connecting-ip': '203.0.113.9',
+              'x-forwarded-for': '198.51.100.1',
+            },
+          } as never,
+          edgeSecret,
+        ),
+      ).toBe('203.0.113.9');
+    });
+
+    it('ignores spoofed forwarding headers without the valid edge assertion', () => {
+      expect(
+        resolveAuthRateLimitClientAddress(
+          {
+            socket: { remoteAddress: '::ffff:10.0.0.8' },
+            headers: {
+              [SESSION_TRUSTED_EDGE_HEADER]: 'invalid',
+              'cf-connecting-ip': '203.0.113.9',
+              'x-forwarded-for': '198.51.100.1',
+            },
+          } as never,
+          edgeSecret,
+        ),
+      ).toBe('10.0.0.8');
+    });
+
+    it('falls back to the socket when the edge client IP is ambiguous', () => {
+      expect(
+        resolveAuthRateLimitClientAddress(
+          {
+            socket: { remoteAddress: '10.0.0.8' },
+            headers: {
+              [SESSION_TRUSTED_EDGE_HEADER]: [edgeSecret, edgeSecret],
+              'cf-connecting-ip': '203.0.113.9',
+            },
+          } as never,
+          edgeSecret,
+        ),
+      ).toBe('10.0.0.8');
+    });
   });
 
   describe('readSessionCookieRequestMetadata', () => {

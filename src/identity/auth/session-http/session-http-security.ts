@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'crypto';
+import { isIP } from 'node:net';
 import type { Request } from 'express';
 import { SessionClientType } from '../../sessions/entities/auth-session.entity';
 
@@ -83,6 +84,61 @@ export function isSecureSessionTransport(
   if (!assertionBytes) return false;
 
   return timingSafeEqual(assertionBytes, expectedBytes);
+}
+
+export function hasTrustedSessionEdgeAssertion(
+  edgeAssertion: string | undefined,
+  trustedEdgeSecret: string | undefined,
+): boolean {
+  const expectedBytes = decodeEdgeSecret(trustedEdgeSecret);
+  const assertionBytes = decodeEdgeSecret(edgeAssertion);
+  return Boolean(
+    expectedBytes &&
+      assertionBytes &&
+      timingSafeEqual(assertionBytes, expectedBytes),
+  );
+}
+
+/**
+ * Uses Cloudflare's overwritten client-IP header only behind the private edge
+ * assertion; otherwise counts by the direct socket peer. Forwarded headers are
+ * deliberately not accepted as client identity.
+ */
+export function resolveAuthRateLimitClientAddress(
+  request: Pick<Request, 'socket' | 'headers'>,
+  trustedEdgeSecret: string | undefined,
+): string | null {
+  const edgeAssertion = readSingleHeader(
+    request.headers[SESSION_TRUSTED_EDGE_HEADER],
+  );
+  const edgeClientAddress = readSingleHeader(
+    request.headers['cf-connecting-ip'],
+  );
+  if (
+    hasTrustedSessionEdgeAssertion(edgeAssertion, trustedEdgeSecret) &&
+    edgeClientAddress
+  ) {
+    const normalized = normalizeIpAddress(edgeClientAddress);
+    if (normalized) return normalized;
+  }
+
+  return normalizeIpAddress(request.socket.remoteAddress ?? '');
+}
+
+function normalizeIpAddress(value: string): string | null {
+  if (isIP(value) === 0) return null;
+  const ipv4Mapped = value.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  const candidate = ipv4Mapped?.[1] ?? value;
+  try {
+    const hostname = new URL(
+      candidate.includes(':')
+        ? `http://[${candidate}]/`
+        : `http://${candidate}/`,
+    ).hostname;
+    return hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  } catch {
+    return null;
+  }
 }
 
 function decodeEdgeSecret(value: string | undefined): Buffer | undefined {
@@ -176,6 +232,23 @@ export function validateSessionCookieRequest(
   configuredOrigins: SessionClientOrigins,
   verifyCsrfToken: SessionCsrfVerifier,
 ): SessionClientType {
+  const clientType = validateSessionCookieRequestMetadata(
+    metadata,
+    configuredOrigins,
+  );
+
+  if (!metadata.csrfToken || !verifyCsrfToken(metadata.csrfToken, clientType)) {
+    throw new ForbiddenException('CSRF validation failed');
+  }
+
+  return clientType;
+}
+
+/** Validates request controls that do not require reading the session cookie. */
+export function validateSessionCookieRequestMetadata(
+  metadata: SessionCookieRequestMetadata,
+  configuredOrigins: SessionClientOrigins,
+): SessionClientType {
   if (!metadata.secure) {
     throw new ForbiddenException('Session requests require HTTPS');
   }
@@ -199,8 +272,35 @@ export function validateSessionCookieRequest(
     throw new ForbiddenException('Request metadata is not allowed');
   }
 
-  if (!metadata.csrfToken || !verifyCsrfToken(metadata.csrfToken, clientType)) {
-    throw new ForbiddenException('CSRF validation failed');
+  return clientType;
+}
+
+/**
+ * Validates the non-mutating CSRF bootstrap. It intentionally has no JSON
+ * Content-Type or CSRF-token requirement: this GET creates the first nonce and
+ * token. HTTPS, exact Origin and valid Fetch Metadata remain mandatory.
+ */
+export function validateSessionCsrfBootstrapRequest(
+  metadata: SessionCookieRequestMetadata,
+  configuredOrigins: SessionClientOrigins,
+): SessionClientType {
+  if (!metadata.secure) {
+    throw new ForbiddenException('Session requests require HTTPS');
+  }
+
+  const clientType = resolveSessionClientFromOrigin(
+    metadata.origin,
+    configuredOrigins,
+  );
+  if (!clientType) {
+    throw new ForbiddenException('Request origin is not allowed');
+  }
+
+  if (
+    metadata.fetchSite !== undefined &&
+    !ALLOWED_FETCH_SITES.has(metadata.fetchSite)
+  ) {
+    throw new ForbiddenException('Request metadata is not allowed');
   }
 
   return clientType;
@@ -223,5 +323,6 @@ function isJsonContentType(value: string | undefined): boolean {
 function readSingleHeader(
   value: string | string[] | undefined,
 ): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+  if (value === undefined) return undefined;
+  return typeof value === 'string' ? value : '';
 }
