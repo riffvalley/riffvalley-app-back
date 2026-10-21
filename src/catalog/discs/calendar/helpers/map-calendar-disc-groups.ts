@@ -1,8 +1,6 @@
 import type { Disc } from '../../entities/disc.entity';
 
-export function mapNationalReleaseIds(
-  rows: { discId: string; id: string }[],
-) {
+export function mapNationalReleaseIds(rows: { discId: string; id: string }[]) {
   return new Map(rows.map((row) => [row.discId, row.id]));
 }
 
@@ -29,9 +27,7 @@ export function mapAuthenticatedCalendarDiscGroups(
       userRate: disc.rates.length > 0 ? disc.rates[0] : null,
       favoriteId: disc.favorites.length > 0 ? disc.favorites[0].id : null,
       pendingId:
-        disc.pendings && disc.pendings.length > 0
-          ? disc.pendings[0].id
-          : null,
+        disc.pendings && disc.pendings.length > 0 ? disc.pendings[0].id : null,
       nationalReleaseId: nationalReleaseMap.get(disc.id) ?? null,
       asignations: disc.asignations.map((asignation) => ({
         id: asignation.id,

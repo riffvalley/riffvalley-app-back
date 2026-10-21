@@ -11,14 +11,20 @@ export class DiscEnrichmentService {
     private readonly discRepository: Repository<Disc>,
   ) {}
 
-  async findWeeklyWithoutImage(month: number, year: number, week?: number): Promise<{ id: string; artistName: string; name: string }[]> {
+  async findWeeklyWithoutImage(
+    month: number,
+    year: number,
+    week?: number,
+  ): Promise<{ id: string; artistName: string; name: string }[]> {
     const weekRanges = getFridayWeekRanges(month, year);
-    const filtered = weekRanges.filter((w) => week === undefined || w.week === week);
+    const filtered = weekRanges.filter(
+      (w) => week === undefined || w.week === week,
+    );
     if (!filtered.length) return [];
 
     const pad = (n: number) => String(n).padStart(2, '0');
     const start = `${year}-${pad(month)}-${pad(filtered[0].from)}`;
-    const end   = `${year}-${pad(month)}-${pad(filtered[filtered.length - 1].to)}`;
+    const end = `${year}-${pad(month)}-${pad(filtered[filtered.length - 1].to)}`;
 
     const discs = await this.discRepository
       .createQueryBuilder('disc')

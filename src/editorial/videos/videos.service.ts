@@ -7,13 +7,20 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  Between,
   ILike,
   LessThanOrEqual,
   MoreThanOrEqual,
+  FindOptionsWhere,
+  QueryFailedError,
   Repository,
   In,
 } from 'typeorm';
-import { Video, VideoStatus as VideoStatusEnum } from './entities/video.entity';
+import {
+  Video,
+  VideoStatus as VideoStatusEnum,
+  VideoType as VideoTypeEnum,
+} from './entities/video.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
 import { ContentType } from 'src/editorial/contents/entities/content.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
@@ -40,6 +47,25 @@ export interface FindVideoParams {
   userId?: string;
 }
 
+const VIDEO_RELATION_FOREIGN_KEY_CONSTRAINTS = new Set([
+  'FK_74e27b13f8ac66f999400df12f6', // video.userId -> users.id
+  'FK_326eb34c48fc181639511958a19', // video.editorId -> users.id
+  'FK_e7181db8200f878e3ba5fb2486c', // video.listId -> list.id
+]);
+
+const VIDEO_STATUSES: Record<VideoStatus, VideoStatusEnum> = {
+  not_started: VideoStatusEnum.NOT_STARTED,
+  in_progress: VideoStatusEnum.IN_PROGRESS,
+  editing: VideoStatusEnum.EDITING,
+  ready: VideoStatusEnum.READY,
+  published: VideoStatusEnum.PUBLISHED,
+};
+
+const VIDEO_TYPES: Record<VideoType, VideoTypeEnum> = {
+  best: VideoTypeEnum.BEST,
+  custom: VideoTypeEnum.CUSTOM,
+};
+
 @Injectable()
 export class VideosService {
   constructor(
@@ -51,6 +77,13 @@ export class VideosService {
   ) {}
 
   async create(createVideoDto: CreateVideoDto): Promise<Video> {
+    this.validateStatusRequirements(
+      createVideoDto.status,
+      Boolean(createVideoDto.userId),
+      createVideoDto.updateDate,
+      'create',
+    );
+
     const entity = this.repo.create({
       ...createVideoDto,
       updateDate: createVideoDto.updateDate
@@ -62,7 +95,7 @@ export class VideosService {
         : undefined,
       list: createVideoDto.listId ? { id: createVideoDto.listId } : undefined,
     });
-    const savedEntity = await this.repo.save(entity);
+    const savedEntity = await this.saveVideo(entity);
 
     return this.findOne(savedEntity.id);
   }
@@ -79,11 +112,22 @@ export class VideosService {
       userId,
     } = params;
 
-    const baseWhere: any = {
-      ...(status ? { status } : {}),
-      ...(type ? (Array.isArray(type) ? { type: In(type) } : { type }) : {}),
-      ...(desde ? { updateDate: MoreThanOrEqual(new Date(desde)) } : {}),
-      ...(hasta ? { updateDate: LessThanOrEqual(new Date(hasta)) } : {}),
+    const baseWhere: FindOptionsWhere<Video> = {
+      ...(status ? { status: VIDEO_STATUSES[status] } : {}),
+      ...(type
+        ? {
+            type: Array.isArray(type)
+              ? In(type.map((videoType) => VIDEO_TYPES[videoType]))
+              : VIDEO_TYPES[type],
+          }
+        : {}),
+      ...(desde && hasta
+        ? { updateDate: Between(new Date(desde), new Date(hasta)) }
+        : desde
+          ? { updateDate: MoreThanOrEqual(new Date(desde)) }
+          : hasta
+            ? { updateDate: LessThanOrEqual(new Date(hasta)) }
+            : {}),
       ...(userId ? { user: { id: userId } } : {}),
     };
 
@@ -117,51 +161,66 @@ export class VideosService {
       entity.updateDate = new Date(updateVideoDto.updateDate);
     }
 
-    // Handle User Assignment
-    if (updateVideoDto.userId) {
-      entity.user = { id: updateVideoDto.userId } as any;
+    // Omitted relation fields preserve their current assignments; explicit
+    // null clears them. Determine the final state and User together so a
+    // combined status/assignment PATCH is validated as one operation.
+    if (updateVideoDto.userId !== undefined) {
+      this.repo.merge(entity, {
+        user: updateVideoDto.userId ? { id: updateVideoDto.userId } : null,
+      });
     }
 
-    // Handle Editor Assignment
-    if (updateVideoDto.editorId) {
-      entity.editor = { id: updateVideoDto.editorId } as any;
+    if (updateVideoDto.editorId !== undefined) {
+      this.repo.merge(entity, {
+        editor: updateVideoDto.editorId
+          ? { id: updateVideoDto.editorId }
+          : null,
+      });
     }
 
     // Handle List Assignment
     if (updateVideoDto.listId !== undefined) {
-      entity.list = updateVideoDto.listId
-        ? ({ id: updateVideoDto.listId } as any)
-        : null;
+      this.repo.merge(entity, {
+        list: updateVideoDto.listId ? { id: updateVideoDto.listId } : null,
+      });
     }
 
     // Logic for State Transitions
     // NOTE: this no longer touches Content — Video and Content are fully
     // independent. Creating/linking a Content is a manual, explicit action
     // (see createContentForVideo() / POST /videos/:id/content).
-    if (updateVideoDto.status && updateVideoDto.status !== entity.status) {
-      if (
-        updateVideoDto.status === VideoStatusEnum.EDITING ||
-        updateVideoDto.status === VideoStatusEnum.READY
-      ) {
-        if (!entity.user) {
-          throw new BadRequestException(
-            `Para cambiar el estado a "${updateVideoDto.status}", el video debe tener un usuario asignado.`,
-          );
-        }
-      } else if (updateVideoDto.status === VideoStatusEnum.PUBLISHED) {
-        if (!updateVideoDto.updateDate) {
-          throw new BadRequestException(
-            'Para cambiar el estado a "published", debe proporcionar una fecha (updateDate).',
-          );
-        }
-        entity.updateDate = new Date(updateVideoDto.updateDate);
-      }
+    const finalStatus = updateVideoDto.status ?? entity.status;
+    const statusChanged = finalStatus !== entity.status;
+    const userWasExplicitlyCleared = updateVideoDto.userId === null;
+
+    if (statusChanged) {
+      this.validateStatusRequirements(
+        finalStatus,
+        Boolean(entity.user),
+        updateVideoDto.updateDate,
+        'update',
+      );
+    } else if (
+      userWasExplicitlyCleared &&
+      (finalStatus === VideoStatusEnum.EDITING ||
+        finalStatus === VideoStatusEnum.READY)
+    ) {
+      this.validateStatusRequirements(
+        finalStatus,
+        false,
+        updateVideoDto.updateDate,
+        'update',
+      );
+    }
+
+    if (statusChanged && finalStatus === VideoStatusEnum.PUBLISHED) {
+      entity.updateDate = new Date(updateVideoDto.updateDate!);
     }
 
     // Apply state change
     if (updateVideoDto.status) entity.status = updateVideoDto.status;
 
-    await this.repo.save(entity);
+    await this.saveVideo(entity);
 
     return this.findOne(id);
   }
@@ -181,21 +240,30 @@ export class VideosService {
   }
 
   async createListForVideo(videoId: string): Promise<Video> {
-    const video = await this.findOne(videoId);
+    await this.repo.manager.transaction(async (manager) => {
+      const videoRepository = manager.getRepository(Video);
+      const video = await videoRepository.findOne({
+        where: { id: videoId },
+        relations: ['list'],
+        lock: { mode: 'pessimistic_write', tables: ['video'] },
+      });
 
-    if (video.list) {
-      throw new BadRequestException('Este Video ya tiene una List asociada.');
-    }
+      if (!video) throw new NotFoundException('Video not found');
+      if (video.list) {
+        throw new BadRequestException('Este Video ya tiene una List asociada.');
+      }
 
-    const list = await this.listsService.createVideoList(
-      undefined,
-      undefined,
-      video.name,
-      undefined,
-    );
+      const list = await this.listsService.createVideoList(
+        undefined,
+        undefined,
+        video.name,
+        undefined,
+        manager,
+      );
 
-    video.list = list;
-    await this.repo.save(video);
+      video.list = list;
+      await videoRepository.save(video);
+    });
 
     return this.findOne(videoId);
   }
@@ -223,8 +291,65 @@ export class VideosService {
       authorId: video.user.id,
       videoId: video.id,
       backlog: true,
-    } as any);
+    });
 
     return this.findOne(videoId);
+  }
+
+  private validateStatusRequirements(
+    status: VideoStatusEnum,
+    hasUser: boolean,
+    updateDate: string | Date | null | undefined,
+    operation: 'create' | 'update',
+  ): void {
+    if (
+      (status === VideoStatusEnum.EDITING ||
+        status === VideoStatusEnum.READY) &&
+      !hasUser
+    ) {
+      throw new BadRequestException(
+        operation === 'create'
+          ? `Para crear un video en estado "${status}", debe tener un usuario asignado.`
+          : `Para cambiar el estado a "${status}", el video debe tener un usuario asignado.`,
+      );
+    }
+
+    if (status === VideoStatusEnum.PUBLISHED && !updateDate) {
+      throw new BadRequestException(
+        operation === 'create'
+          ? 'Para crear un video en estado "published", debe proporcionar una fecha (updateDate).'
+          : 'Para cambiar el estado a "published", debe proporcionar una fecha (updateDate).',
+      );
+    }
+  }
+
+  private async saveVideo(video: Video): Promise<Video> {
+    try {
+      return await this.repo.save(video);
+    } catch (error) {
+      if (this.isVideoRelationForeignKeyViolation(error)) {
+        throw new NotFoundException(
+          'One or more referenced resources were not found',
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  private isVideoRelationForeignKeyViolation(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false;
+
+    const driverError: unknown = error.driverError;
+    if (typeof driverError !== 'object' || driverError === null) return false;
+    return (
+      'code' in driverError &&
+      driverError.code === '23503' &&
+      'table' in driverError &&
+      driverError.table === 'video' &&
+      'constraint' in driverError &&
+      typeof driverError.constraint === 'string' &&
+      VIDEO_RELATION_FOREIGN_KEY_CONSTRAINTS.has(driverError.constraint)
+    );
   }
 }

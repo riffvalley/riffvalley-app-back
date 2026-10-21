@@ -90,12 +90,9 @@ describe('GET /api/catalog', () => {
   });
 
   it('resolves the controller and both repository dependencies through Nest', () => {
-    const controller = moduleRef.get(CatalogController) as unknown as {
-      genreRepo: unknown;
-      countryRepo: unknown;
-    };
+    const controller = moduleRef.get(CatalogController);
 
-    expect(controller.genreRepo).toBe(genreRepository);
-    expect(controller.countryRepo).toBe(countryRepository);
+    expect(Reflect.get(controller, 'genreRepo')).toBe(genreRepository);
+    expect(Reflect.get(controller, 'countryRepo')).toBe(countryRepository);
   });
 });

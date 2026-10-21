@@ -8,7 +8,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Asignation } from '../../../editorial/asignations/entities/asignations.entity';
+import { Asignation } from '../../../editorial/lists/asignations/entities/asignations.entity';
 import { Favorite } from '../../../community/favorites/entities/favorite.entity';
 import { Pending } from '../../../community/pendings/entities/pending.entity';
 import { Comment } from '../../../community/comments/entities/comment.entity';
@@ -48,7 +48,10 @@ export class Disc {
   @Column('boolean', { nullable: true, default: false })
   pinned: boolean = false;
 
-  @ManyToOne(() => Artist, (artist) => artist.disc, { eager: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => Artist, (artist) => artist.disc, {
+    eager: true,
+    onDelete: 'CASCADE',
+  })
   artist: Artist;
 
   @ManyToOne(() => Genre, (genre) => genre.disc, { eager: true })

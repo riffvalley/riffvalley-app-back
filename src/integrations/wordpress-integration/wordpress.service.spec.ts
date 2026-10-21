@@ -2,7 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { WordpressIntegrationModule } from './wordpress-integration.module';
-import { WordpressService } from './wordpress.service';
+import { WordpressService, WordpressWriteError } from './wordpress.service';
 
 describe('WordpressService public reads', () => {
   const originalFetch = global.fetch;
@@ -387,7 +387,63 @@ describe('WordpressService public reads', () => {
     );
   });
 
-  it('keeps the current private lookup behavior for authentication failures', async () => {
+  it('classifies rejected versus uncertain WordPress write outcomes', async () => {
+    const config = {
+      get: jest.fn((key: string, fallback?: string) =>
+        key === 'WP_USER'
+          ? 'publisher'
+          : key === 'WP_APP_PASSWORD'
+            ? 'app-password'
+            : key === 'WP_API_URL'
+              ? 'https://wp.test/wp-json/wp/v2'
+              : (fallback ?? ''),
+      ),
+    } as unknown as ConfigService;
+    service = new WordpressService(config);
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: jest.fn().mockResolvedValue('forbidden'),
+    });
+    await expect(service.createPost('Title', 'Body')).rejects.toMatchObject({
+      name: 'WordpressWriteError',
+      outcome: 'rejected',
+      status: 401,
+    } satisfies Partial<WordpressWriteError>);
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: jest.fn().mockResolvedValue('temporary failure'),
+    });
+    await expect(service.updatePostContent(41, 'Body')).rejects.toMatchObject({
+      name: 'WordpressWriteError',
+      outcome: 'unknown',
+      status: 503,
+    } satisfies Partial<WordpressWriteError>);
+
+    global.fetch = jest.fn().mockRejectedValue(new Error('socket closed'));
+    await expect(service.updatePostContent(41, 'Body')).rejects.toMatchObject({
+      name: 'WordpressWriteError',
+      outcome: 'unknown',
+      message: 'socket closed',
+    } satisfies Partial<WordpressWriteError>);
+  });
+
+  it('does not treat an unsuccessful slug lookup as proof that no post exists', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: jest.fn().mockResolvedValue('temporarily unavailable'),
+    });
+
+    await expect(service.findPostBySlug('stable-list-slug')).rejects.toThrow(
+      'WordPress API error: 503',
+    );
+  });
+
+  it('propagates private post lookup authentication failures instead of reporting absence', async () => {
     const config = {
       get: jest.fn((key: string, fallback?: string) =>
         key === 'WP_USER'
@@ -405,7 +461,7 @@ describe('WordpressService public reads', () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 401,
-        json: jest.fn().mockResolvedValue([]),
+        text: jest.fn().mockResolvedValue('unauthorized'),
       })
       .mockResolvedValueOnce({
         ok: false,
@@ -414,7 +470,9 @@ describe('WordpressService public reads', () => {
       });
     global.fetch = fetch;
 
-    await expect(service.findPostBySlug('private-list')).resolves.toBeNull();
+    await expect(service.findPostBySlug('private-list')).rejects.toThrow(
+      'WordPress API error: 401',
+    );
     await expect(
       service.findAuthorBySlug('private-author'),
     ).resolves.toBeNull();

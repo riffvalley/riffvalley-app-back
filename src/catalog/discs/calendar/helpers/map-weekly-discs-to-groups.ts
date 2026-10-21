@@ -27,7 +27,20 @@ export function mapWeeklyDiscsToGroups(
   year: number,
   week?: number,
 ): WeeklyCalendarGroup[] {
-  const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const monthNames = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
   const monthLabel = monthNames[month - 1];
   const pad = (value: number) => String(value).padStart(2, '0');
 

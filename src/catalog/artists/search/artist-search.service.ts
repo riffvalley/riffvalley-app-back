@@ -15,6 +15,19 @@ import {
   mapDiscProjection,
 } from '../helpers/map-disc-projection';
 
+function isDuplicateKeyError(
+  error: unknown,
+): error is { code: '23505'; detail: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505' &&
+    'detail' in error &&
+    typeof error.detail === 'string'
+  );
+}
+
 @Injectable()
 export class ArtistSearchService {
   private readonly logger = new Logger('ArtistService');
@@ -88,8 +101,8 @@ export class ArtistSearchService {
         discs: discsByArtist.get(artist.id) ?? [],
       }));
     } catch (error) {
-      if ((error as any).code === '23505') {
-        throw new BadRequestException((error as any).detail);
+      if (isDuplicateKeyError(error)) {
+        throw new BadRequestException(error.detail);
       }
       this.logger.error(error);
       throw new InternalServerErrorException('ayuda', error);

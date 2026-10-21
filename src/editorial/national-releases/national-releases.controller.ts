@@ -1,4 +1,6 @@
 import {
+  ArgumentMetadata,
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,9 +10,11 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  PipeTransform,
   Post,
   Query,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { NationalReleasesService } from './national-releases.service';
@@ -21,6 +25,44 @@ import { CreateNationalReleaseFromDiscDto } from './dto/create-national-release-
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
+const MIN_RELEASE_YEAR = 1;
+const MAX_RELEASE_YEAR = 9999;
+
+class CreateNationalReleaseBodyPipe implements PipeTransform {
+  private readonly dtoPipe = new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transformOptions: { enableImplicitConversion: true },
+  });
+
+  transform(value: unknown, metadata: ArgumentMetadata): Promise<unknown> {
+    const dtoMetadata = {
+      ...metadata,
+      metatype: CreateNationalReleaseDto,
+    };
+
+    if (Array.isArray(value)) {
+      return Promise.all(
+        value.map((item) => this.validateDto(item, dtoMetadata)),
+      );
+    }
+
+    return this.validateDto(value, dtoMetadata);
+  }
+
+  private validateDto(
+    value: unknown,
+    metadata: ArgumentMetadata,
+  ): Promise<unknown> {
+    if (value === null || value === undefined) {
+      throw new BadRequestException('National release body is required');
+    }
+
+    return this.dtoPipe.transform(value, metadata);
+  }
+}
+
 @Controller('national-releases')
 export class NationalReleasesController {
   constructor(private readonly service: NationalReleasesService) {}
@@ -28,7 +70,10 @@ export class NationalReleasesController {
   @Post()
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { ttl: 60000, limit: 5 } })
-  create(@Body() dto: CreateNationalReleaseDto | CreateNationalReleaseDto[]) {
+  create(
+    @Body(new CreateNationalReleaseBodyPipe())
+    dto: CreateNationalReleaseDto | CreateNationalReleaseDto[],
+  ) {
     return Array.isArray(dto)
       ? this.service.createMany(dto)
       : this.service.create(dto);
@@ -42,23 +87,25 @@ export class NationalReleasesController {
 
   @Post('bulk')
   @Auth(ValidRoles.riffvalley)
-  createBulk(@Body() dto: CreateNationalReleaseDto[]) {
+  createBulk(
+    @Body(new CreateNationalReleaseBodyPipe()) dto: CreateNationalReleaseDto[],
+  ) {
     return this.service.createMany(dto);
   }
 
   @Get()
   findAll(@Query('month') month?: string, @Query('year') year?: string) {
     return this.service.findAll(
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseIntegerQuery(month, 'month', 1, 12),
+      this.parseIntegerQuery(year, 'year', MIN_RELEASE_YEAR, MAX_RELEASE_YEAR),
     );
   }
 
   @Get('public')
   findAllPublic(@Query('month') month?: string, @Query('year') year?: string) {
     return this.service.findAllPublic(
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseIntegerQuery(month, 'month', 1, 12),
+      this.parseIntegerQuery(year, 'year', MIN_RELEASE_YEAR, MAX_RELEASE_YEAR),
     );
   }
 
@@ -69,18 +116,17 @@ export class NationalReleasesController {
     @Query('year') year?: string,
     @Query('approved') approved?: string,
   ) {
-    const approvedFilter =
-      approved === 'true' ? true : approved === 'false' ? false : undefined;
+    const approvedFilter = this.parseApprovedQuery(approved);
     return this.service.findAllAdmin(
-      month ? parseInt(month, 10) : undefined,
-      year ? parseInt(year, 10) : undefined,
+      this.parseIntegerQuery(month, 'month', 1, 12),
+      this.parseIntegerQuery(year, 'year', MIN_RELEASE_YEAR, MAX_RELEASE_YEAR),
       approvedFilter,
     );
   }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.findOne(id);
+    return this.service.findOnePublic(id);
   }
 
   @Patch(':id/link-disc')
@@ -103,5 +149,41 @@ export class NationalReleasesController {
   @Auth(ValidRoles.riffvalley)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.remove(id);
+  }
+
+  private parseIntegerQuery(
+    value: string | undefined,
+    field: 'month' | 'year',
+    minimum: number,
+    maximum: number,
+  ): number | undefined {
+    if (value === undefined) return undefined;
+
+    if (
+      typeof value !== 'string' ||
+      !/^\d+$/.test(value) ||
+      !Number.isSafeInteger(Number(value))
+    ) {
+      throw new BadRequestException(
+        `${field} must be an integer between ${minimum} and ${maximum}`,
+      );
+    }
+
+    const parsedValue = Number(value);
+    if (parsedValue < minimum || parsedValue > maximum) {
+      throw new BadRequestException(
+        `${field} must be an integer between ${minimum} and ${maximum}`,
+      );
+    }
+
+    return parsedValue;
+  }
+
+  private parseApprovedQuery(value: string | undefined): boolean | undefined {
+    if (value === undefined) return undefined;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+
+    throw new BadRequestException('approved must be the literal true or false');
   }
 }

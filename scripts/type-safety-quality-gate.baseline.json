@@ -1,0 +1,1805 @@
+{
+  "version": 2,
+  "violations": [
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 175,
+      "column": 18,
+      "fingerprint": "16013c439115b05114440ba2b1425fb772d870249f54e4ec2cadeb6fe0c2db59",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 183,
+      "column": 41,
+      "fingerprint": "834f415be580f527bdc69724bcc3dfbed548b0f29da8f1710754c41e7c0fa7cc",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 198,
+      "column": 52,
+      "fingerprint": "da836629469c84a93fa3d3a49c9988b3d431daf445506e66bb1aed7c60ed69f3",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 233,
+      "column": 35,
+      "fingerprint": "5b1ec0d2cfbaa1fd259459e8ea794a05d51ee5a0c3cc58b56ef08d8c1903444d",
+      "occurrence": 1
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 47,
+      "column": 21,
+      "fingerprint": "6c81d7259c351e11baf768d17b114ef73e0b92712b45f78321a4867d8863f65f",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 77,
+      "column": 35,
+      "fingerprint": "5b1ec0d2cfbaa1fd259459e8ea794a05d51ee5a0c3cc58b56ef08d8c1903444d",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/rates/__tests__/rates.controller.spec.ts",
+      "line": 18,
+      "column": 31,
+      "fingerprint": "2bcf913065f8079c72edcf8908f5644847a6806b81b2d6f3ab6bc2b53bb7037b",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/rates/__tests__/rates.controller.spec.ts",
+      "line": 91,
+      "column": 33,
+      "fingerprint": "e7291ade9f3c8976920389b2ee2184fbd6b8e01a59c6f1e053871d8b21f947df",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/community/requests/__tests__/requests.module.spec.ts",
+      "line": 89,
+      "column": 21,
+      "fingerprint": "91636c82fa03ee4e765541a8b847b9f6b34c251a422b41fc5f0af18c5a979aa2",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts",
+      "line": 102,
+      "column": 5,
+      "fingerprint": "bd0ec10ab3b636d2dcd2ed761d96218a85079e975777d7d657c71a3f164ecb58",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/instagram-integration/instagram-token-storage.service.spec.ts",
+      "line": 12,
+      "column": 5,
+      "fingerprint": "6d4a4cbb0eb83a1a1d95663398addc46de1b9ce0e44743f14fbc6c8ce9ca69af",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/instagram-integration/instagram.controller.spec.ts",
+      "line": 11,
+      "column": 48,
+      "fingerprint": "df327d786e1c91d4b1a270d5e2fd389edb07123089f47414c6ae78ad7b215034",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/instagram-integration/instagram.service.spec.ts",
+      "line": 18,
+      "column": 5,
+      "fingerprint": "3917cafa5ee6c9ea30d7d13578e9f4d81571fa43b5d370fd60ffab05e849e900",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/instagram-integration/instagram.service.spec.ts",
+      "line": 28,
+      "column": 7,
+      "fingerprint": "15808e6303061d335f503cd66c502145fee54f26e3bebb113eda3cbd0918215d",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
+      "line": 18,
+      "column": 20,
+      "fingerprint": "ebf0d9d806096848e41a2af8ae9febe4eb59e32f73dea083cc63f3f4d0634a5a",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
+      "line": 29,
+      "column": 7,
+      "fingerprint": "c8e0f96798ea9c286e04e95f367b89d10ade50381700fb0618820c6ef648bb53",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
+      "line": 91,
+      "column": 63,
+      "fingerprint": "a99aad613156e250ad294cf1219ceb1d7410400a39cd11ebc28c2c85fa2d5572",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-public-api.service.spec.ts",
+      "line": 25,
+      "column": 20,
+      "fingerprint": "ebf0d9d806096848e41a2af8ae9febe4eb59e32f73dea083cc63f3f4d0634a5a",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/api/spotify-public-api.service.spec.ts",
+      "line": 26,
+      "column": 27,
+      "fingerprint": "62f1fc6aa1edb6a80192058b5f92233663a13fee2b74af6a4dc4ffe5531b6cb8",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/oauth/spotify-account-api.service.spec.ts",
+      "line": 11,
+      "column": 7,
+      "fingerprint": "2629aae52572bd5e646caa24fab342c4b22eeb6ba70a6781b99a33f50b2cb712",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/oauth/spotify-oauth-api.service.spec.ts",
+      "line": 15,
+      "column": 20,
+      "fingerprint": "ebf0d9d806096848e41a2af8ae9febe4eb59e32f73dea083cc63f3f4d0634a5a",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/spotify-integration/oauth/spotify-oauth-api.service.spec.ts",
+      "line": 16,
+      "column": 20,
+      "fingerprint": "7444077731a989eafaf694e1ce434506667d45cfab49ea1fd3e051eb8de6f53b",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/api/tiktok-api.service.spec.ts",
+      "line": 28,
+      "column": 27,
+      "fingerprint": "5e338b5527ee8148b2b9a5bad38fe10627a9fc38da1173b448eef959e236d830",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 71,
+      "column": 7,
+      "fingerprint": "0afaf49a39498e59b91be1dec6e5eb3868f19b9b53536c512fdc8e62ab5ed10c",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 72,
+      "column": 7,
+      "fingerprint": "a822650e3999393c955634ff2fd5ae14206e2e18ae2dcacdccbd9f53b6e56f83",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/oauth/token-crypto.service.spec.ts",
+      "line": 7,
+      "column": 34,
+      "fingerprint": "df995d697499a7f20de1b879eebd66d88798d1f1eb195bf3a1610fc654cd09c2",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 598,
+      "column": 60,
+      "fingerprint": "499180d5f26122214ebb58dc95a9bb53083ea00c778db118e1c0dfebb443554d",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 74,
+      "column": 21,
+      "fingerprint": "df254193be5547a953d2b27782f758356761ad3da9c19c92c6dd7e0716e34a47",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/tiktok-integration/videos/tiktok-videos.service.spec.ts",
+      "line": 24,
+      "column": 7,
+      "fingerprint": "6f8f3892e93874e9b37c13b05ddeb3d3c0265c95c031b710ea7eccb8752ec84f",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 104,
+      "column": 20,
+      "fingerprint": "74138608e707ffcc3559c4d1bdb543237a55fcca3a42bf8ef7d7be75535acfcd",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 12,
+      "column": 20,
+      "fingerprint": "e3e97fa36088ce2c0a2ca2435d647ee2a021fb29e9dcdd89dc89b2496b824bcd",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 143,
+      "column": 20,
+      "fingerprint": "0e9966c8efd6e9a719ad3ff6158e526dea673a650f0089552aadc7b5f266d3ac",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 219,
+      "column": 20,
+      "fingerprint": "0e9966c8efd6e9a719ad3ff6158e526dea673a650f0089552aadc7b5f266d3ac",
+      "occurrence": 1
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 338,
+      "column": 20,
+      "fingerprint": "0e9966c8efd6e9a719ad3ff6158e526dea673a650f0089552aadc7b5f266d3ac",
+      "occurrence": 2
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 391,
+      "column": 20,
+      "fingerprint": "0e9966c8efd6e9a719ad3ff6158e526dea673a650f0089552aadc7b5f266d3ac",
+      "occurrence": 3
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 447,
+      "column": 20,
+      "fingerprint": "0e9966c8efd6e9a719ad3ff6158e526dea673a650f0089552aadc7b5f266d3ac",
+      "occurrence": 4
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/integrations/wordpress-integration/wordpress.service.spec.ts",
+      "line": 500,
+      "column": 20,
+      "fingerprint": "0e9966c8efd6e9a719ad3ff6158e526dea673a650f0089552aadc7b5f266d3ac",
+      "occurrence": 5
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/migrations/1791300000000-RenameRiffValleyPlaylistPersistence.spec.ts",
+      "line": 34,
+      "column": 25,
+      "fingerprint": "47280bb272d535aeb1672d3821958a922fe8043f42ce14b0c54fc38e7595c6d7",
+      "occurrence": 1
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/migrations/1791300000000-RenameRiffValleyPlaylistPersistence.spec.ts",
+      "line": 8,
+      "column": 25,
+      "fingerprint": "47280bb272d535aeb1672d3821958a922fe8043f42ce14b0c54fc38e7595c6d7",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/migrations/1791910000000-MigrateCanonicalUserRoles.spec.ts",
+      "line": 101,
+      "column": 13,
+      "fingerprint": "cdefcd96ceb594608aa79b2895a5b68584a9a6d4ab3792429dfed0905b8143ca",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "src/platform/uploads/uploads.service.spec.ts",
+      "line": 24,
+      "column": 7,
+      "fingerprint": "2e7d8481003ebfd8d2b0ba26d50c1d745d51d2f2bd1186bcdcb0e79ad66df6d0",
+      "occurrence": 0
+    },
+    {
+      "rule": "double-type-assertion",
+      "path": "test/excel.e2e-spec.ts",
+      "line": 39,
+      "column": 24,
+      "fingerprint": "b3976c6713f8fcbb7c37227b7ae4cdc9b5e3730cc055c980b3599baf69d79c77",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/communications/mail/mail.service.spec.ts",
+      "line": 24,
+      "column": 47,
+      "fingerprint": "4e56deaa6f8e6366480a7d91fdc017902905b2906333a6e929bb6a22c4b1e952",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/__tests__/comments.module.spec.ts",
+      "line": 49,
+      "column": 55,
+      "fingerprint": "29d338aefc6ce64d0a753fe0ee23323889d2ae9c3d4cb91fda867b4603208185",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 108,
+      "column": 76,
+      "fingerprint": "9fc38d9ff308d414e256530f55db5843cad2d5c43cbe92f156e66a9d18f13a81",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 203,
+      "column": 70,
+      "fingerprint": "6904c1ef9447b5a01a178cdac0d124312a559e52fceab53a9577fb043f5ae64d",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 208,
+      "column": 73,
+      "fingerprint": "8de803e6b8408099bbc97fe570d2fd8118d626b15f11cdf616f3d679a1813d6b",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 209,
+      "column": 102,
+      "fingerprint": "281ca29b31b1743ba6afb5ae48debf1908444a308b5f37786a388a329f75c7b8",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 209,
+      "column": 73,
+      "fingerprint": "281ca29b31b1743ba6afb5ae48debf1908444a308b5f37786a388a329f75c7b8",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 210,
+      "column": 74,
+      "fingerprint": "8e9f108624acd5457b5b409e0dca606d64e8079883062656d60389a8a4e7d5f5",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 222,
+      "column": 71,
+      "fingerprint": "1eade888842a1cf3cb289f573831ead36868a85f1238c18ffcf58e32efa9b326",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 30,
+      "column": 55,
+      "fingerprint": "5a09b8af8e9aa6b573fd7dc11a6cc4387595d51b2ea188ebb96332b297e918ed",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 4,
+      "column": 58,
+      "fingerprint": "f6a9313b487dffc3753ffc5beb0813eb4816d0ac9d4a61d26bfee3ebddd6f7d7",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 47,
+      "column": 88,
+      "fingerprint": "0a7f1e5a59815bcde8df3d213f912202cf346088358e23ae291e6fe0fda45110",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 5,
+      "column": 51,
+      "fingerprint": "9f22ff0a9402c4251c0bb913ff1e343cad12da92aa49bc07bd4f6e0e31dd7fd8",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 55,
+      "column": 102,
+      "fingerprint": "853f3a5cc2daa3b17957f22c3a20775147d8e4a53b34d0333f1859b1d7afff99",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 6,
+      "column": 19,
+      "fingerprint": "874f09c5c031777bf671507cf85c5f44f61a63ed3820c3a1a61a238fe256cd26",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 62,
+      "column": 78,
+      "fingerprint": "16de66ea4bf6b11179615283a0fe8c8f6f11c4b8d1cb1a379a4d8f00407ac0b7",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 66,
+      "column": 79,
+      "fingerprint": "f8733d56e7a84585118584e23815fe7eeb1ea2cfaa72e1d32702f4cbcbbcf1fb",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.spec.ts",
+      "line": 79,
+      "column": 69,
+      "fingerprint": "6150a5bc4cf9d51e0d508d4872c1ddbcbf0df1084e0b4ef890a3a142426cec93",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.ts",
+      "line": 292,
+      "column": 37,
+      "fingerprint": "4e2a94f559e195571e849bd94d7cdf2673f99202695c13be3979a3349c07e298",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/comments/comments.service.ts",
+      "line": 80,
+      "column": 26,
+      "fingerprint": "65789248bd6a315140a1e3a84a52b740e82d3928566827742af2a0a22e74d8be",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/__tests__/favorites.module.spec.ts",
+      "line": 48,
+      "column": 56,
+      "fingerprint": "d029158a1d907c0b08060fafbb26c9446b2239911a515db4da19a5dfd0cdf355",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 102,
+      "column": 64,
+      "fingerprint": "648f50f2e865c6701ddd25a60f8a540a0646c5f6f31672f1ebb5d03e694049a2",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 197,
+      "column": 19,
+      "fingerprint": "874f09c5c031777bf671507cf85c5f44f61a63ed3820c3a1a61a238fe256cd26",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 21,
+      "column": 64,
+      "fingerprint": "648f50f2e865c6701ddd25a60f8a540a0646c5f6f31672f1ebb5d03e694049a2",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 246,
+      "column": 18,
+      "fingerprint": "0eead6ddb0d198de26ed88ede66dbf07ab83363b63d8eaf46c13d28821d15674",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 36,
+      "column": 78,
+      "fingerprint": "e6ccace4c9c6850c65294ec6ebc156f9f34901211c2d6f460095ebac5727fba0",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.spec.ts",
+      "line": 47,
+      "column": 56,
+      "fingerprint": "e045cfddc0267e7d85e16226341caad6af34de275bcc95b147581fc340aff1e6",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/favorites/favorites.service.ts",
+      "line": 298,
+      "column": 37,
+      "fingerprint": "4e2a94f559e195571e849bd94d7cdf2673f99202695c13be3979a3349c07e298",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pending-user-relation.postgres.spec.ts",
+      "line": 116,
+      "column": 10,
+      "fingerprint": "64bd8144b660899d95b7dcb96799f538ec4636a070f4d1ecd8e82228a42f6622",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 102,
+      "column": 23,
+      "fingerprint": "24ab2be0ce03bc4d8beb46d13f58d2e9d1519fcb6911a17738fd496e5a28c0b2",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 112,
+      "column": 23,
+      "fingerprint": "a6f71f6a0919c5ba5311ef86b7a57609db6782270be621c0d8e2a39588112981",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 120,
+      "column": 28,
+      "fingerprint": "6173db748c84e1d373300203f79d939a10464df662155403283bfb96767d9aaf",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 129,
+      "column": 29,
+      "fingerprint": "f387880600417698a8d385df31d42c1266fe383d81253e4252170991c6fc947d",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 139,
+      "column": 26,
+      "fingerprint": "72509237e3d9c3b1539dac5df13fc57d39edfe162541848ce0e315b36e3ce44b",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/__tests__/pendings.module.spec.ts",
+      "line": 50,
+      "column": 55,
+      "fingerprint": "1a43c035a70e45128b7e74082c81be414526199bb605a51dbbfdb74c0d01c7a1",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 205,
+      "column": 23,
+      "fingerprint": "e7d602fecf34252e4392547bcadcb32c0bf9edf556d57970d9dbd986f6d595ca",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/pendings.service.spec.ts",
+      "line": 224,
+      "column": 19,
+      "fingerprint": "874f09c5c031777bf671507cf85c5f44f61a63ed3820c3a1a61a238fe256cd26",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/pendings/pendings.service.ts",
+      "line": 272,
+      "column": 37,
+      "fingerprint": "4e2a94f559e195571e849bd94d7cdf2673f99202695c13be3979a3349c07e298",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.controller.spec.ts",
+      "line": 46,
+      "column": 27,
+      "fingerprint": "51bfd4a82832c216341769545dc809338364abe012e32efe67512bb932d996db",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.controller.spec.ts",
+      "line": 50,
+      "column": 45,
+      "fingerprint": "2cd3f20590f7047fc1e71159c321b4a27b3af1ec3a713b2c1bcd1b2e03f45db7",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 40,
+      "column": 44,
+      "fingerprint": "8d6a6d55f14f3fa3c60cbe85d387ddfa2a240325f45d631d9511cd37149cb19e",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 41,
+      "column": 49,
+      "fingerprint": "4424901c144993f56abf61a8b0a8ee409693705c8e2aefa0f37fe4d940a2c96e",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 42,
+      "column": 51,
+      "fingerprint": "5fe7254dd62ae532e58e9b5d7336dc126f1ce9c05692109c00e3354a5fc56c98",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 52,
+      "column": 25,
+      "fingerprint": "8941d4731308ccf488f48dfd6b05921ba5b6e39a98ddd2be51e8ce5120e6e96a",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 55,
+      "column": 25,
+      "fingerprint": "65045b7d32cd3d937c5932dcaefb6cf4551069701ce9bf63a5d2e706550d4a77",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 58,
+      "column": 25,
+      "fingerprint": "8cd0a65cdc18e9f8a630f2d9ca6d23a293011c1feb4b72fdf217f2516b369be6",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/__tests__/rates.module.spec.ts",
+      "line": 62,
+      "column": 26,
+      "fingerprint": "b8d0c95e54b1596df18bc85e520b8a93d9552667f925b04689ccf6dec7ba3cf7",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 108,
+      "column": 59,
+      "fingerprint": "670b68506f241052096cdb771768d9bde4bd4df8e67878bf8013e3d76d1018de",
+      "occurrence": 2
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 36,
+      "column": 59,
+      "fingerprint": "670b68506f241052096cdb771768d9bde4bd4df8e67878bf8013e3d76d1018de",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 7,
+      "column": 36,
+      "fingerprint": "9cbe0bd3ad3c991fb9bbbdb76a89b7a94ffc7c58e037347350f7aae74b2c1338",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 8,
+      "column": 25,
+      "fingerprint": "e3cfe41844d5e0de8bd1ef98ad0bbef9369ab01aef16f6ff72cae6b36af7eff7",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.spec.ts",
+      "line": 80,
+      "column": 59,
+      "fingerprint": "670b68506f241052096cdb771768d9bde4bd4df8e67878bf8013e3d76d1018de",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.ts",
+      "line": 110,
+      "column": 23,
+      "fingerprint": "2ea01c94e04b1215509e6c367e1e5b913d08f700c491258152a74c520cf9b837",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.ts",
+      "line": 131,
+      "column": 25,
+      "fingerprint": "2ea01c94e04b1215509e6c367e1e5b913d08f700c491258152a74c520cf9b837",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.ts",
+      "line": 69,
+      "column": 18,
+      "fingerprint": "7e73840e79895a36553a0b654fc1d2e6d6590f499d46b4df3c037c56ee2d9290",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/history/rates-history.service.ts",
+      "line": 72,
+      "column": 46,
+      "fingerprint": "bc0846f38c89380902ee11a2f9bdc3fc5dc1d218d2ef862f24c9c47236b26374",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.controller.ts",
+      "line": 61,
+      "column": 22,
+      "fingerprint": "88f1ac10493dabc4e7eb5f73e6b1389d6709299b860c80d36b91ec64725fbec0",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.controller.ts",
+      "line": 62,
+      "column": 24,
+      "fingerprint": "0253dc1e32f1093a732c280a2b79aa840d25e9836a6fa1cf6d19f10e633d74fe",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 10,
+      "column": 23,
+      "fingerprint": "e7d602fecf34252e4392547bcadcb32c0bf9edf556d57970d9dbd986f6d595ca",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 103,
+      "column": 26,
+      "fingerprint": "05385cda179bfe68fcef07e1e6204828941a91bf8566a7ca4419e76889cdfb6e",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 105,
+      "column": 49,
+      "fingerprint": "1f872c6a24963025f8816ac28132a224f6f53943647aac5426713fa0fdabfda5",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 114,
+      "column": 25,
+      "fingerprint": "d132b3789a40ae96e965c430e632a3b6350b5884845faafd399b43c4ba335c3b",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 117,
+      "column": 23,
+      "fingerprint": "7eef564f88b9e00e2f06cfd52f79c0e07f3aeddef50662991c021de17f384801",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 120,
+      "column": 46,
+      "fingerprint": "cb0efefb4bff3d637671396db4dff8d10b597945b5584ed39b7adcff0d88c045",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 146,
+      "column": 26,
+      "fingerprint": "05385cda179bfe68fcef07e1e6204828941a91bf8566a7ca4419e76889cdfb6e",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 154,
+      "column": 25,
+      "fingerprint": "d132b3789a40ae96e965c430e632a3b6350b5884845faafd399b43c4ba335c3b",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 159,
+      "column": 10,
+      "fingerprint": "64bd8144b660899d95b7dcb96799f538ec4636a070f4d1ecd8e82228a42f6622",
+      "occurrence": 2
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 161,
+      "column": 46,
+      "fingerprint": "e466a455064b60435851271b09523430545cd09abca624892662173cdd5afc0d",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 18,
+      "column": 75,
+      "fingerprint": "c7b5a4754cf637d36e5aff5d31e8c180b3e5e78015493c1d5f4cf6c1081bbb9c",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 181,
+      "column": 23,
+      "fingerprint": "e7d602fecf34252e4392547bcadcb32c0bf9edf556d57970d9dbd986f6d595ca",
+      "occurrence": 4
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 189,
+      "column": 58,
+      "fingerprint": "5030d6f66f336d3f048c31f31a7e01fac6da76e9764abc365a4744ee1d776b2b",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 193,
+      "column": 58,
+      "fingerprint": "7fb6ef6dc5ffaf31cfd6d34a1d9506b5268ee208ed8634af3c0d541da6981d68",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 199,
+      "column": 23,
+      "fingerprint": "b5be0095c283c85ef91be65a4c3cc13722d809f75b930ec14146a4cdc225ef11",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 202,
+      "column": 62,
+      "fingerprint": "96081bfb534ce5acd74a0c13141e93eafe5f058dbe312a435009bd4ece74b089",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 212,
+      "column": 39,
+      "fingerprint": "e8e5cfe91cb502b9f0674c5a18ede9825bf1bd5611c601acea99c809e28727de",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 216,
+      "column": 23,
+      "fingerprint": "063f694838431d6e550eaf2e5b9d1ba4164d768091c08e184e63673b8c16693c",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 227,
+      "column": 23,
+      "fingerprint": "e7d602fecf34252e4392547bcadcb32c0bf9edf556d57970d9dbd986f6d595ca",
+      "occurrence": 5
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 233,
+      "column": 56,
+      "fingerprint": "9a43fccf4bdf70b1585ee314940fb47e23492a7a3de43bbbf5387fbe66d5864c",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 238,
+      "column": 23,
+      "fingerprint": "e7d602fecf34252e4392547bcadcb32c0bf9edf556d57970d9dbd986f6d595ca",
+      "occurrence": 6
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 28,
+      "column": 10,
+      "fingerprint": "64bd8144b660899d95b7dcb96799f538ec4636a070f4d1ecd8e82228a42f6622",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 29,
+      "column": 83,
+      "fingerprint": "5f7a96619c609038faa1b6981b4ee793d2805393f2788e5f8c924d36cb1fc4d8",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 32,
+      "column": 23,
+      "fingerprint": "e7d602fecf34252e4392547bcadcb32c0bf9edf556d57970d9dbd986f6d595ca",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 40,
+      "column": 65,
+      "fingerprint": "7f4e4961a2f8dbe023a692e5f2a4f7362927fca2187d01ba86bdf491842c7acb",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 42,
+      "column": 65,
+      "fingerprint": "7f4e4961a2f8dbe023a692e5f2a4f7362927fca2187d01ba86bdf491842c7acb",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 5,
+      "column": 36,
+      "fingerprint": "1af069f5621792a24ede53a56ab13c03d080ec25c0599b563489d4cf13edc4f2",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 52,
+      "column": 10,
+      "fingerprint": "64bd8144b660899d95b7dcb96799f538ec4636a070f4d1ecd8e82228a42f6622",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 6,
+      "column": 36,
+      "fingerprint": "7e19f8adcc1fa23b3e441c947373fa46161a1c8e06c56857ee40460018cc9826",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 68,
+      "column": 23,
+      "fingerprint": "e7d602fecf34252e4392547bcadcb32c0bf9edf556d57970d9dbd986f6d595ca",
+      "occurrence": 2
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 84,
+      "column": 23,
+      "fingerprint": "e7d602fecf34252e4392547bcadcb32c0bf9edf556d57970d9dbd986f6d595ca",
+      "occurrence": 3
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.spec.ts",
+      "line": 92,
+      "column": 78,
+      "fingerprint": "d3ca5f578891f31d424124b8f393a28d74e354e6db350755d26568f6584a8924",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/rates.service.ts",
+      "line": 336,
+      "column": 37,
+      "fingerprint": "4e2a94f559e195571e849bd94d7cdf2673f99202695c13be3979a3349c07e298",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/stats/rates-stats.service.spec.ts",
+      "line": 26,
+      "column": 36,
+      "fingerprint": "1af069f5621792a24ede53a56ab13c03d080ec25c0599b563489d4cf13edc4f2",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/stats/rates-stats.service.spec.ts",
+      "line": 38,
+      "column": 55,
+      "fingerprint": "3a78638955a200f8cb1d2e54c2c5527f93642a6dee34437585eeeb6840c0a91d",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/rates/stats/rates-stats.service.spec.ts",
+      "line": 38,
+      "column": 66,
+      "fingerprint": "3a78638955a200f8cb1d2e54c2c5527f93642a6dee34437585eeeb6840c0a91d",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 134,
+      "column": 22,
+      "fingerprint": "82f846ca5a1612e4e88eadfb99ba5d0311cbc8edce2a5aab49e81d50900a18d2",
+      "occurrence": 2
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 135,
+      "column": 21,
+      "fingerprint": "c32f30de351f23d2455c4cdc241370437e3fb26ef251583127fcb908dc3b38a2",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 136,
+      "column": 19,
+      "fingerprint": "cbd3e7281e8d75e2bc1f6ddfd81f69a476a8d56c377ff3015f7f414e984d2953",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 137,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 8
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 138,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 9
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 208,
+      "column": 24,
+      "fingerprint": "82f846ca5a1612e4e88eadfb99ba5d0311cbc8edce2a5aab49e81d50900a18d2",
+      "occurrence": 3
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 209,
+      "column": 23,
+      "fingerprint": "c32f30de351f23d2455c4cdc241370437e3fb26ef251583127fcb908dc3b38a2",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 210,
+      "column": 21,
+      "fingerprint": "cbd3e7281e8d75e2bc1f6ddfd81f69a476a8d56c377ff3015f7f414e984d2953",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 211,
+      "column": 15,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 10
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 212,
+      "column": 15,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 11
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 256,
+      "column": 22,
+      "fingerprint": "82f846ca5a1612e4e88eadfb99ba5d0311cbc8edce2a5aab49e81d50900a18d2",
+      "occurrence": 4
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 257,
+      "column": 21,
+      "fingerprint": "c32f30de351f23d2455c4cdc241370437e3fb26ef251583127fcb908dc3b38a2",
+      "occurrence": 2
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 258,
+      "column": 19,
+      "fingerprint": "cbd3e7281e8d75e2bc1f6ddfd81f69a476a8d56c377ff3015f7f414e984d2953",
+      "occurrence": 2
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 259,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 12
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 260,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 13
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 39,
+      "column": 22,
+      "fingerprint": "82f846ca5a1612e4e88eadfb99ba5d0311cbc8edce2a5aab49e81d50900a18d2",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 40,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 41,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 42,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 2
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 43,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 3
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 86,
+      "column": 22,
+      "fingerprint": "82f846ca5a1612e4e88eadfb99ba5d0311cbc8edce2a5aab49e81d50900a18d2",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 87,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 4
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 88,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 5
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 89,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 6
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/community/requests/requests.service.spec.ts",
+      "line": 90,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 7
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth-rate.consumer.spec.ts",
+      "line": 41,
+      "column": 43,
+      "fingerprint": "8e8c56262e21c529e884fad041640f0521be3b0bf1a33d86cc8332f40389d13a",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth-rate.consumer.spec.ts",
+      "line": 63,
+      "column": 58,
+      "fingerprint": "cf4e7b55663ac8b5aa2d8a93f5771fc345299803496727e476c34500d101b6f1",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 101,
+      "column": 74,
+      "fingerprint": "7addeeaea2ea9932c672e135137726205101fb6373a22b7d3da4c56c81887818",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 110,
+      "column": 12,
+      "fingerprint": "8b1bec7fa133f77ae0d1dc4578550f51e63d3c8b0b5847178419e57d1d117c9a",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 14,
+      "column": 49,
+      "fingerprint": "ec72db56b873de61965fcc115d0ccbf410b08295db5304e00158b2a78ab9ddcb",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 68,
+      "column": 60,
+      "fingerprint": "fed83b64b45bfc65edb97edc00ac14fbffd47556c91ed4a0a08dec0aeafd1b69",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.controller.spec.ts",
+      "line": 79,
+      "column": 30,
+      "fingerprint": "5f6496936bfd649b42d961000467c5437a8ddc31d47628099f065747bea01495",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 10,
+      "column": 19,
+      "fingerprint": "8ad68edb1da5f8e16463265c6e538a07eea2caa38fe4cadde809d9d861382b58",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 138,
+      "column": 58,
+      "fingerprint": "0b5e15dfb723c634507054de358583e7af5e6c7c828759361a0a671b0ebd0dc5",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 167,
+      "column": 73,
+      "fingerprint": "af3291a4df7ff17765912589768b790e29d2565d17a94797b27fa55a885c661e",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 184,
+      "column": 16,
+      "fingerprint": "44af9486388e6e5b190fefb5966877a0fc9d9490e5f2415c1af48041844a1261",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 185,
+      "column": 31,
+      "fingerprint": "c0216db04d2a1e67e4b5d7dd779949261e670ad1cd79554bbc7a08556b206a59",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 206,
+      "column": 12,
+      "fingerprint": "64bd8144b660899d95b7dcb96799f538ec4636a070f4d1ecd8e82228a42f6622",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 236,
+      "column": 21,
+      "fingerprint": "e760c02866f7dc2812a1e9f23c736760f4b4aa77356cd376409f97a1e0aa2731",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 237,
+      "column": 30,
+      "fingerprint": "3c72c7e23d6239b81fdae835ad1f68a5490350c9e25ab5c616ee75b6792c3d7d",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 246,
+      "column": 47,
+      "fingerprint": "b853c67797a7f87258d251ed050ff3acf8679efacd4e1d84af561d73441071cf",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 247,
+      "column": 30,
+      "fingerprint": "3c72c7e23d6239b81fdae835ad1f68a5490350c9e25ab5c616ee75b6792c3d7d",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 266,
+      "column": 61,
+      "fingerprint": "c91b8396bde28dbf3c4619e0695b28947deb1f0ae8a5a39c883c2cd05fb0a5cf",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 27,
+      "column": 13,
+      "fingerprint": "3e7d2de1604c9eac2ddf08125cfd171a8507dd53270cc1580a613a033872b55f",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 281,
+      "column": 65,
+      "fingerprint": "ebb4382399261c3317ee293c2b9c235fc479dc9cdb2f40871ea61c7593917b88",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 284,
+      "column": 55,
+      "fingerprint": "1a9f6798ccfb74984e87821c1376fda7a6d50915a683e863efc2da458085fe86",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 68,
+      "column": 14,
+      "fingerprint": "173ba61958c63dfe8c688621e0847c3045a1b8046dbfb646966df8ebbe2b6dec",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 8,
+      "column": 23,
+      "fingerprint": "3a2fc275af2323f6aca04729201fa45366de17f7576bfc2665c54db960aed8a9",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/auth.service.spec.ts",
+      "line": 9,
+      "column": 28,
+      "fingerprint": "fa3ff64b2dd1ae4d0a10cb4c86f9234e470247bb49fd7479fcd16aa50a7b3f9a",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/domain-mutation-authorization.spec.ts",
+      "line": 149,
+      "column": 15,
+      "fingerprint": "079df57089e5236e3e8999ea49c6ddaa7d7bd9ac61ceeeee2ba74dbf07853567",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/__tests__/domain-mutation-authorization.spec.ts",
+      "line": 28,
+      "column": 15,
+      "fingerprint": "309f77d03b841a1fc4eba222d565fd2c9ed6648df0c0fecdf29f698c4c98a27e",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/auth.service.ts",
+      "line": 490,
+      "column": 20,
+      "fingerprint": "06cccafd52efd888a96358910414686af37e53ec382e43ce5b00ee1e4666c047",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/identity/auth/auth.service.ts",
+      "line": 539,
+      "column": 33,
+      "fingerprint": "9ac1ffd53577a80edbe8431b89f3389d6ba3e213a7a351676efbfc051c9fad2a",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/instagram-integration/instagram.service.ts",
+      "line": 129,
+      "column": 75,
+      "fingerprint": "ad9c19959f636edec86e3a167d919d6e526257c8b23f1bfcad67b31f5817d4cc",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/instagram-integration/instagram.service.ts",
+      "line": 73,
+      "column": 72,
+      "fingerprint": "081f5b175344fce864e67935dd0e1e6f99899396d2e9132211b07dbeb2e48cd4",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/telegram-integration/telegram.service.spec.ts",
+      "line": 144,
+      "column": 26,
+      "fingerprint": "2dcc94695baf7cd30f0f19d0398c8c54fb963a974b07deb404c442087d4e4537",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 108,
+      "column": 19,
+      "fingerprint": "83582fdea14d194a1240bde568401275b744a3fa6119241e4b8e8ac3f2660d80",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 123,
+      "column": 19,
+      "fingerprint": "83582fdea14d194a1240bde568401275b744a3fa6119241e4b8e8ac3f2660d80",
+      "occurrence": 2
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 137,
+      "column": 21,
+      "fingerprint": "83582fdea14d194a1240bde568401275b744a3fa6119241e4b8e8ac3f2660d80",
+      "occurrence": 3
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "line": 85,
+      "column": 21,
+      "fingerprint": "83582fdea14d194a1240bde568401275b744a3fa6119241e4b8e8ac3f2660d80",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok-integration.module.spec.ts",
+      "line": 23,
+      "column": 16,
+      "fingerprint": "2a2a8d8efe9fd71c97f6b3609975c15ef24517587ff43ca0d8fa8c7c1c9f1bb9",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok-integration.module.spec.ts",
+      "line": 27,
+      "column": 47,
+      "fingerprint": "0dca877da06d8aa72e5a5d508e5af572b6b494b817b6c0c86b0f99aed530850f",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 22,
+      "column": 29,
+      "fingerprint": "63b10e8c92b8f13479f66b1a6dd81ee850a48a76bcafe087bec36e465ad9b1af",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 23,
+      "column": 24,
+      "fingerprint": "06f246faff8ad84f05b79367a8a732a3fcd9a40e5617f4e3b25d15b3bee07ce7",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 24,
+      "column": 20,
+      "fingerprint": "cab35562325890a34cf073054e6daba1e30d3d29eb08113776fd00585c3de722",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 28,
+      "column": 20,
+      "fingerprint": "f21f267d6db9393fff19ac1c3f0b50e2e756d0467665d9ae5ffdf0d39256bdf6",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/integrations/tiktok-integration/tiktok.service.spec.ts",
+      "line": 33,
+      "column": 20,
+      "fingerprint": "a719e2db0cb718b1547c1e0dafec17349d008b5658f34abe577846e12f3cf1a3",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/migrations/1791920000000-MigrateUsersToSingleRole.spec.ts",
+      "line": 398,
+      "column": 10,
+      "fingerprint": "c691ae0bc8358c57829a5a592916f069d1f3446dcebd467e4bec7bf41d905dfc",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/platform/seeds/seed.module.spec.ts",
+      "line": 29,
+      "column": 51,
+      "fingerprint": "1d6dd4c18b9e0aff35b35504287e0d140196a3e781ed7174cdab259d44c927fa",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.spec.ts",
+      "line": 13,
+      "column": 25,
+      "fingerprint": "58cfc383b95d8f9be83ee75f0aac5c50463130d8c62ca5118fa0e43b3d22a189",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.spec.ts",
+      "line": 14,
+      "column": 26,
+      "fingerprint": "3030ae6e8dfac6b74d698f397589413226041edb83654293820410a0354d6ec6",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.spec.ts",
+      "line": 15,
+      "column": 27,
+      "fingerprint": "90d222a58c09e38466954b2a627275c53967a48f5ffdb5f1c1367c2cfb2b569f",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.spec.ts",
+      "line": 66,
+      "column": 26,
+      "fingerprint": "2dcc94695baf7cd30f0f19d0398c8c54fb963a974b07deb404c442087d4e4537",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.ts",
+      "line": 195,
+      "column": 20,
+      "fingerprint": "dc54ca4b28844e65ad02c562445d572ae696c069d42f9103afef3d7a2bbc5ec8",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.ts",
+      "line": 282,
+      "column": 37,
+      "fingerprint": "4e2a94f559e195571e849bd94d7cdf2673f99202695c13be3979a3349c07e298",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/news/news.service.ts",
+      "line": 55,
+      "column": 18,
+      "fingerprint": "5afa7527efdb5c25033b9491ff6301a9fb7d21dcb996053c49a482abaf2d5ff7",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/suggestions/suggestions.service.ts",
+      "line": 54,
+      "column": 18,
+      "fingerprint": "5afa7527efdb5c25033b9491ff6301a9fb7d21dcb996053c49a482abaf2d5ff7",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/suggestions/suggestions.service.ts",
+      "line": 72,
+      "column": 18,
+      "fingerprint": "73f660d9c5a4824c69d3a223b85b0fa847da3c80b78d4267560e940375ee7c12",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.logic.spec.ts",
+      "line": 10,
+      "column": 25,
+      "fingerprint": "7f6ff2f8e330b6d07e1177d7183323811f2a3e42acc2d5ab313939a7a87782b6",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.logic.spec.ts",
+      "line": 11,
+      "column": 22,
+      "fingerprint": "54e3a5eceb4af4d6426e1145b4e784daeb9f0e47aaa02895ff686c6e7fd68a41",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.logic.spec.ts",
+      "line": 85,
+      "column": 10,
+      "fingerprint": "8b1bec7fa133f77ae0d1dc4578550f51e63d3c8b0b5847178419e57d1d117c9a",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 160,
+      "column": 23,
+      "fingerprint": "bb5396adb36821a724e79e472def34ac7eadd199ab3843a53e3a5bdab456eb5f",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 162,
+      "column": 61,
+      "fingerprint": "f95d832aea85fe81efd52033a647df5d0e7d1c4102d0039c7e3d7041e06369e2",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 163,
+      "column": 64,
+      "fingerprint": "5a18a113672754c43d24d98edef8a58e0bb563d2e6c6b9fa833df7fe368ff01e",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 174,
+      "column": 27,
+      "fingerprint": "609e5a8accb2d9d662a92b9f4e553a21c88dfbdea70d0204b6b7bf649e665c00",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 201,
+      "column": 67,
+      "fingerprint": "521a03d758702e3989cb4e8785bb11ca82aeeb995e701561917fcf440ee4ff1c",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 205,
+      "column": 39,
+      "fingerprint": "79d077f834a41b1e669f833252f8b556f6287d0553bf427dfd3721715e026f0e",
+      "occurrence": 0
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 248,
+      "column": 27,
+      "fingerprint": "609e5a8accb2d9d662a92b9f4e553a21c88dfbdea70d0204b6b7bf649e665c00",
+      "occurrence": 1
+    },
+    {
+      "rule": "explicit-any",
+      "path": "src/product/versions/versions.service.ts",
+      "line": 53,
+      "column": 25,
+      "fingerprint": "3b00feb1191b28e20404c52d30e40efe972c6b803d62c7976c462fd77d3b11c4",
+      "occurrence": 0
+    }
+  ]
+}

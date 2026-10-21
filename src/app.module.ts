@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CommonModule } from './catalog/overview/common.module';
 import { I18nConfigModule } from './platform/i18n/i18n.module';
+import { shouldEnableCronJobs } from './platform/scheduling/schedule-options';
 
 //MODULES
 import { ArtistsModule } from './catalog/artists/artists.module';
@@ -14,11 +15,10 @@ import { GenresModule } from './catalog/genres/genres.module';
 import { CatalogImportModule } from './catalog/import/catalog-import.module';
 import { AuthModule } from './identity/auth/auth.module';
 import { RatesModule } from './community/rates/rates.module';
-import { AsignationsModule } from './editorial/asignations/asignations.module';
+import { AsignationsModule } from './editorial/lists/asignations/asignations.module';
 import { ListsModule } from './editorial/lists/list.module';
 import { ReunionsModule } from './editorial/reunions/reunions.module';
 import { PointsModule } from './editorial/reunions/points/points.module';
-import { LinksModule } from './editorial/links/links.module';
 import { SeedModule } from './platform/seeds/seed.module';
 import { FavoritesModule } from './community/favorites/favorites.module';
 import { PendingsModule } from './community/pendings/pendings.module';
@@ -38,13 +38,18 @@ import { LastfmModule } from './catalog/lastfm/lastfm.module';
 import { SuggestionsModule } from './product/suggestions/suggestions.module';
 import { AccessRequestsModule } from './identity/access-requests/access-requests.module';
 import { InstagramIntegrationModule } from './integrations/instagram-integration/instagram-integration.module';
-import { FestivalPlaylistsModule } from './editorial/playlists/festival-playlists/festival-playlists.module';
+import { SpotifyPlaylistsModule } from './editorial/playlists/spotify-playlists/spotify-playlists.module';
 import { TiktokIntegrationModule } from './integrations/tiktok-integration/tiktok-integration.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
-    ScheduleModule.forRoot(),
+    ScheduleModule.forRoot({
+      cronJobs: shouldEnableCronJobs(
+        process.env.STAGE,
+        process.env.DISABLE_SCHEDULED_TASKS,
+      ),
+    }),
     TypeOrmModule.forRoot({
       ssl: process.env.STAGE === 'prod',
       extra: {
@@ -77,7 +82,6 @@ import { TiktokIntegrationModule } from './integrations/tiktok-integration/tikto
     ListsModule,
     ReunionsModule,
     PointsModule,
-    LinksModule,
     SeedModule,
     FavoritesModule,
     PendingsModule,
@@ -97,7 +101,7 @@ import { TiktokIntegrationModule } from './integrations/tiktok-integration/tikto
     SuggestionsModule,
     AccessRequestsModule,
     InstagramIntegrationModule,
-    FestivalPlaylistsModule,
+    SpotifyPlaylistsModule,
     TiktokIntegrationModule,
   ],
 })

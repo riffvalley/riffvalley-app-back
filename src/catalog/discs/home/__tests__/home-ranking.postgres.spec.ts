@@ -1,6 +1,10 @@
-import { Repository } from 'typeorm';
+import {
+  HomePostgresClient,
+  getHomePostgresValues,
+} from './home-postgres-types';
+import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { User } from '../../../../identity/auth/entities/user.entity';
-import { Disc } from '../../entities/disc.entity';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { DiscHomeService } from '../disc-home.service';
 
 const describePostgres =
@@ -17,16 +21,25 @@ const DISC_IDS = Array.from(
     `00000000-0000-4000-8000-${String(index + 10).padStart(12, '0')}`,
 );
 
+function homeUser(): User {
+  return Object.assign(new User(), { id: USER_ID });
+}
+
 describePostgres('home disc ranking with PostgreSQL fixtures', () => {
-  let client: any;
+  let client: HomePostgresClient | null = null;
+  const getClient = (): HomePostgresClient => {
+    if (!client) throw new Error('PostgreSQL client is not initialized');
+    return client;
+  };
 
   beforeAll(async () => {
-    require('dotenv').config();
+    const dotenv = await import('dotenv');
+    dotenv.config();
     if (process.env.STAGE !== 'dev') {
       throw new Error('D32 PostgreSQL tests require STAGE=dev');
     }
 
-    const { Client } = require('pg');
+    const { Client } = await import('pg');
     client = new Client({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT || 5432),
@@ -35,7 +48,7 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
-    await client.query(`
+    await getClient().query(`
       CREATE TEMP TABLE country (id uuid PRIMARY KEY, name text, "isoCode" text);
       CREATE TEMP TABLE artist (id uuid PRIMARY KEY, name text, "countryId" uuid);
       CREATE TEMP TABLE genre (id uuid PRIMARY KEY, name text, color text);
@@ -72,19 +85,19 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
   });
 
   async function clearFixtures() {
-    await client.query(
+    await getClient().query(
       'TRUNCATE comment, pending, favorite, rate, disc, genre, artist, country',
     );
   }
 
   async function seedBaseFixtures() {
     await clearFixtures();
-    await client.query(
+    await getClient().query(
       `INSERT INTO country (id, name, "isoCode") VALUES
         ($1, 'Fixtureland', 'FX'), ($2, 'Otherland', 'OT')`,
       [COUNTRY_ID, OTHER_COUNTRY_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO artist (id, name, "countryId") VALUES
         ($1, 'Fixture Artist', $2), ($3, 'Other Artist', $4)`,
       [
@@ -94,12 +107,12 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
         OTHER_COUNTRY_ID,
       ],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO genre (id, name, color) VALUES
         ($1, 'Fixture Genre', '#000'), ($2, 'Other Genre', '#fff')`,
       [GENRE_ID, OTHER_GENRE_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO disc
         (id, name, "releaseDate", pinned, "artistId", "genreId", description, image, verified, ep, debut, link, featured)
        VALUES
@@ -128,7 +141,7 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
         OTHER_GENRE_ID,
       ],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO rate (id, "discId", "userId", rate, cover) VALUES
         ('00000000-0000-4000-8000-000000000101', $1, '00000000-0000-4000-8000-000000000111', 4.00, 3.00),
         ('00000000-0000-4000-8000-000000000102', $1, '00000000-0000-4000-8000-000000000112', 2.00, NULL),
@@ -139,12 +152,12 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
         ('00000000-0000-4000-8000-000000000107', $5, '00000000-0000-4000-8000-000000000117', 5.00, NULL)`,
       [DISC_IDS[0], DISC_IDS[3], DISC_IDS[4], DISC_IDS[6], DISC_IDS[7]],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO favorite (id, "discId", "userId") VALUES
         ('00000000-0000-4000-8000-000000000201', $1, $2)`,
       [DISC_IDS[0], USER_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO pending (id, "discId", "userId") VALUES
         ('00000000-0000-4000-8000-000000000301', $1, $2)`,
       [DISC_IDS[0], USER_ID],
@@ -156,40 +169,46 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     dateRange: [string, string] = ['2020-01-01', '2025-12-31'],
   ) {
     jest.useFakeTimers().setSystemTime(new Date(`${today}T12:00:00.000Z`));
-    const queries: { sql: string; params: unknown[]; rows?: any[] }[] = [];
-    const repository = {
+    const queries: {
+      sql: string;
+      params: unknown[];
+      rows?: Record<string, unknown>[];
+    }[] = [];
+    const repository: HomeQueryRunner = {
       query: async (sql: string, params: unknown[] = []) => {
-        const call: { sql: string; params: unknown[]; rows?: any[] } = {
+        const call: {
+          sql: string;
+          params: unknown[];
+          rows?: Record<string, unknown>[];
+        } = {
           sql,
           params,
         };
         queries.push(call);
         if (sql.includes('AVG(avgRates)')) {
-          call.rows = (await client.query(sql, params as any[])).rows;
+          call.rows = (
+            await getClient().query(sql, getHomePostgresValues(params))
+          ).rows;
           return call.rows;
         }
         if (sql.includes('AS "weightedScore"')) {
-          call.rows = (await client.query(sql, params as any[])).rows;
+          call.rows = (
+            await getClient().query(sql, getHomePostgresValues(params))
+          ).rows;
           return call.rows;
         }
         return [];
       },
-      count: jest.fn().mockResolvedValue(0),
-      createQueryBuilder: jest.fn().mockReturnValue({
-        leftJoin: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getRawOne: jest.fn().mockResolvedValue({ totalVotes: '0' }),
-      }),
     };
-    const service = new DiscHomeService(
-      repository as unknown as Repository<Disc>,
-    );
+    const service = new DiscHomeService(repository);
 
     try {
       const result = await service.findTopRatedOrFeaturedAndStats(
-        { dateRange, country: 'Fixtureland' } as any,
-        { id: USER_ID } as User,
+        Object.assign(new PaginationDto(), {
+          dateRange: [new Date(dateRange[0]), new Date(dateRange[1])],
+          country: 'Fixtureland',
+        }),
+        homeUser(),
         GENRE_ID,
       );
       return {
@@ -265,19 +284,19 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
 
   it('limits 25 equal-score pinned discs to the first 20 IDs in stable tie order', async () => {
     await clearFixtures();
-    await client.query(
+    await getClient().query(
       `INSERT INTO country (id, name, "isoCode") VALUES ($1, 'Fixtureland', 'FX')`,
       [COUNTRY_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO artist (id, name, "countryId") VALUES ($1, 'Fixture Artist', $2)`,
       [ARTIST_ID, COUNTRY_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO genre (id, name, color) VALUES ($1, 'Fixture Genre', '#000')`,
       [GENRE_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO disc (id, name, "releaseDate", pinned, "artistId", "genreId")
        SELECT ('00000000-0000-4000-8000-' || lpad((n + 100)::text, 12, '0'))::uuid,
               'Pinned ' || n, DATE '2023-01-01', true, $1, $2
@@ -305,13 +324,13 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
 
   it('returns one disc and uninflated rating aggregates with multiple favorites and pendings', async () => {
     await seedBaseFixtures();
-    await client.query(
+    await getClient().query(
       `INSERT INTO favorite (id, "discId", "userId") VALUES
         ('00000000-0000-4000-8000-000000000202', $1, $2),
         ('00000000-0000-4000-8000-000000000203', $1, $2);`,
       [DISC_IDS[0], USER_ID],
     );
-    await client.query(
+    await getClient().query(
       `INSERT INTO pending (id, "discId", "userId") VALUES
         ('00000000-0000-4000-8000-000000000302', $1, $2),
         ('00000000-0000-4000-8000-000000000303', $1, $2);`,

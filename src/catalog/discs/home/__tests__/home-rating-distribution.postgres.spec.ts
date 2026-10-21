@@ -1,17 +1,28 @@
+import {
+  HomePostgresClient,
+  getHomePostgresValues,
+} from './home-postgres-types';
+import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { loadHomeRatingDistribution } from '../loaders/home-rating-distribution';
 
-const describePostgres = process.env.D37_POSTGRES_TEST === '1' ? describe : describe.skip;
+const describePostgres =
+  process.env.D37_POSTGRES_TEST === '1' ? describe : describe.skip;
 
 describePostgres('loadHomeRatingDistribution with PostgreSQL fixtures', () => {
-  let client: any;
+  let client: HomePostgresClient | null = null;
+  const getClient = (): HomePostgresClient => {
+    if (!client) throw new Error('PostgreSQL client is not initialized');
+    return client;
+  };
 
   beforeAll(async () => {
-    require('dotenv').config();
+    const dotenv = await import('dotenv');
+    dotenv.config();
     if (process.env.STAGE !== 'dev') {
       throw new Error('D37 PostgreSQL tests require STAGE=dev');
     }
 
-    const { Client } = require('pg');
+    const { Client } = await import('pg');
     client = new Client({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT || 5432),
@@ -20,7 +31,7 @@ describePostgres('loadHomeRatingDistribution with PostgreSQL fixtures', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
-    await client.query(`
+    await getClient().query(`
       CREATE TEMP TABLE disc (id integer PRIMARY KEY, "releaseDate" date);
       CREATE TEMP TABLE rate (
         id integer PRIMARY KEY,
@@ -35,8 +46,8 @@ describePostgres('loadHomeRatingDistribution with PostgreSQL fixtures', () => {
   });
 
   beforeEach(async () => {
-    await client.query('TRUNCATE rate, disc');
-    await client.query(`
+    await getClient().query('TRUNCATE rate, disc');
+    await getClient().query(`
       INSERT INTO disc (id, "releaseDate") VALUES
         (1, DATE '2024-01-01'),
         (2, DATE '2024-12-31'),
@@ -57,19 +68,25 @@ describePostgres('loadHomeRatingDistribution with PostgreSQL fixtures', () => {
   });
 
   async function loadDistribution(distributionDateRange?: string[]) {
-    let rawRows: any[] = [];
+    let rawRows: Record<string, unknown>[] = [];
     let sql = '';
     let params: unknown[] = [];
-    const repository = {
+    const repository: HomeQueryRunner = {
       query: async (query: string, values: unknown[]) => {
         sql = query;
         params = values;
-        const result = await client.query(query, values as any[]);
+        const result = await getClient().query(
+          query,
+          getHomePostgresValues(values),
+        );
         rawRows = result.rows;
         return result.rows;
       },
     };
-    const result = await loadHomeRatingDistribution(repository as any, distributionDateRange);
+    const result = await loadHomeRatingDistribution(
+      repository,
+      distributionDateRange,
+    );
     return { result, rawRows, sql, params };
   }
 
@@ -90,10 +107,18 @@ describePostgres('loadHomeRatingDistribution with PostgreSQL fixtures', () => {
       ['4.50', '2'],
       ['5.00', '1'],
     ]);
-    expect(rawRows.every(({ rateValue, count }) =>
-      typeof rateValue === 'string' && typeof count === 'string')).toBe(true);
-    expect(result.every(({ rate, count }) =>
-      typeof rate === 'number' && typeof count === 'number')).toBe(true);
+    expect(
+      rawRows.every(
+        ({ rateValue, count }) =>
+          typeof rateValue === 'string' && typeof count === 'string',
+      ),
+    ).toBe(true);
+    expect(
+      result.every(
+        ({ rate, count }) =>
+          typeof rate === 'number' && typeof count === 'number',
+      ),
+    ).toBe(true);
     expect(sql).toContain('WHERE r.rate IS NOT NULL');
     expect(sql).toContain('GROUP BY r.rate');
     expect(sql).toContain('ORDER BY r.rate;');
@@ -111,16 +136,17 @@ describePostgres('loadHomeRatingDistribution with PostgreSQL fixtures', () => {
       { rate: 3.75, count: 2 },
       { rate: 4.5, count: 2 },
     ]);
-    expect(rawRows.map(({ rateValue }) => rateValue)).toEqual(['2.25', '3.75', '4.50']);
-    expect(params).toEqual([
-      new Date('2024-01-01'),
-      new Date('2024-12-31'),
+    expect(rawRows.map(({ rateValue }) => rateValue)).toEqual([
+      '2.25',
+      '3.75',
+      '4.50',
     ]);
+    expect(params).toEqual([new Date('2024-01-01'), new Date('2024-12-31')]);
     expect(sql).toContain('AND d."releaseDate" BETWEEN $1 AND $2');
   });
 
   it('returns an empty distribution when there are no rating rows', async () => {
-    await client.query('TRUNCATE rate');
+    await getClient().query('TRUNCATE rate');
 
     await expect(loadDistribution()).resolves.toMatchObject({
       result: [],

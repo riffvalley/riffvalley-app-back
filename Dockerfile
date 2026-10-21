@@ -4,20 +4,20 @@ FROM node:20-bookworm-slim AS build
 WORKDIR /app
 
 # Copia los archivos necesarios
-COPY package*.json ./
+COPY package.json yarn.lock ./
 
 # Instala las dependencias
 RUN apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
-RUN npm install
+RUN corepack enable && corepack prepare yarn@1.22.22 --activate && yarn install --frozen-lockfile
 
 # Copia todo el proyecto
 COPY . .
 
 # Construye la aplicación
-RUN npm run build
+RUN yarn build
 
 # Expone el puerto
 EXPOSE 3000
 
 # Comando para ejecutar la aplicación
-CMD ["npm", "run", "start:prod"]
+CMD ["yarn", "start:prod"]

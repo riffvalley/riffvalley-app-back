@@ -25,7 +25,7 @@ export class DiscCalendarService {
     private readonly genreRepository: Repository<Genre>,
     @InjectRepository(Country)
     private readonly countryRepository: Repository<Country>,
-  ) { }
+  ) {}
 
   // Listas completas usadas por el calendario público para ofrecer filtros
   // solo de entidades asociadas a algún disco.
@@ -98,7 +98,15 @@ export class DiscCalendarService {
   }
 
   async findAllByDate(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange, genre, country, countryId } = paginationDto;
+    const {
+      limit = 10,
+      offset = 0,
+      query,
+      dateRange,
+      genre,
+      country,
+      countryId,
+    } = paginationDto;
     const countryFilter = country || countryId;
 
     const userId = user.id;
@@ -142,11 +150,16 @@ export class DiscCalendarService {
     }
 
     if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          countryFilter,
+        );
       if (isUUID) {
         queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
       } else {
-        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
+        queryBuilder.andWhere('country.name = :countryFilter', {
+          countryFilter,
+        });
       }
     }
 
@@ -178,10 +191,11 @@ export class DiscCalendarService {
     const discIds = discs.map((d) => d.id);
     let nationalReleaseMap = new Map<string, string>();
     if (discIds.length > 0) {
-      const nrRows: { discId: string; id: string }[] = await this.discRepository.manager.query(
-        `SELECT "discId", id FROM national_release WHERE "discId" = ANY($1)`,
-        [discIds],
-      );
+      const nrRows: { discId: string; id: string }[] =
+        await this.discRepository.manager.query(
+          `SELECT "discId", id FROM national_release WHERE "discId" = ANY($1)`,
+          [discIds],
+        );
       nationalReleaseMap = mapNationalReleaseIds(nrRows);
     }
 
@@ -202,7 +216,14 @@ export class DiscCalendarService {
   // Igual que findAllByDate pero sin datos por-usuario (rate, favoritos,
   // pendientes), pensado para el calendario público sin autenticar.
   async findAllByDatePublic(paginationDto: PaginationDto) {
-    const { limit = 10, offset = 0, dateRange, genre, country, countryId } = paginationDto;
+    const {
+      limit = 10,
+      offset = 0,
+      dateRange,
+      genre,
+      country,
+      countryId,
+    } = paginationDto;
     const countryFilter = country || countryId;
 
     const queryBuilder = this.discRepository
@@ -216,11 +237,16 @@ export class DiscCalendarService {
     }
 
     if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          countryFilter,
+        );
       if (isUUID) {
         queryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
       } else {
-        queryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
+        queryBuilder.andWhere('country.name = :countryFilter', {
+          countryFilter,
+        });
       }
     }
 
@@ -257,5 +283,4 @@ export class DiscCalendarService {
       data: groupedArray,
     };
   }
-
 }

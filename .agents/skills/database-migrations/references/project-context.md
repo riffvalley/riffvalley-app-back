@@ -8,11 +8,11 @@ Reconfirma estos datos en el repositorio cada vez que uses la skill. Se observar
 - `src/data-source.ts` usa explícitamente `synchronize: false` y `migrationsRun: false`. Usa `STAGE=prod` para escoger `dist/**/*.entity.js` y `dist/migrations/*.js`; en desarrollo usa `src/**/*.entity.ts` y `src/migrations/*.ts`.
 - `Procfile` contiene únicamente `web: yarn start:prod`; no debe añadirse una fase `release` para migraciones.
 - NestJS no debe inicializar un runner de migraciones. Heroku Automatic Deploys despliega código y no debe ser conectado a ningún paso que aplique esquema.
-- Hay notas históricas en `roadmap/roles-migration-preflight.md` que mencionan `migrationsRun: true` y un Procfile distinto. Son evidencia histórica, no configuración vigente. Contrasta siempre los archivos ejecutables citados arriba y comunica la discrepancia si afecta la tarea; no la “corrijas” dentro de una tarea de skill/análisis.
+- Hay notas históricas en `roadmap/roles/migration-preflight.md` que mencionan `migrationsRun: true` y un Procfile distinto. Son evidencia histórica, no configuración vigente. Contrasta siempre los archivos ejecutables citados arriba y comunica la discrepancia si afecta la tarea; no la “corrijas” dentro de una tarea de skill/análisis.
 
 ## Paquete y comandos existentes
 
-El proyecto declara Yarn Classic 1.22.22 y Node 20.x. Usa Yarn, aunque instrucciones antiguas de `AGENTS.md` muestren comandos npm.
+El proyecto admite Node 20.18.1+ y 22.x; `.nvmrc` conserva Node 20 como referencia. Usa Yarn Classic 1.22.22, fijado en `packageManager`.
 
 - `yarn migration:create src/migrations/<Nombre>` crea una migración vacía.
 - `yarn migration:generate src/migrations/<Nombre>` genera diferencias de entidades contra la base indicada por `src/data-source.ts`; solo debe apuntar a una base aislada y verificada.

@@ -21,12 +21,16 @@ const FIND_ALL_ORDER_FIELDS: Record<string, string> = {
 const FIND_ALL_AVERAGE_RATE_FILTER =
   'EXISTS (SELECT 1 FROM rate r WHERE r."discId" = disc.id AND r.rate IS NOT NULL)';
 
+function isBooleanFilter(value: unknown, expected: boolean): boolean {
+  return typeof value === 'boolean' && value === expected;
+}
+
 @Injectable()
 export class DiscCatalogService {
   constructor(
     @InjectRepository(Disc)
     private readonly discRepository: Repository<Disc>,
-  ) { }
+  ) {}
 
   async findOne(id: string): Promise<Disc> {
     try {
@@ -47,9 +51,20 @@ export class DiscCatalogService {
   }
 
   async findAll(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange, genre, country, countryId, voted, votedType } = paginationDto;
+    const {
+      limit = 10,
+      offset = 0,
+      query,
+      dateRange,
+      genre,
+      country,
+      countryId,
+      voted: votedInput,
+      votedType,
+    } = paginationDto;
     const countryFilter = country || countryId;
     const userId = user.id;
+    const voted: string | boolean | undefined = votedInput;
 
     const today = new Date();
 
@@ -115,14 +130,31 @@ export class DiscCatalogService {
       .leftJoin('artist.country', 'country');
 
     // Solo los filtros voted necesitan la relación rate en la consulta de count.
-    if (voted === 'false' || (voted as any) === false || voted === 'true' || (voted as any) === true) {
-      totalItemsQueryBuilder.leftJoin('disc.rates', 'rate', 'rate.userId = :userId', { userId });
+    if (
+      voted === 'false' ||
+      isBooleanFilter(voted, false) ||
+      voted === 'true' ||
+      isBooleanFilter(voted, true)
+    ) {
+      totalItemsQueryBuilder.leftJoin(
+        'disc.rates',
+        'rate',
+        'rate.userId = :userId',
+        { userId },
+      );
     }
 
-    const filterOptions = { genre, countryFilter, query, startDate, endDate, voted, votedType };
+    const filterOptions = {
+      genre,
+      countryFilter,
+      query,
+      startDate,
+      endDate,
+      voted,
+      votedType,
+    };
     this.applyFindAllFilters(queryBuilder, filterOptions);
     this.applyFindAllFilters(totalItemsQueryBuilder, filterOptions);
-
 
     if (paginationDto.orderBy) {
       const sortParts = paginationDto.orderBy.split(',');
@@ -133,13 +165,19 @@ export class DiscCatalogService {
         if (field && direction) {
           const dbField = FIND_ALL_ORDER_FIELDS[field];
           if (dbField) {
-            if (field === 'disc.averageRate' && !excludesDiscsWithoutAverageRate) {
+            if (
+              field === 'disc.averageRate' &&
+              !excludesDiscsWithoutAverageRate
+            ) {
               [queryBuilder, totalItemsQueryBuilder].forEach((builder) =>
                 builder.andWhere(FIND_ALL_AVERAGE_RATE_FILTER),
               );
               excludesDiscsWithoutAverageRate = true;
             }
-            queryBuilder.addOrderBy(dbField, direction.toUpperCase() as 'ASC' | 'DESC');
+            queryBuilder.addOrderBy(
+              dbField,
+              direction.toUpperCase() as 'ASC' | 'DESC',
+            );
           }
         }
       });
@@ -149,9 +187,7 @@ export class DiscCatalogService {
         .addOrderBy('artist.name', 'ASC');
     }
 
-    queryBuilder
-      .take(limit)
-      .skip(offset);
+    queryBuilder.take(limit).skip(offset);
     const { entities: discs, raw } = await queryBuilder.getRawAndEntities();
 
     const rawByDiscId = indexCatalogRawRows(raw);
@@ -184,16 +220,29 @@ export class DiscCatalogService {
       votedType?: string;
     },
   ): void {
-    const { genre, countryFilter, query, startDate, endDate, voted, votedType } = filters;
+    const {
+      genre,
+      countryFilter,
+      query,
+      startDate,
+      endDate,
+      voted,
+      votedType,
+    } = filters;
 
     if (genre) {
       queryBuilder.andWhere('disc.genreId = :genre', { genre });
     }
 
     if (countryFilter) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          countryFilter,
+        );
       queryBuilder.andWhere(
-        isUUID ? 'country.id = :countryFilter' : 'country.name = :countryFilter',
+        isUUID
+          ? 'country.id = :countryFilter'
+          : 'country.name = :countryFilter',
         { countryFilter },
       );
     }
@@ -213,13 +262,15 @@ export class DiscCatalogService {
       );
     }
 
-    if (voted === 'false' || (voted as any) === false) {
+    if (voted === 'false' || voted === false) {
       queryBuilder.andWhere(
         votedType === 'cover' ? 'rate.cover IS NULL' : 'rate.rate IS NULL',
       );
-    } else if (voted === 'true' || (voted as any) === true) {
+    } else if (voted === 'true' || voted === true) {
       queryBuilder.andWhere(
-        votedType === 'cover' ? 'rate.cover IS NOT NULL' : 'rate.rate IS NOT NULL',
+        votedType === 'cover'
+          ? 'rate.cover IS NOT NULL'
+          : 'rate.rate IS NOT NULL',
       );
     }
   }
@@ -245,16 +296,25 @@ export class DiscCatalogService {
       idsQueryBuilder
         .leftJoin('disc.artist', 'artist')
         .leftJoin('artist.country', 'country');
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(countryFilter);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          countryFilter,
+        );
       if (isUUID) {
-        idsQueryBuilder.andWhere('country.id = :countryFilter', { countryFilter });
+        idsQueryBuilder.andWhere('country.id = :countryFilter', {
+          countryFilter,
+        });
       } else {
-        idsQueryBuilder.andWhere('country.name = :countryFilter', { countryFilter });
+        idsQueryBuilder.andWhere('country.name = :countryFilter', {
+          countryFilter,
+        });
       }
     }
 
     if (year) {
-      idsQueryBuilder.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', { year });
+      idsQueryBuilder.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', {
+        year,
+      });
     }
 
     if (ep !== undefined) {
@@ -347,7 +407,10 @@ export class DiscCatalogService {
     // Solo se unen las relaciones necesarias para devolver el campo o aplicar
     // sus filtros; year/ep/debut no necesitan cargar relaciones por sí solos.
     if (field === 'country' || country) {
-      qb.leftJoin('disc.artist', 'artist').leftJoin('artist.country', 'country');
+      qb.leftJoin('disc.artist', 'artist').leftJoin(
+        'artist.country',
+        'country',
+      );
     }
     if (field === 'genre' || genre) {
       qb.leftJoin('disc.genre', 'genre');
@@ -356,20 +419,32 @@ export class DiscCatalogService {
     qb.where('disc.releaseDate <= :today', { today });
 
     // Filtros de lo YA elegido (nunca se filtra por el campo que se está pidiendo)
-    if (field !== 'country' && country) qb.andWhere('country.id = :country', { country });
+    if (field !== 'country' && country)
+      qb.andWhere('country.id = :country', { country });
     if (field !== 'genre' && genre) qb.andWhere('genre.id = :genre', { genre });
-    if (field !== 'year' && year) qb.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', { year });
-    if (field !== 'ep' && ep !== undefined) qb.andWhere('disc.ep = :ep', { ep });
-    if (field !== 'debut' && debut !== undefined) qb.andWhere('disc.debut = :debut', { debut });
+    if (field !== 'year' && year)
+      qb.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', { year });
+    if (field !== 'ep' && ep !== undefined)
+      qb.andWhere('disc.ep = :ep', { ep });
+    if (field !== 'debut' && debut !== undefined)
+      qb.andWhere('disc.debut = :debut', { debut });
 
     if (field === 'country') {
-      qb.select('country.id', 'id').addSelect('country.name', 'name').addSelect('country.isoCode', 'isoCode')
+      qb.select('country.id', 'id')
+        .addSelect('country.name', 'name')
+        .addSelect('country.isoCode', 'isoCode')
         .andWhere('country.id IS NOT NULL')
-        .groupBy('country.id').addGroupBy('country.name').addGroupBy('country.isoCode');
+        .groupBy('country.id')
+        .addGroupBy('country.name')
+        .addGroupBy('country.isoCode');
     } else if (field === 'genre') {
-      qb.select('genre.id', 'id').addSelect('genre.name', 'name').addSelect('genre.color', 'color')
+      qb.select('genre.id', 'id')
+        .addSelect('genre.name', 'name')
+        .addSelect('genre.color', 'color')
         .andWhere('genre.id IS NOT NULL')
-        .groupBy('genre.id').addGroupBy('genre.name').addGroupBy('genre.color');
+        .groupBy('genre.id')
+        .addGroupBy('genre.name')
+        .addGroupBy('genre.color');
     } else if (field === 'ep') {
       qb.select('disc.ep', 'ep')
         .andWhere('disc.ep IS NOT NULL')
@@ -379,8 +454,9 @@ export class DiscCatalogService {
         .andWhere('disc.debut IS NOT NULL')
         .groupBy('disc.debut');
     } else {
-      qb.select('EXTRACT(YEAR FROM disc.releaseDate)', 'year')
-        .groupBy('EXTRACT(YEAR FROM disc.releaseDate)');
+      qb.select('EXTRACT(YEAR FROM disc.releaseDate)', 'year').groupBy(
+        'EXTRACT(YEAR FROM disc.releaseDate)',
+      );
     }
 
     // ORDER BY RANDOM() sobre valores YA agrupados (no sobre discos), así que
@@ -389,5 +465,4 @@ export class DiscCatalogService {
 
     return mapOptionRows(field, rows);
   }
-
 }

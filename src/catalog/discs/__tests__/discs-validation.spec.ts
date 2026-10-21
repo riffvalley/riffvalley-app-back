@@ -1,8 +1,11 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
 import { CreateDiscDto } from '../dto/create-discs.dto';
 import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from '../dto/update-discs.dto';
 import { DiscsController } from '../discs.controller';
+import { DiscsService } from '../discs.service';
 
 describe('DiscsController write validation', () => {
   const validationPipe = new ValidationPipe({
@@ -11,20 +14,48 @@ describe('DiscsController write validation', () => {
     transform: true,
     transformOptions: { enableImplicitConversion: true },
   });
-  const service = {
-    create: jest.fn(),
-    createWithArtist: jest.fn(),
-    update: jest.fn(),
+  let service: {
+    create: jest.Mock<Promise<unknown>, Parameters<DiscsService['create']>>;
+    createWithArtist: jest.Mock<
+      Promise<unknown>,
+      Parameters<DiscsService['createWithArtist']>
+    >;
+    update: jest.Mock<Promise<unknown>, Parameters<DiscsService['update']>>;
   };
-  const controller = new DiscsController(service as any);
+  let controller: DiscsController;
+  let moduleRef: TestingModule;
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    service = {
+      create: jest.fn(),
+      createWithArtist: jest.fn(),
+      update: jest.fn(),
+    };
+    moduleRef = await Test.createTestingModule({
+      controllers: [DiscsController],
+      providers: [{ provide: DiscsService, useValue: service }],
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .compile();
+    controller = moduleRef.get(DiscsController);
+  });
 
-  async function body<T>(payload: object, metatype: new (...args: any[]) => T) {
-    return (await validationPipe.transform(payload, {
+  afterEach(async () => moduleRef.close());
+
+  async function body<T extends object>(
+    payload: object,
+    metatype: new (...args: never[]) => T,
+  ): Promise<T> {
+    const transformed: unknown = await validationPipe.transform(payload, {
       type: 'body',
       metatype,
-    })) as T;
+    });
+    if (!(transformed instanceof metatype)) {
+      throw new Error('ValidationPipe did not return the expected DTO');
+    }
+    return transformed;
   }
 
   it('rejects an invalid create payload before invoking the write service', async () => {

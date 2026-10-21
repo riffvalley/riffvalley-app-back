@@ -11,8 +11,9 @@ import {
 import { ContentsService } from './contents.service';
 import { CreateContentDto } from './dto/create-content.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
+import { FindContentByMonthQueryDto } from './dto/find-content-by-month-query.dto';
 
-import { ContentSchedulerService } from './content-scheduler.service';
+import { DiscLinkMaintenanceService } from 'src/catalog/discs/maintenance/disc-link-maintenance.service';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
@@ -20,13 +21,13 @@ import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 export class ContentsController {
   constructor(
     private readonly contentsService: ContentsService,
-    private readonly contentSchedulerService: ContentSchedulerService,
+    private readonly discLinkMaintenanceService: DiscLinkMaintenanceService,
   ) {}
 
   @Post('trigger-daily-link-update')
   @Auth(ValidRoles.riffvalley)
   async triggerDailyLinkUpdate() {
-    await this.contentSchedulerService.checkMissingSpotifyLinks();
+    await this.discLinkMaintenanceService.checkMissingSpotifyLinks();
     return { message: 'Daily link update triggered' };
   }
 
@@ -37,10 +38,8 @@ export class ContentsController {
   }
 
   @Get('by-month')
-  findByMonth(@Query('year') year: string, @Query('month') month: string) {
-    const yearNum = parseInt(year, 10);
-    const monthNum = parseInt(month, 10);
-    return this.contentsService.findByMonth(yearNum, monthNum);
+  findByMonth(@Query() query: FindContentByMonthQueryDto) {
+    return this.contentsService.findByMonth(query.year, query.month);
   }
 
   @Get()

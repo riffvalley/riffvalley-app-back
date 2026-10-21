@@ -1,6 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SmtpTransportService } from 'src/integrations/smtp-integration/smtp-transport.service';
-import { CreateNationalReleaseDto } from 'src/editorial/national-releases/dto/create-national-release.dto';
+
+export interface NationalReleaseNotification {
+  artistName: string;
+  discName: string;
+  discType: string;
+  genre: string;
+  releaseDay: string;
+  link?: string;
+}
 
 @Injectable()
 export class MailService {
@@ -36,7 +44,7 @@ export class MailService {
   }
 
   async sendNationalReleaseNotification(
-    dto: CreateNationalReleaseDto,
+    dto: NationalReleaseNotification,
   ): Promise<void> {
     const subject = `Nueva novedad nacional: ${dto.artistName} - ${dto.discName}`;
 

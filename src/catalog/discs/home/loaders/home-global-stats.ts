@@ -1,5 +1,4 @@
-import { Repository } from 'typeorm';
-import { Disc } from '../../entities/disc.entity';
+import { HomeQueryRunner } from './home-query-runner';
 
 type HomeGlobalStats = {
   globalAvgRate: number;
@@ -7,7 +6,7 @@ type HomeGlobalStats = {
 };
 
 export async function loadHomeGlobalStats(
-  discRepository: Pick<Repository<Disc>, 'query'>,
+  discRepository: HomeQueryRunner,
   globalWhere: string,
   globalParams: unknown[],
 ): Promise<HomeGlobalStats> {
@@ -30,11 +29,12 @@ export async function loadHomeGlobalStats(
   `;
 
   const result = await discRepository.query(globalStatsQuery, globalParams);
-  const { globalAvgRate: globalAvgRateValue, medianVotes: medianVotesValue } =
-    result[0] || {};
+  const row = result[0];
+  const globalAvgRateValue = row?.globalAvgRate;
+  const medianVotesValue = row?.medianVotes;
 
   return {
-    globalAvgRate: parseFloat(globalAvgRateValue) || 0,
-    medianVotes: parseInt(medianVotesValue, 10) || 1,
+    globalAvgRate: Number.parseFloat(String(globalAvgRateValue ?? '')) || 0,
+    medianVotes: Number.parseInt(String(medianVotesValue ?? ''), 10) || 1,
   };
 }

@@ -59,6 +59,16 @@ export class SpotifyAccountApiService {
     });
   }
 
+  removePlaylistFromLibrary(
+    accessToken: string,
+    playlistId: string,
+  ): Promise<void> {
+    const uri = encodeURIComponent(`spotify:playlist:${playlistId}`);
+    return this.api.request(`/me/library?uris=${uri}`, accessToken, {
+      method: 'DELETE',
+    });
+  }
+
   getPlaylist(
     accessToken: string,
     playlistId: string,

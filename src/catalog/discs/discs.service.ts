@@ -14,7 +14,7 @@ import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
 import type { WeeklyCalendarGroup } from './calendar/helpers/map-weekly-discs-to-groups';
 import { DiscWriteService } from './write/disc-write.service';
 import { DiscSpotifyService } from './spotify/disc-spotify.service';
-import { DiscHomeService } from './home/disc-home.service';
+import { DiscHomeService, DiscHomeResult } from './home/disc-home.service';
 
 @Injectable()
 export class DiscsService {
@@ -93,20 +93,7 @@ export class DiscsService {
     paginationDto: PaginationDto,
     user: User,
     genreId?: string,
-  ): Promise<{
-    discs: Disc[];
-    totalDiscs: number;
-    totalVotes: number;
-    topUsersByRates: {
-      user: { id: number; username: string };
-      rateCount: number;
-    }[];
-    topUsersByCover: {
-      user: { id: number; username: string };
-      totalCover: number;
-    }[];
-    ratingDistribution: { rate: number; count: number }[];
-  }> {
+  ): Promise<DiscHomeResult> {
     return this.discHomeService.findTopRatedOrFeaturedAndStats(
       paginationDto,
       user,

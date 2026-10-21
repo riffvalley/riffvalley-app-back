@@ -12,7 +12,7 @@ import {
 } from 'typeorm';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
-import { RiffValleyPlaylistArtist } from 'src/editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from 'src/editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
 
 export enum RiffValleyPlaylistStatus {
   NOT_STARTED = 'not_started',

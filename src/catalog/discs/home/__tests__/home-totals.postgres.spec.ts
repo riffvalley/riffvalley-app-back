@@ -1,17 +1,28 @@
+import {
+  HomePostgresClient,
+  getHomePostgresValues,
+} from './home-postgres-types';
+import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { loadHomeDiscTotals } from '../loaders/home-totals';
 
-const describePostgres = process.env.D34_POSTGRES_TEST === '1' ? describe : describe.skip;
+const describePostgres =
+  process.env.D34_POSTGRES_TEST === '1' ? describe : describe.skip;
 
 describePostgres('loadHomeDiscTotals with PostgreSQL fixtures', () => {
-  let client: any;
+  let client: HomePostgresClient | null = null;
+  const getClient = (): HomePostgresClient => {
+    if (!client) throw new Error('PostgreSQL client is not initialized');
+    return client;
+  };
 
   beforeAll(async () => {
-    require('dotenv').config();
+    const dotenv = await import('dotenv');
+    dotenv.config();
     if (process.env.STAGE !== 'dev') {
       throw new Error('D34 PostgreSQL tests require STAGE=dev');
     }
 
-    const { Client } = require('pg');
+    const { Client } = await import('pg');
     client = new Client({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT || 5432),
@@ -20,7 +31,7 @@ describePostgres('loadHomeDiscTotals with PostgreSQL fixtures', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
-    await client.query(`
+    await getClient().query(`
       CREATE TEMP TABLE disc (id uuid PRIMARY KEY, "releaseDate" date);
       CREATE TEMP TABLE rate (id uuid PRIMARY KEY, "discId" uuid, rate numeric);
     `);
@@ -31,8 +42,8 @@ describePostgres('loadHomeDiscTotals with PostgreSQL fixtures', () => {
   });
 
   beforeEach(async () => {
-    await client.query('TRUNCATE rate, disc');
-    await client.query(`
+    await getClient().query('TRUNCATE rate, disc');
+    await getClient().query(`
       INSERT INTO disc (id, "releaseDate") VALUES
         ('00000000-0000-4000-8000-000000000001', DATE '2024-01-01'),
         ('00000000-0000-4000-8000-000000000002', DATE '2024-12-31'),
@@ -50,15 +61,18 @@ describePostgres('loadHomeDiscTotals with PostgreSQL fixtures', () => {
   });
 
   async function loadTotals(statsDateRange?: string[]) {
-    let rawRow: any;
-    const repository = {
+    let rawRow: Record<string, unknown> = {};
+    const repository: HomeQueryRunner = {
       query: async (sql: string, params: unknown[]) => {
-        const result = await client.query(sql, params as any[]);
+        const result = await getClient().query(
+          sql,
+          getHomePostgresValues(params),
+        );
         rawRow = result.rows[0];
         return result.rows;
       },
     };
-    const totals = await loadHomeDiscTotals(repository as any, statsDateRange);
+    const totals = await loadHomeDiscTotals(repository, statsDateRange);
     return { totals, rawRow };
   }
 
@@ -81,16 +95,21 @@ describePostgres('loadHomeDiscTotals with PostgreSQL fixtures', () => {
   });
 
   it('returns zero votes for NULL-only rates and zero totals for an empty catalog', async () => {
-    await client.query('TRUNCATE rate');
-    await client.query(
+    await getClient().query('TRUNCATE rate');
+    await getClient().query(
       'INSERT INTO rate (id, "discId", rate) VALUES ($1, $2, NULL)',
-      ['00000000-0000-4000-8000-000000000107', '00000000-0000-4000-8000-000000000005'],
+      [
+        '00000000-0000-4000-8000-000000000107',
+        '00000000-0000-4000-8000-000000000005',
+      ],
     );
-    await expect(loadTotals(['2024-01-01', '2024-12-31'])).resolves.toMatchObject({
+    await expect(
+      loadTotals(['2024-01-01', '2024-12-31']),
+    ).resolves.toMatchObject({
       totals: { totalDiscs: 3, totalVotes: 0 },
     });
 
-    await client.query('TRUNCATE rate, disc');
+    await getClient().query('TRUNCATE rate, disc');
     await expect(loadTotals()).resolves.toEqual({
       totals: { totalDiscs: 0, totalVotes: 0 },
       rawRow: { totalDiscs: '0', totalVotes: '0' },

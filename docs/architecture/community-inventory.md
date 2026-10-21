@@ -1,6 +1,6 @@
 # Community — Inventario de capacidades y consumidores
 
-Inventario iniciado para A.1 de [`roadmap/community.md`](../../roadmap/community.md), con la decisión de acceso actualizada al completar G.1. Las descripciones de payload, consultas y metadata reflejan la revisión del 2026-10-05; la sección de rutas incorpora el cierre de seguridad.
+Inventario iniciado para A.1 de [`roadmap/community/community.md`](../../roadmap/community/community.md), con la decisión de acceso actualizada al completar G.1. Las descripciones de payload, consultas y metadata reflejan la revisión del 2026-10-05; la sección de rutas incorpora el cierre de seguridad.
 
 ## Resumen
 

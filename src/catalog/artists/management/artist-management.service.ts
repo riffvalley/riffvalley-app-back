@@ -5,7 +5,7 @@ import { normalizeForSearch } from '../helpers/normalize-for-search';
 import { Artist } from '../entities/artist.entity';
 import { Disc } from '../../discs/entities/disc.entity';
 import { NationalRelease } from '../../../editorial/national-releases/entities/national-release.entity';
-import { RiffValleyPlaylistArtist } from '../../../editorial/playlists/festival-playlists/entities/riff-valley-playlist-artist.entity';
+import { RiffValleyPlaylistArtist } from '../../../editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
 import { RiffValleyPlaylist } from '../../../editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { ArtistOrphansService } from '../orphans/artist-orphans.service';
 import {

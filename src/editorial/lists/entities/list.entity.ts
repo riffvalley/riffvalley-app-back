@@ -1,5 +1,4 @@
-import { Asignation } from 'src/editorial/asignations/entities/asignations.entity';
-import { Link } from 'src/editorial/links/entities/links.entity';
+import { Asignation } from 'src/editorial/lists/asignations/entities/asignations.entity';
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum ListType {
@@ -69,9 +68,6 @@ export class List {
   })
   specialType?: SpecialListType;
 
-  @Column({ type: 'boolean', default: false, nullable: true })
-  free: boolean;
-
   @Column({ type: 'timestamp', nullable: true })
   listDate?: Date;
 
@@ -98,10 +94,4 @@ export class List {
     eager: true,
   })
   asignations: Asignation[];
-
-  @OneToMany(() => Link, (link) => link.list, {
-    cascade: true,
-    eager: true,
-  })
-  links: Link[];
 }

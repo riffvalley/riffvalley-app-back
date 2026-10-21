@@ -1,7 +1,6 @@
 import {
   IsString,
   IsOptional,
-  IsBoolean,
   IsEnum,
   IsDateString,
   MaxLength,
@@ -23,10 +22,6 @@ export class CreateListDto {
   @IsOptional()
   @IsEnum(SpecialListType)
   specialType?: SpecialListType;
-
-  @IsBoolean()
-  @IsOptional()
-  free?: boolean | null;
 
   @IsOptional()
   @IsDateString()

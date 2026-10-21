@@ -14,26 +14,27 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 
 ## Roadmaps por área
 
-- [Catalog](roadmap/catalog.md) — ownership de Catalog y planificación de Discs, Artists, Genres, Countries e integración de Catalog.
-- [Community](roadmap/community.md) — Comments, Requests, Favorites, Pendings y Rates como capacidades de interacción y contribución al catálogo.
-- [Roles](roadmap/roles.md) — inventario, contrato de permisos, adaptación progresiva y migración de roles de usuario.
-- [Spotify](roadmap/spotify.md) — separación del dominio de la playlist de Riff Valley y la integración con la API externa de Spotify.
-- [Integrations](roadmap/integrations.md) — agrupación e inventario progresivo de integraciones externas bajo `src/integrations/`.
-- [Integrations Cleanup](roadmap/integrations-cleanup.md) — auditoría interna y saneamiento progresivo de las ocho integraciones.
+- [Catalog](roadmap/catalog/README.md) — ownership de Catalog y planificación de Discs, Artists, Genres, Countries e integración de Catalog.
+- [Community](roadmap/community/README.md) — Comments, Requests, Favorites, Pendings y Rates como capacidades de interacción y contribución al catálogo.
+- [Roles](roadmap/roles/README.md) — inventario, contrato de permisos, adaptación progresiva y migración de roles de usuario.
+- [Spotify](roadmap/integrations/spotify/README.md) — separación del dominio de la playlist de Riff Valley y la integración con la API externa de Spotify.
+- [Integrations](roadmap/integrations/README.md) — agrupación e inventario progresivo de integraciones externas bajo `src/integrations/`.
+- [Integrations Cleanup](roadmap/integrations/README.md#integrations-cleanup) — auditoría interna y saneamiento progresivo de las ocho integraciones.
 - [Backend Architecture](roadmap/backend-architecture.md) — inventario global de módulos, ownership propuesto, árbol objetivo y plan futuro de reorganización física sin cambios de comportamiento.
-- [Backend Cleanup](roadmap/backend-cleanup.md) — auditoría técnica progresiva módulo por módulo y tareas de mejora interna posteriores.
+- [Backend Cleanup](roadmap/backend-cleanup/README.md) — reglas, inventario global y auditorías de Catalog y Editorial; [Quality Gates](roadmap/backend-cleanup/quality-gates.md) conserva la norma estructural y BC-QG2. Editorial quedó completado por BC-ED-0 (2026-10-20).
 
 ## Estado de alto nivel
 
-- **Catalog:** C5 declara cerrada la fase de ownership de Catalog (2026-10-04). La planificación detallada de Discs permanece en su documento; su última nota de cierre deja D48 pendiente.
+- **Catalog:** completado formalmente por BC-CAT (2026-10-20): QG-1–QG-18 cerradas, cero infracciones en sus tres baselines, `yarn verify` aprobado y C5 confirmado mediante la composición directa de los siete módulos. DIS-F5 y D5 permanecen como decisiones contractuales documentadas, sin bloquear el cierre. Véase el [registro de cierre](roadmap/backend-cleanup/catalog.md).
 - **Community:** cerrada (2026-10-05). Migración estructural y saneamiento G.1–G.7 completados; regresión backend y regresión manual frontend completadas sin incidencias. No quedan subtareas pendientes en su roadmap; los desacoplamientos Catalog ↔ Community y Auth → Rate siguen aplazados.
-- **Roles:** roadmap funcional completado. Backend y frontend desplegados, PostgreSQL usa `users.role` y la secuencia de producción quedó verificada; las comprobaciones adicionales de permisos con cuentas editoriales y administrativas se conservan como observaciones, no como fases obligatorias. Véase [cierre de roles](roadmap/roles.md).
+- **Editorial:** completado por BC-ED-0 (2026-10-20). BC-ED-1–10 completados, sin bloqueos activos; Links retirado por BC-LNK-1. Véase el [cierre formal](roadmap/backend-cleanup/editorial/closure.md).
+- **Roles:** roadmap funcional completado. Backend y frontend desplegados, PostgreSQL usa `users.role` y la secuencia de producción quedó verificada; las comprobaciones adicionales de permisos con cuentas editoriales y administrativas se conservan como observaciones, no como fases obligatorias. Véase [cierre de roles](roadmap/roles/roles.md).
 - **Fase 4 — Lists:** administración de listas, integración WordPress y sincronización/publicación de discos; considerar primero los efectos externos.
 - **Fase 5 — Festival Playlists:** reglas de playlist e integración externa; revisar selección y sincronización de discos y manejo de errores.
 - **Fase 6 — Contents, Articles, News y publicaciones:** workflows editoriales, estados, fechas programadas, versiones y publicación WordPress.
-- **Fase 7 — Integraciones externas:** completada (2026-10-14); I.0–I.8 cerradas. Véase [Integrations](roadmap/integrations.md) para la evidencia y las limitaciones de regresión.
-- **Integrations Cleanup:** completada (2026-10-14); IC-0–IC-8 cerradas. Véase [Integrations Cleanup](roadmap/integrations-cleanup.md) para la evidencia y los hallazgos conservados fuera de alcance.
-- **Fase 8 — Versions y Asignations:** workflows, estados, asignaciones y transiciones. Requests figuraba históricamente en esta agrupación; su planificación y ownership actuales están en [Community](roadmap/community.md).
+- **Fase 7 — Integraciones externas:** completada (2026-10-14); I.0–I.8 cerradas. Véase [Integrations](roadmap/integrations/integrations.md) para la evidencia y las limitaciones de regresión.
+- **Integrations Cleanup:** completada (2026-10-14); IC-0–IC-8 cerradas. Véase [Integrations Cleanup](roadmap/integrations/cleanup.md) para la evidencia y los hallazgos conservados fuera de alcance.
+- **Fase 8 — Versions y Asignations:** workflows, estados, asignaciones y transiciones. Requests figuraba históricamente en esta agrupación; su planificación y ownership actuales están en [Community](roadmap/community/README.md).
 - **Fase 9 — Auth y módulos restantes:** caracterizar primero el impacto transversal de Auth y ordenar los módulos restantes por uso, duplicación y coste de consultas.
 
 ## Notas de organización

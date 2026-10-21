@@ -13,7 +13,7 @@ import { normalizeForSearch } from '../../../artists/helpers/normalize-for-searc
 import {
   CatalogImportTransactionError,
   runCatalogImportTransaction,
-} from '../../catalog-import-transaction';
+} from '../../transaction/catalog-import-transaction';
 import {
   CatalogImportFailedResult,
   CatalogImportResultItem,

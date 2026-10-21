@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Put,
   Delete,
   Param,
   Body,
@@ -10,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ReunionService } from './reunions.service';
 import { CreateReunionDto } from './dto/create-reunion.dto';
+import { UpdateReunionDto } from './dto/update-reunion.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
@@ -35,10 +35,7 @@ export class ReunionController {
 
   @Patch(':id')
   @Auth(ValidRoles.riffvalley)
-  async update(
-    @Param('id') id: string,
-    @Body() updateData: Partial<CreateReunionDto>,
-  ) {
+  async update(@Param('id') id: string, @Body() updateData: UpdateReunionDto) {
     return this.reunionService.updateReunion(id, updateData);
   }
 

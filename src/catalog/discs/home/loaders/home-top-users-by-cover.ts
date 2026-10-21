@@ -1,10 +1,9 @@
-import { Repository } from 'typeorm';
-import { Disc } from '../../entities/disc.entity';
 import { buildHomeDateRange } from '../helpers/home-date-range';
+import { HomeQueryRunner } from './home-query-runner';
 
 /** Loads the Home ranking of users with the most non-NULL covers. */
 export async function loadHomeTopUsersByCover(
-  discRepository: Pick<Repository<Disc>, 'query'>,
+  discRepository: HomeQueryRunner,
   statsDateRange?: (string | Date)[],
 ) {
   const { condition: dateCondition, params } = buildHomeDateRange(
@@ -23,11 +22,11 @@ export async function loadHomeTopUsersByCover(
   `;
   const rows = await discRepository.query(topUsersByCoverQuery, params);
 
-  return rows.map((row: any) => ({
+  return rows.map((row) => ({
     user: {
-      id: row.userId,
-      username: row.username,
+      id: String(row.userId),
+      username: String(row.username),
     },
-    totalCover: parseInt(row.coverCount, 10),
+    totalCover: Number.parseInt(String(row.coverCount), 10),
   }));
 }

@@ -11,12 +11,15 @@ import {
 } from '@nestjs/common';
 import { ListsService } from './list.service';
 import { CreateListDto } from './dto/create-list.dto';
+import { CreateWeeklyListDto } from './dto/create-weekly-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { GenerateWpPostsQueryDto } from './dto/generate-wp-posts-query.dto';
+import {
+  ListYearMonthParamsDto,
+  ListYearParamsDto,
+} from './dto/list-period-params.dto';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
-import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
-import { User } from 'src/identity/auth/entities/user.entity';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
 @Controller('lists')
@@ -31,7 +34,7 @@ export class ListsController {
 
   @Get()
   @Auth()
-  findAll(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
+  findAll(@Query() paginationDto: PaginationDto) {
     return this.listsServices.findAll(paginationDto);
   }
 
@@ -53,13 +56,10 @@ export class ListsController {
   }
 
   @Get('weekly/past/:year/:month')
-  findPastWeeklyByMonth(
-    @Param('year') year: string,
-    @Param('month') month: string,
-  ) {
+  findPastWeeklyByMonth(@Param() params: ListYearMonthParamsDto) {
     return this.listsServices.findPastWeeklyListsByMonth(
-      parseInt(year),
-      parseInt(month),
+      params.year,
+      params.month,
     );
   }
 
@@ -69,10 +69,8 @@ export class ListsController {
   }
 
   @Get('video/past/:year')
-  findPastVideoByYear(
-    @Param('year') year: string, // Only year is passed
-  ) {
-    return this.listsServices.findPastVideoListsByYear(parseInt(year));
+  findPastVideoByYear(@Param() params: ListYearParamsDto) {
+    return this.listsServices.findPastVideoListsByYear(params.year);
   }
 
   @Get('special')
@@ -91,10 +89,8 @@ export class ListsController {
   }
 
   @Get('month/past/:year')
-  findPastMonthByYear(
-    @Param('year') year: string, // Only year is passed
-  ) {
-    return this.listsServices.findPastMonthListsByYear(parseInt(year));
+  findPastMonthByYear(@Param() params: ListYearParamsDto) {
+    return this.listsServices.findPastMonthListsByYear(params.year);
   }
 
   @Get('video/current')
@@ -103,14 +99,16 @@ export class ListsController {
   }
 
   @Get('video/past/:year')
-  findPastVideosByYear(@Param('year') year: string) {
-    return this.listsServices.findPastVideoListsByYear(parseInt(year));
+  findPastVideosByYear(@Param() params: ListYearParamsDto) {
+    return this.listsServices.findPastVideoListsByYear(params.year);
   }
 
   @Post('weekly/create')
   @Auth(ValidRoles.riffvalley)
-  createWeekly() {
-    return this.listsServices.createWeeklyList();
+  createWeekly(@Body() createWeeklyListDto: CreateWeeklyListDto) {
+    return this.listsServices.createWeeklyList(
+      new Date(createWeeklyListDto.releaseDate),
+    );
   }
 
   @Post(':id/wp-posts')

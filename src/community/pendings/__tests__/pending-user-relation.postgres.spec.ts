@@ -43,7 +43,7 @@ describePostgres('Pending ↔ User relation with PostgreSQL fixtures', () => {
         id uuid PRIMARY KEY,
         email text NOT NULL DEFAULT 'pending-owner@example.test',
         password text NOT NULL DEFAULT 'test-password-hash',
-        roles text[] NOT NULL DEFAULT ARRAY['user'],
+        role text NOT NULL DEFAULT 'user',
         username text NOT NULL,
         "isActive" boolean NOT NULL DEFAULT true,
         image text,
@@ -75,7 +75,10 @@ describePostgres('Pending ↔ User relation with PostgreSQL fixtures', () => {
 
   it('persists Pending.user and loads Pending → User through the owning relation', async () => {
     const manager = queryRunner.manager;
-    const user = manager.create(User, { id: USER_ID, username: 'pending-owner' });
+    const user = manager.create(User, {
+      id: USER_ID,
+      username: 'pending-owner',
+    });
     await manager.save(user);
 
     const pending = manager.create(Pending, {
@@ -94,7 +97,10 @@ describePostgres('Pending ↔ User relation with PostgreSQL fixtures', () => {
     const loaded = await manager.findOneOrFail(Pending, {
       where: { id: PENDING_ID },
     });
-    expect(loaded.user).toMatchObject({ id: USER_ID, username: 'pending-owner' });
+    expect(loaded.user).toMatchObject({
+      id: USER_ID,
+      username: 'pending-owner',
+    });
   });
 
   it('cascades and loads User → Pending through the declared inverse relation', async () => {

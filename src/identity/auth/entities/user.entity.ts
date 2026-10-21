@@ -1,4 +1,4 @@
-import { Asignation } from '../../../editorial/asignations/entities/asignations.entity';
+import { Asignation } from '../../../editorial/lists/asignations/entities/asignations.entity';
 import { Comment } from '../../../community/comments/entities/comment.entity';
 import { Favorite } from '../../../community/favorites/entities/favorite.entity';
 import { Pending } from '../../../community/pendings/entities/pending.entity';

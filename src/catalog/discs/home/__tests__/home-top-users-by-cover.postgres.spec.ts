@@ -1,19 +1,30 @@
+import {
+  HomePostgresClient,
+  getHomePostgresValues,
+} from './home-postgres-types';
+import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { loadHomeTopUsersByCover } from '../loaders/home-top-users-by-cover';
 
-const describePostgres = process.env.D36_POSTGRES_TEST === '1' ? describe : describe.skip;
+const describePostgres =
+  process.env.D36_POSTGRES_TEST === '1' ? describe : describe.skip;
 
 describePostgres('loadHomeTopUsersByCover with PostgreSQL fixtures', () => {
-  let client: any;
+  let client: HomePostgresClient | null = null;
+  const getClient = (): HomePostgresClient => {
+    if (!client) throw new Error('PostgreSQL client is not initialized');
+    return client;
+  };
   const userId = (id: number) =>
     `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`;
 
   beforeAll(async () => {
-    require('dotenv').config();
+    const dotenv = await import('dotenv');
+    dotenv.config();
     if (process.env.STAGE !== 'dev') {
       throw new Error('D36 PostgreSQL tests require STAGE=dev');
     }
 
-    const { Client } = require('pg');
+    const { Client } = await import('pg');
     client = new Client({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT || 5432),
@@ -22,7 +33,7 @@ describePostgres('loadHomeTopUsersByCover with PostgreSQL fixtures', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
-    await client.query(`
+    await getClient().query(`
       CREATE TEMP TABLE "users" (id uuid PRIMARY KEY, username text);
       CREATE TEMP TABLE disc (id integer PRIMARY KEY, "releaseDate" date);
       CREATE TEMP TABLE rate (
@@ -40,8 +51,8 @@ describePostgres('loadHomeTopUsersByCover with PostgreSQL fixtures', () => {
   });
 
   beforeEach(async () => {
-    await client.query('TRUNCATE rate, disc, "users"');
-    await client.query(`
+    await getClient().query('TRUNCATE rate, disc, "users"');
+    await getClient().query(`
       INSERT INTO "users" (id, username) VALUES
         ('${userId(1)}', 'Ada'), ('${userId(2)}', 'Bea'), ('${userId(3)}', 'Cy'),
         ('${userId(4)}', 'Dan'), ('${userId(5)}', 'Eli'), ('${userId(6)}', 'Fox');
@@ -65,19 +76,22 @@ describePostgres('loadHomeTopUsersByCover with PostgreSQL fixtures', () => {
   });
 
   async function loadTopUsers(statsDateRange?: string[]) {
-    let rawRows: any[] = [];
+    let rawRows: Record<string, unknown>[] = [];
     let sql = '';
     let params: unknown[] = [];
-    const repository = {
+    const repository: HomeQueryRunner = {
       query: async (query: string, values: unknown[]) => {
         sql = query;
         params = values;
-        const result = await client.query(query, values as any[]);
+        const result = await getClient().query(
+          query,
+          getHomePostgresValues(values),
+        );
         rawRows = result.rows;
         return result.rows;
       },
     };
-    const result = await loadHomeTopUsersByCover(repository as any, statsDateRange);
+    const result = await loadHomeTopUsersByCover(repository, statsDateRange);
     return { result, rawRows, sql, params };
   }
 
@@ -85,12 +99,23 @@ describePostgres('loadHomeTopUsersByCover with PostgreSQL fixtures', () => {
     const { result, rawRows, sql, params } = await loadTopUsers();
 
     expect(result).toHaveLength(5);
-    expect(result.slice(0, 3).map(({ user }) => user.id).sort()).toEqual([
-      userId(1), userId(2), userId(4),
-    ]);
-    expect(result.slice(0, 3).every(({ totalCover }) => totalCover === 2)).toBe(true);
-    expect(result.slice(3).map(({ user, totalCover }) => [user.id, totalCover]).sort()).toEqual([
-      [userId(3), 1], [userId(5), 1],
+    expect(
+      result
+        .slice(0, 3)
+        .map(({ user }) => user.id)
+        .sort(),
+    ).toEqual([userId(1), userId(2), userId(4)]);
+    expect(result.slice(0, 3).every(({ totalCover }) => totalCover === 2)).toBe(
+      true,
+    );
+    expect(
+      result
+        .slice(3)
+        .map(({ user, totalCover }) => [user.id, totalCover])
+        .sort(),
+    ).toEqual([
+      [userId(3), 1],
+      [userId(5), 1],
     ]);
     expect(result.some(({ user }) => user.id === userId(6))).toBe(false);
     expect(rawRows[0].coverCount).toBe('2');
@@ -110,28 +135,35 @@ describePostgres('loadHomeTopUsersByCover with PostgreSQL fixtures', () => {
       '2024-12-31',
     ]);
 
-    expect(result.map(({ user, totalCover }) => [user.id, totalCover]).sort()).toEqual([
-      [userId(1), 2], [userId(2), 2], [userId(3), 1],
+    expect(
+      result.map(({ user, totalCover }) => [user.id, totalCover]).sort(),
+    ).toEqual([
+      [userId(1), 2],
+      [userId(2), 2],
+      [userId(3), 1],
     ]);
-    expect(rawRows.map(({ coverCount }) => coverCount)).toEqual(['2', '2', '1']);
-    expect(params).toEqual([
-      new Date('2024-01-01'),
-      new Date('2024-12-31'),
+    expect(rawRows.map(({ coverCount }) => coverCount)).toEqual([
+      '2',
+      '2',
+      '1',
     ]);
+    expect(params).toEqual([new Date('2024-01-01'), new Date('2024-12-31')]);
   });
 
   it('returns an empty ranking when no non-NULL covers match', async () => {
-    await client.query('TRUNCATE rate');
+    await getClient().query('TRUNCATE rate');
 
-    await expect(loadTopUsers(['2030-01-01', '2030-12-31'])).resolves.toMatchObject({
+    await expect(
+      loadTopUsers(['2030-01-01', '2030-12-31']),
+    ).resolves.toMatchObject({
       result: [],
       rawRows: [],
     });
   });
 
   it('returns at most 20 users and does not promise an order for tied counts', async () => {
-    await client.query('TRUNCATE rate, disc, "users"');
-    await client.query(`
+    await getClient().query('TRUNCATE rate, disc, "users"');
+    await getClient().query(`
       INSERT INTO "users" (id, username)
       SELECT ('00000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, 'User ' || n
       FROM generate_series(1, 25) AS n;
@@ -150,7 +182,9 @@ describePostgres('loadHomeTopUsersByCover with PostgreSQL fixtures', () => {
     expect(result).toHaveLength(20);
     expect(result.every(({ totalCover }) => totalCover === 1)).toBe(true);
     expect(new Set(result.map(({ user }) => user.id)).size).toBe(20);
-    const allowedUserIds = new Set(Array.from({ length: 25 }, (_, index) => userId(index + 1)));
+    const allowedUserIds = new Set(
+      Array.from({ length: 25 }, (_, index) => userId(index + 1)),
+    );
     expect(result.every(({ user }) => allowedUserIds.has(user.id))).toBe(true);
     expect(sql).toContain('ORDER BY "coverCount" DESC\n    LIMIT 20;');
     expect(sql).not.toMatch(/ORDER BY "coverCount" DESC\s*,/);

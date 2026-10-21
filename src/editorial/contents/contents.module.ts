@@ -5,20 +5,22 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Content } from './entities/content.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Reunion } from 'src/editorial/reunions/entities/reunion.entity';
+import { Point } from 'src/editorial/reunions/points/entities/point.entity';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Article } from 'src/editorial/articles/entities/article.entity';
 import { Video } from 'src/editorial/videos/entities/video.entity';
-import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { List } from 'src/editorial/lists/entities/list.entity';
 
 import { ListsModule } from 'src/editorial/lists/list.module';
-import { PointsModule } from 'src/editorial/reunions/points/points.module';
+import { DiscModule } from 'src/catalog/discs/discs.module';
 
 import { ContentSchedulerService } from './content-scheduler.service';
 
 import { forwardRef } from '@nestjs/common';
-import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 import { AuthModule } from 'src/identity/auth/auth.module';
+import { ContentQueryService } from './application/content-query.service';
+import { ContentCreationService } from './application/content-creation.service';
+import { ContentLifecycleService } from './application/content-lifecycle.service';
 
 @Module({
   imports: [
@@ -26,19 +28,24 @@ import { AuthModule } from 'src/identity/auth/auth.module';
       Content,
       User,
       Reunion,
+      Point,
       RiffValleyPlaylist,
       Article,
       Video,
-      Disc,
       List,
     ]),
     forwardRef(() => ListsModule),
-    PointsModule,
-    SpotifyIntegrationModule,
+    DiscModule,
     AuthModule,
   ],
   controllers: [ContentsController],
-  providers: [ContentsService, ContentSchedulerService],
+  providers: [
+    ContentsService,
+    ContentSchedulerService,
+    ContentQueryService,
+    ContentCreationService,
+    ContentLifecycleService,
+  ],
   exports: [ContentsService],
 })
 export class ContentsModule {}

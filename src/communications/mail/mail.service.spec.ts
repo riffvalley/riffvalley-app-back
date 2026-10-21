@@ -1,9 +1,19 @@
+import { Logger } from '@nestjs/common';
 import { MailService } from './mail.service';
+import type { NationalReleaseNotification } from './mail.service';
 
 describe('MailService', () => {
   const originalEnv = { ...process.env };
   const sendMail = jest.fn();
   let service: MailService;
+  const nationalRelease: NationalReleaseNotification = {
+    artistName: 'Artist',
+    discName: 'Album',
+    discType: 'album',
+    genre: 'Rock',
+    releaseDay: '2026-10-14',
+    link: 'https://example.test/album',
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -35,32 +45,36 @@ describe('MailService', () => {
   });
 
   it('composes national release fields including the optional link', async () => {
-    await service.sendNationalReleaseNotification({
-      artistName: 'Artist',
-      discName: 'Album',
-      discType: 'album',
-      genre: 'Rock',
-      releaseDay: '2026-10-14',
-      link: 'https://example.test/album',
-    } as any);
+    await service.sendNationalReleaseNotification(nationalRelease);
 
     expect(sendMail).toHaveBeenCalledWith({
       from: '"Riff Valley" <mailer@test.invalid>',
       to: 'notifications@test.invalid',
       subject: 'Nueva novedad nacional: Artist - Album',
-      html: expect.stringContaining('https://example.test/album'),
+      html: expect.stringContaining(
+        '<tr><td><strong>Artista</strong></td><td>Artist</td></tr>',
+      ),
     });
+    const [{ html }] = sendMail.mock.calls[0];
+    expect(html).toContain('<td>Album</td>');
+    expect(html).toContain('<td>album</td>');
+    expect(html).toContain('<td>Rock</td>');
+    expect(html).toContain('<td>2026-10-14</td>');
+    expect(html).toContain('https://example.test/album');
   });
 
   it('keeps national release transport errors swallowed after logging', async () => {
-    sendMail.mockRejectedValueOnce(new Error('SMTP unavailable'));
+    const error = new Error('SMTP unavailable');
+    const loggerError = jest.spyOn(Logger.prototype, 'error');
+    sendMail.mockRejectedValueOnce(error);
 
     await expect(
-      service.sendNationalReleaseNotification({
-        artistName: 'Artist',
-        discName: 'Album',
-      } as any),
+      service.sendNationalReleaseNotification(nationalRelease),
     ).resolves.toBeUndefined();
+    expect(loggerError).toHaveBeenCalledWith(
+      'Error sending national release email',
+      error,
+    );
   });
 
   it('composes the Spotify reminder and retains its recipient fallback', async () => {

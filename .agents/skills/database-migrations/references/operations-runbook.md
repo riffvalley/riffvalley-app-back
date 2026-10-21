@@ -9,6 +9,21 @@
 
 ## Desarrollo local
 
+### Bootstrap de esquema actual para una base vacía
+
+El repositorio contiene 92 migraciones incrementales sin una migración inicial. No asumas que se pueden aplicar desde cero: algunas migraciones tempranas alteran tablas antes de que se creen. `yarn db:bootstrap-local` ofrece una alternativa local limitada: construye el esquema vigente desde metadata de entidades con `DataSource.synchronize(false)`, sin crear ni registrar el ledger. No es un baseline de migraciones ni permite ejecutar las migraciones históricas posteriormente.
+
+El comando solo admite `STAGE=dev`, `DB_HOST=localhost`, `DB_PORT=5432`, `DB_NAME=SpamMusicDB`, el contenedor Docker `spammusicdb` con imagen PostgreSQL 17 y `DATABASE_URL` ausente. Verifica por SQL el nombre de base/usuario/propietario, versión y dirección interna del contenedor. Si `public` contiene relaciones, exige confirmación interactiva exacta `REINICIAR SpamMusicDB` antes de borrarlo; rechaza objetos en otros esquemas. El modo `--verify-only` no escribe. Ejecuta localmente:
+
+```sh
+DISABLE_SCHEDULED_TASKS=true STAGE=dev yarn db:bootstrap-local
+yarn db:bootstrap-local --verify-only
+```
+
+Tras el bootstrap, `db:status` informará 92 pendientes porque no hay ledger; no ejecutes `db:migrate`, `migration:run` ni `db:check` como si fuera una base migrada. Para probar una cadena real de migraciones se requiere una base inicial compatible y aislada; este bootstrap valida el esquema funcional actual, no el historial. El arranque de Nest mantiene `synchronize: false` y `migrationsRun: false`.
+
+En local, `DISABLE_SCHEDULED_TASKS=true` junto con `STAGE=dev` apaga únicamente la inscripción de cron jobs de Nest Schedule. La configuración no puede desactivar los cron jobs en otros stages y no afecta endpoints ni guards.
+
 Revisa `package.json`, `src/data-source.ts`, `src/app.module.ts`, `Procfile`, entidades y migraciones existentes. Comprueba `git status` y que `STAGE`, host, puerto y base apuntan a PostgreSQL local aislado.
 
 Para crear un archivo vacío:
