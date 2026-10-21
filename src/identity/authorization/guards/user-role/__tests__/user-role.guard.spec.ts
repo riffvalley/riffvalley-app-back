@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ExecutionContext,
   ForbiddenException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
@@ -10,12 +11,13 @@ import {
   META_MINIMUM_ROLE,
   RoleProtected,
 } from 'src/identity/auth/decorators/role-protected.decorator';
-import { UserRoleGuard } from './user-role.guard';
+import { UserRoleGuard } from '../user-role.guard';
 import {
   isValidRole,
   roleMeetsMinimum,
   ValidRoles,
-} from '../../interfaces/valid-roles';
+} from '../../../interfaces/valid-roles';
+import { UsersService } from '../../../../users/users.service';
 
 class AuthenticatedController {
   @Auth()
@@ -43,7 +45,6 @@ class HandlerOverridesController {
 }
 
 class InvalidMetadataController {
-  @RoleProtected('admin' as ValidRoles)
   handle() {}
 }
 
@@ -94,7 +95,12 @@ describe('role hierarchy', () => {
 
 describe('UserRoleGuard', () => {
   let guard: UserRoleGuard;
-  let userRepository: { findOne: jest.Mock };
+  let usersService: Pick<UsersService, 'findIdentityById'>;
+  let findIdentityById: jest.MockedFunction<
+    (
+      id: string,
+    ) => Promise<{ id: string; role: unknown; isActive: boolean } | null>
+  >;
 
   const contextFor = (
     controller: ControllerConstructor,
@@ -106,8 +112,9 @@ describe('UserRoleGuard', () => {
     new ExecutionContextHost([request], controller, handler);
 
   beforeEach(() => {
-    userRepository = { findOne: jest.fn() };
-    guard = new UserRoleGuard(new Reflector(), userRepository as never);
+    findIdentityById = jest.fn();
+    usersService = { findIdentityById: findIdentityById as never };
+    guard = new UserRoleGuard(new Reflector(), usersService as never);
   });
 
   it('allows authenticated-only routes without reading the persisted role', async () => {
@@ -117,7 +124,7 @@ describe('UserRoleGuard', () => {
     expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
     expect(Reflect.getMetadata('__guards__', handler)).toHaveLength(2);
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(userRepository.findOne).not.toHaveBeenCalled();
+    expect(usersService.findIdentityById).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -131,7 +138,11 @@ describe('UserRoleGuard', () => {
   ])(
     'allows persisted %s to satisfy each applicable minimum',
     async (role, minimums) => {
-      userRepository.findOne.mockResolvedValue({ role });
+      findIdentityById.mockResolvedValue({
+        id: 'user-id',
+        role,
+        isActive: true,
+      });
 
       for (const minimumRole of minimums) {
         const handler = MinimumRoleController.prototype[minimumRole];
@@ -151,7 +162,11 @@ describe('UserRoleGuard', () => {
     [ValidRoles.riffvalley, ValidRoles.superadmin],
   ])('denies %s below minimum %s', async (role, minimumRole) => {
     const handler = MinimumRoleController.prototype[minimumRole];
-    userRepository.findOne.mockResolvedValue({ role });
+    findIdentityById.mockResolvedValue({
+      id: 'user-id',
+      role,
+      isActive: true,
+    });
 
     await expect(
       guard.canActivate(contextFor(MinimumRoleController, handler)),
@@ -159,7 +174,11 @@ describe('UserRoleGuard', () => {
   });
 
   it('allows superadmin to satisfy every minimum', async () => {
-    userRepository.findOne.mockResolvedValue({ role: ValidRoles.superadmin });
+    findIdentityById.mockResolvedValue({
+      id: 'user-id',
+      role: ValidRoles.superadmin,
+      isActive: true,
+    });
 
     for (const minimumRole of Object.values(ValidRoles)) {
       const handler = MinimumRoleController.prototype[minimumRole];
@@ -173,7 +192,11 @@ describe('UserRoleGuard', () => {
     'denies invalid persisted role %s',
     async (role) => {
       const handler = MinimumRoleController.prototype.riffvalley;
-      userRepository.findOne.mockResolvedValue({ role });
+      findIdentityById.mockResolvedValue({
+        id: 'user-id',
+        role,
+        isActive: true,
+      });
 
       await expect(
         guard.canActivate(contextFor(MinimumRoleController, handler)),
@@ -183,7 +206,11 @@ describe('UserRoleGuard', () => {
 
   it('reads the persisted singular role and ignores role claims in the JWT', async () => {
     const handler = MinimumRoleController.prototype.riffvalley;
-    userRepository.findOne.mockResolvedValue({ role: ValidRoles.collaborator });
+    findIdentityById.mockResolvedValue({
+      id: 'user-id',
+      role: ValidRoles.collaborator,
+      isActive: true,
+    });
     const context = contextFor(MinimumRoleController, handler, {
       user: {
         id: 'user-id',
@@ -195,13 +222,15 @@ describe('UserRoleGuard', () => {
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
-    expect(userRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 'user-id' },
-      select: ['role'],
-    });
+    expect(findIdentityById).toHaveBeenCalledWith('user-id');
   });
 
   it('denies invalid minimum metadata', async () => {
+    Reflect.defineMetadata(
+      META_MINIMUM_ROLE,
+      'admin',
+      InvalidMetadataController.prototype.handle,
+    );
     await expect(
       guard.canActivate(
         contextFor(
@@ -210,7 +239,7 @@ describe('UserRoleGuard', () => {
         ),
       ),
     ).rejects.toThrow(new ForbiddenException('Invalid minimum role'));
-    expect(userRepository.findOne).not.toHaveBeenCalled();
+    expect(findIdentityById).not.toHaveBeenCalled();
   });
 
   it('denies a missing or unidentified request user', async () => {
@@ -227,12 +256,12 @@ describe('UserRoleGuard', () => {
         }),
       ),
     ).rejects.toThrow(new BadRequestException('User not found'));
-    expect(userRepository.findOne).not.toHaveBeenCalled();
+    expect(findIdentityById).not.toHaveBeenCalled();
   });
 
   it('denies when PostgreSQL no longer has the authenticated user', async () => {
     const handler = MinimumRoleController.prototype.riffvalley;
-    userRepository.findOne.mockResolvedValue(null);
+    findIdentityById.mockResolvedValue(null);
 
     await expect(
       guard.canActivate(contextFor(MinimumRoleController, handler)),
@@ -244,9 +273,13 @@ describe('UserRoleGuard', () => {
     await expect(
       guard.canActivate(contextFor(UnprotectedController, unprotectedHandler)),
     ).resolves.toBe(true);
-    expect(userRepository.findOne).not.toHaveBeenCalled();
+    expect(findIdentityById).not.toHaveBeenCalled();
 
-    userRepository.findOne.mockResolvedValue({ role: ValidRoles.riffvalley });
+    findIdentityById.mockResolvedValue({
+      id: 'user-id',
+      role: ValidRoles.riffvalley,
+      isActive: true,
+    });
     await expect(
       guard.canActivate(
         contextFor(
@@ -255,5 +288,22 @@ describe('UserRoleGuard', () => {
         ),
       ),
     ).resolves.toBe(true);
+  });
+
+  it('rejects a user deactivated after the JWT strategy authenticated them', async () => {
+    findIdentityById.mockResolvedValue({
+      id: 'user-id',
+      role: ValidRoles.superadmin,
+      isActive: false,
+    });
+
+    await expect(
+      guard.canActivate(
+        contextFor(
+          MinimumRoleController,
+          MinimumRoleController.prototype.superadmin,
+        ),
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

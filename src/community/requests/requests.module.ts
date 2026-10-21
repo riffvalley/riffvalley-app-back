@@ -7,12 +7,12 @@ import { Artist } from '../../catalog/artists/entities/artist.entity';
 import { Disc } from '../../catalog/discs/entities/disc.entity';
 import { Genre } from '../../catalog/genres/entities/genre.entity';
 import { Country } from '../../catalog/countries/entities/country.entity';
-import { AuthModule } from '../../identity/auth/auth.module';
+import { AuthorizationModule } from '../../identity/authorization/authorization.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([DiscRequest, Artist, Disc, Genre, Country]),
-    AuthModule,
+    AuthorizationModule,
   ],
   controllers: [RequestsController],
   providers: [RequestsService],

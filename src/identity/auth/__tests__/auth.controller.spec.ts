@@ -75,13 +75,18 @@ describe('AuthController role contract', () => {
     async (handlerName, path, minimumRole) => {
       const handler = prototype[handlerName];
       const response = [{ id: 'user-2', username: 'author' }];
-      const authService = {
+      const authService = {};
+      const usersService = {
         findAllRv: jest.fn().mockReturnValue(response),
         findUsersByRole: jest.fn().mockReturnValue(response),
         findSuperUsers: jest.fn().mockReturnValue(response),
         findOne: jest.fn().mockReturnValue(response[0]),
       };
-      const controller = new AuthController(authService as never);
+      const controller = new AuthController(
+        authService as never,
+        usersService as never,
+        {} as never,
+      );
 
       expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
       expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(minimumRole);
@@ -98,6 +103,87 @@ describe('AuthController role contract', () => {
       expect(result).toBe(handlerName === 'findOne' ? response[0] : response);
     },
   );
+
+  it('delegates account and activity routes to their owning services', async () => {
+    const pagination = { limit: 10, offset: 20 };
+    const usersService = {
+      findAll: jest.fn().mockResolvedValue(['users']),
+      updateUser: jest.fn().mockResolvedValue({ id: 'user-1' }),
+      updateUserSuperAdmin: jest.fn().mockResolvedValue({ id: 'user-2' }),
+      setActive: jest.fn().mockResolvedValue({ id: 'user-2' }),
+      remove: jest.fn().mockResolvedValue({ id: 'user-2' }),
+    };
+    const activityService = {
+      findAllAdminStats: jest.fn().mockResolvedValue({ users: [] }),
+      getAllActivity: jest.fn().mockResolvedValue({ data: [] }),
+      getUserActivity: jest.fn().mockResolvedValue({ votes: [], logins: [] }),
+    };
+    const controller = new AuthController(
+      {} as never,
+      usersService as never,
+      activityService as never,
+    );
+    const actorId = 'actor-1';
+    const actor = { id: actorId } as never;
+
+    await expect(controller.findAll()).resolves.toEqual(['users']);
+    await expect(controller.update({}, actor)).resolves.toEqual({
+      id: 'user-1',
+    });
+    await expect(
+      controller.updateSuperAdmin('user-2', {}, actor),
+    ).resolves.toEqual({ id: 'user-2' });
+    await expect(controller.deactivate('user-2', actor)).resolves.toEqual({
+      id: 'user-2',
+    });
+    await expect(controller.remove('user-2', actor)).resolves.toEqual({
+      id: 'user-2',
+    });
+    await expect(
+      controller.findAllAdminStats(pagination as never),
+    ).resolves.toEqual({ users: [] });
+    await expect(
+      controller.getAllActivity(pagination as never),
+    ).resolves.toEqual({ data: [] });
+    await expect(controller.getUserActivity('user-2')).resolves.toEqual({
+      votes: [],
+      logins: [],
+    });
+
+    expect(usersService.updateUser).toHaveBeenCalledWith({}, actorId);
+    expect(usersService.updateUserSuperAdmin).toHaveBeenCalledWith(
+      'user-2',
+      {},
+      actorId,
+    );
+    expect(usersService.setActive).toHaveBeenCalledWith(
+      'user-2',
+      false,
+      actorId,
+    );
+    expect(usersService.remove).toHaveBeenCalledWith('user-2', actorId);
+    expect(activityService.findAllAdminStats).toHaveBeenCalledWith(pagination);
+    expect(activityService.getAllActivity).toHaveBeenCalledWith(pagination);
+    expect(activityService.getUserActivity).toHaveBeenCalledWith('user-2');
+  });
+
+  it('records historical activity after a successful login while preserving its payload', async () => {
+    const response = { id: 'user-1', username: 'listener', token: 'signed' };
+    const authService = { login: jest.fn().mockResolvedValue(response) };
+    const activityService = {
+      recordLoginAccess: jest.fn().mockResolvedValue(undefined),
+    };
+    const controller = new AuthController(
+      authService as never,
+      {} as never,
+      activityService as never,
+    );
+
+    await expect(
+      controller.login({ username: 'listener', password: 'Password1' }),
+    ).resolves.toBe(response);
+    expect(activityService.recordLoginAccess).toHaveBeenCalledWith('user-1');
+  });
 
   const authorizationCases = [
     [ValidRoles.riffvalley, 'findAllRv', ValidRoles.riffvalley, true],
@@ -120,10 +206,13 @@ describe('AuthController role contract', () => {
   it.each(authorizationCases)(
     'authorizes persisted %s for %s at minimum %s',
     async (persistedRole, handlerName, _minimumRole, allowed) => {
-      const userRepository = {
-        findOne: jest.fn().mockResolvedValue({ role: persistedRole }),
+      const usersService = {
+        findIdentityById: jest.fn().mockResolvedValue({
+          role: persistedRole,
+          isActive: true,
+        }),
       };
-      const guard = new UserRoleGuard(new Reflector(), userRepository as never);
+      const guard = new UserRoleGuard(new Reflector(), usersService as never);
       const context = new ExecutionContextHost(
         [{ user: { id: 'user-1', username: 'listener' } }],
         AuthController,

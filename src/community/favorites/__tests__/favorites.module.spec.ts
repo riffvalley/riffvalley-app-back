@@ -8,7 +8,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity';
@@ -43,7 +43,7 @@ describe('FavoritesModule characterization', () => {
 
   afterAll(async () => moduleRef?.close());
 
-  it('resolves the controller, service and repositories through FavoritesModule/AuthModule', () => {
+  it('resolves the controller, service and repositories through FavoritesModule/AuthorizationModule', () => {
     expect(moduleRef.get(FavoritesController)).toBeDefined();
     const service = moduleRef.get(FavoritesService);
     expect(service).toBeDefined();
@@ -57,7 +57,7 @@ describe('FavoritesModule characterization', () => {
       MODULE_METADATA.IMPORTS,
       FavoritesModule,
     ) as unknown[];
-    expect(imports).toContain(AuthModule);
+    expect(imports).toContain(AuthorizationModule);
   });
 
   it('preserves route methods, paths and the current authentication decorators', () => {

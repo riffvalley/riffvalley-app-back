@@ -5,14 +5,14 @@ import { VideosController } from './videos.controller';
 import { Video } from './entities/video.entity';
 import { ContentsModule } from 'src/editorial/contents/contents.module';
 import { ListsModule } from 'src/editorial/lists/list.module';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Video]),
     forwardRef(() => ContentsModule),
     ListsModule,
-    AuthModule,
+    AuthorizationModule,
   ],
   controllers: [VideosController],
   providers: [VideosService],

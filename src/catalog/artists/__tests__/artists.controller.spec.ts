@@ -42,10 +42,12 @@ describe('ArtistsController contract characterization', () => {
       controllers: [ArtistsController],
       providers: [
         { provide: ArtistsService, useValue: service },
-        { provide: UserRoleGuard, useValue: { canActivate: jest.fn() } },
         { provide: getRepositoryToken(User), useValue: { findOne: jest.fn() } },
       ],
-    }).compile();
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: jest.fn() })
+      .compile();
     controller = moduleRef.get(ArtistsController);
   });
 
@@ -274,7 +276,10 @@ describe('ArtistsController contract characterization', () => {
 
   it('allows persisted superadmin for artist operations through the riffvalley minimum', async () => {
     const repository = {
-      findOne: jest.fn().mockResolvedValue({ role: ValidRoles.superadmin }),
+      findIdentityById: jest.fn().mockResolvedValue({
+        role: ValidRoles.superadmin,
+        isActive: true,
+      }),
     };
     const guard = new UserRoleGuard(new Reflector(), repository as never);
 

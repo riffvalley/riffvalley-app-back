@@ -3,25 +3,27 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AuthModule } from '../auth.module';
-import { AuthService } from '../auth.service';
+import { ActivityModule } from '../../activity/activity.module';
+import { ActivityService } from '../../activity/activity.service';
 import { User } from '../entities/user.entity';
 import { UserAccessLog } from '../entities/user-access-log.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { RatesModule } from 'src/community/rates/rates.module';
 import { CatalogImportModule } from 'src/catalog/import/catalog-import.module';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 
-describe('Auth → Rate consumer characterization', () => {
+describe('Activity → Rate consumer characterization', () => {
   let moduleRef: TestingModule;
   const rateRepository = {
     findAndCount: jest.fn(),
     find: jest.fn(),
   };
   const userRepository = {};
-  const accessLogRepository = { find: jest.fn() };
+  const accessLogRepository = { find: jest.fn(), query: jest.fn() };
 
   beforeAll(async () => {
-    moduleRef = await Test.createTestingModule({ imports: [AuthModule] })
+    moduleRef = await Test.createTestingModule({ imports: [ActivityModule] })
       .overrideProvider(getRepositoryToken(Rate))
       .useValue(rateRepository)
       .overrideProvider(getRepositoryToken(User))
@@ -37,8 +39,9 @@ describe('Auth → Rate consumer characterization', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('registers the Rate repository in AuthModule', () => {
+  it('registers the Rate repository through ActivityModule', () => {
     expect(moduleRef.get(getRepositoryToken(Rate))).toBe(rateRepository);
+    expect(moduleRef.get(ActivityService)).toBeInstanceOf(ActivityService);
   });
 
   it('preserves Rate based activity queries and their observable projections', async () => {
@@ -55,7 +58,7 @@ describe('Auth → Rate consumer characterization', () => {
     rateRepository.findAndCount.mockResolvedValue([[rate], 1]);
     rateRepository.find.mockResolvedValue([rate]);
     accessLogRepository.find.mockResolvedValue([{ date: createdAt }]);
-    const service = moduleRef.get(AuthService);
+    const service = moduleRef.get(ActivityService);
 
     await expect(
       service.getAllActivity(
@@ -121,9 +124,17 @@ describe('Auth → Rate consumer characterization', () => {
       MODULE_METADATA.IMPORTS,
       CatalogImportModule,
     ) as unknown[];
+    const activityImports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      ActivityModule,
+    ) as unknown[];
+    expect(authImports).toContain(ActivityModule);
     expect(authImports).not.toContain(RatesModule);
-    expect(ratesImports).toContain(AuthModule);
-    expect(catalogImports).toContain(AuthModule);
+    expect(activityImports).not.toContain(AuthModule);
+    expect(activityImports).not.toContain(RatesModule);
+    expect(ratesImports).not.toContain(AuthModule);
+    expect(ratesImports).toContain(AuthorizationModule);
+    expect(catalogImports).not.toContain(AuthModule);
     expect(catalogImports).not.toContain(RatesModule);
   });
 });

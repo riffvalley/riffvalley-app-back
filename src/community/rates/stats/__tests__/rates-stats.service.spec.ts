@@ -1,5 +1,6 @@
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../../../../identity/auth/entities/user.entity';
+import { UsersService } from '../../../../identity/users/users.service';
 import { Rate } from '../../entities/rate.entity';
 import { RatesStatsService } from '../rates-stats.service';
 
@@ -73,11 +74,10 @@ describe('RatesStatsService.getHomeInsights', () => {
           .mockReturnValueOnce(queryBuilders[1]),
       },
     );
-    const userRepository = Object.assign(
-      new Repository<User>(User, new EntityManager(dataSource)),
-      { count: jest.fn<Promise<number>, []>().mockResolvedValue(0) },
-    );
-    service = new RatesStatsService(rateRepository, userRepository);
+    const usersService = {
+      countUsers: jest.fn<Promise<number>, []>().mockResolvedValue(0),
+    } satisfies Pick<UsersService, 'countUsers'>;
+    service = new RatesStatsService(rateRepository, usersService as never);
   };
 
   beforeEach(() => {

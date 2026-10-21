@@ -172,8 +172,8 @@ describe('domain mutation authorization', () => {
   it.each(mutations)(
     '$controller.name.$method denies roles below its minimum and allows its minimum and superadmin',
     async (mutation) => {
-      const userRepository = { findOne: jest.fn() };
-      const guard = new UserRoleGuard(new Reflector(), userRepository as never);
+      const usersService = { findIdentityById: jest.fn() };
+      const guard = new UserRoleGuard(new Reflector(), usersService as never);
       const handler = getHandler(mutation);
       const contextFor = (role: ValidRoles) =>
         new ExecutionContextHost(
@@ -183,14 +183,20 @@ describe('domain mutation authorization', () => {
         );
 
       for (const role of [ValidRoles.user, ValidRoles.collaborator]) {
-        userRepository.findOne.mockResolvedValue({ role });
+        usersService.findIdentityById.mockResolvedValue({
+          role,
+          isActive: true,
+        });
         await expect(
           guard.canActivate(contextFor(role)),
         ).rejects.toBeInstanceOf(ForbiddenException);
       }
 
       for (const role of [mutation.minimum, ValidRoles.superadmin]) {
-        userRepository.findOne.mockResolvedValue({ role });
+        usersService.findIdentityById.mockResolvedValue({
+          role,
+          isActive: true,
+        });
         await expect(guard.canActivate(contextFor(role))).resolves.toBe(true);
       }
     },

@@ -3,14 +3,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { NationalRelease } from './entities/national-release.entity';
 import { NationalReleasesService } from './national-releases.service';
 import { NationalReleasesController } from './national-releases.controller';
-import { AuthModule } from '../../identity/auth/auth.module';
+import { AuthorizationModule } from '../../identity/authorization/authorization.module';
 import { MailModule } from '../../communications/mail/mail.module';
 import { Disc } from '../../catalog/discs/entities/disc.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([NationalRelease, Disc]),
-    AuthModule,
+    AuthorizationModule,
     MailModule,
   ],
   controllers: [NationalReleasesController],

@@ -9,6 +9,7 @@ import {
 import { RequestMethod } from '@nestjs/common';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
+import { UsersService } from 'src/identity/users/users.service';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { Rate } from '../entities/rate.entity';
 import { RatesController } from '../rates.controller';
@@ -44,12 +45,10 @@ function createRateRepository(): Repository<Rate> {
   return new Repository<Rate>(Rate, new EntityManager(dataSource));
 }
 
-function createUserRepository(): Repository<User> {
-  const dataSource = new DataSource({
-    type: 'postgres',
-    database: 'rates-controller-test',
-  });
-  return new Repository<User>(User, new EntityManager(dataSource));
+function createUsersService(): UsersService {
+  return Object.assign(Object.create(UsersService.prototype), {
+    countUsers: jest.fn().mockResolvedValue(0),
+  }) as UsersService;
 }
 
 describe('RatesController home insights route', () => {
@@ -57,7 +56,7 @@ describe('RatesController home insights route', () => {
     const ratesService = new RatesService(createRateRepository());
     const ratesStatsService = new RatesStatsService(
       createRateRepository(),
-      createUserRepository(),
+      createUsersService(),
     );
     const getHomeInsights = jest
       .spyOn(ratesStatsService, 'getHomeInsights')
@@ -133,7 +132,7 @@ describe('RatesController history route', () => {
     const ratesService = new RatesService(createRateRepository());
     const ratesStatsService = new RatesStatsService(
       createRateRepository(),
-      createUserRepository(),
+      createUsersService(),
     );
     const ratesHistoryService = new RatesHistoryService(createRateRepository());
     const findHistory = jest
@@ -189,7 +188,7 @@ describe('RatesController history route', () => {
     const ratesService = new RatesService(createRateRepository());
     const ratesStatsService = new RatesStatsService(
       createRateRepository(),
-      createUserRepository(),
+      createUsersService(),
     );
     const ratesHistoryService = new RatesHistoryService(createRateRepository());
     const findHistory = jest
@@ -251,7 +250,7 @@ describe('RatesController history route', () => {
     const ratesHistoryService = new RatesHistoryService(createRateRepository());
     const controller = new RatesController(
       new RatesService(createRateRepository()),
-      new RatesStatsService(createRateRepository(), createUserRepository()),
+      new RatesStatsService(createRateRepository(), createUsersService()),
       ratesHistoryService,
     );
 
@@ -286,7 +285,7 @@ describe('RatesController history route', () => {
       });
     const controller = new RatesController(
       new RatesService(createRateRepository()),
-      new RatesStatsService(createRateRepository(), createUserRepository()),
+      new RatesStatsService(createRateRepository(), createUsersService()),
       ratesHistoryService,
     );
     const query = await validateHistoryQuery({

@@ -6,7 +6,7 @@ import { Disc } from './entities/disc.entity';
 import { Artist } from '../artists/entities/artist.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';
@@ -30,7 +30,7 @@ import { DiscLinkMaintenanceService } from './maintenance/disc-link-maintenance.
   ],
   imports: [
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
-    AuthModule,
+    AuthorizationModule,
     SpotifyIntegrationModule,
   ],
   exports: [DiscsService, DiscLinkMaintenanceService],

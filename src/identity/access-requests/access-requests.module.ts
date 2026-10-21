@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from '../auth/entities/user.entity';
 import { MailModule } from '../../communications/mail/mail.module';
 import { AccessRequestsController } from './access-requests.controller';
 import { AccessRequestsService } from './access-requests.service';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), MailModule],
+  imports: [UsersModule, MailModule],
   controllers: [AccessRequestsController],
   providers: [AccessRequestsService],
 })

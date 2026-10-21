@@ -12,7 +12,7 @@ import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import {
@@ -25,33 +25,6 @@ import { DiscRequest } from '../entities/disc-request.entity';
 import { RequestsController } from '../requests.controller';
 import { RequestsModule } from '../requests.module';
 import { RequestsService } from '../requests.service';
-
-jest.mock('src/identity/auth/auth.module', () => {
-  const { Module } =
-    jest.requireActual<typeof import('@nestjs/common')>('@nestjs/common');
-  const { PassportModule } =
-    jest.requireActual<typeof import('@nestjs/passport')>('@nestjs/passport');
-  const { TypeOrmModule } =
-    jest.requireActual<typeof import('@nestjs/typeorm')>('@nestjs/typeorm');
-  const { User } = jest.requireActual<
-    typeof import('src/identity/auth/entities/user.entity')
-  >('src/identity/auth/entities/user.entity');
-  const { UserRoleGuard } = jest.requireActual<
-    typeof import('src/identity/auth/guards/user-role/user-role.guard')
-  >('src/identity/auth/guards/user-role/user-role.guard');
-
-  class AuthModule {}
-  Module({
-    imports: [
-      TypeOrmModule.forFeature([User]),
-      PassportModule.register({ defaultStrategy: 'jwt' }),
-    ],
-    providers: [UserRoleGuard],
-    exports: [TypeOrmModule, PassportModule, UserRoleGuard],
-  })(AuthModule);
-
-  return { AuthModule };
-});
 
 describe('RequestsModule', () => {
   let moduleRef: TestingModule;
@@ -91,7 +64,7 @@ describe('RequestsModule', () => {
     await moduleRef?.close();
   });
 
-  it('resolves Requests with its controller, service, AuthModule, and Catalog repositories', () => {
+  it('resolves Requests with its controller, service, AuthorizationModule, and Catalog repositories', () => {
     const imports = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,
       RequestsModule,
@@ -99,7 +72,7 @@ describe('RequestsModule', () => {
     const service = moduleRef.get(RequestsService);
 
     expect(moduleRef.get(RequestsController)).toBeDefined();
-    expect(imports).toContain(AuthModule);
+    expect(imports).toContain(AuthorizationModule);
     expect(service).toHaveProperty(
       'requestRepo',
       repositories.get(DiscRequest),

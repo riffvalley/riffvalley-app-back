@@ -164,7 +164,10 @@ describe('ExcelController contract characterization', () => {
 
   it('allows a persisted superadmin through the riffvalley minimum on both routes', async () => {
     const repository = {
-      findOne: jest.fn().mockResolvedValue({ role: ValidRoles.superadmin }),
+      findIdentityById: jest.fn().mockResolvedValue({
+        role: ValidRoles.superadmin,
+        isActive: true,
+      }),
     };
     const guard = new UserRoleGuard(new Reflector(), repository as never);
 

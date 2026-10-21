@@ -15,7 +15,7 @@ import { TelegramController } from './telegram.controller';
 import { TelegramIntegrationModule } from './telegram-integration.module';
 import { TelegramService } from './telegram.service';
 import { NewsModule } from 'src/product/news/news.module';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 
 describe('TelegramController authorization metadata', () => {
   it('restricts channel-posts to riffvalley and inherited superadmin access', () => {
@@ -55,7 +55,7 @@ describe('TelegramIntegrationModule dependencies', () => {
   it('provides and exports TelegramService for NewsModule', () => {
     expect(
       Reflect.getMetadata(MODULE_METADATA.IMPORTS, TelegramIntegrationModule),
-    ).toContain(AuthModule);
+    ).toContain(AuthorizationModule);
     expect(
       Reflect.getMetadata(MODULE_METADATA.PROVIDERS, TelegramIntegrationModule),
     ).toContain(TelegramService);

@@ -3,10 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { GenresService } from './genres.service';
 import { GenresController } from './genres.controller';
 import { Genre } from './entities/genre.entity';
-import { AuthModule } from '../../identity/auth/auth.module';
+import { AuthorizationModule } from '../../identity/authorization/authorization.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Genre]), AuthModule],
+  imports: [TypeOrmModule.forFeature([Genre]), AuthorizationModule],
   controllers: [GenresController],
   providers: [GenresService],
 })

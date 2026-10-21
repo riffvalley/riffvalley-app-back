@@ -1,27 +1,20 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../auth/entities/user.entity';
 import { MailService } from '../../communications/mail/mail.service';
 import { CreateAccessRequestDto } from './dto/create-access-request.dto';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class AccessRequestsService {
   private readonly logger = new Logger(AccessRequestsService.name);
 
   constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly usersService: UsersService,
     private readonly mailService: MailService,
   ) {}
 
   async create(dto: CreateAccessRequestDto): Promise<{ message: string }> {
     // Validar que el alias no exista ya en la base de datos
-    const existingUser = await this.userRepository.findOne({
-      where: { username: dto.alias },
-    });
-
-    if (existingUser) {
+    if (await this.usersService.isUsernameTaken(dto.alias)) {
       throw new BadRequestException('El alias ya está en uso');
     }
 

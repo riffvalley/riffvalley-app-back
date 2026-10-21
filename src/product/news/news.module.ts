@@ -3,7 +3,7 @@ import { NewsService } from './news.service';
 import { NewsController } from './news.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { News } from './entities/news.entity';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { TelegramIntegrationModule } from 'src/integrations/telegram-integration/telegram-integration.module';
 import { WordpressIntegrationModule } from 'src/integrations/wordpress-integration/wordpress-integration.module';
 
@@ -12,7 +12,7 @@ import { WordpressIntegrationModule } from 'src/integrations/wordpress-integrati
   providers: [NewsService],
   imports: [
     TypeOrmModule.forFeature([News]),
-    AuthModule,
+    AuthorizationModule,
     TelegramIntegrationModule,
     WordpressIntegrationModule,
   ],

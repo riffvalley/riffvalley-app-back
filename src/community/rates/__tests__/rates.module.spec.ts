@@ -4,10 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { getMetadataArgsStorage } from 'typeorm';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { User } from 'src/identity/auth/entities/user.entity';
-import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { UsersModule } from 'src/identity/users/users.module';
+import { UsersService } from 'src/identity/users/users.service';
 import { RatesController } from '../rates.controller';
 import { RatesModule } from '../rates.module';
 import { RatesService } from '../rates.service';
@@ -28,8 +29,6 @@ describe('RatesModule characterization', () => {
       .useValue(discRepository)
       .overrideProvider(getRepositoryToken(User))
       .useValue({})
-      .overrideProvider(getRepositoryToken(UserAccessLog))
-      .useValue({})
       .overrideProvider(ConfigService)
       .useValue({ get: () => 'rates-test-secret' })
       .compile();
@@ -37,10 +36,11 @@ describe('RatesModule characterization', () => {
 
   afterAll(async () => moduleRef?.close());
 
-  it('resolves the controller, services and repositories through RatesModule/AuthModule', () => {
+  it('resolves the controller, services and repositories through RatesModule', () => {
     expect(moduleRef.get(RatesController)).toBeDefined();
     expect(moduleRef.get(RatesService)).toBeDefined();
     expect(moduleRef.get(RatesStatsService)).toBeDefined();
+    expect(moduleRef.get(UsersService)).toBeDefined();
     expect(moduleRef.get(RatesHistoryService)).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Rate))).toBe(rateRepository);
     expect(moduleRef.get(RatesService)).toHaveProperty(
@@ -58,7 +58,7 @@ describe('RatesModule characterization', () => {
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
     expect(
       Reflect.getMetadata(MODULE_METADATA.IMPORTS, RatesModule) as unknown[],
-    ).toContain(AuthModule);
+    ).toEqual(expect.arrayContaining([AuthorizationModule, UsersModule]));
   });
 
   it('preserves Rate relation metadata and inverse sides', () => {

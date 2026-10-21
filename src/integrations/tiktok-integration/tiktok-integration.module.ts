@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { MailModule } from 'src/communications/mail/mail.module';
 import { TiktokConnection } from './oauth/tiktok-connection.entity';
 import { TiktokVideo } from './entities/tiktok-video.entity';
@@ -16,7 +16,7 @@ import { TiktokTokenCryptoService } from './oauth/token-crypto.service';
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([TiktokConnection, TiktokVideo]),
-    AuthModule,
+    AuthorizationModule,
     MailModule,
   ],
   controllers: [TiktokController],
