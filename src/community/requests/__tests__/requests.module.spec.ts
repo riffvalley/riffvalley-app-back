@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common/constants';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
+import { DataSource } from 'typeorm';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
@@ -74,7 +75,8 @@ describe('RequestsModule', () => {
       imports: [RequestsModule],
     })
       .overrideProvider(ConfigService)
-      .useValue({ get: jest.fn(() => 'requests-module-test-secret') });
+      .useValue({ get: jest.fn(() => 'requests-module-test-secret') })
+      .useMocker((token) => (token === DataSource ? {} : undefined));
 
     for (const entity of entities) {
       testingModule

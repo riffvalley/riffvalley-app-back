@@ -5,7 +5,6 @@ import {
   DeleteResult,
   EntityManager,
   FindOneOptions,
-  getMetadataArgsStorage,
   Repository,
 } from 'typeorm';
 import { Disc } from '../../../catalog/discs/entities/disc.entity';
@@ -260,17 +259,26 @@ describe('RatesService characterization', () => {
     );
   });
 
-  it('returns the direct per-disc Rate rows with nullable scores and the loaded User relation', async () => {
+  it('returns per-disc Rate and Disc data with only the public User fields', async () => {
     const rates = [
       Object.assign(new Rate(), {
         id: 'rate-zero',
         rate: 0,
         cover: null,
         createdAt: new Date('2024-01-01'),
+        editedAt: null,
+        disc,
         user: Object.assign(new User(), {
           id: 'user-1',
           username: 'listener',
           image: null,
+          isActive: true,
+          dashboardConfig: [{ id: 'private', enabled: true }],
+          mobileDashboardConfig: [{ id: 'private-mobile', enabled: true }],
+          dashboardButtonsEnabled: true,
+          createdAt: new Date('2020-01-01'),
+          notes: 'private note',
+          lastLogin: new Date('2024-01-01'),
         }),
       }),
       Object.assign(new Rate(), {
@@ -278,10 +286,13 @@ describe('RatesService characterization', () => {
         rate: null,
         cover: 7.5,
         createdAt: new Date('2024-01-02'),
+        disc,
         user: Object.assign(new User(), {
           id: 'user-2',
           username: 'friend',
           image: 'avatar.png',
+          isActive: false,
+          notes: 'another private note',
         }),
       }),
     ];
@@ -303,39 +314,63 @@ describe('RatesService characterization', () => {
     });
     const service = new RatesService(repository);
 
-    await expect(service.findRatesByDisc(disc.id)).resolves.toEqual(rates);
+    const result = await service.findRatesByDisc(disc.id);
+
+    expect(result).toEqual([
+      {
+        id: 'rate-zero',
+        rate: 0,
+        cover: null,
+        createdAt: new Date('2024-01-01'),
+        editedAt: null,
+        disc,
+        user: { id: 'user-1', username: 'listener', image: null },
+      },
+      {
+        id: 'rate-cover-only',
+        rate: null,
+        cover: 7.5,
+        createdAt: new Date('2024-01-02'),
+        disc,
+        user: { id: 'user-2', username: 'friend', image: 'avatar.png' },
+      },
+    ]);
+    expect(result[0].user).not.toHaveProperty('isActive');
+    expect(result[0].user).not.toHaveProperty('dashboardConfig');
+    expect(result[0].user).not.toHaveProperty('mobileDashboardConfig');
+    expect(result[0].user).not.toHaveProperty('dashboardButtonsEnabled');
+    expect(result[0].user).not.toHaveProperty('createdAt');
+    expect(result[0].user).not.toHaveProperty('notes');
+    expect(result[0].user).not.toHaveProperty('lastLogin');
+    expect(result[0].user).not.toHaveProperty('email');
+    expect(result[0].user).not.toHaveProperty('password');
+    expect(result[0].user).not.toHaveProperty('role');
     expect(repository.find).toHaveBeenCalledWith({
       where: { disc: { id: disc.id } },
       relations: ['user'],
     });
+  });
 
-    const userColumns = getMetadataArgsStorage().columns.filter(
-      (column) => column.target === User,
+  it('preserves an empty per-disc Rate list', async () => {
+    const manager = Object.assign(
+      new EntityManager(
+        new DataSource({ type: 'postgres', database: 'rates-test' }),
+      ),
+      {
+        findOne: jest
+          .fn<Promise<Disc | null>, [typeof Disc, FindOneOptions<Disc>]>()
+          .mockResolvedValue(disc),
+      },
     );
-    const selectedUserColumns = userColumns
-      .filter((column) => column.options.select !== false)
-      .map((column) => column.propertyName);
-    const excludedUserColumns = userColumns
-      .filter((column) => column.options.select === false)
-      .map((column) => column.propertyName);
+    const repository = createRepositoryMock({
+      manager,
+      find: jest
+        .fn<Promise<Rate[]>, Parameters<Repository<Rate>['find']>>()
+        .mockResolvedValue([]),
+    });
+    const service = new RatesService(repository);
 
-    expect(selectedUserColumns).toEqual(
-      expect.arrayContaining([
-        'id',
-        'username',
-        'isActive',
-        'image',
-        'dashboardConfig',
-        'mobileDashboardConfig',
-        'dashboardButtonsEnabled',
-        'createdAt',
-        'notes',
-        'lastLogin',
-      ]),
-    );
-    expect(excludedUserColumns).toEqual(
-      expect.arrayContaining(['email', 'password', 'role']),
-    );
+    await expect(service.findRatesByDisc(disc.id)).resolves.toEqual([]);
   });
 
   it('updates the existing rate for the same user and disc', async () => {

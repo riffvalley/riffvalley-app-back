@@ -4,8 +4,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { DiscRequest, RequestStatus } from './entities/disc-request.entity';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
@@ -21,6 +21,8 @@ export class RequestsService {
   private readonly logger = new Logger(RequestsService.name);
 
   constructor(
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     @InjectRepository(DiscRequest)
     private readonly requestRepo: Repository<DiscRequest>,
     @InjectRepository(Artist)
@@ -99,47 +101,53 @@ export class RequestsService {
   }
 
   async approve(id: string): Promise<Disc> {
-    const request = await this.findOne(id);
+    return this.dataSource.transaction(async (manager) => {
+      const requestRepo = manager.getRepository(DiscRequest);
+      const artistRepo = manager.getRepository(Artist);
+      const discRepo = manager.getRepository(Disc);
+      const request = await requestRepo.findOneBy({ id });
 
-    if (request.status !== RequestStatus.PENDING) {
-      throw new BadRequestException('Esta petición ya fue procesada');
-    }
+      if (!request) throw new NotFoundException(`Request ${id} not found`);
+      if (request.status !== RequestStatus.PENDING) {
+        throw new BadRequestException('Esta petición ya fue procesada');
+      }
 
-    // Buscar o crear artista
-    const normalizedArtistName = normalizeForSearch(request.artistName);
-    let artist = await this.artistRepo.findOne({
-      where: { nameNormalized: normalizedArtistName },
-    });
-
-    if (!artist) {
-      artist = this.artistRepo.create({
-        name: request.artistName,
-        nameNormalized: normalizedArtistName,
-        ...(request.country ? { countryId: request.country.id } : {}),
+      // Buscar o crear artista
+      const normalizedArtistName = normalizeForSearch(request.artistName);
+      let artist = await artistRepo.findOne({
+        where: { nameNormalized: normalizedArtistName },
       });
-      await this.artistRepo.save(artist);
-      this.logger.log(`Artista creado: "${request.artistName}"`);
-    }
 
-    // Crear disco
-    const disc = this.discRepo.create({
-      name: request.discName,
-      releaseDate: request.releaseDate,
-      ep: request.ep,
-      debut: request.debut,
-      description: request.description,
-      image: request.image,
-      link: request.link,
-      artist,
-      ...(request.genre ? { genre: request.genre } : {}),
+      if (!artist) {
+        artist = artistRepo.create({
+          name: request.artistName,
+          nameNormalized: normalizedArtistName,
+          ...(request.country ? { countryId: request.country.id } : {}),
+        });
+        await artistRepo.save(artist);
+        this.logger.log(`Artista creado: "${request.artistName}"`);
+      }
+
+      // Crear disco
+      const disc = discRepo.create({
+        name: request.discName,
+        releaseDate: request.releaseDate,
+        ep: request.ep,
+        debut: request.debut,
+        description: request.description,
+        image: request.image,
+        link: request.link,
+        artist,
+        ...(request.genre ? { genre: request.genre } : {}),
+      });
+      await discRepo.save(disc);
+      this.logger.log(`Disco creado desde petición: "${request.discName}"`);
+
+      request.status = RequestStatus.APPROVED;
+      await requestRepo.save(request);
+
+      return disc;
     });
-    await this.discRepo.save(disc);
-    this.logger.log(`Disco creado desde petición: "${request.discName}"`);
-
-    request.status = RequestStatus.APPROVED;
-    await this.requestRepo.save(request);
-
-    return disc;
   }
 
   async reject(id: string, adminNotes?: string): Promise<DiscRequest> {

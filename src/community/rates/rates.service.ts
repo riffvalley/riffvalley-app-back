@@ -371,7 +371,14 @@ export class RatesService {
         relations: ['user'], // Incluye los usuarios en la consulta
       });
 
-      return rates;
+      return rates.map(({ user, ...rate }) => ({
+        ...rate,
+        user: {
+          id: user.id,
+          username: user.username,
+          image: user.image,
+        },
+      }));
     } catch (error) {
       this.handleDbExceptions(error);
     }

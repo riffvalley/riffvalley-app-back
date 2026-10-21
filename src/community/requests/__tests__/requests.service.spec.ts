@@ -41,14 +41,172 @@ function requestFixture(values: Partial<DiscRequest>): DiscRequest {
   return Object.assign(new DiscRequest(), values);
 }
 
+function transactionDataSource(
+  requestRepo: Repository<DiscRequest>,
+  artistRepo: Repository<Artist>,
+  discRepo: Repository<Disc>,
+): DataSource {
+  const dataSource = new DataSource({
+    type: 'postgres',
+    database: 'requests-test',
+  });
+  const repositories = new Map<
+    EntityTarget<ObjectLiteral>,
+    Repository<ObjectLiteral>
+  >([
+    [DiscRequest, requestRepo as Repository<ObjectLiteral>],
+    [Artist, artistRepo as Repository<ObjectLiteral>],
+    [Disc, discRepo as Repository<ObjectLiteral>],
+  ]);
+  const manager = Object.assign(new EntityManager(dataSource), {
+    getRepository: <T extends ObjectLiteral>(
+      entity: EntityTarget<T>,
+    ): Repository<T> => {
+      const repository = repositories.get(entity);
+      if (!repository) throw new Error('Unexpected transaction repository');
+      return repository as Repository<T>;
+    },
+  });
+  Object.assign(dataSource, {
+    transaction: jest.fn(
+      (run: (entityManager: EntityManager) => Promise<unknown>) => run(manager),
+    ),
+  });
+  return dataSource;
+}
+
+function failingApprovalHarness(failingWrite: 'artist' | 'disc' | 'request') {
+  const request = requestFixture({
+    id: 'request-id',
+    artistName: 'The Band',
+    discName: 'Requested Record',
+    status: RequestStatus.PENDING,
+  });
+  const artist = Object.assign(new Artist(), { id: 'artist-id' });
+  const disc = Object.assign(new Disc(), { id: 'disc-id', artist });
+  const persisted = {
+    artists: 0,
+    discs: 0,
+    requestStatus: RequestStatus.PENDING,
+  };
+  const requestRepo = repositoryMock(DiscRequest, {
+    findOneBy: jest
+      .fn<Promise<DiscRequest | null>, [FindOptionsWhere<DiscRequest>]>()
+      .mockResolvedValue(request),
+    save: jest
+      .fn<Promise<DiscRequest>, [DiscRequest]>()
+      .mockImplementation(async (saved) => {
+        if (failingWrite === 'request') throw new Error('request save failed');
+        persisted.requestStatus = saved.status;
+        return saved;
+      }),
+  });
+  const artistRepo = repositoryMock(Artist, {
+    findOne: jest
+      .fn<Promise<Artist | null>, [FindOneOptions<Artist>]>()
+      .mockResolvedValue(null),
+    create: jest.fn<Artist, [DeepPartial<Artist>]>().mockReturnValue(artist),
+    save: jest
+      .fn<Promise<Artist>, [Artist]>()
+      .mockImplementation(async (saved) => {
+        if (failingWrite === 'artist') throw new Error('artist save failed');
+        persisted.artists += 1;
+        return saved;
+      }),
+  });
+  const discRepo = repositoryMock(Disc, {
+    create: jest.fn<Disc, [DeepPartial<Disc>]>().mockReturnValue(disc),
+    save: jest.fn<Promise<Disc>, [Disc]>().mockImplementation(async (saved) => {
+      if (failingWrite === 'disc') throw new Error('disc save failed');
+      persisted.discs += 1;
+      return saved;
+    }),
+  });
+  const dataSource = transactionDataSource(requestRepo, artistRepo, discRepo);
+  const tx = dataSource.transaction;
+  Object.assign(dataSource, {
+    transaction: jest.fn(
+      async (run: (manager: EntityManager) => Promise<unknown>) => {
+        const before = { ...persisted };
+        try {
+          return await tx.call(dataSource, run);
+        } catch (error) {
+          Object.assign(persisted, before);
+          throw error;
+        }
+      },
+    ),
+  });
+  const externalRequestRepo = repositoryMock(DiscRequest, {
+    save: jest.fn<Promise<DiscRequest>, [DiscRequest]>(),
+  });
+  const externalArtistRepo = repositoryMock(Artist, {
+    save: jest.fn<Promise<Artist>, [Artist]>(),
+  });
+  const externalDiscRepo = repositoryMock(Disc, {
+    save: jest.fn<Promise<Disc>, [Disc]>(),
+  });
+  const service = createService(
+    externalRequestRepo,
+    externalArtistRepo,
+    externalDiscRepo,
+    undefined,
+    undefined,
+    dataSource,
+  );
+
+  return {
+    service,
+    request,
+    persisted,
+    externalRequestRepo,
+    externalArtistRepo,
+    externalDiscRepo,
+  };
+}
+
 function createService(
   requestRepo: Repository<DiscRequest>,
   artistRepo: Repository<Artist> = repositoryMock(Artist, {}),
   discRepo: Repository<Disc> = repositoryMock(Disc, {}),
   genreRepo: Repository<Genre> = repositoryMock(Genre, {}),
   countryRepo: Repository<Country> = repositoryMock(Country, {}),
+  transactionDataSource?: DataSource,
 ): RequestsService {
+  const repositories = new Map<
+    EntityTarget<ObjectLiteral>,
+    Repository<ObjectLiteral>
+  >([
+    [DiscRequest, requestRepo as Repository<ObjectLiteral>],
+    [Artist, artistRepo as Repository<ObjectLiteral>],
+    [Disc, discRepo as Repository<ObjectLiteral>],
+  ]);
+  const dataSource =
+    transactionDataSource ??
+    new DataSource({
+      type: 'postgres',
+      database: 'requests-test',
+    });
+  if (!transactionDataSource) {
+    const manager = Object.assign(new EntityManager(dataSource), {
+      getRepository: <T extends ObjectLiteral>(
+        entity: EntityTarget<T>,
+      ): Repository<T> => {
+        const repository = repositories.get(entity);
+        if (!repository) throw new Error('Unexpected transaction repository');
+        return repository as Repository<T>;
+      },
+    });
+    Object.assign(dataSource, {
+      transaction: jest.fn(
+        (run: (entityManager: EntityManager) => Promise<unknown>) =>
+          run(manager),
+      ),
+    });
+  }
+
   return new RequestsService(
+    dataSource,
     requestRepo,
     artistRepo,
     discRepo,
@@ -666,5 +824,101 @@ describe('RequestsService characterization', () => {
     expect(discRepo.save).toHaveBeenCalledWith(disc);
     expect(request.status).toBe(RequestStatus.APPROVED);
     expect(requestRepo.save).toHaveBeenCalledWith(request);
+  });
+
+  it.each([
+    ['artist', 'artist save failed'],
+    ['disc', 'disc save failed'],
+    ['request', 'request save failed'],
+  ] as const)(
+    'rolls back all approval writes when saving %s fails',
+    async (failingWrite, errorMessage) => {
+      const {
+        service,
+        request,
+        persisted,
+        externalRequestRepo,
+        externalArtistRepo,
+        externalDiscRepo,
+      } = failingApprovalHarness(failingWrite);
+
+      await expect(service.approve(request.id)).rejects.toThrow(errorMessage);
+
+      expect(persisted).toEqual({
+        artists: 0,
+        discs: 0,
+        requestStatus: RequestStatus.PENDING,
+      });
+      expect(externalRequestRepo.save).not.toHaveBeenCalled();
+      expect(externalArtistRepo.save).not.toHaveBeenCalled();
+      expect(externalDiscRepo.save).not.toHaveBeenCalled();
+    },
+  );
+
+  it('uses only transaction-scoped repositories when approving with an existing Artist', async () => {
+    const request = requestFixture({
+      id: 'request-id',
+      artistName: 'The Band',
+      discName: 'Requested Record',
+      status: RequestStatus.PENDING,
+    });
+    const artist = Object.assign(new Artist(), {
+      id: 'existing-artist-id',
+      nameNormalized: 'the band',
+    });
+    const disc = Object.assign(new Disc(), { id: 'disc-id', artist });
+    const requestRepo = repositoryMock(DiscRequest, {
+      findOneBy: jest
+        .fn<Promise<DiscRequest | null>, [FindOptionsWhere<DiscRequest>]>()
+        .mockResolvedValue(request),
+      save: jest
+        .fn<Promise<DiscRequest>, [DiscRequest]>()
+        .mockImplementation(async (saved) => saved),
+    });
+    const artistRepo = repositoryMock(Artist, {
+      findOne: jest
+        .fn<Promise<Artist | null>, [FindOneOptions<Artist>]>()
+        .mockResolvedValue(artist),
+      save: jest.fn<Promise<Artist>, [Artist]>(),
+    });
+    const discRepo = repositoryMock(Disc, {
+      create: jest.fn<Disc, [DeepPartial<Disc>]>().mockReturnValue(disc),
+      save: jest.fn<Promise<Disc>, [Disc]>().mockResolvedValue(disc),
+    });
+    const externalRequestRepo = repositoryMock(DiscRequest, {
+      findOneBy: jest.fn(),
+      save: jest.fn(),
+    });
+    const externalArtistRepo = repositoryMock(Artist, {
+      findOne: jest.fn(),
+      save: jest.fn(),
+    });
+    const externalDiscRepo = repositoryMock(Disc, {
+      create: jest.fn(),
+      save: jest.fn(),
+    });
+    const service = createService(
+      externalRequestRepo,
+      externalArtistRepo,
+      externalDiscRepo,
+      undefined,
+      undefined,
+      transactionDataSource(requestRepo, artistRepo, discRepo),
+    );
+
+    await expect(service.approve(request.id)).resolves.toBe(disc);
+
+    expect(artistRepo.findOne).toHaveBeenCalledWith({
+      where: { nameNormalized: 'the band' },
+    });
+    expect(artistRepo.save).not.toHaveBeenCalled();
+    expect(discRepo.save).toHaveBeenCalledWith(disc);
+    expect(requestRepo.save).toHaveBeenCalledWith(request);
+    expect(externalRequestRepo.findOneBy).not.toHaveBeenCalled();
+    expect(externalRequestRepo.save).not.toHaveBeenCalled();
+    expect(externalArtistRepo.findOne).not.toHaveBeenCalled();
+    expect(externalArtistRepo.save).not.toHaveBeenCalled();
+    expect(externalDiscRepo.create).not.toHaveBeenCalled();
+    expect(externalDiscRepo.save).not.toHaveBeenCalled();
   });
 });
