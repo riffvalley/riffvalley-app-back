@@ -18,6 +18,7 @@ type RateLimitResult = {
 const CLEANUP_INTERVAL_MS = 60_000;
 const CLEANUP_BATCH_SIZE = 500;
 const RETENTION_WINDOWS = 2;
+const MINIMUM_HMAC_KEY_BYTES = 16;
 
 export const AUTH_RATE_LIMIT_INCREMENT_SQL = `
   WITH requested AS (
@@ -75,7 +76,7 @@ export class AuthRateLimitService {
     if (dimensions.length === 0) return null;
 
     const secret = this.configService.get<string>('JWT_SECRET');
-    if (!secret || secret.length < 32) {
+    if (!secret || Buffer.byteLength(secret, 'utf8') < MINIMUM_HMAC_KEY_BYTES) {
       throw new ServiceUnavailableException(
         'Authentication controls are unavailable',
       );
