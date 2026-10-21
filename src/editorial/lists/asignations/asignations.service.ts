@@ -198,7 +198,7 @@ export class AsignationsService {
           const existing = await asignationRepo.findOne({
             where: { id },
             relations: ['list', 'disc'],
-            lock: { mode: 'pessimistic_write', tables: ['Asignation'] },
+            lock: { mode: 'pessimistic_write', tables: ['asignation'] },
           });
 
           if (!existing)
