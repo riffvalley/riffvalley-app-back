@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from '../users/users.module';
 import { ActivityModule } from '../activity/activity.module';
 import { AuthorizationModule } from '../authorization/authorization.module';
+import { SessionsModule } from '../sessions/sessions.module';
 
 @Module({
   controllers: [AuthController],
@@ -15,6 +16,7 @@ import { AuthorizationModule } from '../authorization/authorization.module';
     UsersModule,
     ActivityModule,
     AuthorizationModule,
+    SessionsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
