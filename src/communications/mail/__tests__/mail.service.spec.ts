@@ -1,10 +1,13 @@
 import { Logger } from '@nestjs/common';
-import { MailService } from './mail.service';
-import type { NationalReleaseNotification } from './mail.service';
+import { Test } from '@nestjs/testing';
+import { SmtpTransportService } from 'src/integrations/smtp-integration/smtp-transport.service';
+import { MailService } from '../mail.service';
+import type { NationalReleaseNotification } from '../mail.service';
 
 describe('MailService', () => {
   const originalEnv = { ...process.env };
-  const sendMail = jest.fn();
+  const sendMail: jest.MockedFunction<SmtpTransportService['sendMail']> =
+    jest.fn();
   let service: MailService;
   const nationalRelease: NationalReleaseNotification = {
     artistName: 'Artist',
@@ -15,13 +18,19 @@ describe('MailService', () => {
     link: 'https://example.test/album',
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     process.env.MAIL_USER = 'mailer@test.invalid';
     process.env.MAIL_TO = 'notifications@test.invalid';
     delete process.env.SPOTIFY_REAUTH_NOTIFICATION_EMAIL;
     delete process.env.TIKTOK_REAUTH_NOTIFICATION_EMAIL;
-    service = new MailService({ sendMail } as any);
+    const module = await Test.createTestingModule({
+      providers: [
+        MailService,
+        { provide: SmtpTransportService, useValue: { sendMail } },
+      ],
+    }).compile();
+    service = module.get(MailService);
   });
 
   afterAll(() => {

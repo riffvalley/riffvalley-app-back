@@ -21,13 +21,14 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 - [Integrations](roadmap/integrations/README.md) — agrupación e inventario progresivo de integraciones externas bajo `src/integrations/`.
 - [Integrations Cleanup](roadmap/integrations/README.md#integrations-cleanup) — auditoría interna y saneamiento progresivo de las ocho integraciones.
 - [Backend Architecture](roadmap/backend-architecture.md) — inventario global de módulos, ownership propuesto, árbol objetivo y plan futuro de reorganización física sin cambios de comportamiento.
-- [Backend Cleanup](roadmap/backend-cleanup/README.md) — reglas, inventario global y auditorías de Catalog y Editorial; [Quality Gates](roadmap/backend-cleanup/quality-gates.md) conserva la norma estructural y BC-QG2. Editorial quedó completado por BC-ED-0 (2026-10-20).
+- [Backend Cleanup](roadmap/backend-cleanup/README.md) — reglas, inventario global y auditorías de Catalog, Editorial y Communications; [Quality Gates](roadmap/backend-cleanup/quality-gates.md) conserva la norma estructural y BC-QG2. Editorial quedó completado por BC-ED-0 (2026-10-20) y Communications por BC-COM-2 (2026-10-21).
 
 ## Estado de alto nivel
 
 - **Catalog:** completado formalmente por BC-CAT (2026-10-20): QG-1–QG-18 cerradas, cero infracciones en sus tres baselines, `yarn verify` aprobado y C5 confirmado mediante la composición directa de los siete módulos. DIS-F5 y D5 permanecen como decisiones contractuales documentadas, sin bloquear el cierre. Véase el [registro de cierre](roadmap/backend-cleanup/catalog.md).
 - **Community:** cerrada (2026-10-05). Migración estructural y saneamiento G.1–G.7 completados; regresión backend y regresión manual frontend completadas sin incidencias. No quedan subtareas pendientes en su roadmap; los desacoplamientos Catalog ↔ Community y Auth → Rate siguen aplazados.
 - **Editorial:** completado por BC-ED-0 (2026-10-20). BC-ED-1–10 completados, sin bloqueos activos; Links retirado por BC-LNK-1. Véase el [cierre formal](roadmap/backend-cleanup/editorial/closure.md).
+- **Communications:** saneamiento completado por BC-COM-1/2 (2026-10-21); `yarn verify` aprobado y cero deuda en los tres baselines. El hallazgo de interpolación de contenido de usuarios en HTML de correo sin escape permanece pendiente de revisión de seguridad antes de desplegar cambios que afecten a esos correos. Véase la [auditoría y cierre](roadmap/backend-cleanup/communications.md).
 - **Roles:** roadmap funcional completado. Backend y frontend desplegados, PostgreSQL usa `users.role` y la secuencia de producción quedó verificada; las comprobaciones adicionales de permisos con cuentas editoriales y administrativas se conservan como observaciones, no como fases obligatorias. Véase [cierre de roles](roadmap/roles/roles.md).
 - **Fase 4 — Lists:** administración de listas, integración WordPress y sincronización/publicación de discos; considerar primero los efectos externos.
 - **Fase 5 — Festival Playlists:** reglas de playlist e integración externa; revisar selección y sincronización de discos y manejo de errores.

@@ -3,10 +3,6 @@
   "violations": [
     {
       "rule": "module-root-file",
-      "path": "src/communications/mail/mail.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
       "path": "src/community/comments/comments.controller.spec.ts"
     },
     {
@@ -176,10 +172,6 @@
     {
       "rule": "module-root-file",
       "path": "src/winston.config.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/communications/mail/mail.service.spec.ts"
     },
     {
       "rule": "spec-outside-tests",

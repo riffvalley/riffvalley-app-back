@@ -339,14 +339,6 @@
     },
     {
       "rule": "explicit-any",
-      "path": "src/communications/mail/mail.service.spec.ts",
-      "line": 24,
-      "column": 47,
-      "fingerprint": "4e56deaa6f8e6366480a7d91fdc017902905b2906333a6e929bb6a22c4b1e952",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
       "path": "src/community/comments/__tests__/comments.module.spec.ts",
       "line": 49,
       "column": 55,
