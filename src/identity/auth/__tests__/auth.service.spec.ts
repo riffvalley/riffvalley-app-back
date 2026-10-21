@@ -1,31 +1,76 @@
 import * as bcrypt from 'bcrypt';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from '../auth.service';
+import { User } from '../entities/user.entity';
+import { CreateUserDto } from '../dto/create-user.dto';
+import { AdminUpdateUserDto, UpdateUserDto } from '../dto/update-user.dto';
+import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { ValidRoles } from '../interfaces/valid-roles';
+
+class UserQueryBuilderMock {
+  select = jest.fn((columns: string[] | string) => {
+    void columns;
+    return this;
+  });
+  where = jest.fn((condition: string, parameters?: Record<string, unknown>) => {
+    void condition;
+    void parameters;
+    return this;
+  });
+  getMany = jest.fn<Promise<User[]>, []>();
+}
+
+type UserRepositoryMock = {
+  create: jest.MockedFunction<(user: Partial<User>) => User>;
+  save: jest.MockedFunction<(user: User) => Promise<User>>;
+  findOne: jest.MockedFunction<(options: object) => Promise<User | null>>;
+  findOneByOrFail: jest.MockedFunction<
+    (where: { id: string }) => Promise<User>
+  >;
+  update: jest.MockedFunction<
+    (id: string, values: Partial<User>) => Promise<void>
+  >;
+  createQueryBuilder: jest.MockedFunction<() => UserQueryBuilderMock>;
+};
+
+type AccessLogRepositoryMock = {
+  query: jest.MockedFunction<
+    (query: string, parameters: readonly unknown[]) => Promise<unknown>
+  >;
+};
+
+function makeUser(values: Partial<User>): User {
+  return Object.assign(new User(), values);
+}
 
 describe('AuthService role and user flows', () => {
   let service: AuthService;
-  let userRepository: any;
-  let accessLogRepository: any;
-  let jwtService: any;
+  let userRepository: UserRepositoryMock;
+  let accessLogRepository: AccessLogRepositoryMock;
+  let jwtService: {
+    sign: jest.MockedFunction<(payload: JwtPayload) => string>;
+  };
 
   beforeEach(() => {
     userRepository = {
-      create: jest.fn((user) => user),
+      create: jest.fn((user) => makeUser(user)),
       save: jest.fn(async (user) => user),
-      find: jest.fn(),
       findOne: jest.fn(),
       findOneByOrFail: jest.fn(),
-      update: jest.fn(),
-      createQueryBuilder: jest.fn(),
+      update: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn(() => new UserQueryBuilderMock()),
     };
     accessLogRepository = { query: jest.fn().mockResolvedValue(undefined) };
     jwtService = { sign: jest.fn().mockReturnValue('signed-token') };
     service = new AuthService(
-      userRepository,
-      accessLogRepository,
-      {} as any,
-      jwtService,
+      userRepository as never,
+      accessLogRepository as never,
+      {} as never,
+      jwtService as never,
     );
   });
 
@@ -45,6 +90,11 @@ describe('AuthService role and user flows', () => {
       }),
     );
     expect(result.role).toBe(ValidRoles.user);
+    expect(result).toMatchObject({
+      email: 'new@example.test',
+      username: 'new-user',
+      image: 'avatar.png',
+    });
     expect(result).not.toHaveProperty('roles');
     expect(result).not.toHaveProperty('password');
     expect(result.token).toBe('signed-token');
@@ -59,13 +109,17 @@ describe('AuthService role and user flows', () => {
     'rejects client supplied %s during registration',
     async (field) => {
       await expect(
-        service.create({
-          email: 'new@example.test',
-          username: 'new-user',
-          password: 'Password1',
-          [field]:
-            field === 'roles' ? [ValidRoles.superadmin] : ValidRoles.superadmin,
-        } as any),
+        service.create(
+          Object.assign(new CreateUserDto(), {
+            email: 'new@example.test',
+            username: 'new-user',
+            password: 'Password1',
+            [field]:
+              field === 'roles'
+                ? [ValidRoles.superadmin]
+                : ValidRoles.superadmin,
+          }),
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(userRepository.create).not.toHaveBeenCalled();
@@ -75,13 +129,15 @@ describe('AuthService role and user flows', () => {
 
   it('returns the persisted singular role in login response and JWT', async () => {
     const storedPassword = bcrypt.hashSync('Password1', 4);
-    userRepository.findOne.mockResolvedValue({
-      id: 'user-1',
-      username: 'listener',
-      password: storedPassword,
-      role: ValidRoles.riffvalley,
-      isActive: true,
-    });
+    userRepository.findOne.mockResolvedValue(
+      makeUser({
+        id: 'user-1',
+        username: 'listener',
+        password: storedPassword,
+        role: ValidRoles.riffvalley,
+        isActive: true,
+      }),
+    );
 
     const result = await service.login({
       username: 'listener',
@@ -103,12 +159,30 @@ describe('AuthService role and user flows', () => {
     });
   });
 
+  it('rejects an incorrect password with 401 semantics', async () => {
+    userRepository.findOne.mockResolvedValue(
+      makeUser({
+        id: 'user-1',
+        username: 'listener',
+        password: bcrypt.hashSync('Password1', 4),
+        role: ValidRoles.user,
+        isActive: true,
+      }),
+    );
+
+    await expect(
+      service.login({ username: 'listener', password: 'WrongPass1' }),
+    ).rejects.toMatchObject({ status: 401 });
+    userRepository.findOne.mockResolvedValue(null);
+    await expect(
+      service.login({ username: 'missing-user', password: 'Password1' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(jwtService.sign).not.toHaveBeenCalled();
+  });
+
   it('filters usersRv at the riffvalley minimum, including inherited superadmin', async () => {
-    const query = {
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getMany: jest.fn().mockResolvedValue([]),
-    };
+    const query = new UserQueryBuilderMock();
+    query.getMany.mockResolvedValue([]);
     userRepository.createQueryBuilder.mockReturnValue(query);
 
     await service.findAllRv();
@@ -119,11 +193,8 @@ describe('AuthService role and user flows', () => {
   });
 
   it('filters a requested canonical role exactly and rejects unknown or array filters', async () => {
-    const query = {
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getMany: jest.fn().mockResolvedValue([]),
-    };
+    const query = new UserQueryBuilderMock();
+    query.getMany.mockResolvedValue([]);
     userRepository.createQueryBuilder.mockReturnValue(query);
 
     await service.findUsersByRole(ValidRoles.collaborator);
@@ -134,18 +205,12 @@ describe('AuthService role and user flows', () => {
     await expect(service.findUsersByRole('superUser')).rejects.toBeInstanceOf(
       BadRequestException,
     );
-    await expect(
-      service.findUsersByRole([ValidRoles.riffvalley] as any),
-    ).rejects.toBeInstanceOf(BadRequestException);
     expect(userRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
   });
 
   it('returns superusers using the preserved path query and the exact role', async () => {
-    const query = {
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getMany: jest.fn().mockResolvedValue([]),
-    };
+    const query = new UserQueryBuilderMock();
+    query.getMany.mockResolvedValue([]);
     userRepository.createQueryBuilder.mockReturnValue(query);
 
     await service.findSuperUsers();
@@ -156,15 +221,15 @@ describe('AuthService role and user flows', () => {
   });
 
   it('applies an allowed profile update and rejects privilege or admin fields', async () => {
-    const currentUser = {
+    const currentUser = makeUser({
       id: 'user-1',
       username: 'before',
       role: ValidRoles.user,
       isActive: true,
-    };
+    });
     userRepository.findOneByOrFail.mockResolvedValue(currentUser);
 
-    await service.updateUser({ username: 'after' }, { id: 'user-1' } as any);
+    await service.updateUser({ username: 'after' }, makeUser({ id: 'user-1' }));
 
     expect(currentUser).toMatchObject({
       id: 'user-1',
@@ -176,34 +241,112 @@ describe('AuthService role and user flows', () => {
     for (const field of ['role', 'roles', 'isActive', 'id', 'notes']) {
       await expect(
         service.updateUser(
-          {
+          Object.assign(new UpdateUserDto(), {
             [field]:
               field === 'roles'
                 ? [ValidRoles.superadmin]
                 : ValidRoles.superadmin,
-          } as any,
-          { id: 'user-1' } as any,
+          }),
+          makeUser({ id: 'user-1' }),
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
     }
   });
 
-  it.each(Object.values(ValidRoles))(
-    'allows a persisted superadmin to assign the canonical role %s',
-    async (role) => {
-      userRepository.findOne.mockResolvedValue({
+  it('never serializes the updated profile password hash', async () => {
+    const currentUser = makeUser({
+      id: 'user-1',
+      username: 'listener',
+      email: 'listener@example.test',
+      image: 'avatar.png',
+      role: ValidRoles.user,
+      isActive: true,
+      password: undefined as string | undefined,
+    });
+    userRepository.findOneByOrFail.mockResolvedValue(currentUser);
+
+    const result = await service.updateUser(
+      { password: 'NewPassword1' },
+      makeUser({ id: 'user-1' }),
+    );
+    const response = JSON.parse(JSON.stringify(result)) as Record<
+      string,
+      unknown
+    >;
+
+    expect(currentUser.password).toMatch(/^\$2[aby]\$/);
+    expect(response).not.toHaveProperty('password');
+    expect(response).toMatchObject({
+      id: 'user-1',
+      username: 'listener',
+      email: 'listener@example.test',
+      image: 'avatar.png',
+      role: ValidRoles.user,
+      isActive: true,
+    });
+  });
+
+  it('never serializes an admin-updated password hash', async () => {
+    const targetUser = makeUser({
+      id: 'target-1',
+      username: 'listener',
+      email: 'listener@example.test',
+      role: ValidRoles.user,
+      isActive: true,
+      password: undefined as string | undefined,
+    });
+    userRepository.findOne.mockResolvedValue(
+      makeUser({
         id: 'admin-1',
         role: ValidRoles.superadmin,
         isActive: true,
-      });
-      userRepository.findOneByOrFail.mockResolvedValue({
-        id: 'target-1',
-        role: ValidRoles.user,
-      });
+      }),
+    );
+    userRepository.findOneByOrFail.mockResolvedValue(targetUser);
 
-      const updated = await service.updateUserSuperAdmin('target-1', { role }, {
-        id: 'admin-1',
-      } as any);
+    const result = await service.updateUserSuperAdmin(
+      'target-1',
+      { password: 'NewPassword1' },
+      makeUser({ id: 'admin-1' }),
+    );
+    const response = JSON.parse(JSON.stringify(result)) as Record<
+      string,
+      unknown
+    >;
+
+    expect(targetUser.password).toMatch(/^\$2[aby]\$/);
+    expect(response).not.toHaveProperty('password');
+    expect(response).toMatchObject({
+      id: 'target-1',
+      username: 'listener',
+      email: 'listener@example.test',
+      role: ValidRoles.user,
+      isActive: true,
+    });
+  });
+
+  it.each(Object.values(ValidRoles))(
+    'allows a persisted superadmin to assign the canonical role %s',
+    async (role) => {
+      userRepository.findOne.mockResolvedValue(
+        makeUser({
+          id: 'admin-1',
+          role: ValidRoles.superadmin,
+          isActive: true,
+        }),
+      );
+      userRepository.findOneByOrFail.mockResolvedValue(
+        makeUser({
+          id: 'target-1',
+          role: ValidRoles.user,
+        }),
+      );
+
+      const updated = await service.updateUserSuperAdmin(
+        'target-1',
+        Object.assign(new AdminUpdateUserDto(), { role }),
+        makeUser({ id: 'admin-1' }),
+      );
 
       expect(userRepository.findOne).toHaveBeenCalledWith({
         where: { id: 'admin-1' },
@@ -220,21 +363,25 @@ describe('AuthService role and user flows', () => {
     ['array value', [ValidRoles.superadmin]],
     ['null value', null],
   ])('rejects an administrative assignment with a %s', async (_label, role) => {
-    userRepository.findOne.mockResolvedValue({
-      id: 'admin-1',
-      role: ValidRoles.superadmin,
-      isActive: true,
-    });
-    userRepository.findOneByOrFail.mockResolvedValue({
-      id: 'target-1',
-      role: ValidRoles.user,
-    });
+    userRepository.findOne.mockResolvedValue(
+      makeUser({
+        id: 'admin-1',
+        role: ValidRoles.superadmin,
+        isActive: true,
+      }),
+    );
+    userRepository.findOneByOrFail.mockResolvedValue(
+      makeUser({
+        id: 'target-1',
+        role: ValidRoles.user,
+      }),
+    );
 
     await expect(
       service.updateUserSuperAdmin(
         'target-1',
-        { role } as any,
-        { id: 'admin-1' } as any,
+        Object.assign(new AdminUpdateUserDto(), { role }),
+        makeUser({ id: 'admin-1' }),
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -243,8 +390,10 @@ describe('AuthService role and user flows', () => {
     await expect(
       service.updateUserSuperAdmin(
         'target-1',
-        { roles: [ValidRoles.superadmin] } as any,
-        { id: 'admin-1' } as any,
+        Object.assign(new AdminUpdateUserDto(), {
+          roles: [ValidRoles.superadmin],
+        }),
+        makeUser({ id: 'admin-1' }),
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(userRepository.findOne).not.toHaveBeenCalled();
@@ -253,17 +402,19 @@ describe('AuthService role and user flows', () => {
   it.each([ValidRoles.user, ValidRoles.collaborator, ValidRoles.riffvalley])(
     'denies admin role assignment to persisted %s despite a forged JWT role',
     async (persistedRole) => {
-      userRepository.findOne.mockResolvedValue({
-        id: 'actor-1',
-        role: persistedRole,
-        isActive: true,
-      });
+      userRepository.findOne.mockResolvedValue(
+        makeUser({
+          id: 'actor-1',
+          role: persistedRole,
+          isActive: true,
+        }),
+      );
 
       await expect(
         service.updateUserSuperAdmin(
           'target-1',
           { role: ValidRoles.superadmin },
-          { id: 'actor-1', role: ValidRoles.superadmin } as any,
+          makeUser({ id: 'actor-1', role: ValidRoles.superadmin }),
         ),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(userRepository.findOneByOrFail).not.toHaveBeenCalled();
@@ -271,17 +422,19 @@ describe('AuthService role and user flows', () => {
   );
 
   it('denies inactive or non-canonical persisted actors for activation and deletion', async () => {
-    userRepository.findOne.mockResolvedValue({
+    const actor = makeUser({
       id: 'admin-1',
-      role: 'admin',
+      role: ValidRoles.user,
       isActive: true,
     });
+    Reflect.set(actor, 'role', 'admin');
+    userRepository.findOne.mockResolvedValue(actor);
 
     await expect(
-      service.setActive('target-1', false, { id: 'admin-1' } as any),
+      service.setActive('target-1', false, makeUser({ id: 'admin-1' })),
     ).rejects.toBeInstanceOf(ForbiddenException);
     await expect(
-      service.remove('target-1', { id: 'admin-1' } as any),
+      service.remove('target-1', makeUser({ id: 'admin-1' })),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

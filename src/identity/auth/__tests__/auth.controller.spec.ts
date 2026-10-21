@@ -5,15 +5,16 @@ import {
 } from '@nestjs/common/constants';
 import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { AuthController } from '../auth.controller';
 import { META_MINIMUM_ROLE } from '../decorators/role-protected.decorator';
 import { ValidRoles } from '../interfaces/valid-roles';
 import { UserRoleGuard } from '../guards/user-role/user-role.guard';
 
 describe('AuthController role contract', () => {
-  const prototype = AuthController.prototype as any;
+  const prototype = AuthController.prototype;
 
-  it.each([
+  const privateRoutes = [
     ['testingPrivateRoute', 'private', ValidRoles.superadmin],
     ['findAll', 'users', ValidRoles.superadmin],
     ['findAllAdminStats', 'users/admin-stats', ValidRoles.superadmin],
@@ -23,12 +24,21 @@ describe('AuthController role contract', () => {
     ['deactivate', ':id/deactivate', ValidRoles.superadmin],
     ['activate', ':id/activate', ValidRoles.superadmin],
     ['remove', ':id', ValidRoles.superadmin],
-  ])('protects %s at /auth/%s with %s only', (handlerName, path, role) => {
-    const handler = prototype[handlerName];
-    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
-    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(role);
-    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeDefined();
-  });
+  ] as const satisfies readonly (readonly [
+    keyof AuthController,
+    string,
+    ValidRoles,
+  ])[];
+
+  it.each(privateRoutes)(
+    'protects %s at /auth/%s with %s only',
+    (handlerName, path, role) => {
+      const handler = prototype[handlerName];
+      expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
+      expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(role);
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeDefined();
+    },
+  );
 
   it('preserves public registration and login routes and authenticated profile route', () => {
     expect(Reflect.getMetadata(PATH_METADATA, prototype.create)).toBe(
@@ -49,12 +59,18 @@ describe('AuthController role contract', () => {
     ).toBeUndefined();
   });
 
-  it.each([
+  const readRoutes = [
     ['findAllRv', 'usersRv', ValidRoles.riffvalley],
     ['findUsersByRole', 'users/role/:role', ValidRoles.superadmin],
     ['findSuperUsers', 'users/superusers', ValidRoles.superadmin],
     ['findOne', ':id', ValidRoles.superadmin],
-  ])(
+  ] as const satisfies readonly (readonly [
+    keyof AuthController,
+    string,
+    ValidRoles,
+  ])[];
+
+  it.each(readRoutes)(
     'protects %s at /auth/%s with minimum %s and preserves its response',
     async (handlerName, path, minimumRole) => {
       const handler = prototype[handlerName];
@@ -65,7 +81,7 @@ describe('AuthController role contract', () => {
         findSuperUsers: jest.fn().mockReturnValue(response),
         findOne: jest.fn().mockReturnValue(response[0]),
       };
-      const controller = new AuthController(authService as any);
+      const controller = new AuthController(authService as never);
 
       expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
       expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(minimumRole);
@@ -76,12 +92,14 @@ describe('AuthController role contract', () => {
           ? controller.findUsersByRole(ValidRoles.user)
           : handlerName === 'findOne'
             ? controller.findOne('user-2')
-            : (controller as any)[handlerName]();
+            : handlerName === 'findAllRv'
+              ? controller.findAllRv()
+              : controller.findSuperUsers();
       expect(result).toBe(handlerName === 'findOne' ? response[0] : response);
     },
   );
 
-  it.each([
+  const authorizationCases = [
     [ValidRoles.riffvalley, 'findAllRv', ValidRoles.riffvalley, true],
     [ValidRoles.superadmin, 'findAllRv', ValidRoles.riffvalley, true],
     [ValidRoles.user, 'findAllRv', ValidRoles.riffvalley, false],
@@ -92,22 +110,25 @@ describe('AuthController role contract', () => {
     [ValidRoles.user, 'findUsersByRole', ValidRoles.superadmin, false],
     [ValidRoles.collaborator, 'findSuperUsers', ValidRoles.superadmin, false],
     [ValidRoles.riffvalley, 'findOne', ValidRoles.superadmin, false],
-  ])(
+  ] as const satisfies readonly (readonly [
+    ValidRoles,
+    keyof AuthController,
+    ValidRoles,
+    boolean,
+  ])[];
+
+  it.each(authorizationCases)(
     'authorizes persisted %s for %s at minimum %s',
     async (persistedRole, handlerName, _minimumRole, allowed) => {
       const userRepository = {
         findOne: jest.fn().mockResolvedValue({ role: persistedRole }),
       };
-      const guard = new UserRoleGuard(new Reflector(), userRepository as any);
-      const context = {
-        getHandler: () => prototype[handlerName],
-        getClass: () => AuthController,
-        switchToHttp: () => ({
-          getRequest: () => ({
-            user: { id: 'user-1', username: 'listener' },
-          }),
-        }),
-      } as any;
+      const guard = new UserRoleGuard(new Reflector(), userRepository as never);
+      const context = new ExecutionContextHost(
+        [{ user: { id: 'user-1', username: 'listener' } }],
+        AuthController,
+        prototype[handlerName],
+      );
 
       if (allowed) {
         await expect(guard.canActivate(context)).resolves.toBe(true);

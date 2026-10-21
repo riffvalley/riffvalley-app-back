@@ -4,6 +4,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import {
   META_MINIMUM_ROLE,
@@ -50,6 +51,9 @@ class UnprotectedController {
   handle() {}
 }
 
+type ControllerConstructor = new (...args: never[]) => object;
+type RouteHandler = (...args: never[]) => unknown;
+
 describe('role hierarchy', () => {
   it('defines only the four canonical role names', () => {
     expect(Object.values(ValidRoles)).toEqual([
@@ -93,19 +97,13 @@ describe('UserRoleGuard', () => {
   let userRepository: { findOne: jest.Mock };
 
   const contextFor = (
-    controller: Function,
-    handler: Function,
+    controller: ControllerConstructor,
+    handler: RouteHandler,
     request: {
       user?: { id?: string; username?: string; role?: unknown } | null;
     } = { user: { id: 'user-id', username: 'test-user' } },
   ): ExecutionContext =>
-    ({
-      getClass: () => controller,
-      getHandler: () => handler,
-      switchToHttp: () => ({
-        getRequest: () => request,
-      }),
-    }) as unknown as ExecutionContext;
+    new ExecutionContextHost([request], controller, handler);
 
   beforeEach(() => {
     userRepository = { findOne: jest.fn() };
@@ -138,9 +136,7 @@ describe('UserRoleGuard', () => {
       for (const minimumRole of minimums) {
         const handler = MinimumRoleController.prototype[minimumRole];
         await expect(
-          guard.canActivate(
-            contextFor(MinimumRoleController, handler as Function),
-          ),
+          guard.canActivate(contextFor(MinimumRoleController, handler)),
         ).resolves.toBe(true);
       }
     },
@@ -158,8 +154,8 @@ describe('UserRoleGuard', () => {
     userRepository.findOne.mockResolvedValue({ role });
 
     await expect(
-      guard.canActivate(contextFor(MinimumRoleController, handler as Function)),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+      guard.canActivate(contextFor(MinimumRoleController, handler)),
+    ).rejects.toMatchObject({ status: 403 });
   });
 
   it('allows superadmin to satisfy every minimum', async () => {
@@ -168,9 +164,7 @@ describe('UserRoleGuard', () => {
     for (const minimumRole of Object.values(ValidRoles)) {
       const handler = MinimumRoleController.prototype[minimumRole];
       await expect(
-        guard.canActivate(
-          contextFor(MinimumRoleController, handler as Function),
-        ),
+        guard.canActivate(contextFor(MinimumRoleController, handler)),
       ).resolves.toBe(true);
     }
   });
@@ -182,9 +176,7 @@ describe('UserRoleGuard', () => {
       userRepository.findOne.mockResolvedValue({ role });
 
       await expect(
-        guard.canActivate(
-          contextFor(MinimumRoleController, handler as Function),
-        ),
+        guard.canActivate(contextFor(MinimumRoleController, handler)),
       ).rejects.toBeInstanceOf(ForbiddenException);
     },
   );

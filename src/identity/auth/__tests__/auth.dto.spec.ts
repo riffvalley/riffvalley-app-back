@@ -1,12 +1,30 @@
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { AdminUpdateUserDto, UpdateUserDto } from '../dto/update-user.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
+import { LoginUserDto } from '../dto/login-user.dto';
 import { ValidRoles } from '../interfaces/valid-roles';
 
 const validationOptions = { whitelist: true, forbidNonWhitelisted: true };
 
 describe('Auth DTO role boundaries', () => {
+  it('returns a 400 validation error for an invalid login payload', async () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+
+    const validation = pipe.transform(
+      { username: 'x', password: 'bad', role: ValidRoles.superadmin },
+      { type: 'body', metatype: LoginUserDto },
+    );
+
+    await expect(validation).rejects.toBeInstanceOf(BadRequestException);
+    await expect(validation).rejects.toMatchObject({ status: 400 });
+  });
+
   it.each(['role', 'roles'])('rejects registration field %s', async (field) => {
     const dto = plainToInstance(CreateUserDto, {
       email: 'new@example.test',

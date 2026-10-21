@@ -21,21 +21,55 @@ import { ReunionController } from 'src/editorial/reunions/reunions.controller';
 import { RiffValleyPlaylistController } from 'src/editorial/playlists/riff-valley-playlists/riff-valley-playlist.controller';
 import { VersionsController } from 'src/product/versions/versions.controller';
 import { VideosController } from 'src/editorial/videos/videos.controller';
+import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 
 jest.mock('sanitize-html', () => jest.fn());
 
+type ControllerConstructor = {
+  new (...args: never[]): object;
+  readonly prototype: object;
+  readonly name: string;
+};
+
+type MutationRow = readonly [
+  ControllerConstructor,
+  string,
+  string,
+  number,
+  ValidRoles,
+];
+
 type Mutation = {
-  controller: any;
+  controller: ControllerConstructor;
   method: string;
   path: string;
   httpMethod: number;
   minimum: ValidRoles;
 };
 
+type RouteHandler = (...args: never[]) => unknown;
+
+function isRouteHandler(value: unknown): value is RouteHandler {
+  return typeof value === 'function';
+}
+
+function getHandler(mutation: Mutation): RouteHandler {
+  const handler: unknown = Reflect.get(
+    mutation.controller.prototype,
+    mutation.method,
+  );
+  if (!isRouteHandler(handler)) {
+    throw new Error(
+      `Missing route handler ${mutation.controller.name}.${mutation.method}`,
+    );
+  }
+  return handler;
+}
+
 const riffvalley = ValidRoles.riffvalley;
 const superadmin = ValidRoles.superadmin;
 
-const mutations: Mutation[] = [
+const mutationRows: readonly MutationRow[] = [
   [ArticlesController, 'create', '/', 1, riffvalley],
   [ArticlesController, 'createContent', ':id/content', 1, riffvalley],
   [ArticlesController, 'update', ':id', 4, riffvalley],
@@ -86,16 +120,20 @@ const mutations: Mutation[] = [
   [VideosController, 'createContent', ':id/content', 1, riffvalley],
   [VideosController, 'update', ':id', 4, riffvalley],
   [VideosController, 'remove', ':id', 3, riffvalley],
-].map(([controller, method, path, httpMethod, minimum]) => ({
-  controller,
-  method,
-  path,
-  httpMethod,
-  minimum,
-})) as Mutation[];
+];
+
+const mutations: Mutation[] = mutationRows.map(
+  ([controller, method, path, httpMethod, minimum]) => ({
+    controller,
+    method,
+    path,
+    httpMethod,
+    minimum,
+  }),
+);
 
 describe('domain mutation authorization', () => {
-  const controllerPaths = new Map<Function, string>([
+  const controllerPaths = new Map<ControllerConstructor, string>([
     [ArticlesController, 'articles'],
     [AsignationsController, 'asignations'],
     [ArtistsController, 'artists'],
@@ -114,7 +152,7 @@ describe('domain mutation authorization', () => {
   it.each(mutations)(
     '$controller.name.$method keeps its route and requires $minimum',
     (mutation) => {
-      const handler = mutation.controller.prototype[mutation.method];
+      const handler = getHandler(mutation);
       expect(Reflect.getMetadata(PATH_METADATA, mutation.controller)).toBe(
         controllerPaths.get(mutation.controller),
       );
@@ -136,17 +174,13 @@ describe('domain mutation authorization', () => {
     async (mutation) => {
       const userRepository = { findOne: jest.fn() };
       const guard = new UserRoleGuard(new Reflector(), userRepository as never);
-      const handler = mutation.controller.prototype[mutation.method];
+      const handler = getHandler(mutation);
       const contextFor = (role: ValidRoles) =>
-        ({
-          getClass: () => mutation.controller,
-          getHandler: () => handler,
-          switchToHttp: () => ({
-            getRequest: () => ({
-              user: { id: 'user-id', username: 'test-user' },
-            }),
-          }),
-        }) as any;
+        new ExecutionContextHost(
+          [{ user: { id: 'user-id', username: 'test-user', role } }],
+          mutation.controller,
+          handler,
+        );
 
       for (const role of [ValidRoles.user, ValidRoles.collaborator]) {
         userRepository.findOne.mockResolvedValue({ role });

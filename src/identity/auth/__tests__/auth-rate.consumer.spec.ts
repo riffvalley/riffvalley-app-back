@@ -9,6 +9,7 @@ import { UserAccessLog } from '../entities/user-access-log.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { RatesModule } from 'src/community/rates/rates.module';
 import { CatalogImportModule } from 'src/catalog/import/catalog-import.module';
+import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 
 describe('Auth → Rate consumer characterization', () => {
   let moduleRef: TestingModule;
@@ -36,11 +37,8 @@ describe('Auth → Rate consumer characterization', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('registers Rate in AuthModule and injects its repository into AuthService', () => {
+  it('registers the Rate repository in AuthModule', () => {
     expect(moduleRef.get(getRepositoryToken(Rate))).toBe(rateRepository);
-    expect((moduleRef.get(AuthService) as any).rateRepository).toBe(
-      rateRepository,
-    );
   });
 
   it('preserves Rate based activity queries and their observable projections', async () => {
@@ -60,7 +58,9 @@ describe('Auth → Rate consumer characterization', () => {
     const service = moduleRef.get(AuthService);
 
     await expect(
-      service.getAllActivity({ limit: 10, offset: 0 } as any),
+      service.getAllActivity(
+        Object.assign(new PaginationDto(), { limit: 10, offset: 0 }),
+      ),
     ).resolves.toEqual({
       totalItems: 1,
       totalPages: 1,

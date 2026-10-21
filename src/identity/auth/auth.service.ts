@@ -25,6 +25,11 @@ import { JwtService } from '@nestjs/jwt';
 import { ILike, IsNull } from 'typeorm';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 
+type UserWithoutPassword = Omit<
+  User,
+  'password' | 'checkFieldsBeforeInsert' | 'checkFieldsBeforeUpdate'
+>;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -114,7 +119,8 @@ export class AuthService {
       ),
     ]);
 
-    const { password: _pw, ...safeUser } = user;
+    const safeUser = { ...user };
+    Reflect.deleteProperty(safeUser, 'password');
 
     return {
       ...safeUser,
@@ -370,7 +376,7 @@ export class AuthService {
     id: string,
     updateData: AdminUpdateUserDto,
     actor: User,
-  ): Promise<User> {
+  ): Promise<UserWithoutPassword> {
     this.assertAllowedFields(updateData, [
       'email',
       'password',
@@ -388,10 +394,13 @@ export class AuthService {
     const user = await this.findOne(id);
 
     Object.assign(user, this.adminUpdateFields(updateData));
-    return this.userRepository.save(user);
+    return this.withoutPassword(await this.userRepository.save(user));
   }
 
-  async updateUser(updateData: UpdateUserDto, actor: User): Promise<User> {
+  async updateUser(
+    updateData: UpdateUserDto,
+    actor: User,
+  ): Promise<UserWithoutPassword> {
     this.assertAllowedFields(updateData, [
       'email',
       'password',
@@ -403,7 +412,7 @@ export class AuthService {
     ]);
     const user = await this.findOne(actor.id);
     Object.assign(user, this.profileUpdateFields(updateData));
-    return this.userRepository.save(user);
+    return this.withoutPassword(await this.userRepository.save(user));
   }
 
   async remove(id: string, actor: User) {
@@ -471,6 +480,12 @@ export class AuthService {
     return token;
   }
 
+  private withoutPassword(user: User): UserWithoutPassword {
+    const safeUser: UserWithoutPassword = { ...user };
+    Reflect.deleteProperty(safeUser, 'password');
+    return safeUser;
+  }
+
   private profileUpdateFields(
     updateData: UpdateUserDto | AdminUpdateUserDto,
   ): Partial<User> {
@@ -487,7 +502,7 @@ export class AuthService {
 
     for (const field of allowedFields) {
       if (updateData[field] !== undefined) {
-        (fields as any)[field] = updateData[field];
+        Object.assign(fields, { [field]: updateData[field] });
       }
     }
 
@@ -536,7 +551,18 @@ export class AuthService {
     }
   }
 
-  private handleDBerrors(error: any) {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
+  private handleDBerrors(error: unknown): void {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === '23505'
+    ) {
+      const detail =
+        'detail' in error && typeof error.detail === 'string'
+          ? error.detail
+          : undefined;
+      throw new BadRequestException(detail);
+    }
   }
 }

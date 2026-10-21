@@ -11,7 +11,6 @@ import { User } from 'src/identity/auth/entities/user.entity';
 import {
   isValidRole,
   roleMeetsMinimum,
-  ValidRoles,
 } from 'src/identity/auth/interfaces/valid-roles';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -35,8 +34,8 @@ export class UserRoleGuard implements CanActivate {
       throw new ForbiddenException('Invalid minimum role');
     }
 
-    const req = context.switchToHttp().getRequest();
-    const user = req.user as User | undefined;
+    const req = context.switchToHttp().getRequest<{ user?: User }>();
+    const user = req.user;
     if (!user?.id) throw new BadRequestException('User not found');
 
     const userRep = await this.userRepository.findOne({

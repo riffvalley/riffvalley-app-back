@@ -22,6 +22,10 @@ Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gate
 
 - [Mail](communications.md) — BC-COM-1/2 completados; el hallazgo de seguridad HTML sigue pendiente.
 
+### Identity
+
+- [Auditoría y saneamiento de Identity](identity.md) — BC-ID-0, BC-ID-1 y BC-ID-2 completadas (2026-10-21); BC-ID-1 incluyó regresiones de permisos y corrección acotada de exposición del hash en respuestas PATCH; BC-ID-2 eliminó deuda TypeScript/ESLint del dominio.
+
 ## Objetivo y alcance
 
 Auditar progresivamente los módulos del backend después de completar Backend Architecture. Esta fase revisa responsabilidades, dependencias, calidad, consultas, contratos y pruebas; convierte solo los problemas demostrados en tareas pequeñas y verificables. La reorganización física ya cerrada no se reabre por defecto.
