@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Rate } from '../entities/rate.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
+import { UsersService } from 'src/identity/users/users.service';
 
 @Injectable()
 export class RatesStatsService {
@@ -11,8 +12,7 @@ export class RatesStatsService {
   constructor(
     @InjectRepository(Rate)
     private readonly rateRepository: Repository<Rate>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly usersService: UsersService,
   ) {}
 
   async getHomeInsights(user: User) {
@@ -236,7 +236,7 @@ export class RatesStatsService {
     });
 
     // 6. Total Usuarios y Ranking
-    const totalUsers = await this.userRepository.count();
+    const totalUsers = await this.usersService.countUsers();
 
     // Ranking: Contar cuántos usuarios tienen más votos que el usuario actual sobre el mismo
     // conjunto de discos (año filtrado, o todos si no hay año) - misma lógica que el leaderboard

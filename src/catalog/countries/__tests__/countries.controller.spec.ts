@@ -55,10 +55,12 @@ describe('CountriesController contract characterization', () => {
       controllers: [CountriesController],
       providers: [
         { provide: CountriesService, useValue: service },
-        { provide: UserRoleGuard, useValue: { canActivate: jest.fn() } },
         { provide: getRepositoryToken(User), useValue: { findOne: jest.fn() } },
       ],
-    }).compile();
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: jest.fn() })
+      .compile();
     controller = moduleRef.get(CountriesController);
   });
 

@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TelegramController } from './telegram.controller';
 import { TelegramService } from './telegram.service';
-import { AuthModule } from '../../identity/auth/auth.module';
+import { AuthorizationModule } from '../../identity/authorization/authorization.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthorizationModule],
   controllers: [TelegramController],
   providers: [TelegramService],
   exports: [TelegramService],

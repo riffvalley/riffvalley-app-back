@@ -22,6 +22,10 @@ Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gate
 
 - [Mail](communications.md) — BC-COM-1/2 completados; el hallazgo de seguridad HTML sigue pendiente.
 
+### Identity
+
+- [Auditoría y diseño de Identity](identity.md) — BC-ID-0–3E, BC-ID-5A–5D y la composición interna BC-ID-6A completadas; BC-ID-4A–4E y BC-ID-4 general completadas solo como fase de diseño. Sessions está conectada internamente a Auth, pero no expuesta por HTTP; BC-ID-3F, BC-ID-6B–6D y BC-ID-7–10 siguen pendientes. La [preparación del despliegue intermedio](identity-production-preparation.md) queda bloqueada hasta confirmar el release, la base/migraciones pendientes, `uuid-ossp` y un backup recuperable. Los diseños están en [4C](identity-sessions-model.md), [4D](identity-session-security.md), [4E](identity-session-contracts-and-rollout.md) y el [ADR de arquitectura con antecedente OIDC](identity-sso-architecture.md).
+
 ## Objetivo y alcance
 
 Auditar progresivamente los módulos del backend después de completar Backend Architecture. Esta fase revisa responsabilidades, dependencias, calidad, consultas, contratos y pruebas; convierte solo los problemas demostrados en tareas pequeñas y verificables. La reorganización física ya cerrada no se reabre por defecto.

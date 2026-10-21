@@ -1,4 +1,4 @@
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { MailModule } from 'src/communications/mail/mail.module';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
@@ -18,7 +18,9 @@ import { TiktokVideosService } from './videos/tiktok-videos.service';
 describe('TiktokIntegrationModule', () => {
   it('registers provider HTTP, token, persistence and existing app dependencies', () => {
     const imports = Reflect.getMetadata('imports', TiktokIntegrationModule);
-    expect(imports).toEqual(expect.arrayContaining([AuthModule, MailModule]));
+    expect(imports).toEqual(
+      expect.arrayContaining([AuthorizationModule, MailModule]),
+    );
     const typeOrmFeature = imports.find(
       (module: any) => module?.module === TypeOrmModule,
     );

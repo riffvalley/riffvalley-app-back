@@ -3,10 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CountriesController } from './countries.controller';
 import { Country } from './entities/country.entity';
 import { CountriesService } from './countries.service';
-import { AuthModule } from '../../identity/auth/auth.module';
+import { AuthorizationModule } from '../../identity/authorization/authorization.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Country]), AuthModule],
+  imports: [TypeOrmModule.forFeature([Country]), AuthorizationModule],
   controllers: [CountriesController],
   providers: [CountriesService],
 })

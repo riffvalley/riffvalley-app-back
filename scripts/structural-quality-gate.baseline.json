@@ -143,10 +143,6 @@
     },
     {
       "rule": "spec-outside-tests",
-      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
       "path": "src/integrations/cloudflare-r2-integration/cloudflare-r2-integration.module.spec.ts"
     },
     {

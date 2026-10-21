@@ -10,7 +10,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { getMetadataArgsStorage } from 'typeorm';
 import { DataSource } from 'typeorm';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity';
@@ -45,7 +45,7 @@ describe('PendingsModule characterization', () => {
 
   afterAll(async () => moduleRef?.close());
 
-  it('resolves the controller, service and repositories through PendingsModule/AuthModule', () => {
+  it('resolves the controller, service and repositories through PendingsModule/AuthorizationModule', () => {
     expect(moduleRef.get(PendingsController)).toBeDefined();
     const service = moduleRef.get(PendingsService);
     expect(service).toBeDefined();
@@ -57,7 +57,7 @@ describe('PendingsModule characterization', () => {
       MODULE_METADATA.IMPORTS,
       PendingsModule,
     ) as unknown[];
-    expect(imports).toContain(AuthModule);
+    expect(imports).toContain(AuthorizationModule);
   });
 
   it('preserves route methods, paths and the current authentication decorators', () => {

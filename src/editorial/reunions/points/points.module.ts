@@ -4,9 +4,9 @@ import { Point } from './entities/point.entity';
 import { Reunion } from '../entities/reunion.entity';
 import { PointService } from './points.service';
 import { PointController } from './points.controller';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 @Module({
-  imports: [TypeOrmModule.forFeature([Point, Reunion]), AuthModule],
+  imports: [TypeOrmModule.forFeature([Point, Reunion]), AuthorizationModule],
   controllers: [PointController],
   providers: [PointService],
   exports: [TypeOrmModule],

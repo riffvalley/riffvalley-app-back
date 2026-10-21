@@ -3,9 +3,9 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import * as request from 'supertest';
 import { User } from 'src/identity/auth/entities/user.entity';
+import { UsersService } from 'src/identity/users/users.service';
 import { JwtStrategy } from 'src/identity/auth/strategies/jwt.strategy';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
@@ -22,9 +22,9 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
     isActive: true,
     role: ValidRoles.riffvalley,
   };
-  const userRepository = {
-    findOneBy: jest.fn(),
-    findOne: jest.fn(),
+  const usersService = {
+    findById: jest.fn(),
+    findIdentityById: jest.fn(),
   };
   const service = {
     findAll: jest.fn(),
@@ -38,8 +38,14 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    userRepository.findOneBy.mockResolvedValue(testUser);
-    userRepository.findOne.mockResolvedValue({ role: testUser.role });
+    usersService.findById.mockResolvedValue(
+      Object.assign(new User(), testUser),
+    );
+    usersService.findIdentityById.mockResolvedValue({
+      id: testUser.id,
+      role: testUser.role,
+      isActive: true,
+    });
     moduleRef = await Test.createTestingModule({
       controllers: [RiffValleyPlaylistController],
       imports: [
@@ -48,7 +54,7 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
       ],
       providers: [
         { provide: RiffValleyPlaylistService, useValue: service },
-        { provide: getRepositoryToken(User), useValue: userRepository },
+        { provide: UsersService, useValue: usersService },
         {
           provide: ConfigService,
           useValue: { get: () => 'riff-valley-routes-test-secret' },
@@ -85,6 +91,24 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
     await request(app.getHttpServer())
       .get('/api/riff-valley-playlists')
       .expect(200, [playlist]);
+  });
+
+  it('rejects an expired JWT before invoking a protected handler', async () => {
+    const expiredToken = await moduleRef.get(JwtService).signAsync(
+      {
+        id: testUser.id,
+        username: testUser.username,
+        role: testUser.role,
+      },
+      { expiresIn: '-1s' },
+    );
+
+    await request(app.getHttpServer())
+      .post('/api/riff-valley-playlists')
+      .set('Authorization', `Bearer ${expiredToken}`)
+      .send({ name: 'Expired token' })
+      .expect(401);
+    expect(service.create).not.toHaveBeenCalled();
   });
 
   it('routes lists, festival/genre filters, and random genre lookup', async () => {

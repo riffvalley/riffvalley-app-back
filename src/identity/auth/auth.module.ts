@@ -1,23 +1,22 @@
 import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './entities/user.entity';
-import { UserAccessLog } from './entities/user-access-log.entity';
-import { Rate } from '../../community/rates/entities/rate.entity';
-import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { UserRoleGuard } from './guards/user-role/user-role.guard';
+import { UsersModule } from '../users/users.module';
+import { ActivityModule } from '../activity/activity.module';
+import { AuthorizationModule } from '../authorization/authorization.module';
+import { SessionsModule } from '../sessions/sessions.module';
 
 @Module({
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, UserRoleGuard],
+  providers: [AuthService],
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([User, UserAccessLog, Rate]),
-    PassportModule.register({ defaultStrategy: 'jwt' }),
+    UsersModule,
+    ActivityModule,
+    AuthorizationModule,
+    SessionsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -30,13 +29,6 @@ import { UserRoleGuard } from './guards/user-role/user-role.guard';
         };
       },
     }),
-  ],
-  exports: [
-    TypeOrmModule,
-    JwtStrategy,
-    PassportModule,
-    JwtModule,
-    UserRoleGuard,
   ],
 })
 export class AuthModule {}

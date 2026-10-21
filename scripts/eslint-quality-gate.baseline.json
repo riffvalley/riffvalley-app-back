@@ -3,62 +3,6 @@
   "violations": [
     {
       "rule": "@typescript-eslint/ban-types",
-      "path": "src/identity/auth/__tests__/domain-mutation-authorization.spec.ts",
-      "line": 98,
-      "column": 35,
-      "fingerprint": "27ac6703a6a87de31fda36ac15b52bff29d0ae5bec3b8a0a9891983640bbc796",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
-      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts",
-      "line": 142,
-      "column": 58,
-      "fingerprint": "655276c5630d81e328ac3eebf7eae74a6559cb4b5bfbb2a27ca34bb57493090c",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
-      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts",
-      "line": 161,
-      "column": 70,
-      "fingerprint": "9679e3bd4b42c0566e447a8b0b567be89b5e7d47acda8f9d23711a373d95c656",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
-      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts",
-      "line": 172,
-      "column": 56,
-      "fingerprint": "2003b4b8bda46f380340088ff1d9e482c69667e30d65d06a7c70a4d00dbfdf94",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
-      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts",
-      "line": 186,
-      "column": 56,
-      "fingerprint": "2003b4b8bda46f380340088ff1d9e482c69667e30d65d06a7c70a4d00dbfdf94",
-      "occurrence": 1
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
-      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts",
-      "line": 96,
-      "column": 17,
-      "fingerprint": "978c180e5b812a45c1d249215b71b4f26b583a4cf5b15dc589d9ee8e212a3832",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
-      "path": "src/identity/auth/guards/user-role/user-role.guard.spec.ts",
-      "line": 97,
-      "column": 14,
-      "fingerprint": "fb0f462dd22d75bb3f3a49ee5632a8c0161285848df30a5fd408bdf6b5ee3a70",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
       "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
       "line": 24,
       "column": 65,
@@ -95,46 +39,6 @@
       "line": 71,
       "column": 12,
       "fingerprint": "49e1e002c5fbbe0d57d200d5f96803be9b909d4799916dcf17b5da8bf5b91933",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/no-unused-vars",
-      "path": "src/identity/auth/__tests__/domain-mutation-authorization.spec.ts",
-      "line": 140,
-      "column": 27,
-      "fingerprint": "6d774316233754efd82f9f5bc8e8aa2b2eff5a7ac00c78f06005a29e653cf2b5",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/no-unused-vars",
-      "path": "src/identity/auth/auth.service.ts",
-      "line": 117,
-      "column": 23,
-      "fingerprint": "dac9c860d107c6b9c63721ee02f1df16e19642c9e609cd50fd6489fb9ce13654",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/no-unused-vars",
-      "path": "src/identity/auth/dto/login-user.dto.ts",
-      "line": 2,
-      "column": 3,
-      "fingerprint": "3178df7ca719ccd27f139d487033d8512e1ca07912a685f9d7bd9344a7951e4f",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/no-unused-vars",
-      "path": "src/identity/auth/entities/user.entity.ts",
-      "line": 15,
-      "column": 3,
-      "fingerprint": "d95acb53ed4863e4f5a5985e94b60d36673f9a0b089593c6028d9e6470983f3f",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/no-unused-vars",
-      "path": "src/identity/auth/guards/user-role/user-role.guard.ts",
-      "line": 14,
-      "column": 3,
-      "fingerprint": "13ea4c36cf93b544cd1e7141445304c52a014c12cbe05e6a0fb3f02129c2f004",
       "occurrence": 0
     },
     {

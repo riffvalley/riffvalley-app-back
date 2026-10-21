@@ -29,13 +29,12 @@ describe('LastfmController artist query', () => {
       controllers: [LastfmController],
       providers: [
         { provide: LastfmService, useValue: { getArtistInfo } },
-        {
-          provide: UserRoleGuard,
-          useValue: { canActivate: jest.fn() },
-        },
         { provide: getRepositoryToken(User), useValue: { findOne: jest.fn() } },
       ],
-    }).compile();
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: jest.fn() })
+      .compile();
     controller = moduleRef.get(LastfmController);
   });
 

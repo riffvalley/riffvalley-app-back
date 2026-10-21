@@ -3,10 +3,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import * as request from 'supertest';
 import { User } from 'src/identity/auth/entities/user.entity';
+import { UsersService } from 'src/identity/users/users.service';
 import { JwtStrategy } from 'src/identity/auth/strategies/jwt.strategy';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
@@ -110,11 +111,9 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
   let spotifyAccountApi: SpotifyAccountApi;
   let playlistManagementService: SpotifyPlaylistManagementService;
   let spotifyAuthorizationService: SpotifyAuthorization;
-  const userRepository: jest.Mocked<
-    Pick<Repository<User>, 'findOneBy' | 'findOne'>
-  > = {
-    findOneBy: jest.fn(),
-    findOne: jest.fn(),
+  const usersService = {
+    findById: jest.fn(),
+    findIdentityById: jest.fn(),
   };
 
   let artistRepository: jest.Mocked<Pick<Repository<Artist>, 'findOneBy'>>;
@@ -162,8 +161,12 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
     };
     setlistService = { getTopSongs: jest.fn() };
 
-    userRepository.findOneBy.mockResolvedValue(testUser);
-    userRepository.findOne.mockResolvedValue(testUser);
+    usersService.findById.mockResolvedValue(testUser);
+    usersService.findIdentityById.mockResolvedValue({
+      id: testUser.id,
+      role: testUser.role,
+      isActive: true,
+    });
     moduleRef = await Test.createTestingModule({
       controllers: [FestivalPlaylistsController, GenrePlaylistsController],
       imports: [
@@ -190,7 +193,7 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
           useValue: spotifyAuthorizationService,
         },
         { provide: FestivalSetlistService, useValue: setlistService },
-        { provide: getRepositoryToken(User), useValue: userRepository },
+        { provide: UsersService, useValue: usersService },
         { provide: ConfigService, useValue: { get: () => secret } },
         JwtStrategy,
         UserRoleGuard,

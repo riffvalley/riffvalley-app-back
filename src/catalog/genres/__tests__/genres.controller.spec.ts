@@ -37,10 +37,12 @@ describe('GenresController contract characterization', () => {
       controllers: [GenresController],
       providers: [
         { provide: GenresService, useValue: service },
-        { provide: UserRoleGuard, useValue: { canActivate: jest.fn() } },
         { provide: getRepositoryToken(User), useValue: { findOne: jest.fn() } },
       ],
-    }).compile();
+    })
+      .overrideGuard(UserRoleGuard)
+      .useValue({ canActivate: jest.fn() })
+      .compile();
     controller = moduleRef.get(GenresController);
   });
 

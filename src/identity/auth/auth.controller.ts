@@ -17,10 +17,16 @@ import { ValidRoles } from './interfaces/valid-roles';
 import { Auth } from './decorators/auth.decorator';
 import { AdminUpdateUserDto, UpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { UsersService } from '../users/users.service';
+import { ActivityService } from '../activity/activity.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   @Post('register')
   create(@Body() createUserDto: CreateUserDto) {
@@ -28,8 +34,10 @@ export class AuthController {
   }
 
   @Post('login')
-  login(@Body() LoginUserDto: LoginUserDto) {
-    return this.authService.login(LoginUserDto);
+  async login(@Body() LoginUserDto: LoginUserDto) {
+    const response = await this.authService.login(LoginUserDto);
+    await this.activityService.recordLoginAccess(response.id);
+    return response;
   }
 
   @Get('private')
@@ -45,49 +53,49 @@ export class AuthController {
   @Get('users')
   @Auth(ValidRoles.superadmin)
   findAll() {
-    return this.authService.findAll();
+    return this.usersService.findAll();
   }
 
   @Get('usersRv')
   @Auth(ValidRoles.riffvalley)
   findAllRv() {
-    return this.authService.findAllRv();
+    return this.usersService.findAllRv();
   }
 
   @Get('users/role/:role')
   @Auth(ValidRoles.superadmin)
   findUsersByRole(@Param('role') role: string) {
-    return this.authService.findUsersByRole(role);
+    return this.usersService.findUsersByRole(role);
   }
 
   @Get('users/superusers')
   @Auth(ValidRoles.superadmin)
   findSuperUsers() {
-    return this.authService.findSuperUsers();
+    return this.usersService.findSuperUsers();
   }
 
   @Get('users/admin-stats')
   @Auth(ValidRoles.superadmin)
   findAllAdminStats(@Query() paginationDto: PaginationDto) {
-    return this.authService.findAllAdminStats(paginationDto);
+    return this.activityService.findAllAdminStats(paginationDto);
   }
 
   @Get('activity')
   @Auth(ValidRoles.superadmin)
   getAllActivity(@Query() paginationDto: PaginationDto) {
-    return this.authService.getAllActivity(paginationDto);
+    return this.activityService.getAllActivity(paginationDto);
   }
 
   @Get(':id/activity')
   @Auth(ValidRoles.superadmin)
   getUserActivity(@Param('id') id: string) {
-    return this.authService.getUserActivity(id);
+    return this.activityService.getUserActivity(id);
   }
 
   @Get(':id')
   @Auth(ValidRoles.superadmin)
   findOne(@Param('id') id: string) {
-    return this.authService.findOne(id);
+    return this.usersService.findOne(id);
   }
 
   @Patch('/superadmin/:id')
@@ -97,30 +105,30 @@ export class AuthController {
     @Body() updateAuthDto: AdminUpdateUserDto,
     @GetUser() user: User,
   ) {
-    return this.authService.updateUserSuperAdmin(id, updateAuthDto, user);
+    return this.usersService.updateUserSuperAdmin(id, updateAuthDto, user.id);
   }
 
   @Patch()
   @Auth()
   update(@Body() updateAuthDto: UpdateUserDto, @GetUser() user: User) {
-    return this.authService.updateUser(updateAuthDto, user);
+    return this.usersService.updateUser(updateAuthDto, user.id);
   }
 
   @Patch(':id/deactivate')
   @Auth(ValidRoles.superadmin)
   deactivate(@Param('id') id: string, @GetUser() user: User) {
-    return this.authService.setActive(id, false, user);
+    return this.usersService.setActive(id, false, user.id);
   }
 
   @Patch(':id/activate')
   @Auth(ValidRoles.superadmin)
   activate(@Param('id') id: string, @GetUser() user: User) {
-    return this.authService.setActive(id, true, user);
+    return this.usersService.setActive(id, true, user.id);
   }
 
   @Delete(':id')
   @Auth(ValidRoles.superadmin)
   remove(@Param('id') id: string, @GetUser() user: User) {
-    return this.authService.remove(id, user);
+    return this.usersService.remove(id, user.id);
   }
 }

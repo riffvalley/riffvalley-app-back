@@ -5,7 +5,7 @@ import { Artist } from './entities/artist.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Disc } from '../discs/entities/disc.entity';
 import { NationalRelease } from '../../editorial/national-releases/entities/national-release.entity';
-import { AuthModule } from '../../identity/auth/auth.module';
+import { AuthorizationModule } from '../../identity/authorization/authorization.module';
 import { RiffValleyPlaylistArtist } from '../../editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
 import { ArtistManagementService } from './management/artist-management.service';
 import { ArtistOrphansService } from './orphans/artist-orphans.service';
@@ -32,7 +32,7 @@ import { ArtistDetailsService } from './details/artist-details.service';
       NationalRelease,
       RiffValleyPlaylistArtist,
     ]),
-    AuthModule,
+    AuthorizationModule,
   ],
 })
 export class ArtistsModule {}

@@ -5,10 +5,13 @@ import { VersionsService } from './versions.service';
 import { VersionsController } from './versions.controller';
 import { Version } from './entities/version.entity';
 import { VersionItem } from './entities/version-item.entity';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Version, VersionItem]), AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([Version, VersionItem]),
+    AuthorizationModule,
+  ],
   controllers: [VersionsController],
   providers: [VersionsService],
 })

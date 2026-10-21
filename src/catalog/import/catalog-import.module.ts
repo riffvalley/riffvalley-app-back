@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { Artist } from '../artists/entities/artist.entity';
 import { Country } from '../countries/entities/country.entity';
 import { Disc } from '../discs/entities/disc.entity';
@@ -16,7 +16,7 @@ import { ExcelWorkbookParser } from './excel/parser/excel-workbook.parser';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Artist, Disc, Country, Genre]),
-    AuthModule,
+    AuthorizationModule,
   ],
   controllers: [CatalogImportController, ExcelController],
   providers: [

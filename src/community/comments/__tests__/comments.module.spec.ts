@@ -9,7 +9,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { getMetadataArgsStorage } from 'typeorm';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
@@ -56,7 +56,7 @@ describe('CommentsModule characterization', () => {
       MODULE_METADATA.IMPORTS,
       CommentsModule,
     ) as unknown[];
-    expect(imports).toContain(AuthModule);
+    expect(imports).toContain(AuthorizationModule);
   });
 
   it('preserves route methods, paths, and authentication on create and user list', () => {

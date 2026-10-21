@@ -3,10 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { MODULE_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { User } from 'src/identity/auth/entities/user.entity';
-import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity';
-import { Rate } from 'src/community/rates/entities/rate.entity';
 import { CloudflareR2IntegrationModule } from 'src/integrations/cloudflare-r2-integration/cloudflare-r2-integration.module';
 import { CloudflareR2Service } from 'src/integrations/cloudflare-r2-integration/cloudflare-r2.service';
 import { UploadsController } from './uploads.controller';
@@ -25,7 +23,7 @@ describe('UploadsModule', () => {
       [UploadsService],
     );
     expect(Reflect.getMetadata(MODULE_METADATA.IMPORTS, UploadsModule)).toEqual(
-      [AuthModule, CloudflareR2IntegrationModule],
+      [AuthorizationModule, CloudflareR2IntegrationModule],
     );
     expect(
       Reflect.getMetadata(
@@ -35,14 +33,10 @@ describe('UploadsModule', () => {
     ).toContain(CloudflareR2Service);
   });
 
-  it('resolves UploadsController and UploadsService through Auth and R2 providers', async () => {
+  it('resolves UploadsController and UploadsService through Authorization and R2 providers', async () => {
     let moduleRef: TestingModule;
     const builder = Test.createTestingModule({ imports: [UploadsModule] })
       .overrideProvider(getRepositoryToken(User))
-      .useValue({})
-      .overrideProvider(getRepositoryToken(UserAccessLog))
-      .useValue({})
-      .overrideProvider(getRepositoryToken(Rate))
       .useValue({})
       .overrideProvider(ConfigService)
       .useValue({ get: () => 'uploads-module-test-secret' })

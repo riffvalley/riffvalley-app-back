@@ -3,7 +3,7 @@ import { ListsService } from './list.service';
 import { ListsController } from './list.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { List } from './entities/list.entity';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { WordpressIntegrationModule } from 'src/integrations/wordpress-integration/wordpress-integration.module';
 import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
@@ -27,7 +27,7 @@ import { MonthlyListPublisherService } from './wordpress/monthly-list-publisher.
   ],
   imports: [
     TypeOrmModule.forFeature([List, Content]),
-    AuthModule,
+    AuthorizationModule,
     WordpressIntegrationModule,
     SpotifyIntegrationModule,
   ],

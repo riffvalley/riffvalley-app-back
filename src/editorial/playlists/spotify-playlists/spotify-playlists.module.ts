@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { FestivalPlaylistsController } from './festival-playlists.controller';
 import { SpotifyPlaylistsService } from './spotify-playlists.service';
 import { RiffValleyPlaylistArtist } from './entities/riff-valley-playlist-artist.entity';
@@ -24,7 +24,7 @@ import { SpotifyPlaylistTrackMaintenanceService } from './track-maintenance/spot
       RiffValleyPlaylist,
       Artist,
     ]),
-    AuthModule,
+    AuthorizationModule,
     MailModule,
     SpotifyIntegrationModule,
   ],

@@ -17,7 +17,7 @@ import { DiscModule } from 'src/catalog/discs/discs.module';
 import { ContentSchedulerService } from './content-scheduler.service';
 
 import { forwardRef } from '@nestjs/common';
-import { AuthModule } from 'src/identity/auth/auth.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { ContentQueryService } from './application/content-query.service';
 import { ContentCreationService } from './application/content-creation.service';
 import { ContentLifecycleService } from './application/content-lifecycle.service';
@@ -36,7 +36,7 @@ import { ContentLifecycleService } from './application/content-lifecycle.service
     ]),
     forwardRef(() => ListsModule),
     DiscModule,
-    AuthModule,
+    AuthorizationModule,
   ],
   controllers: [ContentsController],
   providers: [
