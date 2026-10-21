@@ -16,7 +16,7 @@ Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gate
 
 ### Community
 
-- [Auditoría inicial de Community](community.md) — inventario del estado actual, deuda de Quality Gates y propuesta de cortes; auditoría completada por BC-COMM-0 (2026-10-21).
+- [Cierre de Community](community.md) — BC-COMM-0–9 completadas; saneamiento verificado, cero entradas Community en los tres baselines y riesgos contractuales diferidos documentados (2026-10-21).
 
 ### Communications
 
@@ -79,7 +79,7 @@ La secuencia se amplía después de cada dominio; no constituye una orden para a
 | Orden | Dominio                   | Módulos previstos                                                                                                                | Estado                                                                                                                                                                  |
 | ----- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                 | **Completado** por BC-CAT (2026-10-20); QG-1–QG-18 completadas, cero entradas Catalog en los tres baselines y `yarn verify` aprobado                                    |
-| 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                   | **Auditado** por BC-COMM-0 (2026-10-21); propuesta de saneamiento en [community.md](community.md)                                                                         |
+| 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                   | **Completado** por BC-COMM-9 (2026-10-21); cero deuda Community en los tres baselines y `yarn verify` aprobado en [community.md](community.md)                              |
 | 3     | Editorial                 | Articles, Asignations, Contents, SpotifyPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | **Completado** por BC-ED-0; diez módulos activos completados, Links retirado por BC-LNK-1, BC-ED-1–10 completados y cero infracciones editoriales en los tres baselines |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                      | Pendiente                                                                                                                                                               |
 | 5     | Identity                  | Auth, AccessRequests                                                                                                             | Pendiente                                                                                                                                                               |
@@ -100,11 +100,11 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Catalog                   | CatalogImport       | completado |
 | Catalog                   | CatalogOverview     | completado |
 | Catalog                   | LastfmCatalog       | completado |
-| Community                 | Comments            | auditado   |
-| Community                 | Favorites           | auditado   |
-| Community                 | Pendings            | auditado   |
-| Community                 | Rates               | auditado   |
-| Community                 | Requests            | auditado   |
+| Community                 | Comments            | completado |
+| Community                 | Favorites           | completado |
+| Community                 | Pendings            | completado |
+| Community                 | Rates               | completado |
+| Community                 | Requests            | completado |
 | Editorial                 | Articles            | completado |
 | Editorial                 | Asignations         | completado |
 | Editorial                 | Contents            | completado |
