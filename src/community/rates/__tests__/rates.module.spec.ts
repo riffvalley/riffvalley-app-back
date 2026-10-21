@@ -1,4 +1,5 @@
 import { MODULE_METADATA } from '@nestjs/common/constants';
+import { Type } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -21,11 +22,16 @@ describe('RatesModule characterization', () => {
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({ imports: [RatesModule] })
-      .overrideProvider(getRepositoryToken(Rate)).useValue(rateRepository)
-      .overrideProvider(getRepositoryToken(Disc)).useValue(discRepository)
-      .overrideProvider(getRepositoryToken(User)).useValue({})
-      .overrideProvider(getRepositoryToken(UserAccessLog)).useValue({})
-      .overrideProvider(ConfigService).useValue({ get: () => 'rates-test-secret' })
+      .overrideProvider(getRepositoryToken(Rate))
+      .useValue(rateRepository)
+      .overrideProvider(getRepositoryToken(Disc))
+      .useValue(discRepository)
+      .overrideProvider(getRepositoryToken(User))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(UserAccessLog))
+      .useValue({})
+      .overrideProvider(ConfigService)
+      .useValue({ get: () => 'rates-test-secret' })
       .compile();
   });
 
@@ -37,28 +43,60 @@ describe('RatesModule characterization', () => {
     expect(moduleRef.get(RatesStatsService)).toBeDefined();
     expect(moduleRef.get(RatesHistoryService)).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Rate))).toBe(rateRepository);
-    expect((moduleRef.get(RatesService) as any).rateRepository).toBe(rateRepository);
-    expect((moduleRef.get(RatesStatsService) as any).rateRepository).toBe(rateRepository);
-    expect((moduleRef.get(RatesHistoryService) as any).rateRepository).toBe(rateRepository);
+    expect(moduleRef.get(RatesService)).toHaveProperty(
+      'rateRepository',
+      rateRepository,
+    );
+    expect(moduleRef.get(RatesStatsService)).toHaveProperty(
+      'rateRepository',
+      rateRepository,
+    );
+    expect(moduleRef.get(RatesHistoryService)).toHaveProperty(
+      'rateRepository',
+      rateRepository,
+    );
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
-    expect((Reflect.getMetadata(MODULE_METADATA.IMPORTS, RatesModule) as unknown[])).toContain(AuthModule);
+    expect(
+      Reflect.getMetadata(MODULE_METADATA.IMPORTS, RatesModule) as unknown[],
+    ).toContain(AuthModule);
   });
 
   it('preserves Rate relation metadata and inverse sides', () => {
     const relations = getMetadataArgsStorage().relations;
-    const relation = (target: Function, property: string) => relations.find((entry) => entry.target === target && entry.propertyName === property);
+    const relation = (target: Type<unknown>, property: string) =>
+      relations.find(
+        (entry) => entry.target === target && entry.propertyName === property,
+      );
+    const inverseSide = (
+      relationEntry: (typeof relations)[number] | undefined,
+      entity: object,
+    ) => {
+      const inverseSideProperty = relationEntry?.inverseSideProperty;
+      return typeof inverseSideProperty === 'function'
+        ? inverseSideProperty(entity)
+        : undefined;
+    };
     const rateUser = relation(Rate, 'user');
-    expect(rateUser).toMatchObject({ relationType: 'many-to-one', options: { eager: true, onDelete: 'CASCADE' } });
-    expect((rateUser as any).inverseSideProperty({ rate: 'user.rate' })).toBe('user.rate');
+    expect(rateUser).toMatchObject({
+      relationType: 'many-to-one',
+      options: { eager: true, onDelete: 'CASCADE' },
+    });
+    expect(inverseSide(rateUser, { rate: 'user.rate' })).toBe('user.rate');
     const rateDisc = relation(Rate, 'disc');
-    expect(rateDisc).toMatchObject({ relationType: 'many-to-one', options: { eager: true, onDelete: 'CASCADE' } });
-    expect((rateDisc as any).inverseSideProperty({ rates: 'disc.rates' })).toBe('disc.rates');
+    expect(rateDisc).toMatchObject({
+      relationType: 'many-to-one',
+      options: { eager: true, onDelete: 'CASCADE' },
+    });
+    expect(inverseSide(rateDisc, { rates: 'disc.rates' })).toBe('disc.rates');
     const userRate = relation(User, 'rate');
-    expect(userRate).toMatchObject({ relationType: 'one-to-many', options: { cascade: true } });
-    expect((userRate as any).inverseSideProperty({ user: 'rate.user' })).toBe('rate.user');
+    expect(userRate).toMatchObject({
+      relationType: 'one-to-many',
+      options: { cascade: true },
+    });
+    expect(inverseSide(userRate, { user: 'rate.user' })).toBe('rate.user');
     const discRates = relation(Disc, 'rates');
     expect(discRates).toMatchObject({ relationType: 'one-to-many' });
     expect(discRates?.options.eager).toBeUndefined();
-    expect((discRates as any).inverseSideProperty({ disc: 'rate.disc' })).toBe('rate.disc');
+    expect(inverseSide(discRates, { disc: 'rate.disc' })).toBe('rate.disc');
   });
 });

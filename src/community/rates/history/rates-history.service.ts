@@ -66,10 +66,10 @@ export class RatesHistoryService {
     candidatesQB
       .orderBy(
         'rate.editedAt',
-        order as any,
+        order,
         order === 'ASC' ? 'NULLS FIRST' : 'NULLS LAST',
       )
-      .addOrderBy('rate.createdAt', order as any);
+      .addOrderBy('rate.createdAt', order);
 
     // Para paginar por eventos (no por filas), traemos un "buffer".
     // Regla práctica: necesitarás ~offset+limit filas, pero algunas aportan 2 eventos.
@@ -107,7 +107,7 @@ export class RatesHistoryService {
           rate: r.rate ?? null,
           cover: r.cover ?? null,
           disc: {
-            id: (r as any).discId ?? r.disc?.id,
+            id: getDiscId(r),
             name: r.disc?.name,
             artist: r.disc?.artist
               ? { id: r.disc.artist.id, name: r.disc.artist.name }
@@ -128,7 +128,7 @@ export class RatesHistoryService {
             rate: r.rate ?? null,
             cover: r.cover ?? null,
             disc: {
-              id: (r as any).discId ?? r.disc?.id,
+              id: getDiscId(r),
               name: r.disc?.name,
               artist: r.disc?.artist
                 ? { id: r.disc.artist.id, name: r.disc.artist.name }
@@ -186,4 +186,12 @@ export class RatesHistoryService {
       data, // [{ rateId, action, timestamp, dayLabel, rate, cover, disc: {…} }]
     };
   }
+}
+
+function getDiscId(rate: Rate): string | undefined {
+  if ('discId' in rate && typeof rate.discId === 'string') {
+    return rate.discId;
+  }
+
+  return rate.disc?.id;
 }

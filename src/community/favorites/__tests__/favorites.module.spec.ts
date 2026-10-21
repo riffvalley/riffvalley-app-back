@@ -45,12 +45,12 @@ describe('FavoritesModule characterization', () => {
 
   it('resolves the controller, service and repositories through FavoritesModule/AuthModule', () => {
     expect(moduleRef.get(FavoritesController)).toBeDefined();
-    const service = moduleRef.get(FavoritesService) as any;
+    const service = moduleRef.get(FavoritesService);
     expect(service).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Favorite))).toBe(
       favoriteRepository,
     );
-    expect(service.favoriteRepository).toBe(favoriteRepository);
+    expect(service).toHaveProperty('favoriteRepository', favoriteRepository);
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
 
     const imports = Reflect.getMetadata(

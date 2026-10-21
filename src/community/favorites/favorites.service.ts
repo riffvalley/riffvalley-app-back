@@ -28,7 +28,7 @@ export class FavoritesService {
   constructor(
     @InjectRepository(Favorite)
     private readonly favoriteRepository: Repository<Favorite>,
-  ) { }
+  ) {}
 
   async create(createFavoriteDto: CreateFavoriteDto, user: User) {
     try {
@@ -55,7 +55,14 @@ export class FavoritesService {
   }
 
   async findAllByUser(paginationDto: PaginationDto, user: User) {
-    const { limit = 10, offset = 0, query, dateRange, genre, country } = paginationDto;
+    const {
+      limit = 10,
+      offset = 0,
+      query,
+      dateRange,
+      genre,
+      country,
+    } = paginationDto;
     const userId = user.id;
 
     // Manejo del rango de fechas
@@ -143,7 +150,10 @@ export class FavoritesService {
     }
 
     if (country) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(country);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          country,
+        );
       if (isUUID) {
         queryBuilder.andWhere('country.id = :country', { country });
       } else {
@@ -196,14 +206,20 @@ export class FavoritesService {
         commentCount: parseInt(raw[index].commentCount, 10) || 0,
         userRate: raw[index].rateId
           ? {
-            id: raw[index].rateId,
-            rate: raw[index].userRate,
-            cover: raw[index].userCover,
-          }
+              id: raw[index].rateId,
+              rate: raw[index].userRate,
+              cover: raw[index].userCover,
+            }
           : null,
         userPending: raw[index].pendingId ? { id: raw[index].pendingId } : null,
-        averageRate: raw[index].averageRate != null ? parseFloat(raw[index].averageRate) : null,
-        averageCover: raw[index].averageCover != null ? parseFloat(raw[index].averageCover) : null,
+        averageRate:
+          raw[index].averageRate != null
+            ? parseFloat(raw[index].averageRate)
+            : null,
+        averageCover:
+          raw[index].averageCover != null
+            ? parseFloat(raw[index].averageCover)
+            : null,
       },
     }));
 
@@ -236,7 +252,10 @@ export class FavoritesService {
     }
 
     if (country) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(country);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          country,
+        );
       if (isUUID) {
         totalItemsQueryBuilder.andWhere('country.id = :country', { country });
       } else {
@@ -295,15 +314,27 @@ export class FavoritesService {
     }
   }
 
-  private handleDbExceptions(error: any) {
+  private handleDbExceptions(error: unknown) {
     if (error instanceof HttpException) {
       throw error;
     }
     // Por ejemplo, error.code === '23505' en PostgreSQL para entradas duplicadas
-    if (error.code === '23505') {
+    if (isUniqueConstraintError(error)) {
       throw new BadRequestException(error.detail);
     }
     this.logger.error(error);
     throw new InternalServerErrorException('An unexpected error occurred');
   }
+}
+
+function isUniqueConstraintError(
+  error: unknown,
+): error is { code: '23505'; detail?: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505' &&
+    (!('detail' in error) || typeof error.detail === 'string')
+  );
 }

@@ -13,4 +13,4 @@ import { RatesHistoryService } from './history/rates-history.service';
   providers: [RatesService, RatesStatsService, RatesHistoryService],
   imports: [TypeOrmModule.forFeature([Rate, Disc]), AuthModule], // Registro de la entidad Rate en TypeORM
 })
-export class RatesModule { }
+export class RatesModule {}

@@ -3,24 +3,24 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
-import { RequestMethod } from '@nestjs/common';
+import { RequestMethod, Type } from '@nestjs/common';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
-import { FavoritesController } from './favorites.controller';
+import { PendingsController } from '../pendings.controller';
 
-describe('FavoritesController access policy', () => {
+describe('PendingsController access policy', () => {
   it('requires authentication for personal reads and writes', () => {
     const routes = [
-      ['findAll', RequestMethod.GET, '/', true],
       ['create', RequestMethod.POST, '/', true],
+      ['findAll', RequestMethod.GET, '/', true],
       ['findOne', RequestMethod.GET, ':id', true],
       ['remove', RequestMethod.DELETE, ':id', true],
     ] as const;
 
     for (const [name, method, path, authenticated] of routes) {
-      const handler = FavoritesController.prototype[name];
+      const handler = PendingsController.prototype[name];
       const guards = Reflect.getMetadata(GUARDS_METADATA, handler) as
-        | Function[]
+        | Type<unknown>[]
         | undefined;
       expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(method);
       expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);

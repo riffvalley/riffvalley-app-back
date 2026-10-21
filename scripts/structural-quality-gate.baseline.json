@@ -3,42 +3,6 @@
   "violations": [
     {
       "rule": "module-root-file",
-      "path": "src/communications/mail/mail.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/community/comments/comments.controller.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/community/comments/comments.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/community/favorites/favorites.controller.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/community/favorites/favorites.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/community/pendings/pendings.controller.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/community/pendings/pendings.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/community/rates/rates.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/community/requests/requests.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
       "path": "src/data-source.ts"
     },
     {
@@ -176,50 +140,6 @@
     {
       "rule": "module-root-file",
       "path": "src/winston.config.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/communications/mail/mail.service.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/comments/comments.controller.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/comments/comments.service.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/favorites/favorites.controller.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/favorites/favorites.service.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/pendings/pendings.controller.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/pendings/pendings.service.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/rates/history/rates-history.service.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/rates/rates.service.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/rates/stats/rates-stats.service.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/community/requests/requests.service.spec.ts"
     },
     {
       "rule": "spec-outside-tests",

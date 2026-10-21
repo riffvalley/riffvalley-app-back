@@ -1,4 +1,4 @@
-import { RequestMethod } from '@nestjs/common';
+import { RequestMethod, Type } from '@nestjs/common';
 import {
   GUARDS_METADATA,
   METHOD_METADATA,
@@ -47,10 +47,10 @@ describe('PendingsModule characterization', () => {
 
   it('resolves the controller, service and repositories through PendingsModule/AuthModule', () => {
     expect(moduleRef.get(PendingsController)).toBeDefined();
-    const service = moduleRef.get(PendingsService) as any;
+    const service = moduleRef.get(PendingsService);
     expect(service).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Pending))).toBe(pendingRepository);
-    expect(service.pendingRepository).toBe(pendingRepository);
+    expect(service).toHaveProperty('pendingRepository', pendingRepository);
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
 
     const imports = Reflect.getMetadata(
@@ -87,20 +87,27 @@ describe('PendingsModule characterization', () => {
 
   it('preserves Pending relation metadata and targets User.pending as its inverse', () => {
     const relations = getMetadataArgsStorage().relations;
-    const relation = (target: Function, propertyName: string) =>
+    const relation = (target: Type<unknown>, propertyName: string) =>
       relations.find(
         (entry) =>
           entry.target === target && entry.propertyName === propertyName,
       );
+    const inverseSide = (
+      relationEntry: (typeof relations)[number] | undefined,
+      entity: object,
+    ) => {
+      const inverseSideProperty = relationEntry?.inverseSideProperty;
+      return typeof inverseSideProperty === 'function'
+        ? inverseSideProperty(entity)
+        : undefined;
+    };
 
     const pendingUser = relation(Pending, 'user');
     expect(pendingUser).toMatchObject({
       relationType: 'many-to-one',
       options: { eager: true, onDelete: 'CASCADE' },
     });
-    expect(
-      (pendingUser as any).inverseSideProperty({ pending: 'pending' }),
-    ).toBe('pending');
+    expect(inverseSide(pendingUser, { pending: 'pending' })).toBe('pending');
 
     const pendingDisc = relation(Pending, 'disc');
     expect(pendingDisc).toMatchObject({
@@ -108,35 +115,35 @@ describe('PendingsModule characterization', () => {
       options: { onDelete: 'CASCADE' },
     });
     expect(pendingDisc?.options.eager).toBeUndefined();
-    expect(
-      (pendingDisc as any).inverseSideProperty({ pendings: 'pendings' }),
-    ).toBe('pendings');
+    expect(inverseSide(pendingDisc, { pendings: 'pendings' })).toBe('pendings');
 
     const userPending = relation(User, 'pending');
     expect(userPending).toMatchObject({
       relationType: 'one-to-many',
       options: { cascade: true },
     });
-    expect((userPending as any).inverseSideProperty({ user: 'user' })).toBe(
-      'user',
-    );
+    expect(inverseSide(userPending, { user: 'user' })).toBe('user');
 
     const discPendings = relation(Disc, 'pendings');
     expect(discPendings).toMatchObject({
       relationType: 'one-to-many',
       options: { eager: true },
     });
-    expect((discPendings as any).inverseSideProperty({ disc: 'disc' })).toBe(
-      'disc',
-    );
+    expect(inverseSide(discPendings, { disc: 'disc' })).toBe('disc');
   });
 
   it('resolves Pending.user and User.pending as inverse sides of the same relation', async () => {
-    const dataSource = new DataSource({
+    class MetadataDataSource extends DataSource {
+      buildMetadataForTest() {
+        return this.buildMetadatas();
+      }
+    }
+
+    const dataSource = new MetadataDataSource({
       type: 'postgres',
       entities: ['src/**/*.entity.ts'],
     });
-    await (dataSource as any).buildMetadatas();
+    await dataSource.buildMetadataForTest();
 
     const pendingUser = dataSource
       .getMetadata(Pending)

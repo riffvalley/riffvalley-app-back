@@ -4,8 +4,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { DiscRequest, RequestStatus } from './entities/disc-request.entity';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
@@ -21,6 +21,8 @@ export class RequestsService {
   private readonly logger = new Logger(RequestsService.name);
 
   constructor(
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     @InjectRepository(DiscRequest)
     private readonly requestRepo: Repository<DiscRequest>,
     @InjectRepository(Artist)
@@ -34,8 +36,16 @@ export class RequestsService {
   ) {}
 
   async create(dto: CreateRequestDto, user: User): Promise<DiscRequest> {
+    await Promise.all([
+      this.assertGenreExists(dto.genreId),
+      this.assertCountryExists(dto.countryId),
+    ]);
+    const { releaseDate, ...requestFields } = dto;
     const request = this.requestRepo.create({
-      ...dto,
+      ...requestFields,
+      ...(releaseDate !== undefined
+        ? { releaseDate: releaseDate === null ? null : new Date(releaseDate) }
+        : {}),
       user,
       genre: dto.genreId ? ({ id: dto.genreId } as Genre) : null,
       country: dto.countryId ? ({ id: dto.countryId } as Country) : null,
@@ -69,7 +79,11 @@ export class RequestsService {
       );
     }
 
-    const { genreId, countryId, ...rest } = dto;
+    const { genreId, countryId, releaseDate, ...rest } = dto;
+    await Promise.all([
+      genreId === undefined ? undefined : this.assertGenreExists(genreId),
+      countryId === undefined ? undefined : this.assertCountryExists(countryId),
+    ]);
 
     Object.assign(request, rest);
 
@@ -79,52 +93,61 @@ export class RequestsService {
     if (countryId !== undefined) {
       request.country = countryId ? ({ id: countryId } as Country) : null;
     }
+    if (releaseDate !== undefined) {
+      request.releaseDate = releaseDate === null ? null : new Date(releaseDate);
+    }
 
     return this.requestRepo.save(request);
   }
 
   async approve(id: string): Promise<Disc> {
-    const request = await this.findOne(id);
+    return this.dataSource.transaction(async (manager) => {
+      const requestRepo = manager.getRepository(DiscRequest);
+      const artistRepo = manager.getRepository(Artist);
+      const discRepo = manager.getRepository(Disc);
+      const request = await requestRepo.findOneBy({ id });
 
-    if (request.status !== RequestStatus.PENDING) {
-      throw new BadRequestException('Esta petición ya fue procesada');
-    }
+      if (!request) throw new NotFoundException(`Request ${id} not found`);
+      if (request.status !== RequestStatus.PENDING) {
+        throw new BadRequestException('Esta petición ya fue procesada');
+      }
 
-    // Buscar o crear artista
-    const normalizedArtistName = normalizeForSearch(request.artistName);
-    let artist = await this.artistRepo.findOne({
-      where: { nameNormalized: normalizedArtistName },
-    });
-
-    if (!artist) {
-      artist = this.artistRepo.create({
-        name: request.artistName,
-        nameNormalized: normalizedArtistName,
-        ...(request.country ? { countryId: request.country.id } : {}),
+      // Buscar o crear artista
+      const normalizedArtistName = normalizeForSearch(request.artistName);
+      let artist = await artistRepo.findOne({
+        where: { nameNormalized: normalizedArtistName },
       });
-      await this.artistRepo.save(artist);
-      this.logger.log(`Artista creado: "${request.artistName}"`);
-    }
 
-    // Crear disco
-    const disc = this.discRepo.create({
-      name: request.discName,
-      releaseDate: request.releaseDate,
-      ep: request.ep,
-      debut: request.debut,
-      description: request.description,
-      image: request.image,
-      link: request.link,
-      artist,
-      ...(request.genre ? { genre: request.genre } : {}),
+      if (!artist) {
+        artist = artistRepo.create({
+          name: request.artistName,
+          nameNormalized: normalizedArtistName,
+          ...(request.country ? { countryId: request.country.id } : {}),
+        });
+        await artistRepo.save(artist);
+        this.logger.log(`Artista creado: "${request.artistName}"`);
+      }
+
+      // Crear disco
+      const disc = discRepo.create({
+        name: request.discName,
+        releaseDate: request.releaseDate,
+        ep: request.ep,
+        debut: request.debut,
+        description: request.description,
+        image: request.image,
+        link: request.link,
+        artist,
+        ...(request.genre ? { genre: request.genre } : {}),
+      });
+      await discRepo.save(disc);
+      this.logger.log(`Disco creado desde petición: "${request.discName}"`);
+
+      request.status = RequestStatus.APPROVED;
+      await requestRepo.save(request);
+
+      return disc;
     });
-    await this.discRepo.save(disc);
-    this.logger.log(`Disco creado desde petición: "${request.discName}"`);
-
-    request.status = RequestStatus.APPROVED;
-    await this.requestRepo.save(request);
-
-    return disc;
   }
 
   async reject(id: string, adminNotes?: string): Promise<DiscRequest> {
@@ -150,5 +173,23 @@ export class RequestsService {
     request.status = RequestStatus.PENDING;
     request.adminNotes = null;
     return this.requestRepo.save(request);
+  }
+
+  private async assertGenreExists(
+    genreId: string | null | undefined,
+  ): Promise<void> {
+    if (!genreId) return;
+    const genre = await this.genreRepo.findOneBy({ id: genreId });
+    if (!genre)
+      throw new NotFoundException(`No se encontró el género ${genreId}`);
+  }
+
+  private async assertCountryExists(
+    countryId: string | null | undefined,
+  ): Promise<void> {
+    if (!countryId) return;
+    const country = await this.countryRepo.findOneBy({ id: countryId });
+    if (!country)
+      throw new NotFoundException(`No se encontró el país ${countryId}`);
   }
 }

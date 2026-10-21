@@ -29,7 +29,7 @@ export class RatesService {
     @InjectRepository(Rate)
     private readonly rateRepository: Repository<Rate>,
     // private readonly discRespository: Repository<Disc>,
-  ) { }
+  ) {}
 
   async create(createRateDto: CreateRateDto, user: User) {
     try {
@@ -46,8 +46,8 @@ export class RatesService {
       const existingRate = await this.rateRepository.findOne({
         where: {
           user: { id: user.id },
-          disc: { id: discId }
-        }
+          disc: { id: discId },
+        },
       });
 
       if (existingRate) {
@@ -55,7 +55,7 @@ export class RatesService {
         const updatedRate = await this.rateRepository.preload({
           id: existingRate.id,
           ...rateData,
-          editedAt: new Date()
+          editedAt: new Date(),
         });
 
         await this.rateRepository.save(updatedRate);
@@ -190,7 +190,10 @@ export class RatesService {
     }
 
     if (country) {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(country);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          country,
+        );
       if (isUUID) {
         queryBuilder.andWhere('country.id = :country', { country });
         totalItemsQueryBuilder.andWhere('country.id = :country', { country });
@@ -246,8 +249,14 @@ export class RatesService {
         },
         voteCount: parseInt(raw[index].rateCount, 10) || null,
         commentCount: parseInt(raw[index].commentCount, 10) || 0,
-        averageRate: raw[index].averageRate != null ? parseFloat(raw[index].averageRate) : null,
-        averageCover: raw[index].averageCover != null ? parseFloat(raw[index].averageCover) : null,
+        averageRate:
+          raw[index].averageRate != null
+            ? parseFloat(raw[index].averageRate)
+            : null,
+        averageCover:
+          raw[index].averageCover != null
+            ? parseFloat(raw[index].averageCover)
+            : null,
         favoriteId: raw[index].favoriteId || null, // Agregar el ID del favorito si existe
         pendingId: raw[index].pendingId || null,
       },
@@ -333,12 +342,12 @@ export class RatesService {
     return { message: `Rate with id ${id} has been removed` };
   }
 
-  private handleDbExceptions(error: any) {
+  private handleDbExceptions(error: unknown) {
     if (error instanceof HttpException) {
       throw error;
     }
     // Ej. error.code === '23505' en postgres para entradas duplicadas
-    if (error.code === '23505') {
+    if (isUniqueConstraintError(error)) {
       throw new BadRequestException(error.detail);
     }
     this.logger.error(error);
@@ -362,11 +371,28 @@ export class RatesService {
         relations: ['user'], // Incluye los usuarios en la consulta
       });
 
-      return rates;
+      return rates.map(({ user, ...rate }) => ({
+        ...rate,
+        user: {
+          id: user.id,
+          username: user.username,
+          image: user.image,
+        },
+      }));
     } catch (error) {
       this.handleDbExceptions(error);
     }
   }
+}
 
-
+function isUniqueConstraintError(
+  error: unknown,
+): error is { code: '23505'; detail?: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505' &&
+    (!('detail' in error) || typeof error.detail === 'string')
+  );
 }

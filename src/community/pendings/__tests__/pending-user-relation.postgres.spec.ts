@@ -17,7 +17,8 @@ describePostgres('Pending ↔ User relation with PostgreSQL fixtures', () => {
   let queryRunner: ReturnType<DataSource['createQueryRunner']>;
 
   beforeAll(async () => {
-    require('dotenv').config();
+    const dotenv = await import('dotenv');
+    dotenv.config();
     if (process.env.STAGE !== 'dev') {
       throw new Error('Pending/User PostgreSQL tests require STAGE=dev');
     }
@@ -104,16 +105,20 @@ describePostgres('Pending ↔ User relation with PostgreSQL fixtures', () => {
   });
 
   it('cascades and loads User → Pending through the declared inverse relation', async () => {
-    const user = queryRunner.manager.create(User, {
-      id: CASCADE_USER_ID,
-      username: 'cascade-owner',
-      pending: [
-        queryRunner.manager.create(Pending, {
-          id: CASCADE_PENDING_ID,
-          disc: { id: DISC_ID } as Disc,
-        }),
-      ],
-    } as any);
+    const user = Object.assign(
+      queryRunner.manager.create(User, {
+        id: CASCADE_USER_ID,
+        username: 'cascade-owner',
+      }),
+      {
+        pending: [
+          queryRunner.manager.create(Pending, {
+            id: CASCADE_PENDING_ID,
+            disc: { id: DISC_ID } as Disc,
+          }),
+        ],
+      },
+    );
     await queryRunner.manager.save(user);
 
     const persisted = await queryRunner.query(

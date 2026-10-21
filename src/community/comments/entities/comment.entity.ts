@@ -28,7 +28,10 @@ export class Comment {
   @UpdateDateColumn({ nullable: true })
   editedAt: Date;
 
-  @ManyToOne(() => User, (user) => user.comments, { eager: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.comments, {
+    eager: true,
+    onDelete: 'CASCADE',
+  })
   user: User;
 
   @ManyToOne(() => Disc, (disc) => disc.comments, {
@@ -36,7 +39,10 @@ export class Comment {
   })
   disc: Disc;
 
-  @ManyToOne(() => Comment, (comment) => comment.replies, { nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => Comment, (comment) => comment.replies, {
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
   parent: Comment;
 
   @OneToMany(() => Comment, (comment) => comment.parent)

@@ -14,6 +14,14 @@ Este índice conserva el objetivo, las reglas, el procedimiento y el inventario 
 
 Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gates.md). BC-ED-0 cierra Editorial sin cambiar el estado de otros dominios.
 
+### Community
+
+- [Cierre de Community](community.md) — BC-COMM-0–9 completadas; saneamiento verificado, cero entradas Community en los tres baselines y riesgos contractuales diferidos documentados (2026-10-21).
+
+### Communications
+
+- [Mail](communications.md) — BC-COM-1/2 completados; el hallazgo de seguridad HTML sigue pendiente.
+
 ## Objetivo y alcance
 
 Auditar progresivamente los módulos del backend después de completar Backend Architecture. Esta fase revisa responsabilidades, dependencias, calidad, consultas, contratos y pruebas; convierte solo los problemas demostrados en tareas pequeñas y verificables. La reorganización física ya cerrada no se reabre por defecto.
@@ -71,13 +79,13 @@ La secuencia se amplía después de cada dominio; no constituye una orden para a
 | Orden | Dominio                   | Módulos previstos                                                                                                                | Estado                                                                                                                                                                  |
 | ----- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                 | **Completado** por BC-CAT (2026-10-20); QG-1–QG-18 completadas, cero entradas Catalog en los tres baselines y `yarn verify` aprobado                                    |
-| 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                   | Pendiente                                                                                                                                                               |
+| 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                   | **Completado** por BC-COMM-9 (2026-10-21); cero deuda Community en los tres baselines y `yarn verify` aprobado en [community.md](community.md)                              |
 | 3     | Editorial                 | Articles, Asignations, Contents, SpotifyPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | **Completado** por BC-ED-0; diez módulos activos completados, Links retirado por BC-LNK-1, BC-ED-1–10 completados y cero infracciones editoriales en los tres baselines |
 | 4     | Product                   | News, Suggestions, Versions                                                                                                      | Pendiente                                                                                                                                                               |
 | 5     | Identity                  | Auth, AccessRequests                                                                                                             | Pendiente                                                                                                                                                               |
 | 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                           | Pendiente                                                                                                                                                               |
 | 7     | Platform / Infrastructure | I18n, Seeds, Uploads                                                                                                             | Pendiente                                                                                                                                                               |
-| 8     | Communications            | Mail                                                                                                                             | Pendiente                                                                                                                                                               |
+| 8     | Communications            | Mail                                                                                                                             | **Completado** por BC-COM-1/2 (2026-10-21); cero deuda en los tres baselines y `yarn verify` aprobado. Hallazgo de seguridad HTML pendiente.                            |
 
 ### Estado detallado por módulo
 
@@ -92,11 +100,11 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Catalog                   | CatalogImport       | completado |
 | Catalog                   | CatalogOverview     | completado |
 | Catalog                   | LastfmCatalog       | completado |
-| Community                 | Comments            | pendiente  |
-| Community                 | Favorites           | pendiente  |
-| Community                 | Pendings            | pendiente  |
-| Community                 | Rates               | pendiente  |
-| Community                 | Requests            | pendiente  |
+| Community                 | Comments            | completado |
+| Community                 | Favorites           | completado |
+| Community                 | Pendings            | completado |
+| Community                 | Rates               | completado |
+| Community                 | Requests            | completado |
 | Editorial                 | Articles            | completado |
 | Editorial                 | Asignations         | completado |
 | Editorial                 | Contents            | completado |
@@ -124,6 +132,6 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Platform / Infrastructure | I18n                | pendiente  |
 | Platform / Infrastructure | Seeds               | pendiente  |
 | Platform / Infrastructure | Uploads             | pendiente  |
-| Communications            | Mail                | pendiente  |
+| Communications            | Mail                | completado |
 
 **Composición y cierre de Catalog (2026-10-20):** `AppModule` importa directamente sus siete módulos funcionales: `ArtistsModule`, `CountriesModule`, `GenresModule`, `DiscModule`, `CatalogImportModule`, `CommonModule` (overview) y `LastfmModule`. Esta composición satisface C5; no se necesita un `CatalogModule` agregador. Las dependencias cruzadas de servicios se expresan mediante imports/exports Nest concretos, en particular `DiscModule` para Last.fm, Editorial Contents y el bootstrap standalone. BC-CAT cerró formalmente Catalog después de completar QG-1–QG-18 y verificar los tres baselines y `yarn verify`; véase el [registro de cierre](catalog.md).

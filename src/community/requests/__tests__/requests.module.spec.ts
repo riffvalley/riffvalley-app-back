@@ -1,4 +1,4 @@
-import { RequestMethod } from '@nestjs/common';
+import { RequestMethod, Type } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   MODULE_METADATA,
@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common/constants';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
+import { DataSource } from 'typeorm';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
@@ -14,7 +15,10 @@ import { Genre } from 'src/catalog/genres/entities/genre.entity';
 import { AuthModule } from 'src/identity/auth/auth.module';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
-import { roleMeetsMinimum, ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
+import {
+  roleMeetsMinimum,
+  ValidRoles,
+} from 'src/identity/auth/interfaces/valid-roles';
 import { UserAccessLog } from 'src/identity/auth/entities/user-access-log.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { DiscRequest } from '../entities/disc-request.entity';
@@ -23,13 +27,18 @@ import { RequestsModule } from '../requests.module';
 import { RequestsService } from '../requests.service';
 
 jest.mock('src/identity/auth/auth.module', () => {
-  const { Module } = require('@nestjs/common');
-  const { PassportModule } = require('@nestjs/passport');
-  const { TypeOrmModule } = require('@nestjs/typeorm');
-  const { User } = require('src/identity/auth/entities/user.entity');
-  const {
-    UserRoleGuard,
-  } = require('src/identity/auth/guards/user-role/user-role.guard');
+  const { Module } =
+    jest.requireActual<typeof import('@nestjs/common')>('@nestjs/common');
+  const { PassportModule } =
+    jest.requireActual<typeof import('@nestjs/passport')>('@nestjs/passport');
+  const { TypeOrmModule } =
+    jest.requireActual<typeof import('@nestjs/typeorm')>('@nestjs/typeorm');
+  const { User } = jest.requireActual<
+    typeof import('src/identity/auth/entities/user.entity')
+  >('src/identity/auth/entities/user.entity');
+  const { UserRoleGuard } = jest.requireActual<
+    typeof import('src/identity/auth/guards/user-role/user-role.guard')
+  >('src/identity/auth/guards/user-role/user-role.guard');
 
   class AuthModule {}
   Module({
@@ -46,7 +55,7 @@ jest.mock('src/identity/auth/auth.module', () => {
 
 describe('RequestsModule', () => {
   let moduleRef: TestingModule;
-  let repositories: Map<Function, { entity: Function }>;
+  let repositories: Map<Type<unknown>, { entity: Type<unknown> }>;
 
   beforeAll(async () => {
     const entities = [
@@ -66,7 +75,8 @@ describe('RequestsModule', () => {
       imports: [RequestsModule],
     })
       .overrideProvider(ConfigService)
-      .useValue({ get: jest.fn(() => 'requests-module-test-secret') });
+      .useValue({ get: jest.fn(() => 'requests-module-test-secret') })
+      .useMocker((token) => (token === DataSource ? {} : undefined));
 
     for (const entity of entities) {
       testingModule
@@ -86,18 +96,18 @@ describe('RequestsModule', () => {
       MODULE_METADATA.IMPORTS,
       RequestsModule,
     ) as unknown[];
-    const service = moduleRef.get(RequestsService) as unknown as Record<
-      string,
-      unknown
-    >;
+    const service = moduleRef.get(RequestsService);
 
     expect(moduleRef.get(RequestsController)).toBeDefined();
     expect(imports).toContain(AuthModule);
-    expect(service['requestRepo']).toBe(repositories.get(DiscRequest));
-    expect(service['artistRepo']).toBe(repositories.get(Artist));
-    expect(service['discRepo']).toBe(repositories.get(Disc));
-    expect(service['genreRepo']).toBe(repositories.get(Genre));
-    expect(service['countryRepo']).toBe(repositories.get(Country));
+    expect(service).toHaveProperty(
+      'requestRepo',
+      repositories.get(DiscRequest),
+    );
+    expect(service).toHaveProperty('artistRepo', repositories.get(Artist));
+    expect(service).toHaveProperty('discRepo', repositories.get(Disc));
+    expect(service).toHaveProperty('genreRepo', repositories.get(Genre));
+    expect(service).toHaveProperty('countryRepo', repositories.get(Country));
   });
 
   it('preserves route methods and the administrative role boundary', () => {
