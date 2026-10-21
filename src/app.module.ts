@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CommonModule } from './catalog/overview/common.module';
 import { I18nConfigModule } from './platform/i18n/i18n.module';
+import { shouldEnableCronJobs } from './platform/scheduling/schedule-options';
 
 //MODULES
 import { ArtistsModule } from './catalog/artists/artists.module';
@@ -43,7 +44,12 @@ import { TiktokIntegrationModule } from './integrations/tiktok-integration/tikto
 @Module({
   imports: [
     ConfigModule.forRoot(),
-    ScheduleModule.forRoot(),
+    ScheduleModule.forRoot({
+      cronJobs: shouldEnableCronJobs(
+        process.env.STAGE,
+        process.env.DISABLE_SCHEDULED_TASKS,
+      ),
+    }),
     TypeOrmModule.forRoot({
       ssl: process.env.STAGE === 'prod',
       extra: {
