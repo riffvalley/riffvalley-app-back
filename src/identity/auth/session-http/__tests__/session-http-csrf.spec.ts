@@ -1,4 +1,5 @@
 import {
+  createClientLogoutCsrfVerifier,
   createLoginCsrfToken,
   createLoginCsrfVerifier,
   createSessionCsrfToken,
@@ -121,6 +122,28 @@ describe('session HTTP CSRF tokens', () => {
     ).toBe(false);
     expect(
       createLoginCsrfVerifier(undefined, 'nonce', now)(token ?? ' ', 'app'),
+    ).toBe(false);
+  });
+
+  it('verifies a logout CSRF token for idempotent requests without a cookie', () => {
+    const logoutToken = createSessionCsrfToken(
+      secret,
+      'logout',
+      'app',
+      'session-id',
+      now + 60_000,
+      now,
+    );
+    const verify = createClientLogoutCsrfVerifier(secret, now);
+
+    expect(verify(logoutToken ?? '', 'app')).toBe(true);
+    expect(verify(logoutToken ?? '', 'wiki')).toBe(false);
+    expect(verify('not-a-token', 'app')).toBe(false);
+    expect(
+      createClientLogoutCsrfVerifier(secret, now + 60_000)(
+        logoutToken ?? '',
+        'app',
+      ),
     ).toBe(false);
   });
 });

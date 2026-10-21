@@ -90,6 +90,9 @@ describe('AuthController role contract', () => {
         authService as never,
         usersService as never,
         {} as never,
+        { get: jest.fn() } as never,
+        {} as never,
+        {} as never,
       );
 
       expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
@@ -126,6 +129,9 @@ describe('AuthController role contract', () => {
       {} as never,
       usersService as never,
       activityService as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
     );
     const actorId = 'actor-1';
     const actor = { id: actorId } as never;
@@ -181,10 +187,17 @@ describe('AuthController role contract', () => {
       authService as never,
       {} as never,
       activityService as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      { consume: jest.fn().mockResolvedValue(null) } as never,
     );
 
     await expect(
-      controller.login({ username: 'listener', password: 'Password1' }),
+      controller.login(
+        { username: 'listener', password: 'Password1' },
+        undefined,
+        { socket: { remoteAddress: '127.0.0.1' }, headers: {} } as never,
+      ),
     ).resolves.toBe(response);
     expect(activityService.recordLoginAccess).toHaveBeenCalledWith('user-1');
   });
@@ -202,13 +215,15 @@ describe('AuthController role contract', () => {
       authService as never,
       {} as never,
       activityService as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
     );
 
     await expect(
       controller.login(
         { username: 'listener', password: 'Password1' },
         AUTH_SESSION_MODE,
-        'https://app.example.test',
       ),
     ).rejects.toMatchObject({ status: 503 });
     expect(authService.login).not.toHaveBeenCalled();
@@ -216,7 +231,7 @@ describe('AuthController role contract', () => {
     expect(activityService.recordLoginAccess).not.toHaveBeenCalled();
   });
 
-  it('rejects a session login request from an unapproved origin', async () => {
+  it('keeps session login unavailable before reading request metadata when gate is off', async () => {
     const authService = {
       login: jest.fn(),
       loginWithSession: jest.fn(),
@@ -228,53 +243,20 @@ describe('AuthController role contract', () => {
       authService as never,
       {} as never,
       {} as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
     );
 
     await expect(
       controller.login(
         { username: 'listener', password: 'Password1' },
         AUTH_SESSION_MODE,
-        'https://evil.example.test',
       ),
-    ).rejects.toMatchObject({ status: 403 });
+    ).rejects.toMatchObject({ status: 503 });
     expect(authService.login).not.toHaveBeenCalled();
     expect(authService.loginWithSession).not.toHaveBeenCalled();
   });
-
-  it.each([
-    ['app', 'https://app.example.test'],
-    ['wiki', 'https://wiki.example.test'],
-  ] as const)(
-    'validates the server-selected %s origin but keeps session issuance blocked until cookie transport is ready',
-    async (clientType, origin) => {
-      const authService = {
-        login: jest.fn(),
-        loginWithSession: jest.fn(),
-        resolveSessionLoginClient: jest.fn().mockReturnValue(clientType),
-      };
-      const activityService = { recordLoginAccess: jest.fn() };
-      const controller = new AuthController(
-        authService as never,
-        {} as never,
-        activityService as never,
-      );
-
-      await expect(
-        controller.login(
-          { username: 'listener', password: 'Password1' },
-          AUTH_SESSION_MODE,
-          origin,
-        ),
-      ).rejects.toMatchObject({ status: 503 });
-      expect(authService.resolveSessionLoginClient).toHaveBeenCalledWith({
-        mode: AUTH_SESSION_MODE,
-        origin,
-      });
-      expect(authService.login).not.toHaveBeenCalled();
-      expect(authService.loginWithSession).not.toHaveBeenCalled();
-      expect(activityService.recordLoginAccess).not.toHaveBeenCalled();
-    },
-  );
 
   const authorizationCases = [
     [ValidRoles.riffvalley, 'findAllRv', ValidRoles.riffvalley, true],

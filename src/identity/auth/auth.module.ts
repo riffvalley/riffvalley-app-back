@@ -7,10 +7,11 @@ import { UsersModule } from '../users/users.module';
 import { ActivityModule } from '../activity/activity.module';
 import { AuthorizationModule } from '../authorization/authorization.module';
 import { SessionsModule } from '../sessions/sessions.module';
+import { AuthRateLimitService } from './rate-limiting/auth-rate-limit.service';
 
 @Module({
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, AuthRateLimitService],
   imports: [
     ConfigModule,
     UsersModule,

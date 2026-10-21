@@ -1,6 +1,7 @@
 import * as bcrypt from 'bcrypt';
 import {
   ForbiddenException,
+  ConflictException,
   Logger,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -12,6 +13,11 @@ import { ValidRoles } from '../interfaces/valid-roles';
 import { UsersService } from '../../users/users.service';
 import { SessionsService } from '../../sessions/sessions.service';
 import { ConfigService } from '@nestjs/config';
+import {
+  InvalidSessionCredentialError,
+  RefreshOperationAlreadyProcessedError,
+  RefreshTokenReuseDetectedError,
+} from '../../sessions/errors/sessions.errors';
 
 function makeUser(values: Partial<User>): User {
   return Object.assign(new User(), values);
@@ -22,12 +28,14 @@ describe('AuthService authentication', () => {
     createAccount: jest.fn(),
     findCredentialsByUsername: jest.fn(),
     findIdentityById: jest.fn(),
+    findById: jest.fn(),
     recordLogin: jest.fn(),
   } satisfies Pick<
     UsersService,
     | 'createAccount'
     | 'findCredentialsByUsername'
     | 'findIdentityById'
+    | 'findById'
     | 'recordLogin'
   >;
   const jwtService = {
@@ -40,7 +48,11 @@ describe('AuthService authentication', () => {
   const sessionsService = {
     createSession: jest.fn(),
     revokeSession: jest.fn(),
-  } satisfies Pick<SessionsService, 'createSession' | 'revokeSession'>;
+    rotateRefreshToken: jest.fn(),
+  } satisfies Pick<
+    SessionsService,
+    'createSession' | 'revokeSession' | 'rotateRefreshToken'
+  >;
   const configValues: Record<string, string | undefined> = {};
   const configService = {
     get: jest.fn((key: string) => configValues[key]),
@@ -91,6 +103,74 @@ describe('AuthService authentication', () => {
       role: ValidRoles.user,
     });
   });
+
+  it('rotates through Sessions and signs a 15-minute access token', async () => {
+    configValues.AUTH_SESSION_MODE_ENABLED = 'true';
+    configValues.AUTH_SESSION_APP_ORIGIN = 'https://app.example.test';
+    configValues.AUTH_SESSION_WIKI_ORIGIN = 'https://wiki.example.test';
+    const expiresAt = new Date(Date.now() + 29 * 24 * 60 * 60 * 1000);
+    sessionsService.rotateRefreshToken.mockResolvedValue({
+      sessionId: 'session-1',
+      userId: 'user-1',
+      clientType: 'app',
+      createdAt: new Date(),
+      expiresAt,
+      refreshToken: 'rotated-refresh-token',
+    });
+    usersService.findById.mockResolvedValue(
+      makeUser({
+        id: 'user-1',
+        username: 'listener',
+        role: ValidRoles.user,
+        isActive: true,
+        password: 'secret',
+      }),
+    );
+
+    const result = await service.refreshWithSession(
+      'presented-refresh-token',
+      '123e4567-e89b-42d3-a456-426614174000',
+      { mode: 'refresh-v1', origin: 'https://app.example.test' },
+    );
+
+    expect(sessionsService.rotateRefreshToken).toHaveBeenCalledWith({
+      refreshToken: 'presented-refresh-token',
+      operationId: '123e4567-e89b-42d3-a456-426614174000',
+      clientType: 'app',
+    });
+    expect(jwtService.sign).toHaveBeenCalledWith(
+      { username: 'listener', id: 'user-1', role: ValidRoles.user },
+      { expiresIn: '15m' },
+    );
+    expect(result).toMatchObject({
+      accessToken: 'signed-token',
+      refreshCredential: { expiresAt, refreshToken: 'rotated-refresh-token' },
+      user: { id: 'user-1', username: 'listener', role: ValidRoles.user },
+    });
+    expect(result.user).not.toHaveProperty('password');
+  });
+
+  it.each([
+    [new InvalidSessionCredentialError(), UnauthorizedException],
+    [new RefreshTokenReuseDetectedError(), UnauthorizedException],
+    [new RefreshOperationAlreadyProcessedError(), ConflictException],
+  ])(
+    'maps refresh failure to the generic public error',
+    async (failure, ErrorType) => {
+      configValues.AUTH_SESSION_MODE_ENABLED = 'true';
+      configValues.AUTH_SESSION_APP_ORIGIN = 'https://app.example.test';
+      configValues.AUTH_SESSION_WIKI_ORIGIN = 'https://wiki.example.test';
+      sessionsService.rotateRefreshToken.mockRejectedValue(failure);
+
+      await expect(
+        service.refreshWithSession(
+          'presented-refresh-token',
+          '123e4567-e89b-42d3-a456-426614174000',
+          { mode: 'refresh-v1', origin: 'https://app.example.test' },
+        ),
+      ).rejects.toBeInstanceOf(ErrorType);
+    },
+  );
 
   it('validates credentials through Users and preserves the login payload and claims', async () => {
     usersService.findCredentialsByUsername.mockResolvedValue(

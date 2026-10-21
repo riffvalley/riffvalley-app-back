@@ -39,6 +39,12 @@ export class SessionAuthUserDto {
 export class SessionLoginResponseDto extends SessionAuthUserDto {
   @Expose()
   token: string;
+
+  @Expose()
+  csrfToken: string;
+
+  @Expose()
+  logoutCsrfToken: string;
 }
 
 /** JSON body for refresh; the rotating refresh credential is delivered separately by cookie. */
@@ -46,6 +52,12 @@ export class SessionLoginResponseDto extends SessionAuthUserDto {
 export class SessionRefreshResponseDto {
   @Expose()
   token: string;
+
+  @Expose()
+  csrfToken: string;
+
+  @Expose()
+  logoutCsrfToken: string;
 
   /** Absolute session expiry, serialized as an ISO-8601 timestamp. */
   @Expose()

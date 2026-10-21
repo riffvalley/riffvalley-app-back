@@ -21,6 +21,24 @@ const REFRESH_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
  * JSON field. Each client has a separate cookie name on the API host.
  */
 export class SessionRefreshCookieAdapter {
+  /** Call only after transport, Origin, Content-Type and Fetch Metadata pass. */
+  readRefreshTokenForValidatedClient(
+    cookieHeader: string | undefined,
+    clientType: SessionClientType,
+  ): string | null {
+    if (!cookieHeader) return null;
+
+    const cookieName = createSessionRefreshCookieClearPolicy(clientType).name;
+    const matches = cookieHeader
+      .split(';')
+      .map((part) => part.trim())
+      .filter((part) => part.startsWith(`${cookieName}=`));
+
+    if (matches.length !== 1) return null;
+    const token = matches[0].slice(cookieName.length + 1);
+    return REFRESH_TOKEN_PATTERN.test(token) ? token : null;
+  }
+
   readRefreshToken(
     cookieHeader: string | undefined,
     clientType: SessionClientType,
@@ -34,17 +52,7 @@ export class SessionRefreshCookieAdapter {
       verifyCsrfToken,
       clientType,
     );
-    if (!cookieHeader) return null;
-
-    const cookieName = createSessionRefreshCookieClearPolicy(clientType).name;
-    const matches = cookieHeader
-      .split(';')
-      .map((part) => part.trim())
-      .filter((part) => part.startsWith(`${cookieName}=`));
-
-    if (matches.length !== 1) return null;
-    const token = matches[0].slice(cookieName.length + 1);
-    return REFRESH_TOKEN_PATTERN.test(token) ? token : null;
+    return this.readRefreshTokenForValidatedClient(cookieHeader, clientType);
   }
 
   emitRefreshToken(

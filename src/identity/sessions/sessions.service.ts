@@ -52,6 +52,12 @@ export type SessionCredential = {
   refreshToken: string;
 };
 
+export type RefreshTokenSessionBinding = {
+  sessionId: string;
+  userId: string;
+  clientType: SessionClientType;
+};
+
 type RotationOutcome =
   | { kind: 'rotated'; credential: SessionCredential }
   | { kind: 'invalid' }
@@ -273,6 +279,31 @@ export class SessionsService {
       throw new InvalidSessionCredentialError();
     }
     return outcome.credential;
+  }
+
+  /** Resolves the CSRF binding without changing refresh/session state. */
+  async findRefreshTokenSessionBinding(
+    refreshToken: string,
+    clientType: unknown,
+  ): Promise<RefreshTokenSessionBinding | null> {
+    if (
+      !this.isClientType(clientType) ||
+      !REFRESH_TOKEN_PATTERN.test(refreshToken)
+    ) {
+      return null;
+    }
+
+    return this.persistence.withTransaction(async (unitOfWork) => {
+      const token = await unitOfWork.findRefreshTokenByHash(
+        this.hash(refreshToken),
+      );
+      if (!token || token.session.clientType !== clientType) return null;
+      return {
+        sessionId: token.sessionId,
+        userId: token.session.userId,
+        clientType: token.session.clientType,
+      };
+    });
   }
 
   async revokeSession(input: RevokeSessionInput): Promise<boolean> {

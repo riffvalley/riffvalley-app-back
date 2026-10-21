@@ -286,6 +286,34 @@ describe('SessionsService', () => {
     );
   });
 
+  it('resolves the refresh CSRF binding without changing session state', async () => {
+    const { persistence, service } = makeService();
+    const credential = await service.createSession({
+      userId: TEST_USER_ID,
+      clientType: 'app',
+    });
+    const sessionBefore = [...persistence.sessions.values()].map(copySession);
+    const tokensBefore = [...persistence.refreshTokens.values()].map(
+      copyRefreshToken,
+    );
+
+    await expect(
+      service.findRefreshTokenSessionBinding(credential.refreshToken, 'app'),
+    ).resolves.toEqual({
+      sessionId: credential.sessionId,
+      userId: TEST_USER_ID,
+      clientType: 'app',
+    });
+    await expect(
+      service.findRefreshTokenSessionBinding(credential.refreshToken, 'wiki'),
+    ).resolves.toBeNull();
+    await expect(
+      service.findRefreshTokenSessionBinding('malformed', 'app'),
+    ).resolves.toBeNull();
+    expect([...persistence.sessions.values()]).toEqual(sessionBefore);
+    expect([...persistence.refreshTokens.values()]).toEqual(tokensBefore);
+  });
+
   it('rejects unrecognized clients and nonexistent or inactive owners', async () => {
     const { persistence, service } = makeService();
 

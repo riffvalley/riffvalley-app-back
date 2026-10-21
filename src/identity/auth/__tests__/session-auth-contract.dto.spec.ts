@@ -47,6 +47,8 @@ describe('session auth HTTP contracts', () => {
         username: 'valid-user',
         role: 'user',
         token: 'short-lived-access-jwt',
+        csrfToken: 'session-bound-csrf',
+        logoutCsrfToken: 'session-bound-logout-csrf',
         image: null,
         dashboardButtonsEnabled: true,
         dashboardConfig: [{ id: 'ratings', enabled: true }],
@@ -63,6 +65,8 @@ describe('session auth HTTP contracts', () => {
       username: 'valid-user',
       role: 'user',
       token: 'short-lived-access-jwt',
+      csrfToken: 'session-bound-csrf',
+      logoutCsrfToken: 'session-bound-logout-csrf',
       image: null,
       dashboardButtonsEnabled: true,
       dashboardConfig: [{ id: 'ratings', enabled: true }],
@@ -73,6 +77,8 @@ describe('session auth HTTP contracts', () => {
   it('serializes refresh JSON with public user and absolute session expiry only', () => {
     const response = plainToInstance(SessionRefreshResponseDto, {
       token: 'short-lived-access-jwt',
+      csrfToken: 'session-bound-csrf',
+      logoutCsrfToken: 'session-bound-logout-csrf',
       expiresAt: '2026-11-20T00:00:00.000Z',
       user: {
         id: 'user-id',
@@ -89,6 +95,8 @@ describe('session auth HTTP contracts', () => {
 
     expect(instanceToPlain(response)).toEqual({
       token: 'short-lived-access-jwt',
+      csrfToken: 'session-bound-csrf',
+      logoutCsrfToken: 'session-bound-logout-csrf',
       expiresAt: '2026-11-20T00:00:00.000Z',
       user: {
         id: 'user-id',
