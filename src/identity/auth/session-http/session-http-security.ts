@@ -1,4 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import { timingSafeEqual } from 'crypto';
 import type { Request } from 'express';
 import { SessionClientType } from '../../sessions/entities/auth-session.entity';
 
@@ -6,6 +8,14 @@ export interface SessionClientOrigins {
   app: string | undefined;
   wiki: string | undefined;
 }
+
+/** Heroku's forwarded protocol header is not authoritative for TLS decisions. */
+export const SESSION_HTTP_TRUST_PROXY = false;
+export const SESSION_TRUSTED_EDGE_HEADER = 'x-rv-session-edge';
+export const SESSION_EDGE_SECRET_CONFIG_KEY = 'AUTH_SESSION_EDGE_SECRET';
+
+const EDGE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const EDGE_SECRET_BYTES = 32;
 
 export interface SessionRefreshCookieOptions {
   httpOnly: true;
@@ -35,14 +45,56 @@ export type SessionCsrfVerifier = (
 
 export function readSessionCookieRequestMetadata(
   request: Pick<Request, 'secure' | 'headers'>,
+  configService: Pick<ConfigService, 'get'>,
 ): SessionCookieRequestMetadata {
+  const trustedEdgeSecret = configService.get<string>(
+    SESSION_EDGE_SECRET_CONFIG_KEY,
+  );
+
   return {
-    secure: request.secure,
+    secure: isSecureSessionTransport(
+      request.secure,
+      readSingleHeader(request.headers[SESSION_TRUSTED_EDGE_HEADER]),
+      trustedEdgeSecret,
+    ),
     origin: readSingleHeader(request.headers.origin),
     contentType: readSingleHeader(request.headers['content-type']),
     csrfToken: readSingleHeader(request.headers['x-csrf-token']),
     fetchSite: readSingleHeader(request.headers['sec-fetch-site']),
   };
+}
+
+/**
+ * Recognizes direct socket TLS or a private edge assertion only when the
+ * server-configured secret is valid. The edge secret is safe only when a
+ * trusted edge overwrites this custom header and prevents direct origin
+ * access; forwarded-proto is deliberately ignored.
+ */
+export function isSecureSessionTransport(
+  socketSecure: boolean,
+  edgeAssertion: string | undefined,
+  trustedEdgeSecret: string | undefined,
+): boolean {
+  const expectedBytes = decodeEdgeSecret(trustedEdgeSecret);
+  if (!expectedBytes) return false;
+  if (socketSecure) return true;
+
+  const assertionBytes = decodeEdgeSecret(edgeAssertion);
+  if (!assertionBytes) return false;
+
+  return timingSafeEqual(assertionBytes, expectedBytes);
+}
+
+function decodeEdgeSecret(value: string | undefined): Buffer | undefined {
+  if (!value || !EDGE_SECRET_PATTERN.test(value)) return undefined;
+  const bytes = Buffer.from(value, 'base64url');
+  if (
+    bytes.length !== EDGE_SECRET_BYTES ||
+    bytes.toString('base64url') !== value
+  ) {
+    return undefined;
+  }
+  return bytes;
 }
 
 const SESSION_REFRESH_COOKIE_NAMES: Record<SessionClientType, string> = {

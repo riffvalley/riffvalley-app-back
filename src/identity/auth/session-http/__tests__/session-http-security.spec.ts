@@ -1,9 +1,13 @@
 import { ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   createSessionRefreshCookieClearPolicy,
   createSessionRefreshCookiePolicy,
   readSessionCookieRequestMetadata,
   resolveSessionClientFromOrigin,
+  SESSION_HTTP_TRUST_PROXY,
+  SESSION_EDGE_SECRET_CONFIG_KEY,
+  SESSION_TRUSTED_EDGE_HEADER,
   validateSessionCookieRequest,
 } from '../session-http-security';
 
@@ -11,20 +15,34 @@ const origins = {
   app: 'https://app.riffvalley.es',
   wiki: 'https://wiki.riffvalley.es',
 };
+const edgeSecret = Buffer.alloc(32, 42).toString('base64url');
+
+function createConfigService(secret?: string): ConfigService {
+  return new ConfigService(
+    secret === undefined ? {} : { [SESSION_EDGE_SECRET_CONFIG_KEY]: secret },
+  );
+}
 
 describe('session HTTP security helpers', () => {
+  it('keeps Express proxy trust disabled because forwarded protocol is ambiguous', () => {
+    expect(SESSION_HTTP_TRUST_PROXY).toBe(false);
+  });
+
   describe('readSessionCookieRequestMetadata', () => {
     it('uses Express secure state and the exact security headers', () => {
       expect(
-        readSessionCookieRequestMetadata({
-          secure: true,
-          headers: {
-            origin: origins.app,
-            'content-type': 'application/json',
-            'x-csrf-token': 'csrf',
-            'sec-fetch-site': 'same-site',
+        readSessionCookieRequestMetadata(
+          {
+            secure: true,
+            headers: {
+              origin: origins.app,
+              'content-type': 'application/json',
+              'x-csrf-token': 'csrf',
+              'sec-fetch-site': 'same-site',
+            },
           },
-        }),
+          createConfigService(edgeSecret),
+        ),
       ).toEqual({
         secure: true,
         origin: origins.app,
@@ -36,10 +54,13 @@ describe('session HTTP security helpers', () => {
 
     it('fails closed for absent Origin and insecure requests', () => {
       expect(
-        readSessionCookieRequestMetadata({
-          secure: false,
-          headers: {},
-        }),
+        readSessionCookieRequestMetadata(
+          {
+            secure: false,
+            headers: { 'x-forwarded-proto': 'https' },
+          },
+          createConfigService(edgeSecret),
+        ),
       ).toEqual({
         secure: false,
         origin: undefined,
@@ -47,6 +68,125 @@ describe('session HTTP security helpers', () => {
         csrfToken: undefined,
         fetchSite: undefined,
       });
+      expect(
+        readSessionCookieRequestMetadata(
+          {
+            secure: false,
+            headers: {
+              origin: origins.app,
+              'content-type': 'application/json',
+              'x-csrf-token': 'csrf',
+              'x-forwarded-proto': 'https',
+            },
+          },
+          createConfigService(edgeSecret),
+        ).secure,
+      ).toBe(false);
+    });
+
+    it.each(['https', 'http', 'https,http', 'http,https', ['https', 'http']])(
+      'does not infer TLS from forwarded protocol %s',
+      (forwardedProto) => {
+        expect(
+          readSessionCookieRequestMetadata(
+            {
+              secure: false,
+              headers: { 'x-forwarded-proto': forwardedProto },
+            },
+            createConfigService(edgeSecret),
+          ).secure,
+        ).toBe(false);
+      },
+    );
+
+    it('accepts actual socket TLS even if forwarded headers disagree', () => {
+      expect(
+        readSessionCookieRequestMetadata(
+          {
+            secure: true,
+            headers: { 'x-forwarded-proto': 'http,https' },
+          },
+          createConfigService(edgeSecret),
+        ).secure,
+      ).toBe(true);
+    });
+
+    it('accepts the private edge assertion only when it exactly matches', () => {
+      const metadata = readSessionCookieRequestMetadata(
+        {
+          secure: false,
+          headers: {
+            'x-forwarded-proto': 'http',
+            [SESSION_TRUSTED_EDGE_HEADER]: edgeSecret,
+          },
+        },
+        createConfigService(edgeSecret),
+      );
+      expect(metadata.secure).toBe(true);
+
+      expect(
+        readSessionCookieRequestMetadata(
+          {
+            secure: false,
+            headers: {
+              [SESSION_TRUSTED_EDGE_HEADER]: Buffer.alloc(32, 43).toString(
+                'base64url',
+              ),
+            },
+          },
+          createConfigService(edgeSecret),
+        ).secure,
+      ).toBe(false);
+    });
+
+    it('fails closed when the edge secret is absent or malformed, including direct TLS', () => {
+      expect(
+        readSessionCookieRequestMetadata(
+          {
+            secure: false,
+            headers: { [SESSION_TRUSTED_EDGE_HEADER]: edgeSecret },
+          },
+          createConfigService(),
+        ).secure,
+      ).toBe(false);
+      expect(
+        readSessionCookieRequestMetadata(
+          { secure: true, headers: {} },
+          createConfigService(),
+        ).secure,
+      ).toBe(false);
+      expect(
+        readSessionCookieRequestMetadata(
+          {
+            secure: false,
+            headers: { [SESSION_TRUSTED_EDGE_HEADER]: edgeSecret },
+          },
+          createConfigService('not-a-256-bit-secret'),
+        ).secure,
+      ).toBe(false);
+      expect(
+        readSessionCookieRequestMetadata(
+          {
+            secure: false,
+            headers: { [SESSION_TRUSTED_EDGE_HEADER]: 'a'.repeat(43) },
+          },
+          createConfigService('a'.repeat(43)),
+        ).secure,
+      ).toBe(false);
+    });
+
+    it('rejects duplicated edge assertion headers', () => {
+      expect(
+        readSessionCookieRequestMetadata(
+          {
+            secure: false,
+            headers: {
+              [SESSION_TRUSTED_EDGE_HEADER]: [edgeSecret, edgeSecret],
+            },
+          },
+          createConfigService(edgeSecret),
+        ).secure,
+      ).toBe(false);
     });
   });
 

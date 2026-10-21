@@ -1,6 +1,6 @@
 # Topología HTTP de sesiones — verificación para BC-ID-6C.1
 
-**Verificado y actualizado:** 2026-10-21. Las observaciones de BC-ID-6C.1 son de solo lectura. La configuración de dominio registra la asociación autorizada en Heroku y el CNAME específico en Cloudflare. BC-ID-6C.2 implementa CORS y añade un adaptador reutilizable, sin invocar cookies desde rutas ni cambiar el estado del feature gate.
+**Verificado y actualizado:** 2026-10-21. Las observaciones de BC-ID-6C.1 son de solo lectura. La configuración de dominio registra la asociación autorizada en Heroku y el CNAME específico en Cloudflare. BC-ID-6C.2 implementa CORS y un adaptador reutilizable. BC-ID-6C.3 mantiene `trust proxy=false` y añade aserción privada de edge/verificadores CSRF, sin invocar cookies desde rutas ni cambiar el estado del feature gate.
 
 ## Topología desplegada observada
 
@@ -51,30 +51,50 @@ Para login, refresh y logout con autenticación automática por cookie, el adapt
 3. Rechazar `Sec-Fetch-Site` explícitamente inválido; cuando esté presente, aceptar solo valores reconocidos (`same-origin`, `same-site`, `cross-site`). La ausencia no omite Origin ni CSRF. Fetch Metadata es defensa adicional, no sustituto del token.
 4. No tratar CORS/preflight como autorización. No inspeccionar, consumir ni rotar una cookie antes de validar Origin y CSRF.
 
-El helper implementa únicamente la validación de metadata con un callback verificador de CSRF; no emite tokens CSRF ni define firma, rotación, expiración o almacenamiento del nonce. No se crean todavía endpoints. El adaptador debe recibir el verificador adecuado a la operación y se mantiene inaccesible desde HTTP hasta completar esos verificadores.
+El helper implementa la validación de metadata con un callback verificador de CSRF. No se crean todavía endpoints; el adaptador debe recibir el verificador adecuado a la operación y se mantiene inaccesible desde HTTP.
 
 ### Proxy HTTPS de Heroku
 
-Heroku termina TLS en su router y reenvía tráfico HTTP al dyno. `src/main.ts` no configura actualmente `trust proxy`. La documentación de [HTTP Routing de Heroku](https://devcenter.heroku.com/articles/http-routing) advierte que `X-Forwarded-For`, `X-Forwarded-Proto` y `X-Forwarded-Host` no son confiables genéricamente para decisiones de seguridad por el orden de los headers; sus logs de router pueden registrar `tls=true`. El certificado HTTPS del dominio `herokuapp.com` es parte del alojamiento documentado por [Heroku SSL](https://devcenter.heroku.com/articles/ssl).
+Heroku termina TLS en su router y reenvía tráfico HTTP al dyno. La documentación oficial de [HTTP Routing de Heroku](https://devcenter.heroku.com/articles/http-routing) dice que `X-Forwarded-For`, `X-Forwarded-Proto` y `X-Forwarded-Host` no deben tratarse como confiables para seguridad porque un cliente puede aportar campos previos; el log del router sí incluye `tls=true`. El [runtime Common](https://devcenter.heroku.com/articles/dyno-runtime) limita las conexiones entrantes al dyno a la capa de routing, pero eso autentica el salto de red, no el orden/valor de `X-Forwarded-Proto`. `trust proxy=1` confiaría también ese valor ambiguo, por lo que no es una prueba TLS justificable.
 
-El adaptador usa `request.secure` de Express como señal HTTPS y falla cerrado si es falso; no confía por su cuenta en `X-Forwarded-Proto`. Como `src/main.ts` no configura `trust proxy`, la petición reenviada por Heroku actualmente se considera insegura y el adaptador no emitirá cookies en producción. No se habilitó `trust proxy` de forma amplia. Antes de conectar rutas debe acordarse y probarse una estrategia segura para Heroku que distinga HTTPS terminado en el router de HTTP/headers falsificados.
+`src/main.ts` mantiene `trust proxy=false`. El helper ignora `X-Forwarded-Proto` y acepta TLS del socket o una aserción privada del edge, comparada en tiempo constante. Antes de evaluar cualquiera de esas señales, lee `AUTH_SESSION_EDGE_SECRET` desde Nest `ConfigService`; el valor nunca se toma de la petición. La variable debe ser base64url canónico sin padding, exactamente 43 caracteres que decodifiquen a 32 bytes. Ausencia o formato inválido hace fallar cerradas las solicitudes de sesión. Cloudflare documenta que Transform Rules, incluido sobrescribir headers, están disponibles en Free, que exigen DNS proxied y que no permiten cambiar `X-Forwarded-Proto`. La estrategia prevista es proxyear solo este hostname, aplicar [Always Use HTTPS](https://developers.cloudflare.com/ssl/edge-certificates/additional-options/always-use-https/), [Full (strict)](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/) y una [Request Header Transform Rule](https://developers.cloudflare.com/rules/transform/request-header-modification/) que establezca `X-RV-Session-Edge` con un secreto aleatorio de 256 bits. El acceso directo al hostname Heroku debe carecer de ese valor.
+
+La topología observada sigue DNS-only, sin regla edge ni secreto; por eso el helper falla cerrado detrás del router. La consulta de solo lectura a Heroku del 2026-10-21 confirmó ACM activo y certificado `backend.riffvalley.es` válido hasta 2027-01-19 16:51 UTC; el dominio sigue asociado al target Heroku `animate-dove-feqentcsj1yqt48hjbdp6ntp.herokudns.com`. BC-ID-6C.4 implementa localmente la lectura segura de `AUTH_SESSION_EDGE_SECRET`, pero no genera ni configura ningún valor. La release desplegada no contiene ese cambio (ver intento de activación abajo). En esta sesión no hay integración ni acceso autenticado de Cloudflare. No se cambió DNS/Cloudflare/Heroku ni se publicó código. `Origin` exacto y CSRF siguen siendo controles separados y obligatorios.
+
+### Intento de activación edge — 2026-10-21
+
+**No aplicado.** La CLI autenticada de Heroku informó la release activa `v323`, desplegada desde `fd765355`; al inspeccionar ese commit, `src/identity/auth/session-http/session-http-security.ts` no existe, por lo que no contiene BC-ID-6C.4 y no se puede asumir que reconozca `AUTH_SESSION_EDGE_SECRET`. La compatibilidad debe incorporarse en un próximo despliegue antes de configurar el secreto. ACM confirmó `Trusted: true` para `backend.riffvalley.es`, con expiración 2027-01-19 16:51 UTC. La búsqueda de plugins no encontró una integración de Cloudflare disponible y no hay acceso autenticado a la zona desde esta sesión. No se generó secreto ni se cambió producción; permanecen pendientes DNS proxied, Full (strict), HTTPS forzado, overwrite del header y bypass de caché. No asumir aplicada ninguna de esas protecciones.
 
 ## Bloqueos antes de habilitar transporte
 
 - Configurar los Origins exactos en el servidor tras decisión operativa; los valores de sesión consultados en Heroku están vacíos.
 - Diseñar los tokens CSRF pre-login y ligados a sesión y sus verificadores.
-- Acordar una comprobación de HTTPS segura detrás del proxy Heroku; `request.secure` falla cerrado en el despliegue actual.
+- Configurar el secreto aleatorio en Heroku y Cloudflare, y aplicar/verificar la configuración edge descrita arriba. Hasta entonces, al ser DNS-only y no tener secreto configurado, la API rechaza solicitudes de sesión.
 - Probar en navegadores objetivo preflight credentialed, persistencia y envío de cookies cross-site, rotación, expiración y borrado, incluyendo bloqueo de cookies de terceros.
 - Migrar App y Wiki al hostname `backend.riffvalley.es` antes de depender de `SameSite=Lax`; hoy siguen llamando al hostname `herokuapp.com`.
 - Verificar redacción de `Cookie`, `Set-Cookie`, `Authorization` y cuerpos en logs antes de piloto.
 
-Hasta satisfacer esos puntos, conservar el 503 del modo negociado, no emitir cookies ni refresh en JSON y mantener intacto el login legacy.
+Hasta satisfacer esos puntos, conservar el 503 del modo negociado, no emitir cookies ni refresh en JSON y mantener intacto el login legacy. Los verificadores CSRF y la comparación de aserción edge están listos, pero no existe bootstrap HTTP ni consumidor de refresh/logout.
 
 ### BC-ID-6C.2 — transporte HttpOnly y CORS
 
 **Implementado:** 2026-10-21. `src/main.ts` usa una política CORS explícita que conserva los Origins legacy y permite los headers del protocolo; no usa comodines. El adaptador host-only separa `app` y `wiki`, restringe `Path` a `/api/auth`, aplica `Secure; HttpOnly; SameSite=Lax` y expiración absoluta, valida Origin/CSRF/HTTPS antes de leer, escribir o borrar y rechaza valores refresh con formato inválido. No se conectan endpoints ni se emiten cookies en el estado actual. `AUTH_SESSION_MODE_ENABLED` sigue apagado y la negociación continúa respondiendo 503.
 
-`yarn verify` pasó con 0 hallazgos nuevos. La comprobación de HTTPS en Heroku falla cerrado mientras `trust proxy` no se configure con una estrategia verificada; la implementación de bootstrap/verificadores CSRF y pruebas de navegador siguen bloqueando la exposición HTTP del transporte. App y Wiki todavía usan el hostname legacy, por lo que requieren migración coordinada antes de usar `SameSite=Lax`.
+En BC-ID-6C.2, `yarn verify` pasó con 0 hallazgos nuevos. BC-ID-6C.3 mantiene el fallo cerrado mientras no se configure una aserción edge verificable; el bootstrap HTTP y las pruebas de navegador también bloquean la exposición del transporte. App y Wiki aún usan el hostname legacy, por lo que requieren migración coordinada antes de depender de `SameSite=Lax`.
+
+### BC-ID-6C.3 — HTTPS detrás de Heroku y CSRF
+
+**Implementado:** 2026-10-21. `trust proxy=false` en todos los entornos. La detección acepta TLS en el socket o `X-RV-Session-Edge` solo cuando coincide con un secreto de 256 bits configurado en backend; forwarded-proto se ignora. El edge debe sobrescribir ese header, forzar HTTPS y estar en el único camino que puede usar sesiones. El estado actual no cumple aún esas condiciones; se documenta Cloudflare Free proxy + Always HTTPS + Full strict + header overwrite como configuración futura sin coste, sin aplicarla durante este corte.
+
+Los verificadores CSRF usan HMAC-SHA-256 con clave derivada de `JWT_SECRET` y separación de dominio `riffvalley:auth-session:csrf:v1`. Login renovable queda ligado a nonce pre-login no autenticador (máximo 10 minutos); refresh y logout usan tokens de propósito distinto ligados a sesión y cliente (máximo 30 minutos). El validador común exige TLS verificado, Origin HTTPS canónico exacto, asociación app/wiki no ambigua, JSON, Fetch Metadata válido si está presente y el verificador CSRF correspondiente.
+
+Pruebas focalizadas: TLS directo, aserción edge válida/incorrecta/ausente/duplicada, forwarded-proto falsificado y ambiguo, Origin, Content-Type, Fetch Metadata y CSRF. No se crean bootstrap, rutas, cookies ni sesiones; `refresh-v1` conserva 503 y el login legacy permanece intacto.
+
+### BC-ID-6C.4 — configuración del secreto de edge
+
+**Implementado:** `AUTH_SESSION_EDGE_SECRET` se lee desde Nest `ConfigService`, nunca desde headers o datos de la petición. El formato requerido es base64url canónico sin padding, 43 caracteres que decodifican a exactamente 32 bytes. Se exige un secreto válido incluso si el socket es TLS; secreto ausente o malformado produce `secure=false`. La comparación de la aserción conserva tiempo constante.
+
+Pruebas cubren secreto válido, ausente, malformado/no canónico, aserción incorrecta y header duplicado. No se generó ni configuró un secreto de producción y Cloudflare/Heroku no se modificaron. `AUTH_SESSION_MODE_ENABLED` sigue desactivado y `refresh-v1` conserva 503.
 
 ## Configuración de `backend.riffvalley.es`
 
@@ -114,9 +134,9 @@ Para la primera transición se recomienda **Cloudflare DNS autoritativo, registr
 
 Esta opción evita el certificado manual: Heroku indica que con ACM el HTTPS del hostname `herokuapp.com` continúa operativo. En cambio, cargar un certificado manual con `heroku certs:add` desactiva ACM y Heroku documenta que el HTTPS del hostname por defecto puede dejar de funcionar; no hacerlo mientras App/Wiki sigan usándolo ([TLS en Heroku](https://devcenter.heroku.com/articles/understanding-tls-on-heroku), [ACM](https://devcenter.heroku.com/articles/automated-certificate-management), [cambio documentado del host default](https://devcenter.heroku.com/changelog-items/1815)).
 
-El coste incremental esperado de dominio Heroku y ACM es **0**; Heroku indica que los custom domains no se cobran y que ACM se incluye gratuitamente. El app actual ya tiene un dyno Basic de pago; no requiere ampliarlo ni agregar addons. La zona Cloudflare está en el plan **Free**. DNS-only no consume un plan proxy adicional, pero el API queda fuera del proxy/WAF/CDN de Cloudflare y se expone directamente a la red de Heroku. El servidor no redirige HTTP a HTTPS automáticamente según Heroku; debe garantizarse en Nest una política HTTPS segura antes de aceptar credenciales/cookies por HTTP. Esta política sigue pendiente y no se modifica en este corte.
+El coste incremental esperado de dominio Heroku y ACM es **0**; Heroku indica que los custom domains no se cobran y que ACM se incluye gratuitamente. El app actual ya tiene un dyno Basic de pago; no requiere ampliarlo ni agregar addons. La zona Cloudflare está en el plan **Free**. DNS-only no consume un plan proxy adicional, pero el API queda fuera del proxy/WAF/CDN de Cloudflare y se expone directamente a la red de Heroku. El servidor no redirige HTTP a HTTPS automáticamente según Heroku. La política de aplicación falla cerrado hasta que se configure un edge que fuerce HTTPS y establezca la aserción privada descrita arriba.
 
-**Alternativa proxied, no recomendada en esta fase:** Cloudflare DNS naranja + TLS Full (strict) requiere certificado de origen cuyo SAN coincida con `backend.riffvalley.es`. Cloudflare Origin CA (sin coste adicional y aceptado por Full strict) podría instalarse manualmente en Heroku, pero el certificado no es confiable fuera de Cloudflare, requiere proxy siempre activo y Heroku indica que el certificado manual desactiva ACM y puede quitar HTTPS del hostname `herokuapp.com`. Adoptar esta variante exigiría que ambos frontends ya hubieran migrado, un plan de rollback distinto y gestión/rotación manual del certificado. No se debe usar `Flexible`, porque dejaría el tramo Cloudflare→Heroku sin TLS. Cloudflare ofrece Origin CA en todos sus planes pero no envía avisos de vencimiento ([Origin CA](https://developers.cloudflare.com/ssl/origin-configuration/origin-ca/), [Full strict](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/)).
+**Estrategia edge propuesta:** conservar Heroku ACM y usar Cloudflare Free como proxy de solo `backend.riffvalley.es`, TLS Full (strict), Always Use HTTPS y regla de sobrescritura del header privado. No instalar Cloudflare Origin CA en Heroku ni reemplazar ACM: el certificado ACM existente debe validar el tramo edge→Heroku. No usar `Flexible`, porque dejaría ese tramo sin TLS. El acceso directo a `herokuapp.com` no llevará la aserción y fallará cerrado para las rutas de sesión; el login legacy seguirá disponible.
 
 ### Cambios necesarios al completar la transición
 
@@ -125,7 +145,7 @@ El coste incremental esperado de dominio Heroku y ACM es **0**; Heroku indica qu
 - Las rutas, el prefijo `/api`, DTOs, Auth legacy y sesiones no necesitan cambio para resolver el hostname. Mantener disponible el dominio actual de Heroku; no redirigirlo ni retirarlo durante la migración.
 - La allowlist CORS conserva los Origins llamantes `https://app.riffvalley.es` y `https://wiki.riffvalley.es`. `https://backend.riffvalley.es` es el host de destino/API, no un Origin de frontend que haya que añadir. CORS sigue siendo credentialed y necesario aunque ahora las llamadas sean same-site, porque App, Wiki y API continúan siendo origins distintos.
 - Para el transporte de sesiones, configurar en Heroku los valores exactos `AUTH_SESSION_APP_ORIGIN=https://app.riffvalley.es` y `AUTH_SESSION_WIKI_ORIGIN=https://wiki.riffvalley.es` cuando el rollout sea aprobado; mantener `AUTH_SESSION_MODE_ENABLED` apagado. Las variables actuales consultadas estaban vacías.
-- El acceso por otro dominio no resuelve el bloqueo actual de confianza de proxy/HTTPS en Nest. No confiar ampliamente en `X-Forwarded-Proto`; acordar una estrategia verificada para Heroku y Cloudflare antes de usar `req.secure` o emitir cookies. Cloudflare puede forzar HTTPS en el borde, pero un acceso directo conocido al target también debe considerarse.
+- Definir y cablear la variable de entorno del secreto; aplicar y verificar primero la configuración edge de Cloudflare descrita arriba. No confiar en `X-Forwarded-Proto`; validar en el corte operativo que el edge sobrescribe el header y que el acceso directo al origin no puede usar el protocolo de sesiones.
 
 **App y Wiki:**
 
