@@ -511,7 +511,12 @@ integrationSuite('Sessions PostgreSQL integration', () => {
         operationId: randomUUID(),
       }),
     ).rejects.toBeInstanceOf(InvalidSessionCredentialError);
+    lockLogger.lockQueries.length = 0;
     expect(await service.revokeAllSessionsForUser(userId)).toBe(1);
+    expect(lockLogger.lockQueries).toHaveLength(1);
+    expect(lockLogger.lockQueries[0]).toMatch(
+      /FROM "auth_sessions"[\s\S]*FOR UPDATE OF "AuthSession"/i,
+    );
     await expect(
       service.rotateRefreshToken({
         refreshToken: wiki.refreshToken,
