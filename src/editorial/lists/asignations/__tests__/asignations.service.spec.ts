@@ -469,6 +469,18 @@ describe('AsignationsService error classification', () => {
     );
   });
 
+  it('locks only the asignation row while loading its nullable relations', async () => {
+    await expect(
+      service.update(asignationId, { done: true }),
+    ).resolves.toBeDefined();
+
+    expect(asignationFindOne).toHaveBeenCalledWith({
+      where: { id: asignationId },
+      relations: ['list', 'disc'],
+      lock: { mode: 'pessimistic_write', tables: ['Asignation'] },
+    });
+  });
+
   it('rejects movement into a full group and preserves the existing assignment', async () => {
     asignationFindOne.mockResolvedValue(
       asignationFixture({
