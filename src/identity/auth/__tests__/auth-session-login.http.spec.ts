@@ -232,14 +232,14 @@ describe('renewable login HTTP contract', () => {
         'refresh',
         'internal-session-id',
       )(response.body.csrfToken as string, 'app'),
-    ).toBe(true);
+    ).toEqual({ valid: true });
     expect(
       createSessionCsrfVerifier(
         jwtSecret,
         'logout',
         'internal-session-id',
       )(response.body.logoutCsrfToken as string, 'app'),
-    ).toBe(true);
+    ).toEqual({ valid: true });
     expect(JSON.stringify(response.body)).not.toContain(refreshToken);
     expect(JSON.stringify(response.body)).not.toContain('sessionId');
     const cookieHeader = response.headers['set-cookie'];
@@ -489,14 +489,14 @@ describe('renewable login HTTP contract', () => {
         'refresh',
         'internal-session-id',
       )(response.body.csrfToken as string, 'app'),
-    ).toBe(true);
+    ).toEqual({ valid: true });
     expect(
       createSessionCsrfVerifier(
         jwtSecret,
         'logout',
         'internal-session-id',
       )(response.body.logoutCsrfToken as string, 'app'),
-    ).toBe(true);
+    ).toEqual({ valid: true });
     expect(response.headers['set-cookie']).toContainEqual(
       expect.stringMatching(/^__Secure-rv_app_refresh=/),
     );
