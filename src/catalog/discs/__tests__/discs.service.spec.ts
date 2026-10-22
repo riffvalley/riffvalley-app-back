@@ -1,7 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { User } from '../../../identity/auth/entities/user.entity';
-import { PaginationDto } from '../../../platform/common/dtos/pagination.dto';
+import { DiscsCalendarQueryDto } from '../dto/discs-calendar-query.dto';
+import { DiscsListQueryDto } from '../dto/discs-list-query.dto';
+import { TopStatsQueryDto } from '../dto/top-stats-query.dto';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { DiscCatalogService } from '../catalog/disc-catalog.service';
 import { DiscCalendarService } from '../calendar/disc-calendar.service';
@@ -203,7 +205,7 @@ describe('DiscsService facade', () => {
     mocks.discHomeService.findTopRatedOrFeaturedAndStats.mockResolvedValue(
       payload,
     );
-    const pagination = new PaginationDto();
+    const pagination = new TopStatsQueryDto();
     pagination.dateRange = [new Date('2020-01-01'), new Date('2024-12-31')];
     const user = Object.assign(new User(), { id: 'user-id' });
 
@@ -265,7 +267,7 @@ describe('DiscsService facade', () => {
     mocks.discCatalogService.findRandom.mockResolvedValue(randomResult);
     mocks.discCatalogService.findOptions.mockResolvedValue(optionsResult);
     mocks.discCatalogService.findOne.mockResolvedValue(detail);
-    const pagination = Object.assign(new PaginationDto(), { limit: 2 });
+    const pagination = Object.assign(new DiscsListQueryDto(), { limit: 2 });
     const randomDto = Object.assign(new RandomQueryDto(), { limit: 3 });
     const optionsDto = Object.assign(new OptionsQueryDto(), { field: 'genre' });
     const user = Object.assign(new User(), { id: 'user-id' });
@@ -323,7 +325,7 @@ describe('DiscsService facade', () => {
       publicResult,
     );
     mocks.discCalendarService.findWeekly.mockResolvedValue(weeklyResult);
-    const pagination = Object.assign(new PaginationDto(), {
+    const pagination = Object.assign(new DiscsCalendarQueryDto(), {
       limit: 2,
       offset: 4,
     });

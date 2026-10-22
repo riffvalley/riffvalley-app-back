@@ -25,7 +25,7 @@ Consulta agregada de `users.roles` en desarrollo: 198 cuentas en total; 190 `{ba
 
 No se encontraron otros valores de rol en esta base. Esta observación cubre únicamente la base local consultada; antes de diseñar R.5 habrá que confirmar el estado y distribución del entorno de despliegue objetivo. El valor `riffValley` en `ListSpecialType` y en la migración `1770582845482-AddSpecialListType.ts` nombra un tipo de lista, no un rol.
 
-El seed de [seed.service.ts](../../src/platform/seeds/seed.service.ts) propone dos usuarios: `['user','superUser']` y `['user']`; no contiene `babyUser`, `admin` ni `riffValley`. Su invocación en [main.ts](../../src/main.ts) está comentada. Por tanto, no reproduce la distribución real observada.
+El seeder histórico proponía dos usuarios: `['user','superUser']` y `['user']`; no contenía `babyUser`, `admin` ni `riffValley`. Se retiró junto con su invocación comentada en BC-PLAT-R1; por tanto, no reproduce ni define el estado actual del modelo de roles. Véase el [roadmap de Platform](../backend-cleanup/platform.md).
 
 ## Definición central y evaluación de autorización
 
@@ -119,7 +119,7 @@ Hallazgos concretos relevantes para el mapa de roles:
 
 ## Seeds, tests y migraciones
 
-- Seeds de roles: [seed.service.ts](../../src/platform/seeds/seed.service.ts), con los dos ejemplos descritos arriba; `createSeed()` está comentado en `main.ts`.
+- Seeder de roles histórico: retirado en BC-PLAT-R1; los ejemplos que contenía se describen arriba y ya no son código operativo. Véase el [roadmap de Platform](../backend-cleanup/platform.md).
 - `src/identity/auth/guards/user-role/user-role.guard.spec.ts` cubre coincidencia de cualquiera de varios roles, 403 al no coincidir, rol persistido, metadata de handler sobre controller y metadata ausente/vacía. Los casos usan `admin`, `superUser` y `riffValley`.
 - Tests de controllers/imports verifican metadatos en Requests, Artists, Catalog Import y Excel. `test/excel.e2e-spec.ts` genera token `riffValley` admitido y token `user` denegado para imports Excel.
 - `test/auth.http` documenta `/auth/users/superusers`, filtros `superUser`/`riffValley` y la ruta de prueba. No hay tests de migración de roles ni referencias a `babyUser` en tests.

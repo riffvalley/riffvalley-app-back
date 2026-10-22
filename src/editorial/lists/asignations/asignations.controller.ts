@@ -12,7 +12,7 @@ import {
 import { AsignationsService } from './asignations.service';
 import { CreateAsignationDto } from './dto/create-asignations.dto';
 import { UpdateAsignationDto } from './dto/update-asignations.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 

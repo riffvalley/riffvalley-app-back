@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { FavoritesService } from './favorites.service';
 import { CreateFavoriteDto } from './dto/create-favorites.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
@@ -21,8 +21,8 @@ export class FavoritesController {
 
   @Get()
   @Auth()
-  findAll(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
-    return this.favoritesService.findAllByUser(paginationDto, user);
+  findAll(@Query() query: CommunityListQueryDto, @GetUser() user: User) {
+    return this.favoritesService.findAllByUser(query, user);
   }
 
   @Post()

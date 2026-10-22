@@ -27,14 +27,6 @@
     },
     {
       "rule": "double-type-assertion",
-      "path": "src/platform/uploads/uploads.service.spec.ts",
-      "line": 24,
-      "column": 7,
-      "fingerprint": "2e7d8481003ebfd8d2b0ba26d50c1d745d51d2f2bd1186bcdcb0e79ad66df6d0",
-      "occurrence": 0
-    },
-    {
-      "rule": "double-type-assertion",
       "path": "test/excel.e2e-spec.ts",
       "line": 39,
       "column": 24,
@@ -47,14 +39,6 @@
       "line": 398,
       "column": 10,
       "fingerprint": "c691ae0bc8358c57829a5a592916f069d1f3446dcebd467e4bec7bf41d905dfc",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
-      "path": "src/platform/seeds/seed.module.spec.ts",
-      "line": 29,
-      "column": 51,
-      "fingerprint": "1d6dd4c18b9e0aff35b35504287e0d140196a3e781ed7174cdab259d44c927fa",
       "occurrence": 0
     },
     {

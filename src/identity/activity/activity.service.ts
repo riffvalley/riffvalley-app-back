@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { Rate } from '../../community/rates/entities/rate.entity';
-import { PaginationDto } from '../../platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
+import { ActivityListQueryDto } from './dto/activity-list-query.dto';
 import { User } from '../auth/entities/user.entity';
 import { UserAccessLog } from '../auth/entities/user-access-log.entity';
 import { UserAppDailyActivity } from './entities/user-app-daily-activity.entity';
@@ -74,7 +75,7 @@ export class ActivityService {
     return { votes, logins };
   }
 
-  async findAllAdminStats(paginationDto: PaginationDto) {
+  async findAllAdminStats(paginationDto: ActivityListQueryDto) {
     const {
       limit = 10,
       offset = 0,

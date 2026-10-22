@@ -36,10 +36,6 @@ async function bootstrap() {
     }),
   );
 
-  // import { SeedService } from './platform/seeds/seed.service';
-  // const seedService = app.get(SeedService);
-  // await seedService.createSeed(); // Ejecuta el seed
-
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
 }

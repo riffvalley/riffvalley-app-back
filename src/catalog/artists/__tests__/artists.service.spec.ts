@@ -2,7 +2,7 @@ import { ArtistsService } from '../artists.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CreateArtistDto } from '../dto/create-artist.dto';
 import { UpdateArtistDto } from '../dto/update-artist.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { ArtistCatalogService } from '../catalog/artist-catalog.service';
 import { ArtistDetailsService } from '../details/artist-details.service';
 import { ArtistManagementService } from '../management/artist-management.service';

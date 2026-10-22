@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DataSource, In, Not, Repository } from 'typeorm';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { List, ListStatus, ListType } from '../../entities/list.entity';
 import { CreateListDto } from '../../dto/create-list.dto';
 import { ListCrudService } from '../list-crud.service';

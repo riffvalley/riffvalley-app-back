@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 
 const toSafeIntegerQueryValue = (value: unknown): number | undefined => {
   if (value === undefined) return undefined;
@@ -11,6 +11,10 @@ const toSafeIntegerQueryValue = (value: unknown): number | undefined => {
 };
 
 export class GenresQueryDto extends PaginationDto {
+  @IsOptional()
+  @IsString()
+  query?: string;
+
   @IsOptional()
   @Transform(({ obj, key }) => toSafeIntegerQueryValue(obj[key]))
   @IsInt()

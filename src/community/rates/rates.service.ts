@@ -13,14 +13,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { Rate } from './entities/rate.entity';
 import { RateVoteEvent } from './entities/rate-vote-event.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Pending } from 'src/community/pendings/entities/pending.entity';
 import {
   applyOrder,
   parseOrdersRaw,
-} from 'src/platform/common/helpers/apply-order.helper';
+} from 'src/community/common/helpers/apply-order.helper';
 
 @Injectable()
 export class RatesService {
@@ -90,7 +90,7 @@ export class RatesService {
     }
   }
 
-  async findAllByUser(paginationDto: PaginationDto, user: User) {
+  async findAllByUser(paginationDto: CommunityListQueryDto, user: User) {
     const {
       limit = 10,
       offset = 0,

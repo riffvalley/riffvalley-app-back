@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 import { News, NewsStatus } from './entities/news.entity';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { NewsListQueryDto } from './dto/news-list-query.dto';
 import { TelegramService } from 'src/integrations/telegram-integration/telegram.service';
 import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
 import { WpPublicPost } from 'src/integrations/wordpress-integration/types/wordpress.types';
@@ -49,7 +49,7 @@ export class NewsService {
     }
   }
 
-  async findAll(paginationDto: PaginationDto) {
+  async findAll(paginationDto: NewsListQueryDto) {
     const { limit = 10, offset = 0, status } = paginationDto;
 
     const where: any = {};

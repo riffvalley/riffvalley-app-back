@@ -6,7 +6,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
 import { User } from '../../../identity/auth/entities/user.entity';
-import { PaginationDto } from '../../../platform/common/dtos/pagination.dto';
+import { PaginationDto } from '../../../shared/dto/pagination.dto';
 import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
 import { CreateDiscDto } from '../dto/create-discs.dto';
 import { OptionsQueryDto } from '../dto/options-query.dto';

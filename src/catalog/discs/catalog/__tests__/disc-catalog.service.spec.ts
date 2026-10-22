@@ -2,7 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from '../../../../identity/auth/entities/user.entity';
-import { PaginationDto } from '../../../../platform/common/dtos/pagination.dto';
+import { DiscsListQueryDto } from '../../dto/discs-list-query.dto';
 import { Disc } from '../../entities/disc.entity';
 import { OptionsQueryDto } from '../../dto/options-query.dto';
 import { RandomQueryDto } from '../../dto/random-query.dto';
@@ -65,7 +65,10 @@ type RepositoryMock = {
   createQueryBuilder: jest.Mock<QueryBuilderMock, []>;
   findOneOrFail: jest.Mock<Promise<Disc>, [options: unknown]>;
 };
-type FindAllFilters = Omit<Partial<PaginationDto>, 'dateRange' | 'voted'> & {
+type FindAllFilters = Omit<
+  Partial<DiscsListQueryDto>,
+  'dateRange' | 'voted'
+> & {
   dateRange?: Date[];
   voted?: string | boolean;
 };
@@ -177,8 +180,8 @@ function createUserFixture(id: string): User {
   return Object.assign(new User(), { id });
 }
 
-function createPaginationFixture(properties: object): PaginationDto {
-  return Object.assign(new PaginationDto(), properties);
+function createPaginationFixture(properties: object): DiscsListQueryDto {
+  return Object.assign(new DiscsListQueryDto(), properties);
 }
 
 async function createCatalogService(repository: RepositoryMock): Promise<{
@@ -699,7 +702,7 @@ describe('DiscCatalogService.findAll', () => {
     ];
 
     const result = await service.findAll(
-      new PaginationDto(),
+      new DiscsListQueryDto(),
       createUserFixture('user-id'),
     );
 
@@ -796,7 +799,7 @@ describe('DiscCatalogService.findAll', () => {
     ];
 
     const result = await service.findAll(
-      new PaginationDto(),
+      new DiscsListQueryDto(),
       createUserFixture('user-id'),
     );
 
@@ -990,7 +993,7 @@ describe('DiscCatalogService.findAll', () => {
     ];
 
     const result = await service.findAll(
-      new PaginationDto(),
+      new DiscsListQueryDto(),
       createUserFixture('user-id'),
     );
 

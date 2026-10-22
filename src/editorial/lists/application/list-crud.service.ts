@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, FindOptionsWhere, In, Not, Repository } from 'typeorm';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { ListQueryDto } from '../dto/list-query.dto';
 import { CreateListDto } from '../dto/create-list.dto';
 import { List, ListStatus, ListType } from '../entities/list.entity';
 import {
@@ -40,7 +40,7 @@ export class ListCrudService {
     }
   }
 
-  async findAll(paginationDto: PaginationDto) {
+  async findAll(paginationDto: ListQueryDto) {
     const { limit = 40, offset = 0, statusExclusions = [] } = paginationDto;
     const whereConditions: FindOptionsWhere<List> = {};
 

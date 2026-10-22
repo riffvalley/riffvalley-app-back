@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Riff Valley App Backend - A NestJS REST API for the Riff Valley music review/catalog platform. Uses PostgreSQL with TypeORM for data persistence, JWT authentication with Passport, and i18n for internationalization.
+Riff Valley App Backend - A NestJS REST API for the Riff Valley music review/catalog platform. Uses PostgreSQL with TypeORM for data persistence and JWT authentication with Passport.
 
 Supports Node.js 20.18.1+ and 22.x. `.nvmrc` keeps Node 20 as the local reference. Use Yarn 1.22.22 as pinned in `packageManager`.
 
@@ -12,7 +12,7 @@ Supports Node.js 20.18.1+ and 22.x. `.nvmrc` keeps Node 20 as the local referenc
 
 ```bash
 # Development
-yarn start:dev             # Start with hot-reload (also watches i18n files)
+yarn start:dev             # Start with hot-reload
 yarn build                 # Build for production
 
 # Testing
@@ -48,7 +48,7 @@ Each feature follows a standard NestJS module pattern in `src/<feature>/`:
 ### Key Patterns
 - Global `ValidationPipe` with `whitelist: true` and `forbidNonWhitelisted: true` strips unknown properties
 - API prefix: `/api` (set in `main.ts`)
-- i18n: Use `x-custom-lang` header for language selection (en/es)
+- The backend currently has no translation resolver; `X-Custom-Lang` remains in the session CORS allowlist.
 - TypeORM synchronize is OFF; always use migrations for schema changes
 
 ### Environment Variables

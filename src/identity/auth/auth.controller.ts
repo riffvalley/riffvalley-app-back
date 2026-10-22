@@ -36,7 +36,7 @@ import { User } from './entities/user.entity';
 import { ValidRoles } from './interfaces/valid-roles';
 import { Auth } from './decorators/auth.decorator';
 import { AdminUpdateUserDto, UpdateUserDto } from './dto/update-user.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { ActivityListQueryDto } from 'src/identity/activity/dto/activity-list-query.dto';
 import { UsersService } from '../users/users.service';
 import { ActivityService } from '../activity/activity.service';
 import {
@@ -625,14 +625,14 @@ export class AuthController {
 
   @Get('users/admin-stats')
   @Auth(ValidRoles.superadmin)
-  findAllAdminStats(@Query() paginationDto: PaginationDto) {
-    return this.activityService.findAllAdminStats(paginationDto);
+  findAllAdminStats(@Query() query: ActivityListQueryDto) {
+    return this.activityService.findAllAdminStats(query);
   }
 
   @Get('activity')
   @Auth(ValidRoles.superadmin)
-  getAllActivity(@Query() paginationDto: PaginationDto) {
-    return this.activityService.getAllActivity(paginationDto);
+  getAllActivity(@Query() query: ActivityListQueryDto) {
+    return this.activityService.getAllActivity(query);
   }
 
   @Get(':id/activity')

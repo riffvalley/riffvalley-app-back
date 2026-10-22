@@ -1,5 +1,0 @@
-{
-  "dish": {
-    "ingredientExists": "El plato ya contiene el ingrediente '{{ingredientName}}'"
-  }
-}

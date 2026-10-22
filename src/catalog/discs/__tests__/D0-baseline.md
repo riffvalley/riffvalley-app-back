@@ -13,11 +13,11 @@ Este inventario describe el estado leído antes de cualquier refactor. El prefij
 | `GET /api/discs/weekly` | `findWeekly` | Pública | `WeeklyQueryDto` en query |
 | `GET /api/discs/random` | `findRandom` | JWT + `UserRoleGuard`, cualquier rol autenticado; usuario por `@GetUser()` | `RandomQueryDto` en query |
 | `GET /api/discs/options` | `findOptions` | JWT + `UserRoleGuard`, cualquier rol autenticado | `OptionsQueryDto` en query |
-| `GET /api/discs/date` | `findAllByDate` | JWT + `UserRoleGuard`, cualquier rol autenticado; usuario por `@GetUser()` | `PaginationDto` en query |
-| `GET /api/discs/date/public` | `findAllByDatePublic` | Pública | `PaginationDto` en query |
+| `GET /api/discs/date` | `findAllByDate` | JWT + `UserRoleGuard`, cualquier rol autenticado; usuario por `@GetUser()` | `DiscsCalendarQueryDto` en query |
+| `GET /api/discs/date/public` | `findAllByDatePublic` | Pública | `DiscsCalendarQueryDto` en query |
 | `GET /api/discs/date/public/filters` | `getPublicFilters` | Pública | Sin parámetros |
 | `GET /api/discs/homeDiscs` | `findTopRatedOrFeaturedAndStats` | JWT + `UserRoleGuard`, cualquier rol autenticado; usuario por `@GetUser()` | `TopStatsQueryDto` en query; también pasa `genreId` |
-| `GET /api/discs` | `findAll` | JWT + `UserRoleGuard`, cualquier rol autenticado; usuario por `@GetUser()` | `PaginationDto` en query |
+| `GET /api/discs` | `findAll` | JWT + `UserRoleGuard`, cualquier rol autenticado; usuario por `@GetUser()` | `DiscsListQueryDto` en query |
 | `GET /api/discs/:id` | `findOne` | Pública | `ParseUUIDPipe` para `id` |
 | `GET /api/discs/:id/spotify-tracks` | `getSpotifyTracks` | Pública | `ParseUUIDPipe` para `id` |
 | `PATCH /api/discs/:id` | `update` | Pública | `ParseUUIDPipe` para `id`; `UpdateDiscDto` en body |
@@ -27,7 +27,7 @@ La validación global activa `transform`, conversión implícita, `whitelist` y 
 
 ## Defaults y semántica DTO relevantes
 
-- `PaginationDto` no declara defaults de clase. `findAll` usa `limit = 10` y `offset = 0`; `offset` se convierte a número, pero el DTO no le aplica `@IsInt` ni mínimo. `limit` debe ser positivo y tampoco tiene máximo. `orderBy` es texto libre a nivel DTO. `dateRange` y otros rangos convierten arrays a fechas, requieren al menos dos elementos y el servicio de `findAll` solo usa `dateRange` si su longitud es exactamente dos.
+- `PaginationDto` no declara defaults de clase. `findAll` usa `limit = 10` y `offset = 0`; `offset` se convierte a número, pero el DTO no le aplica `@IsInt` ni mínimo. `limit` debe ser positivo y tampoco tiene máximo. `DiscsListQueryDto` conserva los filtros de catálogo, incluido `orderBy`; sus rangos convierten arrays a fechas, requieren al menos dos elementos y el servicio de `findAll` solo usa `dateRange` si su longitud es exactamente dos.
 - `RandomQueryDto.limit` usa el default de servicio `5`, acepta positivos hasta `50`; `OptionsQueryDto.limit` usa el default `3`, acepta positivos hasta `10`.
 - `RandomQueryDto` y `OptionsQueryDto` transforman `ep`/`debut` únicamente para los literales `true` y `false`. Ausencia queda como `undefined`; los valores explícitos `false` se conservan.
 - `WeeklyQueryDto` requiere mes entre 1–12 y año desde 2020; `week` es opcional y, si llega, debe estar entre 1–4.

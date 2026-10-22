@@ -14,6 +14,10 @@ Este índice conserva el objetivo, las reglas, el procedimiento y el inventario 
 
 Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gates.md). BC-ED-0 cierra Editorial sin cambiar el estado de otros dominios.
 
+### Platform / Infrastructure
+
+- [Auditoría de Platform](platform.md) — responsabilidades y consumers; BC-PLAT-R1 (Seeds), R2 (I18n), U2 (Uploads), R3 (filtros por dominio), R4 (cierre estructural) y R5 (composición de AppModule) completadas el 2026-10-22; `src/platform/` eliminado.
+
 ### Community
 
 - [Cierre de Community](community.md) — BC-COMM-0–9 completadas; saneamiento verificado, cero entradas Community en los tres baselines y riesgos contractuales diferidos documentados (2026-10-21).
@@ -88,7 +92,7 @@ La secuencia se amplía después de cada dominio; no constituye una orden para a
 | 4     | Product                   | News, Suggestions, Versions                                                                                                      | Pendiente                                                                                                                                                               |
 | 5     | Identity                  | Auth, AccessRequests                                                                                                             | Pendiente                                                                                                                                                               |
 | 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                           | Pendiente                                                                                                                                                               |
-| 7     | Platform / Infrastructure | I18n, Seeds, Uploads                                                                                                             | Pendiente                                                                                                                                                               |
+| 7     | Platform / Infrastructure | Scheduling, Common                                                                                                               | **Completado**; Seeds, I18n y Uploads retirados; filtros separados por owner y estructura Platform cerrada en BC-PLAT-R3/R4 ([auditoría](platform.md))                |
 | 8     | Communications            | Mail                                                                                                                             | **Completado** por BC-COM-1/2 (2026-10-21); cero deuda en los tres baselines y `yarn verify` aprobado. Hallazgo de seguridad HTML pendiente.                            |
 
 ### Estado detallado por módulo
@@ -133,9 +137,9 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Integrations              | Telegram            | pendiente  |
 | Integrations              | TikTok              | pendiente  |
 | Integrations              | WordPress           | pendiente  |
-| Platform / Infrastructure | I18n                | pendiente  |
-| Platform / Infrastructure | Seeds               | pendiente  |
-| Platform / Infrastructure | Uploads             | pendiente  |
+| Platform / Infrastructure | I18n                | retirado   |
+| Platform / Infrastructure | Seeds               | retirado   |
+| Platform / Infrastructure | Uploads             | retirado   |
 | Communications            | Mail                | completado |
 
 **Composición y cierre de Catalog (2026-10-20):** `AppModule` importa directamente sus siete módulos funcionales: `ArtistsModule`, `CountriesModule`, `GenresModule`, `DiscModule`, `CatalogImportModule`, `CommonModule` (overview) y `LastfmModule`. Esta composición satisface C5; no se necesita un `CatalogModule` agregador. Las dependencias cruzadas de servicios se expresan mediante imports/exports Nest concretos, en particular `DiscModule` para Last.fm, Editorial Contents y el bootstrap standalone. BC-CAT cerró formalmente Catalog después de completar QG-1–QG-18 y verificar los tres baselines y `yarn verify`; véase el [registro de cierre](catalog.md).

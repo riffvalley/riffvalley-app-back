@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { DiscsCalendarQueryDto } from 'src/catalog/discs/dto/discs-calendar-query.dto';
 import { User } from '../../../../identity/auth/entities/user.entity';
 import { Country } from '../../../countries/entities/country.entity';
 import { Genre } from '../../../genres/entities/genre.entity';
@@ -43,7 +43,10 @@ describe('DiscCalendarService authenticated calendar query', () => {
   });
 
   const runCalendarQuery = (filters: Record<string, unknown> = {}) =>
-    service.findAllByDate(Object.assign(new PaginationDto(), filters), user);
+    service.findAllByDate(
+      Object.assign(new DiscsCalendarQueryDto(), filters),
+      user,
+    );
 
   it.each([
     [
@@ -517,7 +520,9 @@ describe('DiscCalendarService public calendar query', () => {
   });
 
   const runPublicCalendarQuery = (filters: Record<string, unknown> = {}) =>
-    service.findAllByDatePublic(Object.assign(new PaginationDto(), filters));
+    service.findAllByDatePublic(
+      Object.assign(new DiscsCalendarQueryDto(), filters),
+    );
 
   it.each([
     [
