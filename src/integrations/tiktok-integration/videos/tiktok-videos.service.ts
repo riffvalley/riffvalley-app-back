@@ -3,7 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TiktokVideosQueryDto } from '../http/dto/tiktok-videos-query.dto';
 import { TiktokVideo } from '../entities/tiktok-video.entity';
-import { isTiktokError, TiktokApiService } from '../api/tiktok-api.service';
+import {
+  formatTiktokException,
+  formatTiktokProviderError,
+  isTiktokError,
+  TiktokApiService,
+} from '../api/tiktok-api.service';
 
 // Public contract of /tiktok/videos: excludes embedHtml and internal columns.
 export interface TiktokVideoSummary {
@@ -69,14 +74,14 @@ export class TiktokVideosService {
       const maxPages = 20;
 
       for (let page = 0; hasMore && page < maxPages; page++) {
-        const { ok, body } = await this.tiktokApi.fetchVideoPage(
+        const { ok, status, body } = await this.tiktokApi.fetchVideoPage(
           accessToken,
           cursor,
         );
 
         if (!ok || isTiktokError(body.error)) {
           this.logger.error(
-            `TikTok API error: ${JSON.stringify(body.error ?? body)}`,
+            `TikTok API error (HTTP ${status}): ${formatTiktokProviderError(body.error)}`,
           );
           break;
         }
@@ -109,7 +114,7 @@ export class TiktokVideosService {
 
       this.logger.log(`TikTok sync finished: ${syncedCount} videos upserted`);
     } catch (error) {
-      this.logger.error(`TikTok sync failed: ${error}`);
+      this.logger.error(`TikTok sync failed: ${formatTiktokException(error)}`);
     }
   }
 

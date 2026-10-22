@@ -8,6 +8,10 @@ import {
   InstagramPost,
 } from './entities/instagram-post.entity';
 import { InstagramPostsQueryDto } from './dto/instagram-posts-query.dto';
+import {
+  instagramErrorMessage,
+  sanitizeInstagramLogValue,
+} from './helpers/instagram-log-sanitizer';
 import { InstagramTokenStorageService } from './instagram-token-storage.service';
 
 interface IgMediaNode {
@@ -91,7 +95,7 @@ export class InstagramService {
 
         if (!res.ok || body.error) {
           this.logger.error(
-            `Instagram API error: ${JSON.stringify(body.error ?? body)}`,
+            `Instagram API error (HTTP ${res.status}): ${this.safeGraphErrorMessage(body.error)}`,
           );
           break;
         }
@@ -126,7 +130,9 @@ export class InstagramService {
 
       this.logger.log(`Instagram sync finished: ${syncedCount} posts upserted`);
     } catch (error) {
-      this.logger.error(`Instagram sync failed: ${error}`);
+      this.logger.error(
+        `Instagram sync failed: ${this.safeErrorMessage(error)}`,
+      );
     }
   }
 
@@ -147,7 +153,7 @@ export class InstagramService {
 
       if (!res.ok || !body.access_token) {
         this.logger.error(
-          `Instagram token refresh failed: ${JSON.stringify(body.error ?? body)}`,
+          `Instagram token refresh failed (HTTP ${res.status}): ${this.safeGraphErrorMessage(body.error)}`,
         );
         return;
       }
@@ -156,7 +162,9 @@ export class InstagramService {
       await this.tokenStorage.persistAccessToken(body.access_token);
       this.logger.log('Instagram access token refreshed');
     } catch (error) {
-      this.logger.error(`Instagram token refresh failed: ${error}`);
+      this.logger.error(
+        `Instagram token refresh failed: ${this.safeErrorMessage(error)}`,
+      );
     }
   }
 
@@ -174,5 +182,30 @@ export class InstagramService {
       totalItems,
       hasMore: offset + data.length < totalItems,
     };
+  }
+
+  private safeGraphErrorMessage(error: InstagramGraphError | undefined) {
+    const details = [
+      error?.message,
+      error?.type && `type=${error.type}`,
+      error?.code !== undefined && `code=${error.code}`,
+      error?.error_subcode !== undefined &&
+        `error_subcode=${error.error_subcode}`,
+      error?.fbtrace_id && `fbtrace_id=${error.fbtrace_id}`,
+    ].filter((detail): detail is string => typeof detail === 'string');
+
+    if (details.length === 0) return 'no provider error details';
+
+    return sanitizeInstagramLogValue(details.join(' '), [
+      this.accessToken,
+      process.env.IG_HEROKU_API_TOKEN ?? '',
+    ]);
+  }
+
+  private safeErrorMessage(error: unknown) {
+    return sanitizeInstagramLogValue(instagramErrorMessage(error), [
+      this.accessToken,
+      process.env.IG_HEROKU_API_TOKEN ?? '',
+    ]);
   }
 }

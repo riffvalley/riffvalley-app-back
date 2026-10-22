@@ -1,41 +1,26 @@
 import { utilities as nestWinstonUtilities } from 'nest-winston';
 import * as winston from 'winston';
-import 'winston-daily-rotate-file';
+
+const suppressProductionRouteLogs = winston.format((info) => {
+  const isRouteMappingLog =
+    info.level === 'info' &&
+    (info.context === 'RoutesResolver' || info.context === 'RouterExplorer');
+
+  return process.env.STAGE === 'prod' && isRouteMappingLog ? false : info;
+});
 
 export const winstonConfig = {
-    transports: [
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.timestamp(),
-                winston.format.ms(),
-                nestWinstonUtilities.format.nestLike('Riff Valley App', {
-                    prettyPrint: true,
-                    colors: true,
-                }),
-            ),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        suppressProductionRouteLogs(),
+        winston.format.timestamp(),
+        winston.format.ms(),
+        nestWinstonUtilities.format.nestLike('Riff Valley App', {
+          prettyPrint: true,
+          colors: true,
         }),
-        new winston.transports.DailyRotateFile({
-            filename: 'logs/error-%DATE%.log',
-            datePattern: 'YYYY-MM-DD',
-            zippedArchive: true,
-            maxSize: '20m',
-            maxFiles: '14d',
-            level: 'error',
-            format: winston.format.combine(
-                winston.format.timestamp(),
-                winston.format.json(),
-            ),
-        }),
-        new winston.transports.DailyRotateFile({
-            filename: 'logs/combined-%DATE%.log',
-            datePattern: 'YYYY-MM-DD',
-            zippedArchive: true,
-            maxSize: '20m',
-            maxFiles: '14d',
-            format: winston.format.combine(
-                winston.format.timestamp(),
-                winston.format.json(),
-            ),
-        }),
-    ],
+      ),
+    }),
+  ],
 };

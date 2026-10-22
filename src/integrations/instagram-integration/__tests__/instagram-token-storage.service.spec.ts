@@ -121,6 +121,57 @@ describe('InstagramTokenStorageService', () => {
     expect(readFile).not.toHaveBeenCalled();
   });
 
+  it('keeps safe Heroku response diagnostics and omits returned credentials', async () => {
+    process.env.IG_HEROKU_API_TOKEN = 'test-heroku-token';
+    process.env.IG_HEROKU_APP_NAME = 'test-app';
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    fetchMock.mockResolvedValueOnce(
+      response(
+        false,
+        503,
+        JSON.stringify({
+          id: 'maintenance_mode',
+          message: 'Heroku API is temporarily unavailable',
+          IG_ACCESS_TOKEN: 'refreshed-token',
+          IG_HEROKU_API_TOKEN: 'test-heroku-token',
+          authorization: 'Bearer test-heroku-token',
+        }),
+      ),
+    );
+
+    await service.persistAccessToken('refreshed-token');
+
+    const logged = JSON.stringify(loggerError.mock.calls);
+    expect(logged).toContain('503');
+    expect(logged).toContain('Heroku API is temporarily unavailable');
+    expect(logged).toContain('maintenance_mode');
+    expect(logged).not.toContain('refreshed-token');
+    expect(logged).not.toContain('test-heroku-token');
+  });
+
+  it('redacts Instagram and Heroku credentials from token persistence exceptions', async () => {
+    process.env.IG_HEROKU_API_TOKEN = 'test-heroku-token';
+    process.env.IG_HEROKU_APP_NAME = 'test-app';
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    fetchMock.mockRejectedValueOnce(
+      new Error(
+        'request failed with IG_ACCESS_TOKEN=refreshed-token Authorization: Bearer test-heroku-token',
+      ),
+    );
+
+    await service.persistAccessToken('refreshed-token');
+
+    const logged = JSON.stringify(loggerError.mock.calls);
+    expect(logged).toContain('Could not persist refreshed Instagram token');
+    expect(logged).toContain('request failed');
+    expect(logged).not.toContain('refreshed-token');
+    expect(logged).not.toContain('test-heroku-token');
+  });
+
   it('absorbs .env read and write errors', async () => {
     const loggerError = jest
       .spyOn(Logger.prototype, 'error')
