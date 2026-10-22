@@ -161,7 +161,9 @@ export class AuthService {
       throw error;
     }
 
-    const user = await this.usersService.findById(refreshCredential.userId);
+    const user = await this.usersService.findSessionProfileById(
+      refreshCredential.userId,
+    );
     if (!user?.isActive) {
       throw new UnauthorizedException('Session is not available');
     }

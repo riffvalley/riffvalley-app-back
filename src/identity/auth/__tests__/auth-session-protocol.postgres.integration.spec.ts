@@ -97,6 +97,7 @@ integrationSuite(
         | 'findIdentityById'
         | 'recordLogin'
         | 'findById'
+        | 'findSessionProfileById'
       >
     >;
 
@@ -129,7 +130,13 @@ integrationSuite(
       await dataSource.query(`
       CREATE TABLE "users" (
         "id" uuid PRIMARY KEY,
-        "isActive" boolean NOT NULL DEFAULT true
+        "username" text NOT NULL,
+        "isActive" boolean NOT NULL DEFAULT true,
+        "role" text NOT NULL,
+        "image" text,
+        "dashboardConfig" jsonb,
+        "mobileDashboardConfig" jsonb,
+        "dashboardButtonsEnabled" boolean NOT NULL DEFAULT false
       )
     `);
       const rateLimitMigration = new CreateAuthRateLimitWindows1791980000000();
@@ -173,11 +180,26 @@ integrationSuite(
         password: passwordHash,
         role: 'user',
         isActive: true,
-        dashboardButtonsEnabled: true,
+        dashboardConfig: null,
+        mobileDashboardConfig: [{ id: 'news', enabled: false }],
+        dashboardButtonsEnabled: false,
       });
       await dataSource.query(
-        'INSERT INTO "users" ("id", "isActive") VALUES ($1, true)',
-        [userId],
+        `INSERT INTO "users"
+           ("id", "username", "isActive", "role", "dashboardConfig",
+            "mobileDashboardConfig", "dashboardButtonsEnabled")
+         VALUES ($1, $2, true, $3, $4::jsonb, $5::jsonb, $6)`,
+        [
+          userId,
+          'integration-user',
+          ValidRoles.user,
+          null,
+          JSON.stringify([{ id: 'news', enabled: false }]),
+          false,
+        ],
+      );
+      const sessionUsersService = new UsersService(
+        dataSource.getRepository(User),
       );
       usersService = {
         findCredentialsByUsername: jest.fn<Promise<User | null>, [string]>(
@@ -195,6 +217,9 @@ integrationSuite(
         ),
         recordLogin: jest.fn<Promise<void>, [string]>(async () => undefined),
         findById: jest.fn<Promise<User | null>, [string]>(async () => fakeUser),
+        findSessionProfileById: jest.fn((id: string) =>
+          sessionUsersService.findSessionProfileById(id),
+        ),
       };
 
       const configService = new ConfigService({
@@ -258,8 +283,15 @@ integrationSuite(
         'TRUNCATE TABLE "auth_rate_limit_windows", "auth_refresh_tokens", "auth_sessions", "users" CASCADE',
       );
       await dataSource.query(
-        'INSERT INTO "users" ("id", "isActive") VALUES ($1, true)',
-        [userId],
+        `INSERT INTO "users"
+           ("id", "username", "isActive", "role", "dashboardConfig",
+            "mobileDashboardConfig", "dashboardButtonsEnabled")
+         VALUES ($1, 'integration-user', true, $2, NULL, $3::jsonb, false)`,
+        [
+          userId,
+          ValidRoles.user,
+          JSON.stringify([{ id: 'news', enabled: false }]),
+        ],
       );
     });
 
@@ -381,6 +413,10 @@ integrationSuite(
         user: expect.objectContaining({
           id: userId,
           username: 'integration-user',
+          role: ValidRoles.user,
+          dashboardConfig: null,
+          mobileDashboardConfig: [{ id: 'news', enabled: false }],
+          dashboardButtonsEnabled: false,
         }),
         token: expect.any(String),
         csrfToken: expect.any(String),

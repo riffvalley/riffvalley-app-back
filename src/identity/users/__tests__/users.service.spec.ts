@@ -398,6 +398,36 @@ describe('UsersService account and user flows', () => {
     });
   });
 
+  it('selects role and dashboard preferences explicitly for session restoration', async () => {
+    const profile = makeUser({
+      id: 'user-1',
+      username: 'listener',
+      role: ValidRoles.user,
+      isActive: true,
+      dashboardConfig: null,
+      mobileDashboardConfig: [{ id: 'news', enabled: false }],
+      dashboardButtonsEnabled: false,
+    });
+    userRepository.findOne.mockResolvedValue(profile);
+
+    await expect(service.findSessionProfileById('user-1')).resolves.toBe(
+      profile,
+    );
+    expect(userRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        isActive: true,
+        image: true,
+        dashboardConfig: true,
+        mobileDashboardConfig: true,
+        dashboardButtonsEnabled: true,
+      },
+    });
+  });
+
   it('provides the minimal current id, role, and active state for authorization callers', async () => {
     const identity = {
       id: 'user-1',

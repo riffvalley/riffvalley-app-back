@@ -74,7 +74,9 @@ describe('renewable login HTTP contract', () => {
           id: 'user-1',
           username: 'listener',
           role: 'user',
-          dashboardButtonsEnabled: true,
+          dashboardConfig: null,
+          mobileDashboardConfig: [{ id: 'news', enabled: false }],
+          dashboardButtonsEnabled: false,
           password: 'must-not-serialize',
           internalField: 'must-not-serialize',
         },
@@ -513,7 +515,9 @@ describe('renewable login HTTP contract', () => {
         id: 'user-1',
         username: 'listener',
         role: 'user',
-        dashboardButtonsEnabled: true,
+        dashboardConfig: null,
+        mobileDashboardConfig: [{ id: 'news', enabled: false }],
+        dashboardButtonsEnabled: false,
       },
     });
     expect(JSON.stringify(response.body)).not.toContain(refreshToken);
