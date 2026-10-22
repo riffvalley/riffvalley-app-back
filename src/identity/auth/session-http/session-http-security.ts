@@ -44,6 +44,18 @@ export type SessionCsrfVerifier = (
   clientType: SessionClientType,
 ) => boolean;
 
+export type SessionRequestRejectionReason =
+  | 'https_required'
+  | 'origin_invalid'
+  | 'content_type_invalid'
+  | 'browser_metadata_invalid'
+  | 'csrf_invalid'
+  | 'client_type_mismatch';
+
+export type SessionRequestRejectionHandler = (
+  reason: SessionRequestRejectionReason,
+) => void;
+
 export function readSessionCookieRequestMetadata(
   request: Pick<Request, 'secure' | 'headers'>,
   configService: Pick<ConfigService, 'get'>,
@@ -231,13 +243,16 @@ export function validateSessionCookieRequest(
   metadata: SessionCookieRequestMetadata,
   configuredOrigins: SessionClientOrigins,
   verifyCsrfToken: SessionCsrfVerifier,
+  onRejected?: SessionRequestRejectionHandler,
 ): SessionClientType {
   const clientType = validateSessionCookieRequestMetadata(
     metadata,
     configuredOrigins,
+    onRejected,
   );
 
   if (!metadata.csrfToken || !verifyCsrfToken(metadata.csrfToken, clientType)) {
+    onRejected?.('csrf_invalid');
     throw new ForbiddenException('CSRF validation failed');
   }
 
@@ -248,8 +263,10 @@ export function validateSessionCookieRequest(
 export function validateSessionCookieRequestMetadata(
   metadata: SessionCookieRequestMetadata,
   configuredOrigins: SessionClientOrigins,
+  onRejected?: SessionRequestRejectionHandler,
 ): SessionClientType {
   if (!metadata.secure) {
+    onRejected?.('https_required');
     throw new ForbiddenException('Session requests require HTTPS');
   }
 
@@ -258,10 +275,12 @@ export function validateSessionCookieRequestMetadata(
     configuredOrigins,
   );
   if (!clientType) {
+    onRejected?.('origin_invalid');
     throw new ForbiddenException('Request origin is not allowed');
   }
 
   if (!isJsonContentType(metadata.contentType)) {
+    onRejected?.('content_type_invalid');
     throw new ForbiddenException('Session requests must use JSON');
   }
 
@@ -269,6 +288,7 @@ export function validateSessionCookieRequestMetadata(
     metadata.fetchSite !== undefined &&
     !ALLOWED_FETCH_SITES.has(metadata.fetchSite)
   ) {
+    onRejected?.('browser_metadata_invalid');
     throw new ForbiddenException('Request metadata is not allowed');
   }
 

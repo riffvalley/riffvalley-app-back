@@ -9,6 +9,8 @@ import {
   SESSION_HTTP_TRUST_PROXY,
   SESSION_EDGE_SECRET_CONFIG_KEY,
   SESSION_TRUSTED_EDGE_HEADER,
+  SessionCookieRequestMetadata,
+  SessionRequestRejectionReason,
   validateSessionCookieRequest,
 } from '../session-http-security';
 
@@ -357,6 +359,48 @@ describe('session HTTP security helpers', () => {
         validateSessionCookieRequest(metadata, origins, verify),
       ).toThrow(ForbiddenException);
     });
+
+    it.each([
+      [{ ...validMetadata, secure: false }, 'https_required'],
+      [{ ...validMetadata, origin: 'https://evil.example' }, 'origin_invalid'],
+      [{ ...validMetadata, contentType: 'text/plain' }, 'content_type_invalid'],
+      [{ ...validMetadata, fetchSite: 'none' }, 'browser_metadata_invalid'],
+      [{ ...validMetadata, csrfToken: 'invalid' }, 'csrf_invalid'],
+    ] as const)(
+      'reports the stable rejection reason %s',
+      (metadata, expectedReason) => {
+        const reasons: SessionRequestRejectionReason[] = [];
+        const onRejected = (reason: SessionRequestRejectionReason): void => {
+          reasons.push(reason);
+        };
+        const verify = jest.fn(() => false);
+
+        try {
+          validateSessionCookieRequest(
+            metadata as SessionCookieRequestMetadata,
+            origins,
+            verify,
+            onRejected,
+          );
+          throw new Error('Expected request validation to reject');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ForbiddenException);
+          expect((error as ForbiddenException).message).toBe(
+            expectedReason === 'csrf_invalid'
+              ? 'CSRF validation failed'
+              : expectedReason === 'https_required'
+                ? 'Session requests require HTTPS'
+                : expectedReason === 'origin_invalid'
+                  ? 'Request origin is not allowed'
+                  : expectedReason === 'content_type_invalid'
+                    ? 'Session requests must use JSON'
+                    : 'Request metadata is not allowed',
+          );
+        }
+
+        expect(reasons).toEqual([expectedReason]);
+      },
+    );
 
     it('rejects insecure requests before invoking the CSRF verifier', () => {
       expect(() =>

@@ -53,7 +53,7 @@ export class RatesService {
             user: { id: user.id },
             disc: { id: discId },
           },
-          lock: { mode: 'pessimistic_write' },
+          lock: { mode: 'pessimistic_write', tables: ['rate'] },
         });
 
         if (existingRate) {
@@ -317,7 +317,7 @@ export class RatesService {
         const existing = await rateRepository.findOne({
           where: { id },
           relations: ['user'],
-          lock: { mode: 'pessimistic_write' },
+          lock: { mode: 'pessimistic_write', tables: ['rate'] },
         });
 
         if (!existing) {
@@ -349,7 +349,7 @@ export class RatesService {
       const existing = await rateRepository.findOne({
         where: { id },
         relations: ['user'],
-        lock: { mode: 'pessimistic_write' },
+        lock: { mode: 'pessimistic_write', tables: ['rate'] },
       });
 
       if (!existing) {

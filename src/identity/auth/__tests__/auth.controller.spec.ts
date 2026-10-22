@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common/constants';
 import {
   ForbiddenException,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -270,4 +271,58 @@ describe('AuthController role contract', () => {
       }
     },
   );
+});
+
+describe('AuthController refresh rejection diagnostics', () => {
+  it('logs only the safe rejection fields while preserving the 403 response', async () => {
+    const requestId = 'a1234567-b123-4123-8123-a123456789ab';
+    const configValues: Record<string, string> = {
+      AUTH_SESSION_MODE_ENABLED: 'true',
+      AUTH_SESSION_EDGE_SECRET: Buffer.alloc(32, 42).toString('base64url'),
+      AUTH_SESSION_APP_ORIGIN: 'https://app.riffvalley.es',
+      AUTH_SESSION_WIKI_ORIGIN: 'https://wiki.riffvalley.es',
+    };
+    const controller = new AuthController(
+      {} as never,
+      {} as never,
+      {} as never,
+      { get: (key: string) => configValues[key] } as never,
+      {} as never,
+      {} as never,
+    );
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    try {
+      const refresh = controller.refresh(
+        AUTH_SESSION_MODE,
+        undefined,
+        {},
+        {
+          secure: true,
+          headers: {
+            origin: 'https://untrusted.example',
+            'content-type': 'application/json',
+            'x-request-id': requestId,
+            cookie: '__Secure-rv_app_refresh=secret-cookie-value',
+          },
+        } as never,
+        { setHeader: jest.fn() } as never,
+      );
+      await expect(refresh).rejects.toThrow('Request origin is not allowed');
+      await expect(refresh).rejects.toMatchObject({ status: 403 });
+
+      const loggedMessage = String(warn.mock.calls[0]?.[0]);
+      expect(loggedMessage).toContain('endpoint=/api/auth/refresh');
+      expect(loggedMessage).toContain('status=403');
+      expect(loggedMessage).toContain('reason=origin_invalid');
+      expect(loggedMessage).toContain('occurred_at=');
+      expect(loggedMessage).toContain(`request_id=${requestId}`);
+      expect(loggedMessage).not.toContain('untrusted.example');
+      expect(loggedMessage).not.toContain('secret-cookie-value');
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
