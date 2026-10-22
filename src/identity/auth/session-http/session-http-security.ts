@@ -39,17 +39,32 @@ export interface SessionCookieRequestMetadata {
   fetchSite: string | undefined;
 }
 
+export type SessionCsrfFailureReason =
+  | 'csrf_malformed'
+  | 'csrf_signature_invalid'
+  | 'csrf_claims_invalid'
+  | 'csrf_expired'
+  | 'csrf_operation_mismatch'
+  | 'csrf_client_mismatch'
+  | 'csrf_session_mismatch'
+  | 'csrf_verification_unavailable';
+
+export type SessionCsrfVerificationResult =
+  | { valid: true }
+  | { valid: false; reason: SessionCsrfFailureReason };
+
 export type SessionCsrfVerifier = (
   token: string,
   clientType: SessionClientType,
-) => boolean;
+) => SessionCsrfVerificationResult;
 
 export type SessionRequestRejectionReason =
   | 'https_required'
   | 'origin_invalid'
   | 'content_type_invalid'
   | 'browser_metadata_invalid'
-  | 'csrf_invalid'
+  | 'csrf_missing'
+  | SessionCsrfFailureReason
   | 'client_type_mismatch';
 
 export type SessionRequestRejectionHandler = (
@@ -251,8 +266,14 @@ export function validateSessionCookieRequest(
     onRejected,
   );
 
-  if (!metadata.csrfToken || !verifyCsrfToken(metadata.csrfToken, clientType)) {
-    onRejected?.('csrf_invalid');
+  if (!metadata.csrfToken) {
+    onRejected?.('csrf_missing');
+    throw new ForbiddenException('CSRF validation failed');
+  }
+
+  const csrfVerification = verifyCsrfToken(metadata.csrfToken, clientType);
+  if (csrfVerification.valid === false) {
+    onRejected?.(csrfVerification.reason);
     throw new ForbiddenException('CSRF validation failed');
   }
 

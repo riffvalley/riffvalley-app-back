@@ -29,7 +29,7 @@ describe('SessionRefreshCookieAdapter', () => {
           'app',
           validMetadata,
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toBe(validToken);
       expect(
@@ -38,7 +38,7 @@ describe('SessionRefreshCookieAdapter', () => {
           'wiki',
           { ...validMetadata, origin: origins.wiki },
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toBeNull();
     });
@@ -55,7 +55,7 @@ describe('SessionRefreshCookieAdapter', () => {
           'app',
           validMetadata,
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toBeNull();
     });
@@ -67,7 +67,7 @@ describe('SessionRefreshCookieAdapter', () => {
           'app',
           { ...validMetadata, secure: false },
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toThrow(ForbiddenException);
       expect(() =>
@@ -76,7 +76,7 @@ describe('SessionRefreshCookieAdapter', () => {
           'app',
           validMetadata,
           origins,
-          () => false,
+          () => ({ valid: false, reason: 'csrf_signature_invalid' }),
         ),
       ).toThrow(ForbiddenException);
     });
@@ -100,7 +100,10 @@ describe('SessionRefreshCookieAdapter', () => {
         expiry,
         validMetadata,
         origins,
-        (token) => token === 'csrf-valid',
+        (token) =>
+          token === 'csrf-valid'
+            ? { valid: true }
+            : { valid: false, reason: 'csrf_signature_invalid' },
         new Date('2026-10-21T10:00:00.000Z'),
       );
 
@@ -126,7 +129,7 @@ describe('SessionRefreshCookieAdapter', () => {
           expiry,
           { ...validMetadata, secure: false },
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toThrow(ForbiddenException);
       expect(cookie).not.toHaveBeenCalled();
@@ -139,7 +142,7 @@ describe('SessionRefreshCookieAdapter', () => {
           expiry,
           { ...validMetadata, origin: 'https://evil.example' },
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toThrow(ForbiddenException);
       expect(cookie).not.toHaveBeenCalled();
@@ -154,7 +157,7 @@ describe('SessionRefreshCookieAdapter', () => {
           expiry,
           validMetadata,
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toThrow(ForbiddenException);
       expect(() =>
@@ -165,7 +168,7 @@ describe('SessionRefreshCookieAdapter', () => {
           expiry,
           validMetadata,
           origins,
-          () => false,
+          () => ({ valid: false, reason: 'csrf_signature_invalid' }),
         ),
       ).toThrow(ForbiddenException);
       expect(() =>
@@ -176,7 +179,7 @@ describe('SessionRefreshCookieAdapter', () => {
           expiry,
           validMetadata,
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toThrow(InternalServerErrorException);
       expect(cookie).not.toHaveBeenCalled();
@@ -198,7 +201,10 @@ describe('SessionRefreshCookieAdapter', () => {
         'app',
         validMetadata,
         origins,
-        (token) => token === 'csrf-valid',
+        (token) =>
+          token === 'csrf-valid'
+            ? { valid: true }
+            : { valid: false, reason: 'csrf_signature_invalid' },
       );
 
       const options = clearCookie.mock.calls[0][1];
@@ -220,7 +226,7 @@ describe('SessionRefreshCookieAdapter', () => {
           'app',
           { ...validMetadata, origin: 'https://evil.example' },
           origins,
-          () => true,
+          () => ({ valid: true }),
         ),
       ).toThrow(ForbiddenException);
       expect(clearCookie).not.toHaveBeenCalled();
