@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PassportModule } from '@nestjs/passport';
-import { UserRoleGuard } from '../../identity/auth/guards/user-role/user-role.guard';
-import { VersionsController } from './versions.controller';
-import { VersionsService } from './versions.service';
+import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
+import { VersionsController } from '../versions.controller';
+import { VersionsService } from '../versions.service';
 
 type VersionsControllerService = Pick<
   VersionsService,

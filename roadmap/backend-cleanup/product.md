@@ -1,6 +1,6 @@
 # Auditoría de Product
 
-**Estado:** News, Suggestions y Versions auditados el 2026-10-22. No se modificó código funcional, tests ni baselines. Las tareas propuestas son futuras y requieren una implementación aprobada por separado.
+**Estado:** News, Suggestions y Versions auditados el 2026-10-22. Desde la auditoría se completaron las subtareas focalizadas de News, Suggestions y Versions; el estado y la evidencia de Versions están registrados abajo. Las tareas generales BC-PROD-1..3 siguen abiertas en el roadmap.
 
 ## Alcance y método
 
@@ -31,7 +31,7 @@ Los hallazgos de “sin llamada encontrada” se limitan al checkout frontend di
 - **Versions:** es ownership coherente de versiones publicadas y su workflow. El backlog contiene tareas técnicas asignadas a usuarios, pero es parte del workflow de releases y se usa desde el kanban de versiones; no hay evidencia de que deba trasladarse a Identity, Editorial o Platform.
 - **Catalog, Community, Editorial, Identity e Integrations:** no se identifica funcionalidad que deba trasladarse ahora. Las integraciones externas están encapsuladas en sus módulos de Integrations. Las referencias a entidades de User y VersionItem son dependencias funcionales concretas, no módulos adicionales a crear.
 - **Módulos independientes:** los tres tienen controller, servicio, persistencia y consumidores distintos. Ninguno carece de responsabilidad suficiente para mantenerse. Fusionarlos reduciría la separación de APIs y asociaría deployments/features sin beneficio demostrado.
-- **Código simplificable confirmado:** `VersionsService.update` asigna `publishedAt` dos veces bajo la misma condición; una asignación es redundante. `VersionsService` conserva varios `any` incluso donde `CreateVersionItemDto.branch` ya está declarado como `string`, y `NewsService`/`SuggestionsService` construyen filtros TypeORM con `any`. Esto es deuda concreta de tipado/simplificación, no motivo para reestructurar módulos.
+- **Código simplificable confirmado en la auditoría:** la asignación repetida de `publishedAt` y los `any` de News, Suggestions y Versions se resolvieron mediante BC-VERS-1/2 y las subtareas focalizadas de esos módulos. No justificaban reestructurar los módulos.
 - **Código posiblemente huérfano en el cliente:** el servicio frontend define `getPublicVersionsInfinite`, `getPublicVersions` y `getItem`; las búsquedas en vistas/componentes actuales no encontraron consumidores. El backend no expone `/versions/public/infinite` ni `GET /versions/items/:itemId`. No se clasifican como rutas backend muertas: no existen allí; la posible eliminación de wrappers del frontend queda fuera de este checkout/tarea y requiere confirmar consumidores externos antes de borrar.
 
 ### News — revisión detallada y división de tareas (2026-10-22)
@@ -118,23 +118,56 @@ La guardia interpreta el mínimo como inclusivo (`superadmin` satisface `riffval
 
 La discrepancia del wrapper de `GET /api/suggestions` (`{ data, counts }` en backend frente al tipo array del wrapper) permanece como deuda frontend independiente y fuera de esta tarea.
 
+### Versions — revisión detallada y división en subtareas (2026-10-22)
+
+**Responsabilidad, servicios y composición.** `VersionsService` mantiene versiones publicables y sus items: administra versiones, tareas asignadas a versiones y backlog independiente; aplica las reglas de creación/cierre/borrado y sirve lecturas de desarrollo y producción. `VersionsController` es la única fachada HTTP y `VersionsModule` registra `Version`, `VersionItem` y `AuthorizationModule`; `AppModule` compone el módulo. No hay otra clase de servicio ni una segunda responsabilidad que justifique extraer capas. `SuggestionsService` consume la entidad `VersionItem` para enlazar una sugerencia con una tarea; no depende de `VersionsService`.
+
+**Rutas y consumidores comprobados.** El prefijo global es `/api`. Las lecturas de Versions no llevan guard explícito en el controller; las escrituras llevan `@Auth(ValidRoles.superadmin)`.
+
+| Rutas backend | Uso confirmado en App |
+|---|---|
+| `GET/POST /versions`, `GET/PATCH/DELETE /versions/:id`, `PATCH /versions/:id/active` | `ManageVersions.vue` usa `GET/POST/PATCH/DELETE`; el wrapper de activar existe, sin llamada encontrada en vistas. |
+| `GET/POST /versions/:versionId/items`, `PATCH/DELETE /versions/:versionId/items/:itemId` | Kanban/gestión de versión en `VersionKanban.vue` y componentes relacionados. |
+| `GET/POST /versions/items`, `PATCH/DELETE /versions/items/:itemId` | Backlog en `BacklogPanel.vue` y movimientos desde `VersionKanban.vue`. |
+| `GET /versions/dev` | `VersionKanban.vue` carga versión en desarrollo y backlog. |
+| `GET /versions/production/paginated` | `PatchNotes.vue` pagina las notas de producción. |
+| `GET /versions/production/latest` | `SidebarMenu.vue` usa `getLatestPublicVersion` para mostrar el número de versión. |
+| `GET /versions/current/items`, `/versions/public`, `/versions/draft/latest` | No se encontró llamada desde las vistas actuales. `getPublicVersions` tiene wrapper para `/public`; no hay wrapper para las otras dos rutas. |
+
+`SuggestionsManagement.vue` importa el tipo frontend de `VersionItem`, pero el enlace de sugerencia se gestiona desde Suggestions; esto no añade un consumer de endpoints Versions.
+
+**`publishedAt`.** `VersionsService.update` conserva dos bloques idénticos que asignan `v.publishedAt` bajo la misma condición `dto.publishedAt !== undefined`. El segundo no cambia el resultado y puede retirarse de forma aislada, sin tocar la fecha, el estado ni el contrato.
+
+**Tipado seguro, estructura y lint.** BC-VERS-2 retiró los 8 `explicit-any` productivos de `versions.service.ts`; BC-VERS-3 tipó los mocks de repositorio y usó un `CreateVersionItemDto` válido, retirando los tres `explicit-any` de `versions.logic.spec.ts`. Los tres specs están en `__tests__/`, así que se retiraron únicamente sus seis entradas estructurales. Versions ya no tiene hallazgos propios en los gates de estructura ni de tipado seguro; ESLint focalizado tampoco reporta diagnósticos.
+
+**Duplicación y código sin uso.** Además de `publishedAt`, `updateItem` y `removeItem` repiten la construcción de `whereCondition`; se pueden tipar con `FindOptionsWhere<VersionItem>` y expresar el filtro opcional sin un helper nuevo. `createItem` comparte intencionalmente la escritura para el backlog y los items anidados mediante `versionId` opcional; no se separa. No se encontró función privada sin callers en el backend. `findPublic`, `findLatestDraft`, `listCurrentVersionItems` y `setActive` no tienen llamada identificada en vistas; tampoco `setVersionActive` en el frontend. La búsqueda estática del checkout App no descarta clientes externos, así que no se propone borrar endpoints backend. El cast final de `findPublic` y sus comentarios sobre filtrar items no justifican cambios de comportamiento en esta limpieza.
+
 ### Contract finding
 
-**Current behavior:** el backend expone `GET /api/versions/production/latest` como `{ version: string } | null`. El wrapper frontend `getLatestPublicVersion` declara `Version | null`, aunque otro wrapper usa correctamente `{ version: string } | null` para la misma respuesta. También hay wrappers frontend sin uso encontrado que llaman a `/versions/public/infinite` y `/versions/items/:itemId`, rutas que no aparecen en el controller backend.
+**Current behavior:** `GET /api/versions/production/latest` devuelve `{ version: string } | null`. El wrapper `getLatestPublicVersion` declara `Version | null`, y `SidebarMenu.vue` es su consumer real: lee `data.version`, por lo que el comportamiento actual funciona aunque el tipo afirme campos que la respuesta no contiene. Otro wrapper, `getLatestProductionVersion`, declara correctamente `string | null` tras desenvolver el mismo objeto; no se encontró consumer suyo. Los wrappers `getPublicVersionsInfinite` (`/versions/public/infinite`) y `getItem` (`/versions/items/:itemId`) no tienen consumer encontrado y apuntan a rutas inexistentes. `getPublicVersions` sí apunta a la ruta existente `/versions/public`, pero tampoco tiene consumer encontrado. Las búsquedas cubrieron el checkout App local.
 
-**Problem:** los nombres y tipos de dos wrappers no reflejan el contrato backend; además, los otros dos wrappers apuntan a rutas no implementadas, pero no se halló un consumer activo de ellos en las vistas actuales.
+**Problem:** hay un tipo frontend que no refleja la respuesta real y wrappers redundantes/no consumidos; dos invocan paths que el controller no implementa. No hay evidencia que justifique añadir endpoints.
 
-**Impact:** backend + frontend (contrato); el ajuste localizado de wrappers sería frontend-only si se confirma que siguen sin uso.
+**Impact:** frontend-only para alinear o retirar wrappers; backend + frontend únicamente si se decide crear rutas nuevas, cambio que no está justificado.
 
-**Options:** conservar rutas y corregir/eliminar wrappers sin uso; confirmar si se desea añadir endpoints; coordinar un cambio contractual solo si existe consumer real.
+**Options:** conservar las rutas backend y alinear el wrapper usado por Sidebar con `{ version: string } | null`; eliminar wrappers internos sin consumidores confirmados; añadir rutas solo tras identificar un consumer real.
 
-**Recommendation:** no añadir endpoints alternativos. Antes de eliminar wrappers, confirmar consumers completos del frontend y alinear `getLatestPublicVersion` con el objeto `{ version }`; tratarlo en una tarea coordinada de API/client, separada del saneamiento arquitectónico de Product.
+**Recommendation:** corregir el tipo de `getLatestPublicVersion` y retirar el wrapper duplicado/no usado y los wrappers sin consumer tras la revisión final de referencias App. Mantener `/versions/public` y las otras rutas backend disponibles por compatibilidad; no implementar rutas nuevas.
 
-**Blocks the current task:** No; la revisión documental termina, pero cualquier limpieza futura de wrappers requiere confirmar el consumer frontend.
+**Blocks the current task:** No; las correcciones de backend son independientes. La limpieza de wrappers corresponde a una subtarea App posterior y no requiere modificar el frontend en esta revisión.
+
+#### Subtareas Versions
+
+1. **[x] BC-VERS-1 — Quitar la asignación repetida de `publishedAt` (XS; completada 2026-10-22).** **Alcance:** retirar el segundo bloque duplicado de `VersionsService.update`; queda una sola asignación condicional y se conserva la conversión actual de fechas y la persistencia. **Verificación:** suite focalizada aprobada (3 tests). El `yarn --ignore-engines verify` global quedó bloqueado en `quality:lint` por 6 diagnósticos en `src/identity/auth/__tests__/auth-session-login.http.spec.ts`, ajena a esta subtarea y con cambios locales preexistentes; no se modificó Identity.
+2. **[x] BC-VERS-2 — Tipar las operaciones sobre `VersionItem` (S; completada 2026-10-22).** **Alcance:** sustituir los 8 `any` de `VersionsService`: usar `branch` declarado en el DTO, relaciones tipadas con `User` y condiciones TypeORM `FindOptionsWhere<VersionItem>`. Se conservan los filtros, persistencia, asignaciones, errores y payloads. Se retiraron únicamente las 8 entradas de `versions.service.ts` del baseline de tipado. **Verificación:** pruebas focalizadas de `versions.service.spec.ts` y `versions.logic.spec.ts` (2 suites, 10 tests aprobados); `yarn --ignore-engines quality:types` (8 hallazgos históricos, 0 nuevos/obsoletos/duplicados); `yarn --ignore-engines quality:typecheck` (0 errores); ESLint focalizado (0 diagnósticos).
+3. **[x] BC-VERS-3 — Mover y tipar los specs de Versions (S; completada 2026-10-22).** **Alcance:** mover los tres specs a `src/product/versions/__tests__/`, ajustar imports y sustituir los tres `any` de `versions.logic.spec.ts` por mocks de repositorio tipados y DTO válido; se conservan los escenarios y expectativas. Se retiraron únicamente las seis entradas estructurales de los specs y las tres entradas de tipado de `versions.logic.spec.ts`. **Verificación:** 3 suites y 11 tests aprobados; ESLint focalizado sin diagnósticos; `quality:structure` (41 módulos, 0 nuevas/obsoletas); `quality:types` (5 hallazgos históricos, 0 nuevos/obsoletos/duplicados); `quality:typecheck` (0 errores); pruebas de ambos gates aprobadas. `yarn --ignore-engines verify` se detuvo en `quality:lint` por 6 diagnósticos nuevos en `src/identity/auth/__tests__/auth-session-login.http.spec.ts`; archivo ajeno con cambios preexistentes que no se modificó.
+4. **[ ] BC-APP-VERS-1 — Alinear y limpiar wrappers de Versions (XS; App, fuera del alcance actual).** **Alcance:** alinear el tipo de `getLatestPublicVersion` con `{ version: string } | null`; confirmar referencias completas antes de retirar el wrapper duplicado `getLatestProductionVersion` y wrappers sin consumer (`getPublicVersionsInfinite`, `getItem`, opcionalmente `getPublicVersions`). **Dependencias:** revisión de referencias del frontend completo. **Aceptación:** cada wrapper retenido corresponde a una ruta/respuesta backend y tiene uso confirmado; no se añaden endpoints ni se modifica el backend.
+
+**Estado Versions:** BC-VERS-1, BC-VERS-2 y BC-VERS-3 están completadas; la limpieza backend de Versions queda cerrada. BC-APP-VERS-1 sigue pendiente como trabajo independiente del frontend.
 
 ## Quality gates
 
-Los comandos se ejecutaron sobre el backend completo, como están implementados; las cifras siguientes separan los hallazgos que pertenecen a Product de la deuda global.
+La tabla siguiente conserva la captura inicial de la auditoría, anterior a las subtareas focalizadas que se documentan arriba; sus cifras no representan el estado actual de los gates.
 
 | Gate | Resultado global | Hallazgos de Product | Lectura |
 |---|---|---|---|

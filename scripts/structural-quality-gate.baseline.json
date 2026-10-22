@@ -11,18 +11,6 @@
     },
     {
       "rule": "module-root-file",
-      "path": "src/product/versions/versions.controller.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/product/versions/versions.logic.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/product/versions/versions.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
       "path": "src/standalone.ts"
     },
     {
@@ -40,18 +28,6 @@
     {
       "rule": "spec-outside-tests",
       "path": "src/migrations/1791920000000-MigrateUsersToSingleRole.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/product/versions/versions.controller.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/product/versions/versions.logic.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/product/versions/versions.service.spec.ts"
     },
     {
       "rule": "spec-outside-tests",
