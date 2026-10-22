@@ -1,14 +1,30 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { VersionsService } from './versions.service';
-import { Version, VersionStatus } from './entities/version.entity';
-import { VersionItem, DevState } from './entities/version-item.entity';
+import { Repository } from 'typeorm';
+import { VersionsService } from '../versions.service';
+import { Version, VersionStatus } from '../entities/version.entity';
+import {
+  ChangeType,
+  VersionItem,
+  DevState,
+} from '../entities/version-item.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
+import { CreateVersionItemDto } from '../dto/create-version-item.dto';
+
+type VersionsRepository = Pick<
+  Repository<Version>,
+  'create' | 'save' | 'findOne' | 'find' | 'remove'
+>;
+
+type VersionItemsRepository = Pick<
+  Repository<VersionItem>,
+  'create' | 'save' | 'findOne' | 'find' | 'remove'
+>;
 
 describe('VersionsService Logic', () => {
   let service: VersionsService;
-  let versionsRepoMock: any;
-  let itemsRepoMock: any;
+  let versionsRepoMock: jest.Mocked<VersionsRepository>;
+  let itemsRepoMock: jest.Mocked<VersionItemsRepository>;
 
   beforeEach(async () => {
     versionsRepoMock = {
@@ -44,9 +60,11 @@ describe('VersionsService Logic', () => {
   });
 
   it('should not create a new version if one is already in development', async () => {
-    versionsRepoMock.findOne.mockResolvedValue({
-      status: VersionStatus.EN_DESARROLLO,
-    });
+    versionsRepoMock.findOne.mockResolvedValue(
+      Object.assign(new Version(), {
+        status: VersionStatus.EN_DESARROLLO,
+      }),
+    );
 
     await expect(service.create({ version: '1.0.1' })).rejects.toThrow(
       BadRequestException,
@@ -54,11 +72,13 @@ describe('VersionsService Logic', () => {
   });
 
   it('should not release a version with pending items', async () => {
-    const version = {
+    const version = Object.assign(new Version(), {
       id: 'v1',
       status: VersionStatus.EN_DESARROLLO,
-      items: [{ id: 'i1', state: DevState.TODO }],
-    };
+      items: [
+        Object.assign(new VersionItem(), { id: 'i1', state: DevState.TODO }),
+      ],
+    });
     versionsRepoMock.findOne.mockResolvedValue(version);
 
     await expect(
@@ -67,26 +87,28 @@ describe('VersionsService Logic', () => {
   });
 
   it('should not delete a production version', async () => {
-    const version = {
+    const version = Object.assign(new Version(), {
       id: 'v1',
       status: VersionStatus.EN_PRODUCCION,
-    };
+    });
     versionsRepoMock.findOne.mockResolvedValue(version);
 
     await expect(service.remove('v1')).rejects.toThrow(BadRequestException);
   });
 
   it('should create an independent item with TODO state', async () => {
-    const dto = {
-      type: 'feat',
+    const dto: CreateVersionItemDto = {
+      type: ChangeType.FEAT,
       description: 'Independent item',
       branch: 'feat/independent',
       state: DevState.IN_PROGRESS, // Should be ignored/overridden if logic enforces TODO
-    } as any;
+    };
 
-    itemsRepoMock.create.mockImplementation((item) => item);
-    itemsRepoMock.save.mockImplementation((item) =>
-      Promise.resolve({ ...item, id: 'i1' }),
+    itemsRepoMock.create.mockImplementation((item) =>
+      Object.assign(new VersionItem(), item),
+    );
+    itemsRepoMock.save.mockImplementation(async (item) =>
+      Object.assign(new VersionItem(), item, { id: 'i1' }),
     );
 
     const result = await service.createItem(dto);
@@ -96,7 +118,9 @@ describe('VersionsService Logic', () => {
   });
 
   it('should list independent items', async () => {
-    itemsRepoMock.find.mockResolvedValue([{ id: 'i1', version: null }]);
+    itemsRepoMock.find.mockResolvedValue([
+      Object.assign(new VersionItem(), { id: 'i1', version: null }),
+    ]);
     const result = await service.listIndependentItems();
     expect(result).toHaveLength(1);
     expect(itemsRepoMock.find).toHaveBeenCalledWith(
@@ -105,7 +129,11 @@ describe('VersionsService Logic', () => {
   });
 
   it('should not allow updating state of independent item', async () => {
-    const item = { id: 'i1', version: null, state: DevState.TODO };
+    const item = Object.assign(new VersionItem(), {
+      id: 'i1',
+      version: null,
+      state: DevState.TODO,
+    });
     itemsRepoMock.findOne.mockResolvedValue(item);
 
     await expect(
@@ -114,13 +142,15 @@ describe('VersionsService Logic', () => {
   });
 
   it('should reset state to TODO when unassigning version', async () => {
-    const item = {
+    const item = Object.assign(new VersionItem(), {
       id: 'i1',
-      version: { id: 'v1' },
+      version: Object.assign(new Version(), { id: 'v1' }),
       state: DevState.IN_PROGRESS,
-    };
+    });
     itemsRepoMock.findOne.mockResolvedValue(item);
-    itemsRepoMock.save.mockImplementation((i) => Promise.resolve(i));
+    itemsRepoMock.save.mockImplementation(async (item) =>
+      Object.assign(new VersionItem(), item),
+    );
 
     const result = await service.updateItem('i1', { version: null });
 

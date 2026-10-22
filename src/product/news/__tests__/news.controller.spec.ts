@@ -9,11 +9,11 @@ import {
   roleMeetsMinimum,
   ValidRoles,
 } from 'src/identity/auth/interfaces/valid-roles';
-import { NewsController } from './news.controller';
+import { NewsController } from '../news.controller';
 
 describe('NewsController authorization metadata', () => {
   const handler = (method: keyof typeof NewsController.prototype) =>
-    NewsController.prototype[method] as Function;
+    NewsController.prototype[method];
 
   it('restricts news creation, update, and deletion to superadmin', () => {
     const protectedRoutes = [

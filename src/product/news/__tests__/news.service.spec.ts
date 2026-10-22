@@ -1,22 +1,48 @@
-import { NewsService } from './news.service';
+import { Logger } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { News } from '../entities/news.entity';
+import { NewsService } from '../news.service';
+import { TelegramService } from 'src/integrations/telegram-integration/telegram.service';
+import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
+
+type NewsRepositoryMock = jest.Mocked<Pick<Repository<News>, 'find'>>;
+type TelegramServiceMock = jest.Mocked<
+  Pick<TelegramService, 'getChannelPosts'>
+>;
+type WordpressServiceMock = jest.Mocked<
+  Pick<WordpressService, 'getPublicPosts'>
+>;
 
 describe('NewsService WordPress feed', () => {
   let service: NewsService;
-  let wordpressService: { getPublicPosts: jest.Mock };
-  let telegramService: { getChannelPosts: jest.Mock };
+  let testingModule: TestingModule;
+  let wordpressService: WordpressServiceMock;
+  let telegramService: TelegramServiceMock;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const newsRepository: NewsRepositoryMock = {
+      find: jest.fn().mockResolvedValue([]),
+    };
     wordpressService = { getPublicPosts: jest.fn() };
-    const newsRepository = { find: jest.fn().mockResolvedValue([]) };
     telegramService = { getChannelPosts: jest.fn().mockResolvedValue([]) };
-    service = new NewsService(
-      newsRepository as any,
-      telegramService as any,
-      wordpressService as any,
-    );
+
+    testingModule = await Test.createTestingModule({
+      providers: [
+        NewsService,
+        { provide: getRepositoryToken(News), useValue: newsRepository },
+        { provide: TelegramService, useValue: telegramService },
+        { provide: WordpressService, useValue: wordpressService },
+      ],
+    }).compile();
+    service = testingModule.get(NewsService);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(async () => {
+    await testingModule.close();
+    jest.restoreAllMocks();
+  });
 
   it('keeps the public feed mapping and caches provider posts for ten minutes', async () => {
     const providerPosts = [
@@ -62,9 +88,7 @@ describe('NewsService WordPress feed', () => {
 
   it('returns an empty WordPress feed when the provider request fails', async () => {
     wordpressService.getPublicPosts.mockRejectedValue(new Error('offline'));
-    const logger = jest
-      .spyOn((service as any).logger, 'error')
-      .mockImplementation();
+    const logger = jest.spyOn(Logger.prototype, 'error').mockImplementation();
 
     await expect(
       service.getSourceFeed({ source: 'riffvalley.es' }),

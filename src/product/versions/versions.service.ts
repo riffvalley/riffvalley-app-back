@@ -6,8 +6,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, FindOptionsWhere } from 'typeorm';
 import { VersionItem } from './entities/version-item.entity';
+import { User } from '../../identity/auth/entities/user.entity';
 import { CreateVersionDto } from './dto/create-version.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
 import { CreateVersionItemDto } from './dto/create-version-item.dto';
@@ -50,7 +51,7 @@ export class VersionsService {
           scope: i.scope,
           priority: i.priority,
           state: i.state ?? DevState.TODO,
-          branch: (i as any).branch, // 👈 NUEVO: recoger branch del DTO
+          branch: i.branch, // 👈 NUEVO: recoger branch del DTO
         }),
       ),
       status: VersionStatus.EN_DESARROLLO, // Default to development
@@ -78,8 +79,6 @@ export class VersionsService {
     if (dto.notes !== undefined) v.notes = dto.notes;
     if (dto.link !== undefined) v.link = dto.link;
     if (dto.isActive !== undefined) v.isActive = dto.isActive;
-    if (dto.publishedAt !== undefined)
-      v.publishedAt = dto.publishedAt ? new Date(dto.publishedAt) : null;
     if (dto.publishedAt !== undefined)
       v.publishedAt = dto.publishedAt ? new Date(dto.publishedAt) : null;
 
@@ -157,10 +156,10 @@ export class VersionsService {
       scope: dto.scope,
       priority: dto.priority,
       state,
-      branch: (dto as any).branch,
+      branch: dto.branch,
       version,
-      backUser: dto.backUserId ? ({ id: dto.backUserId } as any) : undefined,
-      frontUser: dto.frontUserId ? ({ id: dto.frontUserId } as any) : undefined,
+      backUser: dto.backUserId ? { id: dto.backUserId } : undefined,
+      frontUser: dto.frontUserId ? { id: dto.frontUserId } : undefined,
     });
     return this.itemsRepo.save(item);
   }
@@ -171,7 +170,7 @@ export class VersionsService {
     versionId?: string,
   ): Promise<VersionItem> {
     // Si se pasa versionId, aseguramos que el item pertenece a esa versión
-    const whereCondition: any = { id: itemId };
+    const whereCondition: FindOptionsWhere<VersionItem> = { id: itemId };
     if (versionId) {
       whereCondition.version = { id: versionId };
     }
@@ -198,11 +197,13 @@ export class VersionsService {
 
     // Handle user assignments
     if (dto.backUserId !== undefined) {
-      item.backUser = dto.backUserId ? ({ id: dto.backUserId } as any) : null;
+      item.backUser = dto.backUserId
+        ? Object.assign(new User(), { id: dto.backUserId })
+        : null;
     }
     if (dto.frontUserId !== undefined) {
       item.frontUser = dto.frontUserId
-        ? ({ id: dto.frontUserId } as any)
+        ? Object.assign(new User(), { id: dto.frontUserId })
         : null;
     }
 
@@ -245,7 +246,7 @@ export class VersionsService {
   }
 
   async removeItem(itemId: string, versionId?: string): Promise<void> {
-    const whereCondition: any = { id: itemId };
+    const whereCondition: FindOptionsWhere<VersionItem> = { id: itemId };
     if (versionId) {
       whereCondition.version = { id: versionId };
     }

@@ -22,6 +22,10 @@ Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gate
 
 - [Cierre de Community](community.md) — BC-COMM-0–9 completadas; saneamiento verificado, cero entradas Community en los tres baselines y riesgos contractuales diferidos documentados (2026-10-21).
 
+### Product
+
+- [Auditoría de Product](product.md) — News, Suggestions y Versions auditados (2026-10-22); los tres tienen consumidores frontend. Quedan tareas de simplificación y deuda de gateways; no se propone fusionarlos ni crear un agregador.
+
 ### Communications
 
 - [Mail](communications.md) — BC-COM-1/2 completados; el hallazgo de seguridad HTML sigue pendiente.
@@ -89,7 +93,7 @@ La secuencia se amplía después de cada dominio; no constituye una orden para a
 | 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                 | **Completado** por BC-CAT (2026-10-20); QG-1–QG-18 completadas, cero entradas Catalog en los tres baselines y `yarn verify` aprobado                                    |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                   | **Completado** por BC-COMM-9 (2026-10-21); cero deuda Community en los tres baselines y `yarn verify` aprobado en [community.md](community.md)                              |
 | 3     | Editorial                 | Articles, Asignations, Contents, SpotifyPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | **Completado** por BC-ED-0; diez módulos activos completados, Links retirado por BC-LNK-1, BC-ED-1–10 completados y cero infracciones editoriales en los tres baselines |
-| 4     | Product                   | News, Suggestions, Versions                                                                                                      | Pendiente                                                                                                                                                               |
+| 4     | Product                   | News, Suggestions, Versions                                                                                                      | **Auditado** (2026-10-22); simplificación y saneamiento pendientes en [product.md](product.md)                                                                          |
 | 5     | Identity                  | Auth, AccessRequests                                                                                                             | Pendiente                                                                                                                                                               |
 | 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                           | Pendiente                                                                                                                                                               |
 | 7     | Platform / Infrastructure | Scheduling, Common                                                                                                               | **Completado**; Seeds, I18n y Uploads retirados; filtros separados por owner y estructura Platform cerrada en BC-PLAT-R3/R4 ([auditoría](platform.md))                |
@@ -124,9 +128,9 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Editorial                 | Reunions            | completado |
 | Editorial                 | RiffValleyPlaylists | completado |
 | Editorial                 | Videos              | completado |
-| Product                   | News                | pendiente  |
-| Product                   | Suggestions         | pendiente  |
-| Product                   | Versions            | pendiente  |
+| Product                   | News                | auditado   |
+| Product                   | Suggestions         | auditado   |
+| Product                   | Versions            | auditado   |
 | Identity                  | Auth                | pendiente  |
 | Identity                  | AccessRequests      | pendiente  |
 | Integrations              | CloudflareR2        | pendiente  |
