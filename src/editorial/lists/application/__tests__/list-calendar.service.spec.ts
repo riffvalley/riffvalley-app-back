@@ -11,7 +11,7 @@ import { MonthlyListPublisherService } from '../../wordpress/monthly-list-publis
 import { List, ListType } from '../../entities/list.entity';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
-import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { ListsModule } from '../../list.module';
 
 describe('ListCalendarService Nest wiring', () => {

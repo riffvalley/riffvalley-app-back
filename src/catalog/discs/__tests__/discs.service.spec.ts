@@ -2,7 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { User } from '../../../identity/auth/entities/user.entity';
 import { PaginationDto } from '../../../platform/common/dtos/pagination.dto';
-import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { DiscCatalogService } from '../catalog/disc-catalog.service';
 import { DiscCalendarService } from '../calendar/disc-calendar.service';
 import { DiscEnrichmentService } from '../enrichment/disc-enrichment.service';

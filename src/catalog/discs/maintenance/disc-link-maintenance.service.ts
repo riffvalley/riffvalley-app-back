@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Disc } from '../entities/disc.entity';
 import * as cheerio from 'cheerio';
-import { SpotifyClientCredentialsService } from 'src/integrations/spotify-integration';
+import { SpotifyClientCredentialsService } from 'src/integrations/spotify-integration/api';
 
 @Injectable()
 export class DiscLinkMaintenanceService {

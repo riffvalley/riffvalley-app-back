@@ -7,7 +7,7 @@ import { CreateDiscDto } from './dto/create-discs.dto';
 import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
 import { User } from 'src/identity/auth/entities/user.entity';
-import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { DiscCatalogService } from './catalog/disc-catalog.service';
 import { DiscCalendarService } from './calendar/disc-calendar.service';
 import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';

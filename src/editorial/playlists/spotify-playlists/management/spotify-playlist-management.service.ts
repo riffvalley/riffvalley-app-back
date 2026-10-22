@@ -15,7 +15,7 @@ import { UpdateSyncedPlaylistDto } from '../dto/update-synced-playlist.dto';
 import {
   SpotifyAccountApiService,
   SpotifyPlaylistDetails,
-} from 'src/integrations/spotify-integration';
+} from 'src/integrations/spotify-integration/api';
 import {
   RiffValleyPlaylist,
   RiffValleyPlaylistStatus,

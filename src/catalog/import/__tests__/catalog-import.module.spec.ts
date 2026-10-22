@@ -11,7 +11,7 @@ import { NationalRelease } from '../../../editorial/national-releases/entities/n
 import { RiffValleyPlaylistArtist } from '../../../editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
 import { UserAccessLog } from '../../../identity/auth/entities/user-access-log.entity';
 import { User } from '../../../identity/auth/entities/user.entity';
-import { SpotifyConnection } from '../../../integrations/spotify-integration';
+import { SpotifyConnection } from '../../../integrations/spotify-integration/oauth/spotify-connection.entity';
 import { CatalogImportModule } from '../catalog-import.module';
 import { CatalogImportController } from '../manual/controller/catalog-import.controller';
 import { CatalogImportService } from '../manual/import/catalog-import.service';

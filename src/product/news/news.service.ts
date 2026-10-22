@@ -13,7 +13,7 @@ import { UpdateNewsDto } from './dto/update-news.dto';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { TelegramService } from 'src/integrations/telegram-integration/telegram.service';
 import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
-import { WpPublicPost } from 'src/integrations/wordpress-integration/wordpress.types';
+import { WpPublicPost } from 'src/integrations/wordpress-integration/types/wordpress.types';
 
 export interface FeedPost {
   id: string;

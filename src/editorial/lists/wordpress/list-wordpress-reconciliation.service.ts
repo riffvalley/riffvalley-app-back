@@ -8,8 +8,8 @@ import {
   WordpressService,
   WordpressWriteError,
 } from 'src/integrations/wordpress-integration/wordpress.service';
-import { WpPost } from 'src/integrations/wordpress-integration/wordpress.types';
-import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
+import { WpPost } from 'src/integrations/wordpress-integration/types/wordpress.types';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { PublishedDiscRecord } from '../entities/list.entity';
 import {
   FOOTER_MARKER_CLASS,

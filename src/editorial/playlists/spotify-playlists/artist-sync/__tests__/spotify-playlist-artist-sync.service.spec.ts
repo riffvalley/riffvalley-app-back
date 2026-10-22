@@ -17,7 +17,7 @@ import {
 import {
   SpotifyAccountApiService,
   SpotifyTrack,
-} from 'src/integrations/spotify-integration';
+} from 'src/integrations/spotify-integration/api';
 
 type FestivalSetlistServiceMock = jest.Mocked<
   Pick<FestivalSetlistService, 'getTopSongs'>

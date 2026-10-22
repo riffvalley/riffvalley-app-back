@@ -13,7 +13,7 @@ import {
   RiffValleyPlaylistStatus,
   RiffValleyPlaylistType,
 } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
-import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration/api';
 import { RiffValleyPlaylistArtist } from '../entities/riff-valley-playlist-artist.entity';
 
 function playlistFixture(): RiffValleyPlaylist {
@@ -46,7 +46,6 @@ describe('SpotifyPlaylistsService', () => {
       | 'startSpotifyConnection'
       | 'completeSpotifyConnection'
       | 'getSpotifyConnection'
-      | 'checkSpotifyAuthorizationLifetime'
       | 'disconnectSpotify'
       | 'getValidAccessToken'
     >
@@ -136,7 +135,6 @@ describe('SpotifyPlaylistsService', () => {
       startSpotifyConnection: jest.fn(),
       completeSpotifyConnection: jest.fn(),
       getSpotifyConnection: jest.fn(),
-      checkSpotifyAuthorizationLifetime: jest.fn(),
       disconnectSpotify: jest.fn(),
       getValidAccessToken: jest.fn().mockResolvedValue('access-token'),
     };
@@ -213,9 +211,6 @@ describe('SpotifyPlaylistsService', () => {
       refreshTokenExpiresAt: null,
       daysUntilReauthorization: null,
     });
-    spotifyAuthorizationService.checkSpotifyAuthorizationLifetime.mockResolvedValue(
-      undefined,
-    );
     spotifyAuthorizationService.disconnectSpotify.mockResolvedValue({
       connected: false,
     });
@@ -231,9 +226,6 @@ describe('SpotifyPlaylistsService', () => {
       connected: false,
       authorizationStatus: 'disconnected',
     });
-    await expect(
-      service.checkSpotifyAuthorizationLifetime(),
-    ).resolves.toBeUndefined();
     await expect(service.disconnectSpotify()).resolves.toEqual({
       connected: false,
     });
@@ -246,9 +238,6 @@ describe('SpotifyPlaylistsService', () => {
     ).toHaveBeenCalledWith('code', 'state');
     expect(
       spotifyAuthorizationService.getSpotifyConnection,
-    ).toHaveBeenCalledTimes(1);
-    expect(
-      spotifyAuthorizationService.checkSpotifyAuthorizationLifetime,
     ).toHaveBeenCalledTimes(1);
     expect(spotifyAuthorizationService.disconnectSpotify).toHaveBeenCalledTimes(
       1,

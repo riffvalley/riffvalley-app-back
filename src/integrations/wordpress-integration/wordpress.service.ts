@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { WpAuthor, WpEditablePost, WpPost, WpTag } from './wordpress.types';
-import { WpPublicPost } from './wordpress.types';
+import {
+  WpAuthor,
+  WpEditablePost,
+  WpPost,
+  WpTag,
+  WpPublicPost,
+} from './types/wordpress.types';
 
-export type { WpPost } from './wordpress.types';
+export type { WpPost } from './types/wordpress.types';
 
 export type WordpressWriteOutcome = 'rejected' | 'unknown';
 

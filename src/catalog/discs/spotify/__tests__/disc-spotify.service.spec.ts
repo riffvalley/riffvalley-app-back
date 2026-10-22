@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { Disc } from '../../entities/disc.entity';
 import { DiscSpotifyService } from '../disc-spotify.service';
 

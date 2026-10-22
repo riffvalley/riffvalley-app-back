@@ -6,7 +6,7 @@ import {
 import {
   LastfmAlbumResponse,
   LastfmArtistResponse,
-} from './lastfm-api.types';
+} from './types/lastfm-api.types';
 
 const LASTFM_BASE = 'https://ws.audioscrobbler.com/2.0/';
 

@@ -3,10 +3,12 @@ import { SpotifyPlaylistsModule } from '../spotify-playlists.module';
 import { SpotifyPlaylistsService } from '../spotify-playlists.service';
 import { SpotifyPlaylistAuthorizationService } from '../spotify-authorization/spotify-playlist-authorization.service';
 import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
+import { SpotifyConnectionService } from 'src/integrations/spotify-integration/oauth/spotify-connection.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   SpotifyAccountApiService,
   SpotifyOAuthApiService,
-} from 'src/integrations/spotify-integration';
+} from 'src/integrations/spotify-integration/api';
 import { ConfigService } from '@nestjs/config';
 import { FestivalSetlistService } from '../setlist/festival-setlist.service';
 import { SpotifyPlaylistManagementService } from '../management/spotify-playlist-management.service';
@@ -71,19 +73,29 @@ describe('SpotifyPlaylistsModule authorization wiring', () => {
     expect(exports).toEqual([]);
   });
 
-  it('registers one authorization provider and keeps the cron on it only', () => {
+  it('keeps the authorization cron and connection provider in Spotify Integration', () => {
     const providers = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
       SpotifyPlaylistsModule,
     ) as unknown[];
+    const integrationProviders = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      SpotifyIntegrationModule,
+    ) as unknown[];
+    const integrationExports = Reflect.getMetadata(
+      MODULE_METADATA.EXPORTS,
+      SpotifyIntegrationModule,
+    ) as unknown[];
     const cronOptions = Reflect.getMetadata(
       'SCHEDULE_CRON_OPTIONS',
-      SpotifyPlaylistAuthorizationService.prototype
-        .checkSpotifyAuthorizationLifetime,
+      Reflect.get(
+        SpotifyConnectionService.prototype,
+        'checkSpotifyAuthorizationLifetime',
+      ),
     );
-    const facadeCronOptions = Reflect.getMetadata(
-      'SCHEDULE_CRON_OPTIONS',
-      SpotifyPlaylistsService.prototype.checkSpotifyAuthorizationLifetime,
+    const facadeCron = Reflect.get(
+      SpotifyPlaylistAuthorizationService.prototype,
+      'checkSpotifyAuthorizationLifetime',
     );
 
     expect(
@@ -92,11 +104,14 @@ describe('SpotifyPlaylistsModule authorization wiring', () => {
       ),
     ).toHaveLength(1);
     expect(providers).toContain(SpotifyPlaylistsService);
+    expect(integrationProviders).toContain(SpotifyConnectionService);
+    expect(integrationExports).toContain(SpotifyConnectionService);
+    expect(integrationExports).not.toContain(TypeOrmModule);
     expect(cronOptions).toEqual({
       cronTime: '0 9 * * *',
       timeZone: 'Europe/Madrid',
     });
-    expect(facadeCronOptions).toBeUndefined();
+    expect(facadeCron).toBeUndefined();
   });
 
   it('registra una instancia del servicio de administración con dependencias unidireccionales', () => {
