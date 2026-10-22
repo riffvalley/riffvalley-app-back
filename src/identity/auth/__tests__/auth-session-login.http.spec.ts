@@ -90,14 +90,12 @@ describe('renewable login HTTP contract', () => {
         userId: 'user-1',
         clientType: 'app',
       }),
-      findRecoverableRefreshTokenSessionBinding: jest
-        .fn()
-        .mockResolvedValue({
-          sessionId: 'internal-session-id',
-          userId: 'user-1',
-          clientType: 'app',
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        }),
+      findRecoverableRefreshTokenSessionBinding: jest.fn().mockResolvedValue({
+        sessionId: 'internal-session-id',
+        userId: 'user-1',
+        clientType: 'app',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      }),
       revokeSession: jest.fn().mockResolvedValue(true),
     };
     authRateLimitService = {
