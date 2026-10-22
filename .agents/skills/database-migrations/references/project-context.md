@@ -21,11 +21,8 @@ El proyecto admite Node 20.18.1+ y 22.x; `.nvmrc` conserva Node 20 como referenc
 - `yarn db:status` lista las migraciones cargadas desde `dist/migrations/*.js`, las aplicadas según el ledger existente y las pendientes. No crea el ledger ni instala extensiones.
 - `yarn db:check` usa la misma consulta y termina con error si falta el ledger o quedan pendientes.
 - `yarn db:migrate` aplica las pendientes usando `DataSource.runMigrations()` y valida el ledger al terminar. Con `STAGE=prod` exige `--confirm <DB_NAME>:<lista ordenada exacta>`; la lista confirmada debe coincidir con todas las pendientes observadas.
-- Si la cadena específica `MigrateCanonicalUserRoles1791910000000` / `MigrateUsersToSingleRole1791920000000` aparece pendiente, `db:migrate` se detiene y deriva a `yarn migration:roles` tras su preflight. Este guard no modifica el runner ni automatiza esa migración.
 - Los tres `db:*` requieren `yarn build` antes y ejecutan JavaScript compilado, sin `ts-node`. Su inspección de ledger evita los métodos `showMigrations()`/`getExecutedMigrations()` de TypeORM 0.3.26 porque crean la tabla si no existe.
 - `yarn migration:revert` revierte la última migración con el datasource TypeScript. No usar automáticamente; en producción requiere autorización específica y un plan de recuperación.
-- `yarn migration:roles` ejecuta únicamente la cadena de migración de roles y comprueba condiciones particulares de esa cadena. No es un comando general para futuras migraciones.
-- `migration:roles` aplica una cadena de roles y validaciones particulares; no es el runner general y su filtro no se generaliza.
 
 ## Conexión y ledger
 

@@ -3,11 +3,6 @@
 
 const path = require('node:path');
 const { MigrationExecutor } = require('typeorm');
-const ROLE_CHAIN_MIGRATIONS = new Set([
-  'MigrateCanonicalUserRoles1791910000000',
-  'MigrateUsersToSingleRole1791920000000',
-]);
-
 function pendingMigrations(allMigrations, appliedNames) {
   const applied = new Set(appliedNames);
   return allMigrations.filter((migration) => !applied.has(migration.name));
@@ -168,15 +163,6 @@ async function run(command, args = process.argv.slice(3)) {
       return;
     }
 
-    const pendingRoleChain = status.pending.filter((migration) =>
-      ROLE_CHAIN_MIGRATIONS.has(migration.name),
-    );
-    if (pendingRoleChain.length) {
-      throw new Error(
-        `La cadena específica de roles sigue pendiente (${pendingRoleChain.map((migration) => migration.name).join(', ')}). Usa únicamente yarn migration:roles tras su preflight; db:migrate no ejecutó cambios.`,
-      );
-    }
-
     if (process.env.STAGE === 'prod') {
       const confirmIndex = args.indexOf('--confirm');
       const confirmation =
@@ -225,5 +211,4 @@ module.exports = {
   printJsonStatus,
   parseConfirmation,
   pendingMigrations,
-  ROLE_CHAIN_MIGRATIONS,
 };

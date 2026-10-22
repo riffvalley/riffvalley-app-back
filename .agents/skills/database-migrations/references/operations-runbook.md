@@ -4,7 +4,6 @@
 
 - PostgreSQL se migra manualmente, en una operación separada del deploy. `migrationsRun: false` y `synchronize: false`; el `Procfile` no tiene fase `release` de migraciones y NestJS no migra durante el arranque.
 - Heroku Automatic Deploys publica código únicamente; no ejecuta migraciones. La aplicación de cambios de esquema requiere un comando manual autorizado.
-- `migration:roles` es un runner histórico de la cadena de roles. No lo uses para migraciones futuras.
 - Antes de conectar, confirma app y base destino. No muestres contraseñas, `DATABASE_URL` ni otras credenciales.
 
 ## Desarrollo local
@@ -58,7 +57,7 @@ Desde una copia local del repositorio, con Heroku CLI autenticada, ejecuta:
 
     bash scripts/db-migrate-heroku.sh
 
-El script verifica la identidad exacta de `spammusic-back`, consulta el release y usa `heroku run --no-tty --exit-code` para reutilizar los comandos generales. El release remoto debe incluir la salida estable `yarn db:status --json`; el modo de texto del comando conserva su comportamiento habitual. El JSON contiene `stage`, el nombre de base de TypeORM, existencia del ledger y nombres ordenados de pendientes. El asistente detiene el proceso si `stage` no es `prod`, falta el ledger, `DB_NAME` difiere del datasource o la lista incluye la cadena histórica de roles.
+El script verifica la identidad exacta de `spammusic-back`, consulta el release y usa `heroku run --no-tty --exit-code` para reutilizar los comandos generales. El release remoto debe incluir la salida estable `yarn db:status --json`; el modo de texto del comando conserva su comportamiento habitual. El JSON contiene `stage`, el nombre de base de TypeORM, existencia del ledger y nombres ordenados de pendientes. El asistente detiene el proceso si `stage` no es `prod`, falta el ledger o `DB_NAME` difiere del datasource.
 
 Heroku no ofrece salida JSON para `pg:info` ni para `pg:backups:info`. Por eso el script muestra sus informes sin analizarlos: el desarrollador debe confirmar que `Database` coincide exactamente con `DB_NAME`, introducir el ID del backup creado y confirmar que el informe de ese ID indica `Completed` y corresponde al attachment/base esperados. Si no puede verificarlo, cancela. El token de autorización incluye app, base, lista ordenada y la declaración de compatibilidad o ventana coordinada.
 
@@ -103,7 +102,7 @@ No continúes hasta confirmar que terminó correctamente y corresponde a la base
 
     heroku run --app spammusic-back -- yarn db:migrate --confirm '<DB_NAME>:<Migracion1,Migracion2>'
 
-Sustituye placeholders con valores obtenidos y revisados; no pegues secretos. El runner rechaza una base o una lista/orden distintos de lo que observó. La cadena específica de roles, si apareciera pendiente, se detiene en `db:migrate` y conserva su procedimiento histórico específico; no la incluyas en esta ejecución general.
+Sustituye placeholders con valores obtenidos y revisados; no pegues secretos. El runner rechaza una base o una lista/orden distintos de lo que observó.
 
 ### Ejemplo ficticio completo
 
