@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import {
   Suggestion,
   SuggestionStatus,
@@ -51,7 +51,7 @@ export class SuggestionsService {
   }
 
   async findAll(filters: { type?: SuggestionType; status?: SuggestionStatus }) {
-    const where: any = {};
+    const where: FindOptionsWhere<Suggestion> = {};
     if (filters.type) where.type = filters.type;
     if (filters.status) where.status = filters.status;
     const [data, counts] = await Promise.all([
@@ -69,7 +69,7 @@ export class SuggestionsService {
     user: User,
     filters: { type?: SuggestionType; status?: SuggestionStatus },
   ) {
-    const where: any = { userId: user.id };
+    const where: FindOptionsWhere<Suggestion> = { userId: user.id };
     if (filters.type) where.type = filters.type;
     if (filters.status) where.status = filters.status;
     const [data, counts] = await Promise.all([

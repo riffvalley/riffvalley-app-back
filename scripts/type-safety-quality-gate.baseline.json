@@ -43,22 +43,6 @@
     },
     {
       "rule": "explicit-any",
-      "path": "src/product/suggestions/suggestions.service.ts",
-      "line": 54,
-      "column": 18,
-      "fingerprint": "5afa7527efdb5c25033b9491ff6301a9fb7d21dcb996053c49a482abaf2d5ff7",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
-      "path": "src/product/suggestions/suggestions.service.ts",
-      "line": 72,
-      "column": 18,
-      "fingerprint": "73f660d9c5a4824c69d3a223b85b0fa847da3c80b78d4267560e940375ee7c12",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
       "path": "src/product/versions/versions.logic.spec.ts",
       "line": 10,
       "column": 25,

@@ -11,10 +11,6 @@
     },
     {
       "rule": "module-root-file",
-      "path": "src/product/suggestions/suggestions.controller.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
       "path": "src/product/versions/versions.controller.spec.ts"
     },
     {
@@ -44,10 +40,6 @@
     {
       "rule": "spec-outside-tests",
       "path": "src/migrations/1791920000000-MigrateUsersToSingleRole.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/product/suggestions/suggestions.controller.spec.ts"
     },
     {
       "rule": "spec-outside-tests",

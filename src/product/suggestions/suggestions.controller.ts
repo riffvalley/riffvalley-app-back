@@ -33,7 +33,7 @@ export class SuggestionsController {
   }
 
   @Get()
-  @Auth(ValidRoles.riffvalley)
+  @Auth(ValidRoles.superadmin)
   findAll(
     @Query('type') type?: SuggestionType,
     @Query('status') status?: SuggestionStatus,
@@ -52,13 +52,13 @@ export class SuggestionsController {
   }
 
   @Get(':id')
-  @Auth(ValidRoles.riffvalley)
+  @Auth(ValidRoles.superadmin)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.suggestionsService.findOne(id);
   }
 
   @Patch(':id')
-  @Auth()
+  @Auth(ValidRoles.superadmin)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateSuggestionDto,
@@ -67,13 +67,13 @@ export class SuggestionsController {
   }
 
   @Patch(':id/progress')
-  @Auth(ValidRoles.riffvalley)
+  @Auth(ValidRoles.superadmin)
   setInProgress(@Param('id', ParseUUIDPipe) id: string) {
     return this.suggestionsService.setInProgress(id);
   }
 
   @Patch(':id/reject')
-  @Auth(ValidRoles.riffvalley)
+  @Auth(ValidRoles.superadmin)
   reject(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RejectSuggestionDto,
@@ -82,7 +82,7 @@ export class SuggestionsController {
   }
 
   @Patch(':id/done')
-  @Auth(ValidRoles.riffvalley)
+  @Auth(ValidRoles.superadmin)
   markDone(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: DoneSuggestionDto,
@@ -91,13 +91,13 @@ export class SuggestionsController {
   }
 
   @Patch(':id/read')
-  @Auth(ValidRoles.riffvalley)
+  @Auth(ValidRoles.superadmin)
   markRead(@Param('id', ParseUUIDPipe) id: string) {
     return this.suggestionsService.markRead(id);
   }
 
   @Delete(':id')
-  @Auth(ValidRoles.riffvalley)
+  @Auth(ValidRoles.superadmin)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.suggestionsService.remove(id);
   }

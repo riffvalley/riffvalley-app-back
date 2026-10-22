@@ -9,16 +9,20 @@ import {
   roleMeetsMinimum,
   ValidRoles,
 } from 'src/identity/auth/interfaces/valid-roles';
-import { SuggestionsController } from './suggestions.controller';
+import { SuggestionsController } from '../suggestions.controller';
+
+const isUnknownArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
 
 describe('SuggestionsController authorization metadata', () => {
   const handler = (method: keyof typeof SuggestionsController.prototype) =>
-    SuggestionsController.prototype[method] as Function;
+    SuggestionsController.prototype[method];
 
-  it('restricts management endpoints only to riffvalley', () => {
+  it('restricts all submissions and management endpoints to superadmin', () => {
     const roleProtectedRoutes = [
       ['findAll', 'GET', '/'],
       ['findOne', 'GET', ':id'],
+      ['update', 'PATCH', ':id'],
       ['setInProgress', 'PATCH', ':id/progress'],
       ['reject', 'PATCH', ':id/reject'],
       ['markDone', 'PATCH', ':id/done'],
@@ -36,12 +40,9 @@ describe('SuggestionsController authorization metadata', () => {
       );
       expect(Reflect.getMetadata(PATH_METADATA, routeHandler)).toBe(path);
       const minimumRole = Reflect.getMetadata(META_MINIMUM_ROLE, routeHandler);
-      expect(minimumRole).toBe(ValidRoles.riffvalley);
+      expect(minimumRole).toBe(ValidRoles.superadmin);
       expect(roleMeetsMinimum(ValidRoles.user, minimumRole)).toBe(false);
-      expect(roleMeetsMinimum(ValidRoles.collaborator, minimumRole)).toBe(
-        false,
-      );
-      expect(roleMeetsMinimum(ValidRoles.riffvalley, minimumRole)).toBe(true);
+      expect(roleMeetsMinimum(ValidRoles.riffvalley, minimumRole)).toBe(false);
       expect(roleMeetsMinimum(ValidRoles.superadmin, minimumRole)).toBe(true);
       expect(Reflect.getMetadata(GUARDS_METADATA, routeHandler)).toContain(
         UserRoleGuard,
@@ -49,11 +50,10 @@ describe('SuggestionsController authorization metadata', () => {
     }
   });
 
-  it('keeps create, mine, and update authenticated without a role filter', () => {
+  it('keeps create and own-submission listing available to any authenticated role', () => {
     const authenticatedRoutes = [
       ['create', 'POST', '/'],
       ['findMine', 'GET', 'my'],
-      ['update', 'PATCH', ':id'],
     ] as const;
 
     for (const [methodName, httpMethod, path] of authenticatedRoutes) {
@@ -65,10 +65,13 @@ describe('SuggestionsController authorization metadata', () => {
       expect(
         Reflect.getMetadata(META_MINIMUM_ROLE, routeHandler),
       ).toBeUndefined();
-      const guards = Reflect.getMetadata(
+      const guards: unknown = Reflect.getMetadata(
         GUARDS_METADATA,
         routeHandler,
-      ) as Function[];
+      );
+      if (!isUnknownArray(guards)) {
+        throw new Error('Expected guard metadata to be an array');
+      }
       expect(guards).toHaveLength(2);
       expect(guards).toContain(UserRoleGuard);
     }

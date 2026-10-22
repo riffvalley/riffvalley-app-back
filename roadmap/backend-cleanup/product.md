@@ -54,6 +54,70 @@ Los hallazgos de “sin llamada encontrada” se limitan al checkout frontend di
 
 **Orden recomendado:** BC-NEWS-1, BC-NEWS-2 y BC-NEWS-3 están completadas; no quedan subtareas justificadas de esta limpieza de News.
 
+### Suggestions — revisión detallada y división de tareas (2026-10-22)
+
+**Responsabilidades y consumers.** `SuggestionsController` publica la captura autenticada, los listados de gestión y propios, la consulta individual y las acciones de edición/triage. `SuggestionsService` crea y consulta sugerencias/bugs, calcula conteos por estado, cambia estado/prioridad y permite enlazar el cierre con `VersionItem`. `SuggestionsModule` registra `Suggestion` y `VersionItem` y depende de `AuthorizationModule`; la composición productiva externa es `AppModule`. No hay servicios de Suggestions importados por otros módulos backend. La relación a `User` es eager y forma parte del payload actual; `versionItem` se carga explícitamente en los listados y consulta individual. No se propone cambiar esas cargas.
+
+En el frontend disponible, `SuggestionsPage.vue` usa `POST /suggestions` y `GET /suggestions/my`; `SuggestionsManagement.vue` usa los listados, alta, edición de prioridad, rechazo y borrado; `SidebarMenu.vue` usa el listado filtrado por `in_progress` para el badge. El wrapper también define acciones progress/done, consumidas por gestión. No se encontró llamada frontend a `GET /suggestions/:id` ni a `PATCH /suggestions/:id/read`; `findOne` sí tiene callers internos en el servicio, así que no es código muerto. La ausencia de llamadas se limita al checkout frontend disponible y no justifica retirar rutas.
+
+**Tipado, estructura y lint.** Antes de BC-SUG-1, el baseline de tipado registraba dos `explicit-any` productivos en `suggestions.service.ts`, en la construcción de `where` para `findAll` y `findByUser`; ambos se retiraron al tipar con `FindOptionsWhere<Suggestion>`. Antes de BC-SUG-2, el baseline estructural registraba para el spec los hallazgos `module-root-file` y `spec-outside-tests`, y el lint registraba dos `ban-types` por `Function` en handler y guards; todos se retiraron al mover y tipar el spec. No quedan hallazgos propios de Suggestions en esos tres gates. Eran problemas reales de los gates, aunque no indicaban defectos funcionales.
+
+**Duplicación, uso y ownership.** `findAll` y `findByUser` repiten el armado de filtros y las mismas opciones de orden/relación, pero la diferencia de propietario y el alcance de conteos son explícitos; un helper adicional no queda justificado solo por esas líneas. `getCounts` es compartido por ambos listados y sus conteos excluyen deliberadamente el filtro `status`, preservando totales por estado. Todas las operaciones privadas tienen callers; `findOne` es además la base de las acciones de mutación. La asociación opcional a `VersionItem` representa el resultado del triage, por lo que pertenece aquí como referencia y no requiere mover responsabilidades al módulo Versions. No se identifica código productivo sin uso ni necesidad de extraer otro servicio.
+
+### Contract finding
+
+**Current behavior:** `GET /api/suggestions` devuelve `{ data: Suggestion[], counts }`; `GET /api/suggestions/my` devuelve la misma forma y filtra `data`/`counts` por usuario. `getMySuggestions` refleja correctamente esa respuesta. El wrapper `getSuggestions`, en cambio, declara `Promise<Suggestion[]>` y parametriza `api.get` como array.
+
+**Problem:** el tipo estático de `getSuggestions` contradice el JSON real. En los dos consumers encontrados no produce un fallo funcional actual: `SuggestionsManagement.vue` y `SidebarMenu.vue` detectan si el resultado es array y, para la respuesta real, extraen `result.data`. El primero usa las entradas para la tabla y el badge; el segundo obtiene IDs `in_progress`. Ninguno usa `counts` de este endpoint. Ambos recurren a `any` para tolerar las dos formas, por lo que el contrato equivocado puede ocultar errores de tipos en cambios futuros, pero no rompe esos flujos hoy.
+
+**Impact:** frontend-only si se conserva la respuesta backend; backend + frontend si se cambia la forma de respuesta.
+
+**Options:** conservar `{ data, counts }` y corregir el tipo de `getSuggestions` y los consumers para usar esa forma; cambiar `GET /api/suggestions` a array, comprobando antes si se quiere retirar `counts` y coordinando ambos consumers.
+
+**Recommendation:** conservar `{ data, counts }` como contrato vigente y corregir el wrapper y su uso en el frontend. La discrepancia es deuda de tipos y normalización, no un defecto funcional reproducido en App.
+
+**Blocks the current task:** No; la decisión pendiente afecta una futura tarea frontend, no el backend actual.
+
+### Tareas justificadas de Suggestions
+
+Estas subtareas sustituyen el alcance de Suggestions que estaba agregado en BC-PROD-1 y BC-PROD-3; no requieren alterar esas tareas para los demás módulos.
+
+1. **[x] BC-SUG-1 — Tipar los filtros TypeORM (XS; completada 2026-10-22).** **Alcance:** sustituir únicamente los dos `where: any` de `findAll` y `findByUser` por `FindOptionsWhere<Suggestion>`; conservar los filtros opcionales, el `userId`, orden, relación cargada y consultas de conteos. **Dependencias:** ninguna. **Aceptación:** no quedan `explicit-any` productivos en `suggestions.service.ts`; rutas, forma `{ data, counts }`, orden, relaciones y semántica de conteos no cambian; se retiraron solo las dos entradas Suggestions resueltas del baseline de tipado. **Evidencia:** `yarn --ignore-engines test:unit --runInBand src/product/suggestions/suggestions.controller.spec.ts` (1 suite, 2 tests aprobados); `yarn --ignore-engines verify` aprobado fuera del sandbox tras el primer intento fallido por `listen EPERM` en suites HTTP ajenas: 203 suites y 1.966 tests aprobados; 14 suites y 90 tests omitidos por guards; gates estructural, tipado seguro y lint sin hallazgos nuevos/obsoletos, typecheck con 0 errores y build aprobado.
+2. **[x] BC-SUG-2 — Reubicar y tipar el spec de autorización (S; completada 2026-10-22).** **Alcance:** mover `suggestions.controller.spec.ts` a `src/product/suggestions/__tests__/`, ajustar imports, quitar `Function` del handler y leer el metadata de guards como `unknown`, estrechándolo a `readonly unknown[]` con una comprobación de array. Se mantienen las mismas comprobaciones de metadata, roles y guards. **Dependencias:** ninguna; puede hacerse independientemente de BC-SUG-1. **Aceptación:** Suggestions ya no tiene hallazgos estructurales ni `ban-types`; el spec conserva escenarios y expectativas; se retiraron únicamente las dos entradas estructurales y las dos de lint corregidas, sin hallazgos nuevos. **Evidencia:** spec focalizado aprobado (1 suite, 2 tests); `yarn --ignore-engines verify` aprobado fuera del sandbox tras el primer intento fallido por `listen EPERM` en suites HTTP ajenas: 203 suites y 1.966 tests aprobados; 14 suites y 90 tests omitidos por guards; gates estructural, tipado seguro y lint sin hallazgos nuevos/obsoletos, typecheck con 0 errores y build aprobado.
+
+### Contract finding — permisos (resuelto por BC-SUG-3)
+
+**Comportamiento antes de BC-SUG-3:** `@Auth()` exigía autenticación sin mínimo de rol. `@Auth(ValidRoles.riffvalley)` permitía `riffvalley` y `superadmin` por la jerarquía configurada. La tabla conserva ese estado previo como contexto de la corrección:
+
+| Acción | Permiso backend previo | App disponible |
+|---|---|---|
+| Listar todas (`GET /api/suggestions`) y consultar por ID (`GET /:id`) | `riffvalley` o `superadmin` | `SuggestionsManagement` solo es accesible a `superadmin`; no se encontró uso de `GET /:id`. |
+| Crear (`POST /`) y listar las propias (`GET /my`) | Cualquier usuario autenticado, sin mínimo de rol | `SuggestionsPage` requiere autenticación; crear y consultar las propias son sus flujos. |
+| Editar (`PATCH /:id`) | Cualquier usuario autenticado; el servicio no comprueba titularidad y acepta `title`, `description`, `type` y `priority` | El uso encontrado es cambiar prioridad desde la gestión, cuya ruta App solo permite a `superadmin`. |
+| Cambiar estado, rechazar, marcar hecha/leída y borrar (`PATCH /:id/progress`, `/reject`, `/done`, `/read`; `DELETE /:id`) | `riffvalley` o `superadmin` | La gestión App solo es accesible a `superadmin`; no se encontró consumer de `/read`. |
+
+La guardia interpreta el mínimo como inclusivo (`superadmin` satisface `riffvalley`). En `@Auth()` no se aplica filtro de rol ni la comprobación de estado activo que `UserRoleGuard` realiza cuando existe un mínimo; esas rutas siguen protegidas por autenticación Passport.
+
+**Hallazgo:** los permisos previos permitían a `riffvalley` gestionar Suggestions y a cualquier usuario autenticado editar cualquier envío por `PATCH /:id`. La UI observada solo ofrece la gestión a `superadmin`, pero sus controles no sustituyen la autorización del backend.
+
+**Impact:** backend. El frontend y los contratos HTTP permanecen sin cambios.
+
+**Decisión aplicada:** cualquier usuario autenticado puede crear y consultar sus propios envíos. Solo `superadmin` puede listar todos, consultar por ID, editar, cambiar prioridad o estado, usar las acciones de gestión y eliminar. `riffvalley` carece de permisos administrativos en Suggestions; los usuarios normales no pueden editar después de crear.
+
+**Estado:** corregido por BC-SUG-3; no bloquea trabajo pendiente de Suggestions.
+
+### Tipos, campos y edición de autor
+
+**Modelo y API actuales.** `SuggestionType` distingue solo `suggestion` y `bug` en una columna enum de la misma entidad/tabla. Ambos tipos comparten los mismos campos y validaciones: `title` requerido (1–200 caracteres) y `description` requerida (mínimo 1; sin máximo explícito en el DTO). `type` es opcional y por defecto `suggestion`; `priority` es opcional en creación y por defecto `medium`. El estado inicial común es `in_progress`. La respuesta de entidad añade `id`, `status`, `priority`, `isRead`, `rejectionReason`, `userId`/`user`, `versionItemId`/`versionItem` y fechas. `UpdateSuggestionDto` permite cambiar opcionalmente `title`, `description`, `type` y `priority`; no permite cambiar estado, lectura, rechazo ni vínculo a versión. El backend usa el mismo DTO, entidad, rutas y acciones para ambos tipos.
+
+**Creación y presentación en App.** `SuggestionsPage` ofrece selector de tipo, título y descripción; título y descripción se exigen en cliente después de aplicar `trim`. No pide prioridad ni campos extra para bugs. `SuggestionsManagement` también crea ambos tipos con esos mismos campos y además ofrece prioridad. Las dos vistas presentan la etiqueta/icono/color según `type`; las entradas propias muestran estado, rechazo y versión vinculada, y la gestión filtra por tipo y estado. Ningún comportamiento de estado o triage depende del tipo.
+
+**Edición y política decidida.** El autor no tiene acción de edición en `SuggestionsPage` después del envío y no se añadirá. En la gestión, App permite editar `priority`; las acciones de gestión cambian estado, motivo de rechazo y vínculo a `VersionItem` mediante endpoints separados. El indicador de lectura de App se guarda en `supportStore`/almacenamiento local; el endpoint backend `/read` no tiene consumer encontrado. El DTO genérico de `PATCH /:id` también acepta `title`, `description` y `type`, pero esa ruta requiere ahora `superadmin`; no se habilita edición para usuarios normales. Ambos tipos conservan el mismo modelo y workflow. No se modifica App.
+
+**Tareas de Suggestions.** BC-SUG-1 y BC-SUG-2 están completadas. **[x] BC-SUG-3 — Alinear guards y permisos (XS; completada 2026-10-22).** **Alcance:** permitir a cualquier usuario autenticado crear mediante `POST /` y consultar sus envíos mediante `GET /my`; limitar listado global, consulta individual de gestión, `PATCH /:id` (incluida prioridad), acciones de triage/lectura y `DELETE /:id` a `superadmin`. Quitar el acceso de gestión de `riffvalley`. Mantener los endpoints, DTOs, payloads, respuestas y reglas funcionales de gestión; los usuarios normales no pueden modificar sus envíos después de crearlos. El frontend permanece sin cambios. **Dependencias:** ninguna. **Aceptación:** guards con esos mínimos de rol; tests cubren el acceso de `user`, `riffvalley` y `superadmin`; sin cambios de contratos HTTP ni comportamiento de gestión. **Evidencia:** prueba focalizada `yarn --ignore-engines test:unit --runInBand src/product/suggestions/__tests__/suggestions.controller.spec.ts` (1 suite, 2 tests aprobados); `yarn --ignore-engines verify` aprobado fuera del sandbox (203 suites y 1.966 tests aprobados; 14 suites y 90 tests omitidos por guards; quality gates, typecheck y build aprobados). El primer intento de `verify` dentro del sandbox encontró `listen EPERM` en suites HTTP ajenas; al repetir con permiso para sockets locales, todas las suites restantes pasaron.
+
+La discrepancia del wrapper de `GET /api/suggestions` (`{ data, counts }` en backend frente al tipo array del wrapper) permanece como deuda frontend independiente y fuera de esta tarea.
+
 ### Contract finding
 
 **Current behavior:** el backend expone `GET /api/versions/production/latest` como `{ version: string } | null`. El wrapper frontend `getLatestPublicVersion` declara `Version | null`, aunque otro wrapper usa correctamente `{ version: string } | null` para la misma respuesta. También hay wrappers frontend sin uso encontrado que llaman a `/versions/public/infinite` y `/versions/items/:itemId`, rutas que no aparecen en el controller backend.

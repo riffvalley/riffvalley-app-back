@@ -18,22 +18,6 @@
       "occurrence": 1
     },
     {
-      "rule": "@typescript-eslint/ban-types",
-      "path": "src/product/suggestions/suggestions.controller.spec.ts",
-      "line": 16,
-      "column": 48,
-      "fingerprint": "1cd138a609093d63f60a6f8b39230a337fee3a4906a8dc9456fee51603b13b79",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
-      "path": "src/product/suggestions/suggestions.controller.spec.ts",
-      "line": 71,
-      "column": 12,
-      "fingerprint": "49e1e002c5fbbe0d57d200d5f96803be9b909d4799916dcf17b5da8bf5b91933",
-      "occurrence": 0
-    },
-    {
       "rule": "@typescript-eslint/no-unused-vars",
       "path": "src/integrations/telegram-integration/dto/channel-posts-query.dto.ts",
       "line": 1,
