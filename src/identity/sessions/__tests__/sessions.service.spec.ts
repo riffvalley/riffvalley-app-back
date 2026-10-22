@@ -314,6 +314,51 @@ describe('SessionsService', () => {
     expect([...persistence.refreshTokens.values()]).toEqual(tokensBefore);
   });
 
+  it('recovers CSRF only for a live, unconsumed refresh session after proof expiry', async () => {
+    const { persistence, service } = makeService();
+    const credential = await service.createSession({
+      userId: TEST_USER_ID,
+      clientType: 'app',
+    });
+    const sessionCsrfExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+    jest.advanceTimersByTime(30 * 60 * 1000 + 1);
+
+    await expect(
+      service.findRecoverableRefreshTokenSessionBinding(
+        credential.refreshToken,
+        'app',
+      ),
+    ).resolves.toEqual({
+      sessionId: credential.sessionId,
+      userId: TEST_USER_ID,
+      clientType: 'app',
+      expiresAt: credential.expiresAt,
+    });
+    expect(credential.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(sessionCsrfExpiresAt.getTime()).toBeLessThan(Date.now());
+
+    const activeToken = [...persistence.refreshTokens.values()][0];
+    activeToken.consumedAt = new Date(Date.now());
+    await expect(
+      service.findRecoverableRefreshTokenSessionBinding(
+        credential.refreshToken,
+        'app',
+      ),
+    ).resolves.toBeNull();
+
+    activeToken.consumedAt = null;
+    const session = persistence.sessions.get(credential.sessionId);
+    if (!session) throw new Error('Expected the session fixture to exist');
+    session.expiresAt = new Date(Date.now() - 1);
+    await expect(
+      service.findRecoverableRefreshTokenSessionBinding(
+        credential.refreshToken,
+        'app',
+      ),
+    ).resolves.toBeNull();
+  });
+
   it('rejects unrecognized clients and nonexistent or inactive owners', async () => {
     const { persistence, service } = makeService();
 
