@@ -24,7 +24,7 @@ import {
 } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { RiffValleyPlaylistArtist } from '../entities/riff-valley-playlist-artist.entity';
-import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration/api';
 import { SpotifyPlaylistAuthorizationService } from '../spotify-authorization/spotify-playlist-authorization.service';
 import { FestivalSetlistService } from '../setlist/festival-setlist.service';
 import { SpotifyPlaylistArtistSyncService } from '../artist-sync/spotify-playlist-artist-sync.service';
@@ -50,7 +50,6 @@ type SpotifyAuthorization = jest.Mocked<
     | 'startSpotifyConnection'
     | 'completeSpotifyConnection'
     | 'getSpotifyConnection'
-    | 'checkSpotifyAuthorizationLifetime'
     | 'disconnectSpotify'
     | 'getValidAccessToken'
   >
@@ -146,7 +145,6 @@ describe('FestivalPlaylists partial failure HTTP responses', () => {
       startSpotifyConnection: jest.fn(),
       completeSpotifyConnection: jest.fn(),
       getSpotifyConnection: jest.fn(),
-      checkSpotifyAuthorizationLifetime: jest.fn(),
       disconnectSpotify: jest.fn(),
       getValidAccessToken: jest.fn().mockResolvedValue('token'),
     };

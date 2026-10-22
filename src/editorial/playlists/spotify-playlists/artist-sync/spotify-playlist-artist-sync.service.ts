@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
-import type { SpotifyTrack } from 'src/integrations/spotify-integration';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration/api';
+import type { SpotifyTrack } from 'src/integrations/spotify-integration/api';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { SyncPlaylistArtistDto } from '../dto/sync-playlist-artist.dto';

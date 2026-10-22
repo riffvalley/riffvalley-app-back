@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DeleteResult, Repository, UpdateResult } from 'typeorm';
-import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration/api';
 import {
   RiffValleyPlaylist,
   RiffValleyPlaylistStatus,

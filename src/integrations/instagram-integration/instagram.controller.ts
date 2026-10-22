@@ -1,6 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { InstagramService } from './instagram.service';
 import { InstagramPostsQueryDto } from './dto/instagram-posts-query.dto';
+import { InstagramService } from './instagram.service';
 
 @Controller('instagram')
 export class InstagramController {

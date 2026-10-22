@@ -13,12 +13,12 @@ import { UpdateSyncedPlaylistDto } from '../dto/update-synced-playlist.dto';
 import {
   SpotifyTrack,
   SpotifyImage,
-} from 'src/integrations/spotify-integration';
+} from 'src/integrations/spotify-integration/api';
 import { Repository, DeepPartial, UpdateResult } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
-import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration/api';
 import { SpotifyPlaylistAuthorizationService } from '../spotify-authorization/spotify-playlist-authorization.service';
 import {
   RiffValleyPlaylistArtist,
@@ -78,7 +78,6 @@ type SpotifyAuthorization = jest.Mocked<
     | 'startSpotifyConnection'
     | 'completeSpotifyConnection'
     | 'getSpotifyConnection'
-    | 'checkSpotifyAuthorizationLifetime'
     | 'disconnectSpotify'
     | 'getValidAccessToken'
   >
@@ -235,7 +234,6 @@ describe('SpotifyPlaylistsService partial Spotify/PostgreSQL failures', () => {
       startSpotifyConnection: jest.fn(),
       completeSpotifyConnection: jest.fn(),
       getSpotifyConnection: jest.fn(),
-      checkSpotifyAuthorizationLifetime: jest.fn(),
       disconnectSpotify: jest.fn(),
       getValidAccessToken: jest.fn(),
     };

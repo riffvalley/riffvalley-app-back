@@ -9,9 +9,15 @@ import { SpotifyConnection } from './oauth/spotify-connection.entity';
 import { SpotifyAccountApiService } from './oauth/spotify-account-api.service';
 import { SpotifyOAuthApiService } from './oauth/spotify-oauth-api.service';
 import { TokenCryptoService } from './oauth/token-crypto.service';
+import { SpotifyConnectionService } from './oauth/spotify-connection.service';
+import { MailModule } from 'src/communications/mail/mail.module';
 
 @Module({
-  imports: [ConfigModule, TypeOrmModule.forFeature([SpotifyConnection])],
+  imports: [
+    ConfigModule,
+    TypeOrmModule.forFeature([SpotifyConnection]),
+    MailModule,
+  ],
   controllers: [SpotifyArtistsController, SpotifyAlbumsController],
   providers: [
     SpotifyPublicApiService,
@@ -19,14 +25,14 @@ import { TokenCryptoService } from './oauth/token-crypto.service';
     SpotifyOAuthApiService,
     SpotifyAccountApiService,
     TokenCryptoService,
+    SpotifyConnectionService,
   ],
   exports: [
     SpotifyPublicApiService,
     SpotifyClientCredentialsService,
     SpotifyOAuthApiService,
     SpotifyAccountApiService,
-    TokenCryptoService,
-    TypeOrmModule,
+    SpotifyConnectionService,
   ],
 })
 export class SpotifyIntegrationModule {}

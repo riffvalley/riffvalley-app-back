@@ -4,7 +4,7 @@ import {
   WordpressService,
   WordpressWriteError,
 } from 'src/integrations/wordpress-integration/wordpress.service';
-import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { ListWordPressReconciliationService } from '../list-wordpress-reconciliation.service';
 import {
   GutenbergDiscAssignment,

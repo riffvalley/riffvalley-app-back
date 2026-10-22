@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SpotifyPublicApiService } from 'src/integrations/spotify-integration';
+import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { Disc } from '../entities/disc.entity';
 
 @Injectable()

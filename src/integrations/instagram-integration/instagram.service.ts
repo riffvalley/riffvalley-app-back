@@ -27,6 +27,20 @@ interface IgMediaNode {
 interface IgMediaResponse {
   data: IgMediaNode[];
   paging?: { next?: string };
+  error?: InstagramGraphError;
+}
+
+interface InstagramGraphError {
+  message?: string;
+  type?: string;
+  code?: number;
+  error_subcode?: number;
+  fbtrace_id?: string;
+}
+
+interface InstagramTokenRefreshResponse {
+  access_token?: string;
+  error?: InstagramGraphError;
 }
 
 @Injectable()
@@ -41,7 +55,10 @@ export class InstagramService {
 
   constructor(
     @InjectRepository(InstagramPost)
-    private readonly instagramPostRepository: Repository<InstagramPost>,
+    private readonly instagramPostRepository: Pick<
+      Repository<InstagramPost>,
+      'upsert' | 'findAndCount'
+    >,
     private readonly tokenStorage: InstagramTokenStorageService,
   ) {}
 
@@ -70,7 +87,7 @@ export class InstagramService {
 
       for (let page = 0; url && page < maxPages; page++) {
         const res = await fetch(url);
-        const body = (await res.json()) as IgMediaResponse & { error?: any };
+        const body = (await res.json()) as IgMediaResponse;
 
         if (!res.ok || body.error) {
           this.logger.error(
@@ -126,7 +143,7 @@ export class InstagramService {
       const res = await fetch(
         `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${this.accessToken}`,
       );
-      const body = (await res.json()) as { access_token?: string; error?: any };
+      const body = (await res.json()) as InstagramTokenRefreshResponse;
 
       if (!res.ok || !body.access_token) {
         this.logger.error(

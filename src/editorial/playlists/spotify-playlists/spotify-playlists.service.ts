@@ -38,10 +38,6 @@ export class SpotifyPlaylistsService {
     return this.spotifyAuthorizationService.getSpotifyConnection();
   }
 
-  checkSpotifyAuthorizationLifetime(): Promise<void> {
-    return this.spotifyAuthorizationService.checkSpotifyAuthorizationLifetime();
-  }
-
   disconnectSpotify() {
     return this.spotifyAuthorizationService.disconnectSpotify();
   }

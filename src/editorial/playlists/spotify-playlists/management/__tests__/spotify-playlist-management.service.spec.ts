@@ -10,7 +10,7 @@ import { UpdateSyncedPlaylistDto } from '../../dto/update-synced-playlist.dto';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
-import { SpotifyAccountApiService } from 'src/integrations/spotify-integration';
+import { SpotifyAccountApiService } from 'src/integrations/spotify-integration/api';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import {
   RiffValleyPlaylistStatus,

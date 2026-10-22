@@ -3,7 +3,7 @@
   "violations": [
     {
       "rule": "@typescript-eslint/ban-types",
-      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "path": "src/integrations/tiktok-integration/http/__tests__/tiktok.controller.spec.ts",
       "line": 24,
       "column": 65,
       "fingerprint": "da83ac6f7511f8f9f2e89a7bffb22e51ce52baac67053a44ac8c186eebf64351",
@@ -11,7 +11,7 @@
     },
     {
       "rule": "@typescript-eslint/ban-types",
-      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
+      "path": "src/integrations/tiktok-integration/http/__tests__/tiktok.controller.spec.ts",
       "line": 49,
       "column": 65,
       "fingerprint": "da83ac6f7511f8f9f2e89a7bffb22e51ce52baac67053a44ac8c186eebf64351",
@@ -91,7 +91,7 @@
     },
     {
       "rule": "prefer-const",
-      "path": "src/integrations/instagram-integration/instagram.service.spec.ts",
+      "path": "src/integrations/instagram-integration/__tests__/instagram.service.spec.ts",
       "line": 202,
       "column": 11,
       "fingerprint": "c0c9e3f7e018163a9383cd8a9ec985f142aee526bc99de3ba3f4442a724a3def",
@@ -107,15 +107,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/instagram-integration/instagram.controller.spec.ts",
-      "line": 11,
-      "column": 48,
-      "fingerprint": "6602840f1b557b2fceb0cbba18f508245b86700f6d6ae4ad515119e03983d085",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/instagram-integration/instagram.controller.spec.ts",
+      "path": "src/integrations/instagram-integration/__tests__/instagram.controller.spec.ts",
       "line": 16,
       "column": 74,
       "fingerprint": "e33c724b11dcb06e087c6c312077fda134f81feccedf6179e9b8c795cd114a09",
@@ -123,7 +115,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/instagram-integration/instagram.controller.spec.ts",
+      "path": "src/integrations/instagram-integration/__tests__/instagram.controller.spec.ts",
       "line": 17,
       "column": 12,
       "fingerprint": "529286a1c2e42bce0c9df9ef005c9142a4599cf44e0bdafea2fe82991f586147",
@@ -131,7 +123,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/instagram-integration/instagram.controller.spec.ts",
+      "path": "src/integrations/instagram-integration/__tests__/instagram.controller.spec.ts",
       "line": 18,
       "column": 12,
       "fingerprint": "f6264e7c756b1dd8bbfabdf79132d3e32df4a2bb5ae119b0dece5a6e67a92701",
@@ -139,7 +131,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-api.service.spec.ts",
+      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
       "line": 1,
       "column": 9,
       "fingerprint": "3b49d1145ff507ab017a89856b1c6f8ccf51e9fcb9f392e53004485e3e748855",
@@ -147,7 +139,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-api.service.spec.ts",
+      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
       "line": 26,
       "column": 34,
       "fingerprint": "78b2da0193d8819b90429493b17a29e9ebc0a987fd2a91165052e8258bff6059",
@@ -155,7 +147,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-api.service.spec.ts",
+      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
       "line": 42,
       "column": 17,
       "fingerprint": "6e79d13b9fd1c55bde45d3aef67e5ace0e6c7799debaf629a3b7dfc448943c6f",
@@ -163,7 +155,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-api.service.spec.ts",
+      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
       "line": 74,
       "column": 6,
       "fingerprint": "d90f4a48858bbc580375588259a5007f0b7133d293ea14d337133fcbf7c88cb2",
@@ -171,7 +163,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-api.service.spec.ts",
+      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
       "line": 76,
       "column": 34,
       "fingerprint": "54070a870bf08785d6a0904b92c8ece51f42ad516a033ae4e7dc66295f2a24b9",
@@ -188,14 +180,6 @@
     {
       "rule": "prettier/prettier",
       "path": "src/integrations/lastfm-integration/lastfm-api.service.ts",
-      "line": 6,
-      "column": 9,
-      "fingerprint": "b41216205456f6dbe13c3186becce2023604fc2769941aa2b7d41706aad634d8",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-api.service.ts",
       "line": 64,
       "column": 20,
       "fingerprint": "7f8cec3d11234e21de768995f81a1302741b1a7465a3dbdac0dd55d3d407042a",
@@ -203,7 +187,7 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-integration.module.spec.ts",
+      "path": "src/integrations/lastfm-integration/__tests__/lastfm-integration.module.spec.ts",
       "line": 12,
       "column": 12,
       "fingerprint": "519cda0fd346b67c02428dedf38a5e8742a362b354f2e8291057c3d72369df79",
@@ -211,82 +195,10 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
-      "line": 21,
-      "column": 20,
-      "fingerprint": "4ba77878a6af17e14b37dc2a940aa87dd03b6a31554e76dbd473b408346dd2f6",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
-      "line": 22,
-      "column": 9,
-      "fingerprint": "0001d7d7acfbc067874a248798120886e47cda323fb7c63636a71a7badd61626",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
-      "line": 23,
-      "column": 1,
-      "fingerprint": "f9b10fad6db957fbaa46897c17ec4b143aed7fb1e3257ae1686e84a3050584e8",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
-      "line": 24,
-      "column": 11,
-      "fingerprint": "348ed1ca48003381fe7f95d2a7538880dc134c34f8d0ebb7613328dc566a6f1e",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
-      "line": 25,
-      "column": 1,
-      "fingerprint": "73ef641ff2a22afd5df2f08934eb5de273c9b0ac02781d3b0201c42b156e2c87",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
-      "line": 40,
-      "column": 30,
-      "fingerprint": "def6a92dac61e1337cb83172e88835052b31fc097267299755ef17df0abf7609",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
-      "line": 72,
-      "column": 30,
-      "fingerprint": "623204899b119dec3664e5c77955078818c86eb99fd929d1a6a3a05a6657fd9e",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/api/spotify-client-credentials.service.spec.ts",
-      "line": 74,
-      "column": 30,
-      "fingerprint": "bd6495c8e4e8af80d5d96bd4be3cfe0616deceddba8cd310b05c104d43a12004",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/spotify-integration/http/spotify-artists.controller.spec.ts",
+      "path": "src/integrations/spotify-integration/http/__tests__/spotify-artists.controller.spec.ts",
       "line": 24,
       "column": 21,
       "fingerprint": "dc27c217b52fae23e5cf7df3bb6507e21d77c36a417ef9e4d359777d12d2c8ed",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/tiktok-integration/http/tiktok.controller.spec.ts",
-      "line": 9,
-      "column": 9,
-      "fingerprint": "efcc79151fd25c3915d12a85844aa0178b5e84d3e14a998b6067f9e17fceacd0",
       "occurrence": 0
     },
     {
