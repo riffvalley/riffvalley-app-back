@@ -13,6 +13,8 @@ import { AuthModule } from '../auth.module';
 import { AuthService } from '../auth.service';
 import { User } from '../entities/user.entity';
 import { UserAccessLog } from '../entities/user-access-log.entity';
+import { UserAppDailyActivity } from '../../activity/entities/user-app-daily-activity.entity';
+import { RateVoteEvent } from '../../../community/rates/entities/rate-vote-event.entity';
 import { AuthSession } from '../../sessions/entities/auth-session.entity';
 import { AuthRefreshToken } from '../../sessions/entities/auth-refresh-token.entity';
 import { SessionsModule } from '../../sessions/sessions.module';
@@ -24,6 +26,8 @@ describe('AuthModule composition', () => {
     const repositories = [
       User,
       UserAccessLog,
+      UserAppDailyActivity,
+      RateVoteEvent,
       Rate,
       AuthSession,
       AuthRefreshToken,

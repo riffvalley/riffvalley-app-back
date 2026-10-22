@@ -31,6 +31,21 @@ describe('JwtStrategy', () => {
     expect(usersService.findById).toHaveBeenCalledWith('user-1');
   });
 
+  it('preserves the signed client attribution on the authenticated user', async () => {
+    const user = { id: 'user-1', username: 'listener', isActive: true } as User;
+    usersService.findById.mockResolvedValue(user);
+
+    const authenticatedUser = await strategy.validate({
+      id: user.id,
+      username: user.username,
+      role: ValidRoles.user,
+      clientType: 'app',
+    });
+
+    expect(authenticatedUser).toMatchObject({ id: user.id, clientType: 'app' });
+    expect(Object.keys(authenticatedUser)).not.toContain('clientType');
+  });
+
   it('rejects a JWT whose user has been deleted', async () => {
     usersService.findById.mockResolvedValue(null);
 

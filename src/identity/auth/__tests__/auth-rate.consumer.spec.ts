@@ -7,6 +7,8 @@ import { ActivityModule } from '../../activity/activity.module';
 import { ActivityService } from '../../activity/activity.service';
 import { User } from '../entities/user.entity';
 import { UserAccessLog } from '../entities/user-access-log.entity';
+import { UserAppDailyActivity } from '../../activity/entities/user-app-daily-activity.entity';
+import { RateVoteEvent } from '../../../community/rates/entities/rate-vote-event.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { RatesModule } from 'src/community/rates/rates.module';
 import { CatalogImportModule } from 'src/catalog/import/catalog-import.module';
@@ -30,6 +32,10 @@ describe('Activity → Rate consumer characterization', () => {
       .useValue(userRepository)
       .overrideProvider(getRepositoryToken(UserAccessLog))
       .useValue(accessLogRepository)
+      .overrideProvider(getRepositoryToken(UserAppDailyActivity))
+      .useValue({ query: jest.fn() })
+      .overrideProvider(getRepositoryToken(RateVoteEvent))
+      .useValue({ query: jest.fn() })
       .overrideProvider(ConfigService)
       .useValue({ get: () => 'auth-rate-test-secret' })
       .compile();

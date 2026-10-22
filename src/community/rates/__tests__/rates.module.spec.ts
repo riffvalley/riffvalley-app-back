@@ -15,16 +15,20 @@ import { RatesService } from '../rates.service';
 import { RatesStatsService } from '../stats/rates-stats.service';
 import { RatesHistoryService } from '../history/rates-history.service';
 import { Rate } from '../entities/rate.entity';
+import { RateVoteEvent } from '../entities/rate-vote-event.entity';
 
 describe('RatesModule characterization', () => {
   let moduleRef: TestingModule;
   const rateRepository = {};
+  const rateVoteEventRepository = {};
   const discRepository = {};
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({ imports: [RatesModule] })
       .overrideProvider(getRepositoryToken(Rate))
       .useValue(rateRepository)
+      .overrideProvider(getRepositoryToken(RateVoteEvent))
+      .useValue(rateVoteEventRepository)
       .overrideProvider(getRepositoryToken(Disc))
       .useValue(discRepository)
       .overrideProvider(getRepositoryToken(User))
@@ -43,6 +47,9 @@ describe('RatesModule characterization', () => {
     expect(moduleRef.get(UsersService)).toBeDefined();
     expect(moduleRef.get(RatesHistoryService)).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Rate))).toBe(rateRepository);
+    expect(moduleRef.get(getRepositoryToken(RateVoteEvent))).toBe(
+      rateVoteEventRepository,
+    );
     expect(moduleRef.get(RatesService)).toHaveProperty(
       'rateRepository',
       rateRepository,

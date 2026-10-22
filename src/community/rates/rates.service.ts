@@ -10,8 +10,9 @@ import {
 import { CreateRateDto } from './dto/create-rates.dto';
 import { UpdateRateDto } from './dto/update-rates.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Rate } from './entities/rate.entity';
+import { RateVoteEvent } from './entities/rate-vote-event.entity';
 import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
@@ -34,43 +35,56 @@ export class RatesService {
   async create(createRateDto: CreateRateDto, user: User) {
     try {
       const { discId, ...rateData } = createRateDto;
-      const disc = await this.rateRepository.manager.findOne(Disc, {
-        where: { id: discId },
-      });
+      return await this.rateRepository.manager.transaction(async (manager) => {
+        const disc = await manager.findOne(Disc, { where: { id: discId } });
+        if (!disc) {
+          throw new NotFoundException(`Disc with id ${discId} not found`);
+        }
 
-      if (!disc) {
-        throw new NotFoundException(`Disc with id ${discId} not found`);
-      }
+        // Serialize first inserts and retries for the same user/disc pair.
+        await manager.query(
+          'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+          [user.id, discId],
+        );
 
-      // Check if rate already exists for this user and disc
-      const existingRate = await this.rateRepository.findOne({
-        where: {
-          user: { id: user.id },
-          disc: { id: discId },
-        },
-      });
-
-      if (existingRate) {
-        // Update existing rate
-        const updatedRate = await this.rateRepository.preload({
-          id: existingRate.id,
-          ...rateData,
-          editedAt: new Date(),
+        const rateRepository = manager.getRepository(Rate);
+        const existingRate = await rateRepository.findOne({
+          where: {
+            user: { id: user.id },
+            disc: { id: discId },
+          },
+          lock: { mode: 'pessimistic_write' },
         });
 
-        await this.rateRepository.save(updatedRate);
-        return updatedRate;
-      }
+        if (existingRate) {
+          const updatedRate = await rateRepository.preload({
+            id: existingRate.id,
+            ...rateData,
+            editedAt: new Date(),
+          });
+          if (!updatedRate) {
+            throw new NotFoundException(`Rate ${existingRate.id} not found`);
+          }
 
-      // Create new rate if it doesn't exist
-      const newRate = this.rateRepository.create({
-        ...rateData,
-        user,
-        disc,
+          await rateRepository.save(updatedRate);
+          await this.recordVoteEvent(
+            manager,
+            user.id,
+            existingRate.rate,
+            updatedRate.rate,
+          );
+          return updatedRate;
+        }
+
+        const newRate = rateRepository.create({
+          ...rateData,
+          user,
+          disc,
+        });
+        await rateRepository.save(newRate);
+        await this.recordVoteEvent(manager, user.id, null, newRate.rate);
+        return newRate;
       });
-
-      await this.rateRepository.save(newRate);
-      return newRate;
     } catch (error) {
       this.handleDbExceptions(error);
     }
@@ -297,49 +311,76 @@ export class RatesService {
   }
 
   async update(id: string, updateRateDto: UpdateRateDto, user: User) {
-    const existing = await this.rateRepository.findOne({
-      where: { id },
-      relations: ['user'],
-    });
-
-    if (!existing) {
-      throw new NotFoundException(`Rate with id ${id} not found`);
-    }
-
-    if (existing.user.id !== user.id) {
-      throw new ForbiddenException('You can only edit your own rates');
-    }
-
-    const rate = await this.rateRepository.preload({
-      id,
-      ...updateRateDto,
-      editedAt: new Date(),
-    });
-
     try {
-      await this.rateRepository.save(rate);
-      return rate;
+      return await this.rateRepository.manager.transaction(async (manager) => {
+        const rateRepository = manager.getRepository(Rate);
+        const existing = await rateRepository.findOne({
+          where: { id },
+          relations: ['user'],
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (!existing) {
+          throw new NotFoundException(`Rate with id ${id} not found`);
+        }
+        if (existing.user.id !== user.id) {
+          throw new ForbiddenException('You can only edit your own rates');
+        }
+
+        const rate = await rateRepository.preload({
+          id,
+          ...updateRateDto,
+          editedAt: new Date(),
+        });
+        if (!rate) throw new NotFoundException(`Rate with id ${id} not found`);
+
+        await rateRepository.save(rate);
+        await this.recordVoteEvent(manager, user.id, existing.rate, rate.rate);
+        return rate;
+      });
     } catch (error) {
       this.handleDbExceptions(error);
     }
   }
 
   async remove(id: string, user: User) {
-    const existing = await this.rateRepository.findOne({
-      where: { id },
-      relations: ['user'],
+    return this.rateRepository.manager.transaction(async (manager) => {
+      const rateRepository = manager.getRepository(Rate);
+      const existing = await rateRepository.findOne({
+        where: { id },
+        relations: ['user'],
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!existing) {
+        throw new NotFoundException(`Rate with id ${id} not found`);
+      }
+      if (existing.user.id !== user.id) {
+        throw new ForbiddenException('You can only delete your own rates');
+      }
+
+      await rateRepository.delete({ id });
+      return { message: `Rate with id ${id} has been removed` };
     });
+  }
 
-    if (!existing) {
-      throw new NotFoundException(`Rate with id ${id} not found`);
-    }
+  private async recordVoteEvent(
+    manager: EntityManager,
+    userId: string,
+    previousRate: number | null | undefined,
+    nextRate: number | null | undefined,
+  ): Promise<void> {
+    if (nextRate === null || nextRate === undefined) return;
 
-    if (existing.user.id !== user.id) {
-      throw new ForbiddenException('You can only delete your own rates');
-    }
+    const eventType =
+      previousRate === null || previousRate === undefined
+        ? 'set'
+        : Number(previousRate) === Number(nextRate)
+          ? null
+          : 'change';
+    if (!eventType) return;
 
-    await this.rateRepository.delete({ id });
-    return { message: `Rate with id ${id} has been removed` };
+    await manager.getRepository(RateVoteEvent).insert({ userId, eventType });
   }
 
   private handleDbExceptions(error: unknown) {

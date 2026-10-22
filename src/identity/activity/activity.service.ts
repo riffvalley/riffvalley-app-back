@@ -5,6 +5,7 @@ import { Rate } from '../../community/rates/entities/rate.entity';
 import { PaginationDto } from '../../platform/common/dtos/pagination.dto';
 import { User } from '../auth/entities/user.entity';
 import { UserAccessLog } from '../auth/entities/user-access-log.entity';
+import { UserAppDailyActivity } from './entities/user-app-daily-activity.entity';
 
 @Injectable()
 export class ActivityService {
@@ -15,7 +16,18 @@ export class ActivityService {
     private readonly userAccessLogRepository: Repository<UserAccessLog>,
     @InjectRepository(Rate)
     private readonly rateRepository: Repository<Rate>,
+    @InjectRepository(UserAppDailyActivity)
+    private readonly appDailyActivityRepository: Repository<UserAppDailyActivity>,
   ) {}
+
+  async recordAppDailyActivity(userId: string): Promise<void> {
+    await this.appDailyActivityRepository.query(
+      `INSERT INTO "user_app_daily_activity" ("user_id", "activity_date")
+       VALUES ($1, (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date)
+       ON CONFLICT ("user_id", "activity_date") DO NOTHING`,
+      [userId],
+    );
+  }
 
   async getAllActivity(paginationDto: PaginationDto) {
     const { limit = 20, offset = 0 } = paginationDto;

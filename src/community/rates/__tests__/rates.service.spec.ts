@@ -52,13 +52,25 @@ type SubQueryBuilderMock = {
 
 function createRepositoryMock<T extends object>(
   overrides: T,
-): Repository<Rate> & T {
+): Repository<Rate> & T & { voteEventInsert: jest.Mock } {
   const dataSource = new DataSource({
     type: 'postgres',
     database: 'rates-test',
   });
-  const repository = new Repository<Rate>(Rate, new EntityManager(dataSource));
-  return Object.assign(repository, overrides);
+  const overrideManager = (overrides as { manager?: EntityManager }).manager;
+  const manager = overrideManager ?? new EntityManager(dataSource);
+  const voteEventInsert = jest.fn().mockResolvedValue({ identifiers: [] });
+  const voteEvents = { insert: voteEventInsert };
+  const repository = new Repository<Rate>(Rate, manager);
+  Object.assign(manager, {
+    transaction: async <Result>(
+      operation: (transactionManager: EntityManager) => Promise<Result>,
+    ) => operation(manager),
+    getRepository: (target: unknown) =>
+      target === Rate ? repository : voteEvents,
+    query: jest.fn().mockResolvedValue([]),
+  });
+  return Object.assign(repository, overrides, { voteEventInsert });
 }
 
 function createDisc(id = 'disc-1'): Disc {
@@ -177,6 +189,7 @@ describe('RatesService characterization', () => {
     ).resolves.toBe(createdRate);
     expect(repository.findOne).toHaveBeenCalledWith({
       where: { user: { id: user.id }, disc: { id: disc.id } },
+      lock: { mode: 'pessimistic_write' },
     });
     expect(repository.create).toHaveBeenCalledWith({
       rate: 8,
@@ -185,6 +198,10 @@ describe('RatesService characterization', () => {
       disc,
     });
     expect(repository.save).toHaveBeenCalledWith(createdRate);
+    expect(repository.voteEventInsert).toHaveBeenCalledWith({
+      userId: user.id,
+      eventType: 'set',
+    });
   });
 
   it('returns 404 for a missing Disc, keeps duplicates at 400, and masks unexpected errors as 500', async () => {
@@ -233,6 +250,7 @@ describe('RatesService characterization', () => {
     await expect(
       service.create(createRateDto({ discId: disc.id, rate: 8 }), user),
     ).rejects.toMatchObject({ status: 400 });
+    expect(repository.voteEventInsert).not.toHaveBeenCalled();
     await expect(
       service.create(createRateDto({ discId: disc.id, rate: 8 }), user),
     ).rejects.toMatchObject({
@@ -416,6 +434,155 @@ describe('RatesService characterization', () => {
       editedAt: expect.any(Date),
     });
     expect(repository.save).toHaveBeenCalledWith(updatedRate);
+    expect(repository.voteEventInsert).toHaveBeenCalledWith({
+      userId: user.id,
+      eventType: 'set',
+    });
+  });
+
+  it('does not count a cover-only Rate as a vote', async () => {
+    const coverOnlyRate = Object.assign(new Rate(), {
+      id: 'rate-cover-only',
+      rate: null,
+      cover: 8,
+      user,
+      disc,
+    });
+    const repository = createRepositoryMock({
+      manager: Object.assign(
+        new EntityManager(
+          new DataSource({ type: 'postgres', database: 'rates-test' }),
+        ),
+        {
+          findOne: jest
+            .fn<Promise<Disc | null>, [typeof Disc, FindOneOptions<Disc>]>()
+            .mockResolvedValue(disc),
+        },
+      ),
+      findOne: jest
+        .fn<Promise<Rate | null>, [FindOneOptions<Rate>]>()
+        .mockResolvedValue(null),
+      create: jest
+        .fn<Rate, [DeepPartial<Rate>]>()
+        .mockReturnValue(coverOnlyRate),
+      save: jest.fn<Promise<Rate>, [Rate]>().mockResolvedValue(coverOnlyRate),
+    });
+
+    await new RatesService(repository).create(
+      createRateDto({ discId: disc.id, cover: 8 }),
+      user,
+    );
+
+    expect(repository.voteEventInsert).not.toHaveBeenCalled();
+  });
+
+  it('propagates a ledger failure so the surrounding Rate transaction can roll back', async () => {
+    const existingRate = Object.assign(new Rate(), {
+      id: 'rate-existing',
+      rate: 7,
+      user,
+    });
+    const updatedRate = Object.assign(new Rate(), {
+      id: existingRate.id,
+      rate: 8,
+      user,
+    });
+    const repository = createRepositoryMock({
+      manager: new EntityManager(
+        new DataSource({ type: 'postgres', database: 'rates-test' }),
+      ),
+      findOne: jest
+        .fn<Promise<Rate | null>, [FindOneOptions<Rate>]>()
+        .mockResolvedValue(existingRate),
+      preload: jest
+        .fn<Rate, [DeepPartial<Rate>]>()
+        .mockReturnValue(updatedRate),
+      save: jest.fn<Promise<Rate>, [Rate]>().mockResolvedValue(updatedRate),
+    });
+    repository.voteEventInsert.mockRejectedValue(
+      new Error('ledger unavailable'),
+    );
+
+    await expect(
+      new RatesService(repository).update(
+        existingRate.id,
+        createUpdateRateDto({ rate: 8 }),
+        user,
+      ),
+    ).rejects.toMatchObject({ status: 500 });
+    expect(repository.save).toHaveBeenCalledWith(updatedRate);
+    expect(repository.voteEventInsert).toHaveBeenCalledWith({
+      userId: user.id,
+      eventType: 'change',
+    });
+  });
+
+  it('records a changed score, but not a cover edit or a cleared score', async () => {
+    const existingRate = Object.assign(new Rate(), {
+      id: 'rate-existing',
+      rate: 7,
+      cover: 5,
+      user,
+    });
+    const updatedRate = Object.assign(new Rate(), {
+      ...existingRate,
+      rate: 8,
+      cover: 5,
+    });
+    const repository = createRepositoryMock({
+      manager: new EntityManager(
+        new DataSource({ type: 'postgres', database: 'rates-test' }),
+      ),
+      findOne: jest
+        .fn<Promise<Rate | null>, [FindOneOptions<Rate>]>()
+        .mockResolvedValue(existingRate),
+      preload: jest
+        .fn<Rate, [DeepPartial<Rate>]>()
+        .mockReturnValue(updatedRate),
+      save: jest.fn<Promise<Rate>, [Rate]>().mockResolvedValue(updatedRate),
+    });
+    const service = new RatesService(repository);
+
+    await service.update(
+      existingRate.id,
+      createUpdateRateDto({ rate: 8 }),
+      user,
+    );
+    expect(repository.voteEventInsert).toHaveBeenCalledWith({
+      userId: user.id,
+      eventType: 'change',
+    });
+
+    repository.voteEventInsert.mockClear();
+    repository.findOne.mockResolvedValue(updatedRate);
+    repository.preload.mockReturnValue(updatedRate);
+    await service.update(
+      existingRate.id,
+      createUpdateRateDto({ rate: 8 }),
+      user,
+    );
+    expect(repository.voteEventInsert).not.toHaveBeenCalled();
+
+    repository.findOne.mockResolvedValue(existingRate);
+    repository.preload.mockReturnValue(
+      Object.assign(new Rate(), { ...existingRate, cover: 9 }),
+    );
+    await service.update(
+      existingRate.id,
+      createUpdateRateDto({ cover: 9 }),
+      user,
+    );
+    expect(repository.voteEventInsert).not.toHaveBeenCalled();
+
+    repository.preload.mockReturnValue(
+      Object.assign(new Rate(), { ...existingRate, rate: null }),
+    );
+    await service.update(
+      existingRate.id,
+      createUpdateRateDto({ rate: null }),
+      user,
+    );
+    expect(repository.voteEventInsert).not.toHaveBeenCalled();
   });
 
   it('returns the paginated enriched rate with personal favorite/pending state and aggregates', async () => {
@@ -557,13 +724,24 @@ describe('RatesService characterization', () => {
   });
 
   it('allows the owner to update and delete, and forbids both operations for another user', async () => {
-    const ownRate = Object.assign(new Rate(), { id: 'rate-1', user });
+    const ownRate = Object.assign(new Rate(), {
+      id: 'rate-1',
+      user,
+      rate: null,
+    });
+    const updatedOwnRate = Object.assign(new Rate(), {
+      id: 'rate-1',
+      user,
+      rate: 9,
+    });
     const repository = createRepositoryMock({
       findOne: jest
         .fn<Promise<Rate | null>, [FindOneOptions<Rate>]>()
         .mockResolvedValue(ownRate),
-      preload: jest.fn<Rate, [DeepPartial<Rate>]>().mockReturnValue(ownRate),
-      save: jest.fn<Promise<Rate>, [Rate]>().mockResolvedValue(ownRate),
+      preload: jest
+        .fn<Rate, [DeepPartial<Rate>]>()
+        .mockReturnValue(updatedOwnRate),
+      save: jest.fn<Promise<Rate>, [Rate]>().mockResolvedValue(updatedOwnRate),
       delete: jest
         .fn<Promise<DeleteResult>, Parameters<Repository<Rate>['delete']>>()
         .mockResolvedValue({ affected: 1, raw: [] }),
@@ -572,10 +750,16 @@ describe('RatesService characterization', () => {
 
     await expect(
       service.update('rate-1', createUpdateRateDto({ rate: 9 }), user),
-    ).resolves.toBe(ownRate);
+    ).resolves.toBe(updatedOwnRate);
+    expect(repository.voteEventInsert).toHaveBeenCalledWith({
+      userId: user.id,
+      eventType: 'set',
+    });
+    repository.voteEventInsert.mockClear();
     await expect(service.remove('rate-1', user)).resolves.toEqual({
       message: 'Rate with id rate-1 has been removed',
     });
+    expect(repository.voteEventInsert).not.toHaveBeenCalled();
 
     repository.findOne.mockResolvedValue(
       Object.assign(new Rate(), {
@@ -589,6 +773,7 @@ describe('RatesService characterization', () => {
     await expect(service.remove('rate-1', user)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+    expect(repository.voteEventInsert).not.toHaveBeenCalled();
     expect(repository.delete).toHaveBeenCalledTimes(1);
   });
 

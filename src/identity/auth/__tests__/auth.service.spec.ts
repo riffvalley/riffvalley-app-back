@@ -144,7 +144,12 @@ describe('AuthService authentication', () => {
       clientType: 'app',
     });
     expect(jwtService.sign).toHaveBeenCalledWith(
-      { username: 'listener', id: 'user-1', role: ValidRoles.user },
+      {
+        username: 'listener',
+        id: 'user-1',
+        role: ValidRoles.user,
+        clientType: 'app',
+      },
       { expiresIn: '15m' },
     );
     expect(result).toMatchObject({
@@ -265,7 +270,12 @@ describe('AuthService authentication', () => {
       clientType: 'wiki',
     });
     expect(jwtService.sign).toHaveBeenCalledWith(
-      { username: 'listener', id: 'user-1', role: ValidRoles.user },
+      {
+        username: 'listener',
+        id: 'user-1',
+        role: ValidRoles.user,
+        clientType: 'wiki',
+      },
       { expiresIn: '15m' },
     );
     expect(result).toMatchObject({
