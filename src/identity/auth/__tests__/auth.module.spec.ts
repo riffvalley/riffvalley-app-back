@@ -82,7 +82,7 @@ describe('AuthModule composition', () => {
     expect(moduleRef.get(AuthService)).toBeInstanceOf(AuthService);
   });
 
-  it('preserves the eight hour access token expiry', () => {
+  it('preserves the eight hour JWT default used by account registration', () => {
     const jwtOptions = moduleRef.get<{
       signOptions?: { expiresIn?: string };
     }>('JWT_MODULE_OPTIONS');

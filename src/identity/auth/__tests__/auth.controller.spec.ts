@@ -177,44 +177,17 @@ describe('AuthController role contract', () => {
     expect(activityService.getUserActivity).toHaveBeenCalledWith('user-2');
   });
 
-  it('records historical activity after a successful login while preserving its payload', async () => {
-    const response = { id: 'user-1', username: 'listener', token: 'signed' };
-    const authService = { login: jest.fn().mockResolvedValue(response) };
-    const activityService = {
-      recordLoginAccess: jest.fn().mockResolvedValue(undefined),
-    };
-    const controller = new AuthController(
-      authService as never,
-      {} as never,
-      activityService as never,
-      { get: jest.fn() } as never,
-      {} as never,
-      { consume: jest.fn().mockResolvedValue(null) } as never,
-    );
-
-    await expect(
-      controller.login(
-        { username: 'listener', password: 'Password1' },
-        undefined,
-        { socket: { remoteAddress: '127.0.0.1' }, headers: {} } as never,
-      ),
-    ).resolves.toBe(response);
-    expect(activityService.recordLoginAccess).toHaveBeenCalledWith('user-1');
-  });
-
   it('keeps an explicitly negotiated session login unavailable when its gate is off', async () => {
     const authService = {
-      login: jest.fn(),
       loginWithSession: jest.fn(),
       resolveSessionLoginClient: jest.fn().mockImplementation(() => {
         throw new ServiceUnavailableException('Session login is not available');
       }),
     };
-    const activityService = { recordLoginAccess: jest.fn() };
     const controller = new AuthController(
       authService as never,
       {} as never,
-      activityService as never,
+      {} as never,
       { get: jest.fn() } as never,
       {} as never,
       {} as never,
@@ -226,14 +199,11 @@ describe('AuthController role contract', () => {
         AUTH_SESSION_MODE,
       ),
     ).rejects.toMatchObject({ status: 503 });
-    expect(authService.login).not.toHaveBeenCalled();
     expect(authService.loginWithSession).not.toHaveBeenCalled();
-    expect(activityService.recordLoginAccess).not.toHaveBeenCalled();
   });
 
   it('keeps session login unavailable before reading request metadata when gate is off', async () => {
     const authService = {
-      login: jest.fn(),
       loginWithSession: jest.fn(),
       resolveSessionLoginClient: jest.fn().mockImplementation(() => {
         throw new ForbiddenException('Origin is not allowed');
@@ -254,7 +224,6 @@ describe('AuthController role contract', () => {
         AUTH_SESSION_MODE,
       ),
     ).rejects.toMatchObject({ status: 503 });
-    expect(authService.login).not.toHaveBeenCalled();
     expect(authService.loginWithSession).not.toHaveBeenCalled();
   });
 

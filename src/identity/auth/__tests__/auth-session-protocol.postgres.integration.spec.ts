@@ -249,7 +249,7 @@ integrationSuite(
           { provide: UsersService, useValue: usersService },
           {
             provide: ActivityService,
-            useValue: { recordLoginAccess: jest.fn() },
+            useValue: {},
           },
           { provide: ConfigService, useValue: configService },
           AuthRateLimitService,
@@ -373,6 +373,24 @@ integrationSuite(
         logoutCsrfToken: responseString(response.body, 'logoutCsrfToken'),
         expiresAt,
       };
+    }
+
+    async function attemptLogin(
+      origin: string,
+      username: string,
+      password: string,
+    ) {
+      const csrf = await bootstrap(origin);
+      return request(app.getHttpServer())
+        .post('/api/auth/login')
+        .set('Origin', origin)
+        .set('Content-Type', 'application/json')
+        .set('X-Auth-Session-Mode', AUTH_SESSION_MODE)
+        .set('X-CSRF-Token', csrf.csrfToken)
+        .set('Cookie', csrf.nonceCookie)
+        .set('X-RV-Session-Edge', edgeSecret)
+        .set('Sec-Fetch-Site', 'same-site')
+        .send({ username, password });
     }
 
     async function refresh(
@@ -783,40 +801,17 @@ integrationSuite(
       );
     });
 
-    it('preserves legacy HTTP login without issuing a refresh cookie', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/api/auth/login')
-        .send({ username: 'integration-user', password: loginPassword });
-      expect(response.status).toBe(201);
-      expect(response.headers['set-cookie']).toBeUndefined();
-      expect(response.body).toMatchObject({
-        id: userId,
-        username: 'integration-user',
-        token: expect.any(String),
-      });
-      const decoded = jwtService.decode(responseString(response.body, 'token'));
-      if (
-        typeof decoded !== 'object' ||
-        decoded === null ||
-        !('iat' in decoded) ||
-        !('exp' in decoded) ||
-        typeof decoded.iat !== 'number' ||
-        typeof decoded.exp !== 'number'
-      ) {
-        throw new Error(
-          'Legacy access JWT did not contain numeric iat/exp claims.',
-        );
-      }
-      expect(decoded.exp - decoded.iat).toBe(8 * 60 * 60);
-    });
-
     it('keeps invalid-account errors indistinguishable and limits normalized accounts', async () => {
-      const wrongPassword = await request(app.getHttpServer())
-        .post('/api/auth/login')
-        .send({ username: 'integration-user', password: 'WrongPassword1' });
-      const absentAccount = await request(app.getHttpServer())
-        .post('/api/auth/login')
-        .send({ username: 'absent-account', password: 'WrongPassword1' });
+      const wrongPassword = await attemptLogin(
+        appOrigin,
+        'integration-user',
+        'WrongPassword1',
+      );
+      const absentAccount = await attemptLogin(
+        appOrigin,
+        'absent-account',
+        'WrongPassword1',
+      );
 
       expect(wrongPassword.status).toBe(401);
       expect(absentAccount.status).toBe(401);
@@ -824,17 +819,17 @@ integrationSuite(
 
       const accountAttempts = await Promise.all(
         Array.from({ length: 4 }, () =>
-          request(app.getHttpServer())
-            .post('/api/auth/login')
-            .send({ username: 'Integration-User', password: 'WrongPassword1' }),
+          attemptLogin(appOrigin, 'Integration-User', 'WrongPassword1'),
         ),
       );
       expect(accountAttempts.every((response) => response.status === 401)).toBe(
         true,
       );
-      const limited = await request(app.getHttpServer())
-        .post('/api/auth/login')
-        .send({ username: 'INTEGRATION-USER', password: 'WrongPassword1' });
+      const limited = await attemptLogin(
+        appOrigin,
+        'INTEGRATION-USER',
+        'WrongPassword1',
+      );
       expect(limited.status).toBe(429);
       expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
       expect(limited.body).toEqual({

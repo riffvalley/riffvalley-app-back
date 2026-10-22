@@ -17,13 +17,6 @@ export class ActivityService {
     private readonly rateRepository: Repository<Rate>,
   ) {}
 
-  async recordLoginAccess(userId: string): Promise<void> {
-    await this.userAccessLogRepository.query(
-      `INSERT INTO user_access_log ("userId", date) VALUES ($1, CURRENT_DATE) ON CONFLICT DO NOTHING`,
-      [userId],
-    );
-  }
-
   async getAllActivity(paginationDto: PaginationDto) {
     const { limit = 20, offset = 0 } = paginationDto;
     const [data, totalItems] = await this.rateRepository.findAndCount({

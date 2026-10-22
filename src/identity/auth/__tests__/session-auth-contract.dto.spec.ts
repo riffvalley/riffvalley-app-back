@@ -15,8 +15,8 @@ import { LoginUserDto } from '../dto/login-user.dto';
 const validationOptions = { whitelist: true, forbidNonWhitelisted: true };
 
 describe('session auth HTTP contracts', () => {
-  it('reuses legacy login validation and rejects arbitrary client identifiers', async () => {
-    const legacy = plainToInstance(LoginUserDto, {
+  it('reuses username/password validation and rejects arbitrary client identifiers', async () => {
+    const login = plainToInstance(LoginUserDto, {
       username: 'valid-user',
       password: 'Password1',
     });
@@ -26,7 +26,7 @@ describe('session auth HTTP contracts', () => {
     });
 
     expect(await validate(session, validationOptions)).toEqual(
-      await validate(legacy, validationOptions),
+      await validate(login, validationOptions),
     );
     await expect(validate(session, validationOptions)).resolves.toHaveLength(0);
 
@@ -39,7 +39,7 @@ describe('session auth HTTP contracts', () => {
     expect(errors.map(({ property }) => property)).toContain('clientType');
   });
 
-  it('keeps the negotiated login wire shape compatible with legacy login fields', () => {
+  it('keeps the renewable login wire shape compatible with the shared credentials DTO', () => {
     const response: SessionLoginResponseDto = Object.assign(
       new SessionLoginResponseDto(),
       {

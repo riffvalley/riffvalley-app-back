@@ -67,27 +67,6 @@ export class AuthService {
     };
   }
 
-  async login(loginUserDto: LoginUserDto) {
-    const { password, username } = loginUserDto;
-    const user = await this.usersService.findCredentialsByUsername(username);
-    if (!this.passwordMatchesUser(password, user)) {
-      throw new UnauthorizedException('Credentials are not valid!');
-    }
-
-    await this.usersService.recordLogin(user.id);
-
-    const safeUser = { ...user };
-    Reflect.deleteProperty(safeUser, 'password');
-    return {
-      ...safeUser,
-      token: this.getJwtToken({
-        username: user.username,
-        id: user.id,
-        role: user.role,
-      }),
-    };
-  }
-
   /**
    * Composes an authenticated renewable login after the HTTP controller has
    * validated edge transport, Origin, content type, Fetch Metadata and CSRF.
