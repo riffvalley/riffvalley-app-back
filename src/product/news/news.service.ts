@@ -6,8 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { News, NewsStatus } from './entities/news.entity';
+import { FindOptionsWhere, Repository } from 'typeorm';
+import { News, NewsStatus, NewsType } from './entities/news.entity';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { NewsListQueryDto } from './dto/news-list-query.dto';
@@ -52,7 +52,7 @@ export class NewsService {
   async findAll(paginationDto: NewsListQueryDto) {
     const { limit = 10, offset = 0, status } = paginationDto;
 
-    const where: any = {};
+    const where: FindOptionsWhere<News> = {};
     if (status) {
       where.status = status;
     }
@@ -186,13 +186,15 @@ export class NewsService {
 
   async getSourceFeed(filters: {
     source?: string;
-    type?: string;
+    type?: NewsType;
     limit?: number;
   }): Promise<{ posts: FeedPost[] }> {
     const { source, type, limit = 6 } = filters;
 
     if (source === 'app') {
-      const where: any = { status: NewsStatus.PUBLISHED };
+      const where: FindOptionsWhere<News> = {
+        status: NewsStatus.PUBLISHED,
+      };
       if (type) where.type = type;
       const appNews = await this.newsRepository.find({
         where,
@@ -273,14 +275,28 @@ export class NewsService {
       if (data === null) return [];
       this.wpCache = { data, timestamp: Date.now() };
       return data;
-    } catch (error) {
-      this.logger.error(`Error fetching WordPress posts: ${error.message}`);
+    } catch (error: unknown) {
+      const message =
+        error !== null && typeof error === 'object' && 'message' in error
+          ? error.message
+          : undefined;
+      this.logger.error(`Error fetching WordPress posts: ${String(message)}`);
       return [];
     }
   }
 
-  private handleDbExceptions(error: any) {
-    if (error.code === '23505') throw new BadRequestException(error.detail);
+  private handleDbExceptions(error: unknown) {
+    if (
+      ((typeof error === 'object' && error !== null) ||
+        typeof error === 'function') &&
+      'code' in error &&
+      error.code === '23505'
+    ) {
+      const detail = 'detail' in error ? error.detail : undefined;
+      throw new BadRequestException(
+        typeof detail === 'string' ? detail : undefined,
+      );
+    }
     this.logger.error(error);
     throw new InternalServerErrorException('An unexpected error occurred');
   }

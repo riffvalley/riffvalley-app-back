@@ -19,14 +19,6 @@
     },
     {
       "rule": "@typescript-eslint/ban-types",
-      "path": "src/product/news/news.controller.spec.ts",
-      "line": 16,
-      "column": 41,
-      "fingerprint": "20c1cb5b8aeaf8897ca1e0441450322d4fb8e27aac45b597835140cce897dd5a",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/ban-types",
       "path": "src/product/suggestions/suggestions.controller.spec.ts",
       "line": 16,
       "column": 48,

@@ -43,62 +43,6 @@
     },
     {
       "rule": "explicit-any",
-      "path": "src/product/news/news.service.spec.ts",
-      "line": 13,
-      "column": 25,
-      "fingerprint": "58cfc383b95d8f9be83ee75f0aac5c50463130d8c62ca5118fa0e43b3d22a189",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
-      "path": "src/product/news/news.service.spec.ts",
-      "line": 14,
-      "column": 26,
-      "fingerprint": "3030ae6e8dfac6b74d698f397589413226041edb83654293820410a0354d6ec6",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
-      "path": "src/product/news/news.service.spec.ts",
-      "line": 15,
-      "column": 27,
-      "fingerprint": "90d222a58c09e38466954b2a627275c53967a48f5ffdb5f1c1367c2cfb2b569f",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
-      "path": "src/product/news/news.service.spec.ts",
-      "line": 66,
-      "column": 26,
-      "fingerprint": "2dcc94695baf7cd30f0f19d0398c8c54fb963a974b07deb404c442087d4e4537",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
-      "path": "src/product/news/news.service.ts",
-      "line": 195,
-      "column": 20,
-      "fingerprint": "dc54ca4b28844e65ad02c562445d572ae696c069d42f9103afef3d7a2bbc5ec8",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
-      "path": "src/product/news/news.service.ts",
-      "line": 282,
-      "column": 37,
-      "fingerprint": "4e2a94f559e195571e849bd94d7cdf2673f99202695c13be3979a3349c07e298",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
-      "path": "src/product/news/news.service.ts",
-      "line": 55,
-      "column": 18,
-      "fingerprint": "5afa7527efdb5c25033b9491ff6301a9fb7d21dcb996053c49a482abaf2d5ff7",
-      "occurrence": 0
-    },
-    {
-      "rule": "explicit-any",
       "path": "src/product/suggestions/suggestions.service.ts",
       "line": 54,
       "column": 18,

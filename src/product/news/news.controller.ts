@@ -13,6 +13,7 @@ import { NewsService } from './news.service';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { NewsListQueryDto } from './dto/news-list-query.dto';
+import { NewsType } from './entities/news.entity';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
@@ -39,7 +40,7 @@ export class NewsController {
   @Get('source-feed')
   getSourceFeed(
     @Query('source') source?: string,
-    @Query('type') type?: string,
+    @Query('type') type?: NewsType,
     @Query('limit') limit?: string,
   ) {
     return this.newsService.getSourceFeed({
