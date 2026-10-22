@@ -24,6 +24,47 @@ export class WordpressWriteError extends Error {
   }
 }
 
+function sanitizeWordpressDiagnostic(value: string): string {
+  return value
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, '$1 [REDACTED]')
+    .replace(
+      /((?:access|refresh)[_-]?token|client[_-]?(?:key|secret)|authorization|password|credential(?:s)?|api[_-]?key)\s*[:=]\s*["']?[^,\s"'&}]+/gi,
+      '$1=[REDACTED]',
+    )
+    .replace(/(https?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[REDACTED]@')
+    .replace(
+      /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+)?\b/g,
+      '[REDACTED]',
+    )
+    .slice(0, 240);
+}
+
+function getWordpressErrorDetails(responseBody: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(responseBody);
+  } catch {
+    return '';
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return '';
+  }
+
+  const error = parsed as Record<string, unknown>;
+  const details = [
+    typeof error.code === 'string' && error.code
+      ? `code=${sanitizeWordpressDiagnostic(error.code)}`
+      : undefined,
+    typeof error.message === 'string' && error.message
+      ? `message=${sanitizeWordpressDiagnostic(error.message)}`
+      : undefined,
+  ].filter((value): value is string => value !== undefined);
+
+  return details.join(' ');
+}
+
 @Injectable()
 export class WordpressService {
   private readonly logger = new Logger('WordpressService');
@@ -100,9 +141,7 @@ export class WordpressService {
         // El status HTTP basta para clasificar el resultado aunque falle leer
         // el cuerpo de error.
       }
-      this.logger.error(
-        `Failed to create WP post: ${response.status} - ${error}`,
-      );
+      this.logHttpError('Failed to create WP post', response.status, error);
       throw new WordpressWriteError(
         `WordPress API error: ${response.status}`,
         response.status >= 500 ? 'unknown' : 'rejected',
@@ -145,9 +184,7 @@ export class WordpressService {
     if (res.status === 404) return null;
     if (!res.ok) {
       const error = await res.text();
-      this.logger.error(
-        `Failed to fetch WP post ${postId}: ${res.status} - ${error}`,
-      );
+      this.logHttpError(`Failed to fetch WP post ${postId}`, res.status, error);
       throw new Error(`WordPress API error: ${res.status}`);
     }
     const post: WpEditablePost = await res.json();
@@ -182,8 +219,10 @@ export class WordpressService {
         // El status HTTP basta para clasificar el resultado aunque falle leer
         // el cuerpo de error.
       }
-      this.logger.error(
-        `Failed to update WP post ${postId}: ${response.status} - ${error}`,
+      this.logHttpError(
+        `Failed to update WP post ${postId}`,
+        response.status,
+        error,
       );
       throw new WordpressWriteError(
         `WordPress API error: ${response.status}`,
@@ -223,8 +262,10 @@ export class WordpressService {
     );
     if (!res.ok) {
       const error = await res.text();
-      this.logger.error(
-        `Failed to find WordPress post by slug ${slug}: ${res.status} - ${error}`,
+      this.logHttpError(
+        `Failed to find WordPress post by slug ${slug}`,
+        res.status,
+        error,
       );
       throw new Error(`WordPress API error: ${res.status}`);
     }
@@ -279,5 +320,16 @@ export class WordpressService {
     });
     const created: WpTag = await createRes.json();
     return created.id;
+  }
+
+  private logHttpError(
+    operation: string,
+    status: number,
+    responseBody: string,
+  ): void {
+    const details = getWordpressErrorDetails(responseBody);
+    this.logger.error(
+      `${operation}: ${status}${details ? ` - ${details}` : ''}`,
+    );
   }
 }

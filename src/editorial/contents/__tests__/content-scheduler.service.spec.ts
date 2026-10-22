@@ -158,7 +158,7 @@ describe('Contents/Discs scheduled-job wiring', () => {
       ),
     ).toBeUndefined();
     expect(
-      cronOptions(DiscLinkMaintenanceService, 'checkMissingSpotifyLinks'),
+      cronOptions(DiscLinkMaintenanceService, 'runDailyLinkMaintenance'),
     ).toEqual({
       cronTime: '0 6 * * *',
       timeZone: 'Europe/Madrid',

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TiktokVideosQueryDto } from './http/dto/tiktok-videos-query.dto';
 import { TiktokConnectionService } from './oauth/tiktok-connection.service';
+import { formatTiktokException } from './api/tiktok-api.service';
 import { TiktokVideosService } from './videos/tiktok-videos.service';
 
 export {
@@ -47,9 +48,7 @@ export class TiktokService {
         'video.list',
       ]);
     } catch (error) {
-      this.logger.warn(
-        `TikTok sync omitido: ${error instanceof Error ? error.message : error}`,
-      );
+      this.logger.warn(`TikTok sync omitido: ${formatTiktokException(error)}`);
       return;
     }
 
