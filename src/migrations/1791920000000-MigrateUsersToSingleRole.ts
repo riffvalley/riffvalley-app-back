@@ -89,11 +89,6 @@ const RECOGNIZED_SOURCE_ROLES = new Set([
 
 /**
  * Converts the historical roles array to one canonical role.
- *
- * Run the migration chain through `yarn migration:roles`. Its scoped TypeORM
- * executor uses `each` because the historical migration explicitly sets
- * `transaction = true`, and adapts that migration's legacy UPDATE result shape
- * without changing the historical migration or application query behavior.
  */
 export class MigrateUsersToSingleRole1791920000000
   implements MigrationInterface

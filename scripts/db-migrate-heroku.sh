@@ -256,12 +256,6 @@ destination_ack="DESTINO $database_name"
 prompt_exact "Confirma que current_database() del attachment coincide exactamente con DB_NAME. Escribe '$destination_ack': " "$destination_ack"
 
 pending_csv="$(json_pending_csv "$STATUS_INITIAL")"
-for role_migration in MigrateCanonicalUserRoles1791910000000 MigrateUsersToSingleRole1791920000000; do
-  case ",$pending_csv," in
-    *",$role_migration,"*) fail 'La cadena histórica de roles no se ejecuta con db:migrate-heroku.sh.' ;;
-  esac
-done
-
 confirmation="$database_name:$pending_csv"
 authorization="AUTORIZO MIGRAR $APP $database_name $pending_csv COMPATIBLE_O_VENTANA_COORDINADA"
 printf '\nOperaciones previstas:\n'

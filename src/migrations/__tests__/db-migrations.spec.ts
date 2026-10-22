@@ -3,7 +3,6 @@ const {
   printJsonStatus,
   parseConfirmation,
   pendingMigrations,
-  ROLE_CHAIN_MIGRATIONS,
 } = require('../../../scripts/db-migrations');
 
 describe('manual migration commands', () => {
@@ -106,8 +105,5 @@ describe('manual migration commands', () => {
     expect(pendingMigrations([{ name: 'a' }, { name: 'b' }], ['a'])).toEqual([
       { name: 'b' },
     ]);
-    expect(
-      ROLE_CHAIN_MIGRATIONS.has('MigrateUsersToSingleRole1791920000000'),
-    ).toBe(true);
   });
 });
