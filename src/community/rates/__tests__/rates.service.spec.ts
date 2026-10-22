@@ -189,7 +189,7 @@ describe('RatesService characterization', () => {
     ).resolves.toBe(createdRate);
     expect(repository.findOne).toHaveBeenCalledWith({
       where: { user: { id: user.id }, disc: { id: disc.id } },
-      lock: { mode: 'pessimistic_write' },
+      lock: { mode: 'pessimistic_write', tables: ['rate'] },
     });
     expect(repository.create).toHaveBeenCalledWith({
       rate: 8,
@@ -751,6 +751,11 @@ describe('RatesService characterization', () => {
     await expect(
       service.update('rate-1', createUpdateRateDto({ rate: 9 }), user),
     ).resolves.toBe(updatedOwnRate);
+    expect(repository.findOne).toHaveBeenNthCalledWith(1, {
+      where: { id: 'rate-1' },
+      relations: ['user'],
+      lock: { mode: 'pessimistic_write', tables: ['rate'] },
+    });
     expect(repository.voteEventInsert).toHaveBeenCalledWith({
       userId: user.id,
       eventType: 'set',
@@ -758,6 +763,11 @@ describe('RatesService characterization', () => {
     repository.voteEventInsert.mockClear();
     await expect(service.remove('rate-1', user)).resolves.toEqual({
       message: 'Rate with id rate-1 has been removed',
+    });
+    expect(repository.findOne).toHaveBeenNthCalledWith(2, {
+      where: { id: 'rate-1' },
+      relations: ['user'],
+      lock: { mode: 'pessimistic_write', tables: ['rate'] },
     });
     expect(repository.voteEventInsert).not.toHaveBeenCalled();
 
