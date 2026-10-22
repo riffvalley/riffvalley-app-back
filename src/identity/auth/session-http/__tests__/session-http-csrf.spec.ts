@@ -1,3 +1,4 @@
+import { createHmac } from 'crypto';
 import {
   createClientLogoutCsrfVerifier,
   createLoginCsrfToken,
@@ -5,6 +6,8 @@ import {
   createSessionCsrfToken,
   createSessionCsrfVerifier,
 } from '../session-http-csrf';
+
+const CSRF_KEY_CONTEXT = 'riffvalley:auth-session:csrf:v1';
 
 describe('session HTTP CSRF tokens', () => {
   const secret = 'test-jwt-secret';
@@ -27,17 +30,17 @@ describe('session HTTP CSRF tokens', () => {
         now,
       );
 
-      expect(verify(token ?? ' ', clientType)).toBe(true);
-      expect(verify(token ?? ' ', clientType === 'app' ? 'wiki' : 'app')).toBe(
-        false,
-      );
+      expect(verify(token ?? ' ', clientType)).toEqual({ valid: true });
+      expect(
+        verify(token ?? ' ', clientType === 'app' ? 'wiki' : 'app'),
+      ).toEqual({ valid: false, reason: 'csrf_client_mismatch' });
       expect(
         createLoginCsrfVerifier(
           secret,
           'different-nonce',
           now,
         )(token ?? ' ', clientType),
-      ).toBe(false);
+      ).toEqual({ valid: false, reason: 'csrf_session_mismatch' });
     },
   );
 
@@ -60,7 +63,7 @@ describe('session HTTP CSRF tokens', () => {
           'session-id',
           now,
         )(token ?? ' ', 'wiki'),
-      ).toBe(true);
+      ).toEqual({ valid: true });
       expect(
         createSessionCsrfVerifier(
           secret,
@@ -68,7 +71,7 @@ describe('session HTTP CSRF tokens', () => {
           'session-id',
           now,
         )(token ?? ' ', 'wiki'),
-      ).toBe(false);
+      ).toEqual({ valid: false, reason: 'csrf_operation_mismatch' });
       expect(
         createSessionCsrfVerifier(
           secret,
@@ -76,7 +79,7 @@ describe('session HTTP CSRF tokens', () => {
           'other-session',
           now,
         )(token ?? ' ', 'wiki'),
-      ).toBe(false);
+      ).toEqual({ valid: false, reason: 'csrf_session_mismatch' });
       expect(
         createSessionCsrfVerifier(
           secret,
@@ -84,7 +87,7 @@ describe('session HTTP CSRF tokens', () => {
           'session-id',
           now,
         )(token ?? ' ', 'app'),
-      ).toBe(false);
+      ).toEqual({ valid: false, reason: 'csrf_client_mismatch' });
     },
   );
 
@@ -105,7 +108,7 @@ describe('session HTTP CSRF tokens', () => {
     ).toBeNull();
     expect(
       createLoginCsrfVerifier(secret, 'nonce', now)('not-a-token', 'app'),
-    ).toBe(false);
+    ).toEqual({ valid: false, reason: 'csrf_malformed' });
     const token = createLoginCsrfToken(
       secret,
       'app',
@@ -119,10 +122,43 @@ describe('session HTTP CSRF tokens', () => {
         'nonce',
         now + 60_000,
       )(token ?? ' ', 'app'),
-    ).toBe(false);
+    ).toEqual({ valid: false, reason: 'csrf_expired' });
     expect(
       createLoginCsrfVerifier(undefined, 'nonce', now)(token ?? ' ', 'app'),
-    ).toBe(false);
+    ).toEqual({ valid: false, reason: 'csrf_verification_unavailable' });
+  });
+
+  it('reports safe verification failures without exposing token claims', () => {
+    const token = createSessionCsrfToken(
+      secret,
+      'refresh',
+      'app',
+      'session-id',
+      now + 60_000,
+      now,
+    );
+    const [payload, signature] = (token ?? '').split('.');
+    const tamperedSignature = `${payload}.${signature?.slice(0, -1)}x`;
+    const verify = createSessionCsrfVerifier(
+      secret,
+      'refresh',
+      'session-id',
+      now,
+    );
+
+    expect(verify(tamperedSignature, 'app')).toEqual({
+      valid: false,
+      reason: 'csrf_signature_invalid',
+    });
+    expect(
+      verify(
+        signClaims({ operation: 'refresh', expiresAt: now + 1_800_001 }),
+        'app',
+      ),
+    ).toEqual({
+      valid: false,
+      reason: 'csrf_claims_invalid',
+    });
   });
 
   it('verifies a logout CSRF token for idempotent requests without a cookie', () => {
@@ -136,14 +172,39 @@ describe('session HTTP CSRF tokens', () => {
     );
     const verify = createClientLogoutCsrfVerifier(secret, now);
 
-    expect(verify(logoutToken ?? '', 'app')).toBe(true);
-    expect(verify(logoutToken ?? '', 'wiki')).toBe(false);
-    expect(verify('not-a-token', 'app')).toBe(false);
+    expect(verify(logoutToken ?? '', 'app')).toEqual({ valid: true });
+    expect(verify(logoutToken ?? '', 'wiki')).toEqual({
+      valid: false,
+      reason: 'csrf_client_mismatch',
+    });
+    expect(verify('not-a-token', 'app')).toEqual({
+      valid: false,
+      reason: 'csrf_malformed',
+    });
     expect(
       createClientLogoutCsrfVerifier(secret, now + 60_000)(
         logoutToken ?? '',
         'app',
       ),
-    ).toBe(false);
+    ).toEqual({ valid: false, reason: 'csrf_expired' });
   });
+
+  function signClaims(claimOverrides: Record<string, unknown>): string {
+    const payload = Buffer.from(
+      JSON.stringify({
+        version: 1,
+        operation: 'refresh',
+        clientType: 'app',
+        binding: 'session-id',
+        expiresAt: now + 60_000,
+        ...claimOverrides,
+      }),
+      'utf8',
+    ).toString('base64url');
+    const key = createHmac('sha256', secret).update(CSRF_KEY_CONTEXT).digest();
+    const signature = createHmac('sha256', key)
+      .update(payload)
+      .digest('base64url');
+    return `${payload}.${signature}`;
+  }
 });

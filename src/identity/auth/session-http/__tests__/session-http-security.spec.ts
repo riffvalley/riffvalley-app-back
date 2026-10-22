@@ -334,8 +334,10 @@ describe('session HTTP security helpers', () => {
       csrfToken: 'operation-bound-token',
       fetchSite: 'cross-site',
     };
-    const validCsrf = jest.fn(
-      (token: string) => token === 'operation-bound-token',
+    const validCsrf = jest.fn((token: string) =>
+      token === 'operation-bound-token'
+        ? { valid: true as const }
+        : { valid: false as const, reason: 'csrf_signature_invalid' as const },
     );
 
     beforeEach(() => validCsrf.mockClear());
@@ -365,7 +367,8 @@ describe('session HTTP security helpers', () => {
       [{ ...validMetadata, origin: 'https://evil.example' }, 'origin_invalid'],
       [{ ...validMetadata, contentType: 'text/plain' }, 'content_type_invalid'],
       [{ ...validMetadata, fetchSite: 'none' }, 'browser_metadata_invalid'],
-      [{ ...validMetadata, csrfToken: 'invalid' }, 'csrf_invalid'],
+      [{ ...validMetadata, csrfToken: undefined }, 'csrf_missing'],
+      [{ ...validMetadata, csrfToken: 'invalid' }, 'csrf_signature_invalid'],
     ] as const)(
       'reports the stable rejection reason %s',
       (metadata, expectedReason) => {
@@ -373,7 +376,10 @@ describe('session HTTP security helpers', () => {
         const onRejected = (reason: SessionRequestRejectionReason): void => {
           reasons.push(reason);
         };
-        const verify = jest.fn(() => false);
+        const verify = jest.fn(() => ({
+          valid: false as const,
+          reason: 'csrf_signature_invalid' as const,
+        }));
 
         try {
           validateSessionCookieRequest(
@@ -386,14 +392,15 @@ describe('session HTTP security helpers', () => {
         } catch (error) {
           expect(error).toBeInstanceOf(ForbiddenException);
           expect((error as ForbiddenException).message).toBe(
-            expectedReason === 'csrf_invalid'
-              ? 'CSRF validation failed'
-              : expectedReason === 'https_required'
-                ? 'Session requests require HTTPS'
-                : expectedReason === 'origin_invalid'
-                  ? 'Request origin is not allowed'
-                  : expectedReason === 'content_type_invalid'
-                    ? 'Session requests must use JSON'
+            expectedReason === 'https_required'
+              ? 'Session requests require HTTPS'
+              : expectedReason === 'origin_invalid'
+                ? 'Request origin is not allowed'
+                : expectedReason === 'content_type_invalid'
+                  ? 'Session requests must use JSON'
+                  : expectedReason === 'csrf_missing' ||
+                      expectedReason === 'csrf_signature_invalid'
+                    ? 'CSRF validation failed'
                     : 'Request metadata is not allowed',
           );
         }

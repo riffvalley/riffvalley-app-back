@@ -1,6 +1,9 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { SessionClientType } from '../../sessions/entities/auth-session.entity';
-import { SessionCsrfVerifier } from './session-http-security';
+import type {
+  SessionCsrfVerificationResult,
+  SessionCsrfVerifier,
+} from './session-http-security';
 
 export type SessionCsrfOperation = 'login' | 'refresh' | 'logout';
 
@@ -74,14 +77,15 @@ export function createLoginCsrfVerifier(
   now = Date.now(),
 ): SessionCsrfVerifier {
   return (token, clientType) =>
-    nonce !== undefined &&
-    verifyClaims(secret, token, {
-      operation: 'login',
-      clientType,
-      binding: nonce,
-      maxLifetimeMs: MAX_LOGIN_CSRF_LIFETIME_MS,
-      now,
-    });
+    nonce === undefined
+      ? { valid: false, reason: 'csrf_session_mismatch' }
+      : verifyClaims(secret, token, {
+          operation: 'login',
+          clientType,
+          binding: nonce,
+          maxLifetimeMs: MAX_LOGIN_CSRF_LIFETIME_MS,
+          now,
+        });
 }
 
 export function createSessionCsrfVerifier(
@@ -91,14 +95,15 @@ export function createSessionCsrfVerifier(
   now = Date.now(),
 ): SessionCsrfVerifier {
   return (token, clientType) =>
-    sessionId !== undefined &&
-    verifyClaims(secret, token, {
-      operation,
-      clientType,
-      binding: sessionId,
-      maxLifetimeMs: MAX_SESSION_CSRF_LIFETIME_MS,
-      now,
-    });
+    sessionId === undefined
+      ? { valid: false, reason: 'csrf_session_mismatch' }
+      : verifyClaims(secret, token, {
+          operation,
+          clientType,
+          binding: sessionId,
+          maxLifetimeMs: MAX_SESSION_CSRF_LIFETIME_MS,
+          now,
+        });
 }
 
 /** Verifies a signed logout token when no refresh cookie can identify its session. */
@@ -108,16 +113,15 @@ export function createClientLogoutCsrfVerifier(
 ): SessionCsrfVerifier {
   return (token, clientType) => {
     const binding = readSessionCsrfBinding(token);
-    return (
-      binding !== null &&
-      verifyClaims(secret, token, {
-        operation: 'logout',
-        clientType,
-        binding,
-        maxLifetimeMs: MAX_SESSION_CSRF_LIFETIME_MS,
-        now,
-      })
-    );
+    return binding === null
+      ? { valid: false, reason: 'csrf_malformed' }
+      : verifyClaims(secret, token, {
+          operation: 'logout',
+          clientType,
+          binding,
+          maxLifetimeMs: MAX_SESSION_CSRF_LIFETIME_MS,
+          now,
+        });
   };
 }
 
@@ -144,41 +148,53 @@ function verifyClaims(
     maxLifetimeMs: number;
     now: number;
   },
-): boolean {
+): SessionCsrfVerificationResult {
   const key = deriveKey(secret);
-  if (!key) return false;
+  if (!key) return { valid: false, reason: 'csrf_verification_unavailable' };
   const parts = token.split('.');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return { valid: false, reason: 'csrf_malformed' };
+  }
 
   const expectedSignature = createHmac('sha256', key).update(parts[0]).digest();
-  let providedSignature: Buffer;
-  try {
-    providedSignature = Buffer.from(parts[1], 'base64url');
-  } catch {
-    return false;
+  if (!/^[A-Za-z0-9_-]+$/.test(parts[1])) {
+    return { valid: false, reason: 'csrf_signature_invalid' };
   }
+  const providedSignature = Buffer.from(parts[1], 'base64url');
   if (
     providedSignature.length !== expectedSignature.length ||
     !timingSafeEqual(providedSignature, expectedSignature)
   ) {
-    return false;
+    return { valid: false, reason: 'csrf_signature_invalid' };
   }
 
+  // Do not classify claims before authenticating them: a bad signature cannot
+  // safely reveal whether attacker-controlled claims name another session.
   let parsed: unknown;
   try {
     parsed = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
   } catch {
-    return false;
+    return { valid: false, reason: 'csrf_malformed' };
   }
-  if (!isSessionCsrfClaims(parsed)) return false;
-  return (
-    parsed.version === 1 &&
-    parsed.operation === expected.operation &&
-    parsed.clientType === expected.clientType &&
-    parsed.binding === expected.binding &&
-    parsed.expiresAt > expected.now &&
-    parsed.expiresAt - expected.now <= expected.maxLifetimeMs
-  );
+  if (!isSessionCsrfClaims(parsed)) {
+    return { valid: false, reason: 'csrf_claims_invalid' };
+  }
+  if (parsed.operation !== expected.operation) {
+    return { valid: false, reason: 'csrf_operation_mismatch' };
+  }
+  if (parsed.clientType !== expected.clientType) {
+    return { valid: false, reason: 'csrf_client_mismatch' };
+  }
+  if (parsed.binding !== expected.binding) {
+    return { valid: false, reason: 'csrf_session_mismatch' };
+  }
+  if (parsed.expiresAt <= expected.now) {
+    return { valid: false, reason: 'csrf_expired' };
+  }
+  if (parsed.expiresAt - expected.now > expected.maxLifetimeMs) {
+    return { valid: false, reason: 'csrf_claims_invalid' };
+  }
+  return { valid: true };
 }
 
 function readSessionCsrfBinding(token: string): string | null {

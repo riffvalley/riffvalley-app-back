@@ -52,6 +52,7 @@ import {
   validateSessionCookieRequestMetadata,
   validateSessionCookieRequest,
   validateSessionCsrfBootstrapRequest,
+  resolveSessionClientFromOrigin,
   SessionRequestRejectionReason,
 } from './session-http/session-http-security';
 import { SessionRefreshCookieAdapter } from './session-http/session-refresh-cookie-adapter';
@@ -230,8 +231,15 @@ export class AuthController {
       this.configService,
     );
     const origins = this.sessionOrigins();
+    const resolvedClientType =
+      resolveSessionClientFromOrigin(metadata.origin, origins) ?? undefined;
     const onRejected = (reason: SessionRequestRejectionReason): void =>
-      this.logRefreshRejection(request, reason);
+      this.logRefreshRejection(
+        request,
+        reason,
+        resolvedClientType,
+        operationIdHeader,
+      );
     const clientType = validateSessionCookieRequestMetadata(
       metadata,
       origins,
@@ -438,14 +446,21 @@ export class AuthController {
   private logRefreshRejection(
     request: Request,
     reason: SessionRequestRejectionReason,
+    clientType: SessionClientType | undefined,
+    operationIdHeader: string | string[] | undefined,
   ): void {
     const requestId = request.headers['x-request-id'];
     const safeRequestId =
       typeof requestId === 'string' && REQUEST_ID_PATTERN.test(requestId)
         ? ` request_id=${requestId}`
         : '';
+    const safeOperationId =
+      typeof operationIdHeader === 'string' &&
+      REFRESH_OPERATION_ID_PATTERN.test(operationIdHeader)
+        ? ` operation_id=${operationIdHeader}`
+        : '';
     this.logger.warn(
-      `security_event=auth_refresh_rejected endpoint=/api/auth/refresh status=403 reason=${reason} occurred_at=${new Date().toISOString()}${safeRequestId}`,
+      `security_event=auth_refresh_rejected endpoint=/api/auth/refresh status=403 reason=${reason} client_type=${clientType ?? 'unknown'} occurred_at=${new Date().toISOString()}${safeRequestId}${safeOperationId}`,
     );
   }
 

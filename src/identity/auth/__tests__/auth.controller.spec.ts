@@ -276,9 +276,13 @@ describe('AuthController role contract', () => {
 describe('AuthController refresh rejection diagnostics', () => {
   it('logs only the safe rejection fields while preserving the 403 response', async () => {
     const requestId = 'a1234567-b123-4123-8123-a123456789ab';
+    const operationId = 'b1234567-b123-4123-8123-b123456789ab';
+    const csrfProof = 'eyJmb28iOiJiYXIifQ.AA';
+    const refreshCookieValue = 'A'.repeat(43);
     const configValues: Record<string, string> = {
       AUTH_SESSION_MODE_ENABLED: 'true',
       AUTH_SESSION_EDGE_SECRET: Buffer.alloc(32, 42).toString('base64url'),
+      JWT_SECRET: 'test-jwt-secret',
       AUTH_SESSION_APP_ORIGIN: 'https://app.riffvalley.es',
       AUTH_SESSION_WIKI_ORIGIN: 'https://wiki.riffvalley.es',
     };
@@ -287,8 +291,13 @@ describe('AuthController refresh rejection diagnostics', () => {
       {} as never,
       {} as never,
       { get: (key: string) => configValues[key] } as never,
-      {} as never,
-      {} as never,
+      {
+        findRefreshTokenSessionBinding: jest.fn().mockResolvedValue({
+          sessionId: 'session-id',
+          clientType: 'app',
+        }),
+      } as never,
+      { consume: jest.fn().mockResolvedValue(null) } as never,
     );
     const warn = jest
       .spyOn(Logger.prototype, 'warn')
@@ -297,30 +306,34 @@ describe('AuthController refresh rejection diagnostics', () => {
     try {
       const refresh = controller.refresh(
         AUTH_SESSION_MODE,
-        undefined,
+        operationId,
         {},
         {
           secure: true,
+          socket: { remoteAddress: '127.0.0.1' },
           headers: {
-            origin: 'https://untrusted.example',
+            origin: 'https://app.riffvalley.es',
             'content-type': 'application/json',
             'x-request-id': requestId,
-            cookie: '__Secure-rv_app_refresh=secret-cookie-value',
+            'x-csrf-token': csrfProof,
+            cookie: `__Secure-rv_app_refresh=${refreshCookieValue}`,
           },
         } as never,
         { setHeader: jest.fn() } as never,
       );
-      await expect(refresh).rejects.toThrow('Request origin is not allowed');
+      await expect(refresh).rejects.toThrow('CSRF validation failed');
       await expect(refresh).rejects.toMatchObject({ status: 403 });
 
       const loggedMessage = String(warn.mock.calls[0]?.[0]);
       expect(loggedMessage).toContain('endpoint=/api/auth/refresh');
       expect(loggedMessage).toContain('status=403');
-      expect(loggedMessage).toContain('reason=origin_invalid');
+      expect(loggedMessage).toContain('reason=csrf_signature_invalid');
+      expect(loggedMessage).toContain('client_type=app');
       expect(loggedMessage).toContain('occurred_at=');
       expect(loggedMessage).toContain(`request_id=${requestId}`);
-      expect(loggedMessage).not.toContain('untrusted.example');
-      expect(loggedMessage).not.toContain('secret-cookie-value');
+      expect(loggedMessage).toContain(`operation_id=${operationId}`);
+      expect(loggedMessage).not.toContain(csrfProof);
+      expect(loggedMessage).not.toContain(refreshCookieValue);
     } finally {
       warn.mockRestore();
     }
