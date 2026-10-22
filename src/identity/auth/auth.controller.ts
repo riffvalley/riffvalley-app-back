@@ -93,73 +93,31 @@ export class AuthController {
     @Res({ passthrough: true }) httpResponse?: Response,
   ) {
     this.setNoStoreHeaders(httpResponse);
-    if (sessionMode !== undefined) {
-      this.assertSessionModeEnabled();
-      if (!request || !httpResponse) {
-        throw new ServiceUnavailableException('Session login is not available');
-      }
-      const metadata = readSessionCookieRequestMetadata(
-        request,
-        this.configService,
-      );
-      const nonce = this.loginCsrfCookie.readNonce(request.headers.cookie);
-      const csrfVerifier = createLoginCsrfVerifier(
-        this.configService.get<string>('JWT_SECRET'),
-        nonce,
-      );
-      const clientType = validateSessionCookieRequest(
-        metadata,
-        this.sessionOrigins(),
-        csrfVerifier,
-      );
-      this.authService.resolveSessionLoginClient({
-        mode: sessionMode,
-        origin: metadata.origin,
-      });
-      await this.enforceRateLimit(
-        [
-          this.loginAccountLimit(loginUserDto.username),
-          this.loginIpLimit(request),
-        ],
-        httpResponse,
-      );
-
-      const session = await this.authService.loginWithSession(loginUserDto, {
-        mode: sessionMode,
-        origin: metadata.origin,
-      });
-      this.refreshCookie.emitRefreshToken(
-        httpResponse,
-        clientType,
-        session.refreshCredential.refreshToken,
-        session.refreshCredential.expiresAt,
-        metadata,
-        this.sessionOrigins(),
-        csrfVerifier,
-      );
-      httpResponse.status(200);
-
-      return plainToInstance(
-        SessionLoginResponseDto,
-        {
-          ...session.user,
-          token: session.accessToken,
-          csrfToken: this.createRefreshCsrfToken(
-            clientType,
-            session.refreshCredential.sessionId,
-            session.refreshCredential.expiresAt,
-          ),
-          logoutCsrfToken: this.createSessionCsrfTokenForOperation(
-            'logout',
-            clientType,
-            session.refreshCredential.sessionId,
-            session.refreshCredential.expiresAt,
-          ),
-        },
-        { excludeExtraneousValues: true },
-      );
+    this.assertSessionModeEnabled();
+    if (sessionMode !== AUTH_SESSION_MODE) {
+      throw new ServiceUnavailableException('Session login is not available');
     }
-
+    if (!request || !httpResponse) {
+      throw new ServiceUnavailableException('Session login is not available');
+    }
+    const metadata = readSessionCookieRequestMetadata(
+      request,
+      this.configService,
+    );
+    const nonce = this.loginCsrfCookie.readNonce(request.headers.cookie);
+    const csrfVerifier = createLoginCsrfVerifier(
+      this.configService.get<string>('JWT_SECRET'),
+      nonce,
+    );
+    const clientType = validateSessionCookieRequest(
+      metadata,
+      this.sessionOrigins(),
+      csrfVerifier,
+    );
+    this.authService.resolveSessionLoginClient({
+      mode: sessionMode,
+      origin: metadata.origin,
+    });
     await this.enforceRateLimit(
       [
         this.loginAccountLimit(loginUserDto.username),
@@ -167,9 +125,41 @@ export class AuthController {
       ],
       httpResponse,
     );
-    const response = await this.authService.login(loginUserDto);
-    await this.activityService.recordLoginAccess(response.id);
-    return response;
+
+    const session = await this.authService.loginWithSession(loginUserDto, {
+      mode: sessionMode,
+      origin: metadata.origin,
+    });
+    this.refreshCookie.emitRefreshToken(
+      httpResponse,
+      clientType,
+      session.refreshCredential.refreshToken,
+      session.refreshCredential.expiresAt,
+      metadata,
+      this.sessionOrigins(),
+      csrfVerifier,
+    );
+    httpResponse.status(200);
+
+    return plainToInstance(
+      SessionLoginResponseDto,
+      {
+        ...session.user,
+        token: session.accessToken,
+        csrfToken: this.createRefreshCsrfToken(
+          clientType,
+          session.refreshCredential.sessionId,
+          session.refreshCredential.expiresAt,
+        ),
+        logoutCsrfToken: this.createSessionCsrfTokenForOperation(
+          'logout',
+          clientType,
+          session.refreshCredential.sessionId,
+          session.refreshCredential.expiresAt,
+        ),
+      },
+      { excludeExtraneousValues: true },
+    );
   }
 
   @Get('csrf')

@@ -22,6 +22,7 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 - [Integrations Cleanup](roadmap/integrations/README.md#integrations-cleanup) — auditoría interna y saneamiento progresivo de las ocho integraciones.
 - [Backend Architecture](roadmap/backend-architecture.md) — inventario global de módulos, ownership propuesto, árbol objetivo y plan futuro de reorganización física sin cambios de comportamiento.
 - [Backend Cleanup](roadmap/backend-cleanup/README.md) — reglas, inventario global y auditorías de Catalog, Editorial y Communications; [Quality Gates](roadmap/backend-cleanup/quality-gates.md) conserva la norma estructural y BC-QG2. Editorial quedó completado por BC-ED-0 (2026-10-20) y Communications por BC-COM-2 (2026-10-21).
+- [BC-ID-9 — retirada de autenticación legacy](roadmap/backend-cleanup/identity-legacy-retirement.md) — inventario y plan de retirada del login sin negociación, preservando `refresh-v1`.
 
 ## Estado de alto nivel
 

@@ -40,7 +40,6 @@ describe('ActivityService', () => {
     query: jest.fn(),
   };
   const userAccessLogRepository = {
-    query: jest.fn(),
     createQueryBuilder: jest.fn(() => loginQuery),
   };
   const rateRepository = { findAndCount: jest.fn(), find: jest.fn() };
@@ -58,7 +57,6 @@ describe('ActivityService', () => {
     loginQuery.getRawMany.mockResolvedValue([{ date: '2025-01-02', count: 1 }]);
     userRepository.count.mockResolvedValue(1);
     userRepository.query.mockResolvedValue([]);
-    userAccessLogRepository.query.mockResolvedValue(undefined);
     service = new ActivityService(
       userRepository as never,
       userAccessLogRepository as never,
@@ -137,14 +135,6 @@ describe('ActivityService', () => {
     );
     expect(userRepository.query).toHaveBeenCalledWith(
       expect.stringContaining('d.day - 30'),
-    );
-  });
-
-  it('writes the existing idempotent login access record using server date', async () => {
-    await service.recordLoginAccess('user-1');
-    expect(userAccessLogRepository.query).toHaveBeenCalledWith(
-      'INSERT INTO user_access_log ("userId", date) VALUES ($1, CURRENT_DATE) ON CONFLICT DO NOTHING',
-      ['user-1'],
     );
   });
 });

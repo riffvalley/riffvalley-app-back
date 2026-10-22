@@ -184,61 +184,6 @@ describe('AuthService authentication', () => {
     },
   );
 
-  it('validates credentials through Users and preserves the login payload and claims', async () => {
-    usersService.findCredentialsByUsername.mockResolvedValue(
-      makeUser({
-        id: 'user-1',
-        username: 'listener',
-        password: bcrypt.hashSync('Password1', 4),
-        role: ValidRoles.riffvalley,
-        image: 'avatar.png',
-        dashboardConfig: null,
-        mobileDashboardConfig: null,
-        dashboardButtonsEnabled: false,
-      }),
-    );
-
-    const response = await service.login({
-      username: 'listener',
-      password: 'Password1',
-    });
-
-    expect(response).toMatchObject({
-      id: 'user-1',
-      username: 'listener',
-      role: ValidRoles.riffvalley,
-      image: 'avatar.png',
-      token: 'signed-token',
-    });
-    expect(response).not.toHaveProperty('password');
-    expect(usersService.recordLogin).toHaveBeenCalledWith('user-1');
-    expect(jwtService.sign).toHaveBeenCalledWith({
-      username: 'listener',
-      id: 'user-1',
-      role: ValidRoles.riffvalley,
-    });
-  });
-
-  it('returns the same unauthorized response for missing users and wrong passwords', async () => {
-    usersService.findCredentialsByUsername.mockResolvedValue(null);
-    await expect(
-      service.login({ username: 'missing', password: 'Password1' }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
-
-    usersService.findCredentialsByUsername.mockResolvedValue(
-      makeUser({
-        id: 'user-1',
-        username: 'listener',
-        password: bcrypt.hashSync('Password1', 4),
-      }),
-    );
-    await expect(
-      service.login({ username: 'listener', password: 'WrongPass1' }),
-    ).rejects.toMatchObject({ status: 401 });
-    expect(usersService.recordLogin).not.toHaveBeenCalled();
-    expect(jwtService.sign).not.toHaveBeenCalled();
-  });
-
   it('resolves only the two exact configured client origins after the gate opens', () => {
     const context = { mode: 'refresh-v1', origin: 'https://app.example.test' };
     expect(() => service.resolveSessionLoginClient(context)).toThrow(

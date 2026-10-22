@@ -2,6 +2,8 @@
 
 **Verificado y actualizado:** 2026-10-21. Las observaciones de BC-ID-6C.1 son de solo lectura. La configuración de dominio registra la asociación autorizada en Heroku y el CNAME específico en Cloudflare. BC-ID-6C.2 implementa CORS y un adaptador reutilizable. BC-ID-6C.3 mantiene `trust proxy=false` y añade aserción privada de edge/verificadores CSRF, sin invocar cookies desde rutas ni cambiar el estado del feature gate.
 
+**Estado actual de login (BC-ID-9.2, 2026-10-22):** App y Wiki usan `refresh-v1`. En el código fuente de la retirada, `POST /api/auth/login` exige el header exacto y no ofrece fallback sin negociación. BC-ID-9.2 aún no se ha publicado; las notas de topología y pruebas fechadas abajo describen estados anteriores y no autorizan conservar ni restaurar el login legacy. El rollback de código debe mantener operativo `refresh-v1` según [BC-ID-9](identity-legacy-retirement.md).
+
 ## Topología desplegada observada
 
 | Componente | Host verificado | Observación |
@@ -74,7 +76,7 @@ La topología observada sigue DNS-only, sin regla edge ni secreto; por eso el he
 - Migrar App y Wiki al hostname `backend.riffvalley.es` antes de depender de `SameSite=Lax`; hoy siguen llamando al hostname `herokuapp.com`.
 - Verificar redacción de `Cookie`, `Set-Cookie`, `Authorization` y cuerpos en logs antes de piloto.
 
-Hasta satisfacer esos puntos, conservar el 503 del modo negociado, no emitir cookies ni refresh en JSON y mantener intacto el login legacy. Los verificadores CSRF y la comparación de aserción edge están listos, pero no existe bootstrap HTTP ni consumidor de refresh/logout.
+Este párrafo registra el bloqueo anterior a la exposición HTTP de sesiones: en ese momento se conservó el login legacy mientras el gate renovable permanecía cerrado. Queda superado por BC-ID-7/8 y por la retirada fuente de BC-ID-9.2; no es una instrucción operativa actual.
 
 ### BC-ID-6C.2 — transporte HttpOnly y CORS
 
@@ -88,7 +90,7 @@ En BC-ID-6C.2, `yarn verify` pasó con 0 hallazgos nuevos. BC-ID-6C.3 mantiene e
 
 Los verificadores CSRF usan HMAC-SHA-256 con clave derivada de `JWT_SECRET` y separación de dominio `riffvalley:auth-session:csrf:v1`. Login renovable queda ligado a nonce pre-login no autenticador (máximo 10 minutos); refresh y logout usan tokens de propósito distinto ligados a sesión y cliente (máximo 30 minutos). El validador común exige TLS verificado, Origin HTTPS canónico exacto, asociación app/wiki no ambigua, JSON, Fetch Metadata válido si está presente y el verificador CSRF correspondiente.
 
-Pruebas focalizadas: TLS directo, aserción edge válida/incorrecta/ausente/duplicada, forwarded-proto falsificado y ambiguo, Origin, Content-Type, Fetch Metadata y CSRF. No se crean bootstrap, rutas, cookies ni sesiones; `refresh-v1` conserva 503 y el login legacy permanece intacto.
+Pruebas focalizadas históricas de BC-ID-6C.3: TLS directo, aserción edge válida/incorrecta/ausente/duplicada, forwarded-proto falsificado y ambiguo, Origin, Content-Type, Fetch Metadata y CSRF. En esa fase no se creaban bootstrap, rutas, cookies ni sesiones; el login legacy permanecía intacto. El estado de login vigente se describe en la nota BC-ID-9.2 al inicio de este documento.
 
 ### BC-ID-6C.4 — configuración del secreto de edge
 
@@ -136,7 +138,7 @@ Esta opción evita el certificado manual: Heroku indica que con ACM el HTTPS del
 
 El coste incremental esperado de dominio Heroku y ACM es **0**; Heroku indica que los custom domains no se cobran y que ACM se incluye gratuitamente. El app actual ya tiene un dyno Basic de pago; no requiere ampliarlo ni agregar addons. La zona Cloudflare está en el plan **Free**. DNS-only no consume un plan proxy adicional, pero el API queda fuera del proxy/WAF/CDN de Cloudflare y se expone directamente a la red de Heroku. El servidor no redirige HTTP a HTTPS automáticamente según Heroku. La política de aplicación falla cerrado hasta que se configure un edge que fuerce HTTPS y establezca la aserción privada descrita arriba.
 
-**Estrategia edge propuesta:** conservar Heroku ACM y usar Cloudflare Free como proxy de solo `backend.riffvalley.es`, TLS Full (strict), Always Use HTTPS y regla de sobrescritura del header privado. No instalar Cloudflare Origin CA en Heroku ni reemplazar ACM: el certificado ACM existente debe validar el tramo edge→Heroku. No usar `Flexible`, porque dejaría ese tramo sin TLS. El acceso directo a `herokuapp.com` no llevará la aserción y fallará cerrado para las rutas de sesión; el login legacy seguirá disponible.
+**Estrategia edge propuesta:** conservar Heroku ACM y usar Cloudflare Free como proxy de solo `backend.riffvalley.es`, TLS Full (strict), Always Use HTTPS y regla de sobrescritura del header privado. No instalar Cloudflare Origin CA en Heroku ni reemplazar ACM: el certificado ACM existente debe validar el tramo edge→Heroku. No usar `Flexible`, porque dejaría ese tramo sin TLS. El acceso directo a `herokuapp.com` no llevará la aserción y fallará cerrado para las rutas de sesión. Este plan ya no contempla un login legacy alternativo.
 
 ### Cambios necesarios al completar la transición
 
@@ -150,7 +152,7 @@ El coste incremental esperado de dominio Heroku y ACM es **0**; Heroku indica qu
 **App y Wiki:**
 
 - Cambiar en el entorno de build de ambos clientes la URL base API que actualmente apunta a `https://spammusic-back-99963122d70c.herokuapp.com/api` por `https://backend.riffvalley.es/api`, y desplegar cada frontend solo después de superar el smoke test del dominio nuevo. En App el código consume `VITE_API_BASE_URL`; en Wiki el bundle desplegado usa la URL antigua, pero su código fuente no está presente en el checkout local revisado.
-- En el corte futuro que adopte sesiones, incluir credenciales (`withCredentials` en Axios / `credentials: 'include'` en Fetch) solo para esas llamadas. La migración del hostname por sí sola no requiere enviar cookies ni cambia el login legacy.
+- Durante el corte histórico que adoptó sesiones, las llamadas renovables debían incluir credenciales (`withCredentials` en Axios / `credentials: 'include'` en Fetch). La migración del hostname por sí sola no cambiaba el modo de login; BC-ID-9.2 elimina ahora el fallback sin negociación en el backend.
 
 Al compartir ahora el site registrable y esquema HTTPS, el par App/API y Wiki/API pasa de **cross-site a same-site**, aunque siga siendo **cross-origin**. CORS/preflight y Origin/CSRF siguen aplicando. El adaptador aplica `SameSite=Lax`; una futura prueba en navegador puede comparar `Strict` antes de cualquier activación. Se mantienen `HttpOnly`, `Secure`, host-only sin `Domain`, nombres separados por `app`/`wiki`, `Path=/api/auth` y expiración absoluta de sesión. El servidor debe seleccionar por Origin validado e ignorar el nombre de cookie ajeno a ese cliente; no confiar en `clientType` enviado en JSON.
 

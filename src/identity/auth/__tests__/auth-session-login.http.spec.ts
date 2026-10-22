@@ -28,12 +28,10 @@ const refreshToken = Buffer.alloc(32, 6).toString('base64url');
 describe('renewable login HTTP contract', () => {
   let app: INestApplication;
   let authService: {
-    login: jest.Mock;
     loginWithSession: jest.Mock;
     resolveSessionLoginClient: jest.Mock;
     refreshWithSession: jest.Mock;
   };
-  let activityService: { recordLoginAccess: jest.Mock };
   let configService: ConfigService;
   let sessionsService: {
     findRefreshTokenSessionBinding: jest.Mock;
@@ -43,12 +41,6 @@ describe('renewable login HTTP contract', () => {
 
   beforeAll(async () => {
     authService = {
-      login: jest.fn().mockResolvedValue({
-        id: 'legacy-user',
-        username: 'legacy',
-        role: 'user',
-        token: 'legacy-access-token',
-      }),
       loginWithSession: jest.fn().mockImplementation(async () => ({
         user: {
           id: 'user-1',
@@ -91,9 +83,6 @@ describe('renewable login HTTP contract', () => {
         },
       })),
     };
-    activityService = {
-      recordLoginAccess: jest.fn().mockResolvedValue(undefined),
-    };
     sessionsService = {
       findRefreshTokenSessionBinding: jest.fn().mockResolvedValue({
         sessionId: 'internal-session-id',
@@ -119,7 +108,7 @@ describe('renewable login HTTP contract', () => {
       providers: [
         { provide: AuthService, useValue: authService },
         { provide: UsersService, useValue: {} },
-        { provide: ActivityService, useValue: activityService },
+        { provide: ActivityService, useValue: {} },
         { provide: ConfigService, useValue: configService },
         { provide: SessionsService, useValue: sessionsService },
         {
@@ -148,11 +137,9 @@ describe('renewable login HTTP contract', () => {
 
   beforeEach(() => {
     configService.set('AUTH_SESSION_MODE_ENABLED', 'true');
-    authService.login.mockClear();
     authService.loginWithSession.mockClear();
     authService.resolveSessionLoginClient.mockClear();
     authService.refreshWithSession.mockClear();
-    activityService.recordLoginAccess.mockClear();
     sessionsService.findRefreshTokenSessionBinding.mockClear();
     sessionsService.revokeSession.mockClear();
     authRateLimitService.consume.mockReset().mockResolvedValue(null);
@@ -268,7 +255,6 @@ describe('renewable login HTTP contract', () => {
       origin: appOrigin,
     });
     expect(authService.loginWithSession).toHaveBeenCalledTimes(1);
-    expect(activityService.recordLoginAccess).not.toHaveBeenCalled();
   });
 
   it('returns a generic 429 with Retry-After when the CSRF bootstrap IP is limited', async () => {
@@ -422,64 +408,40 @@ describe('renewable login HTTP contract', () => {
     expect(sessionResponse.headers['set-cookie']).toBeUndefined();
     expect(authService.loginWithSession).not.toHaveBeenCalled();
 
-    const legacyResponse = await request(app.getHttpServer())
+    const missingModeResponse = await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({ username: 'legacy', password: 'Password1' });
-    expect(legacyResponse.status).toBe(201);
-    expect(authService.login).toHaveBeenCalledTimes(1);
-    expect(legacyResponse.headers['set-cookie']).toBeUndefined();
-  });
-
-  it('returns a generic, non-cacheable 429 with Retry-After for a limited legacy login', async () => {
-    authRateLimitService.consume.mockResolvedValueOnce(60);
-
-    const response = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ username: 'listener', password: 'Password1' });
-
-    expect(response.status).toBe(429);
-    expect(response.headers['retry-after']).toBe('60');
-    expect(response.headers['cache-control']).toBe('no-store');
-    expect(JSON.stringify(response.body)).not.toContain('listener');
-    expect(JSON.stringify(response.body)).not.toContain('Password1');
-    expect(authService.login).not.toHaveBeenCalled();
+    expect(missingModeResponse.status).toBe(503);
+    expect(missingModeResponse.headers['cache-control']).toBe('no-store');
+    expect(missingModeResponse.headers['set-cookie']).toBeUndefined();
+    expect(authService.loginWithSession).not.toHaveBeenCalled();
   });
 
   it('fails closed when rate limit storage is unavailable', async () => {
+    const bootstrap = await getBootstrap();
     authRateLimitService.consume.mockRejectedValueOnce(
       new ServiceUnavailableException(
         'Authentication controls are unavailable',
       ),
     );
 
-    const response = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ username: 'listener', password: 'Password1' });
+    const response = await postLogin(bootstrap.csrfToken, bootstrap.cookie);
 
     expect(response.status).toBe(503);
     expect(response.headers['cache-control']).toBe('no-store');
     expect(JSON.stringify(response.body)).not.toContain('database');
-    expect(authService.login).not.toHaveBeenCalled();
+    expect(authService.loginWithSession).not.toHaveBeenCalled();
   });
 
-  it('keeps legacy login unchanged and does not require the session headers', async () => {
+  it('rejects login without refresh-v1 and never creates a legacy token or session', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({ username: 'legacy', password: 'Password1' });
 
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual({
-      id: 'legacy-user',
-      username: 'legacy',
-      role: 'user',
-      token: 'legacy-access-token',
-    });
-    expect(authService.login).toHaveBeenCalledTimes(1);
-    expect(authService.loginWithSession).not.toHaveBeenCalled();
-    expect(activityService.recordLoginAccess).toHaveBeenCalledWith(
-      'legacy-user',
-    );
+    expect(response.status).toBe(503);
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(response.headers['set-cookie']).toBeUndefined();
+    expect(authService.loginWithSession).not.toHaveBeenCalled();
   });
 
   it('rotates the app cookie and returns only the new access token and public profile', async () => {
