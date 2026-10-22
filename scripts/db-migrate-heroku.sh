@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 readonly APP="spammusic-back"
 readonly DATABASE_ATTACHMENT="DATABASE"
-readonly EXPECTED_PENDING_CSV="CreateAuthRateLimitWindows1791980000000"
+readonly EXPECTED_PENDING_CSV="CreateUserAppDailyActivity1791990000000,CreateRateVoteEvents1792000000000"
 readonly LEGACY_LEDGER_ONLY_MIGRATION="UpdateListStatusEnum1766066905027"
 
 fail() {

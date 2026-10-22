@@ -4,10 +4,25 @@ import { Rate } from '../../community/rates/entities/rate.entity';
 import { User } from '../auth/entities/user.entity';
 import { UserAccessLog } from '../auth/entities/user-access-log.entity';
 import { ActivityService } from './activity.service';
+import { UserAppDailyActivity } from './entities/user-app-daily-activity.entity';
+import { ActivityController } from './activity.controller';
+import { AuthorizationModule } from '../authorization/authorization.module';
+import { ActivityStatisticsService } from './stats/activity-statistics.service';
+import { RateVoteEvent } from '../../community/rates/entities/rate-vote-event.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, UserAccessLog, Rate])],
-  providers: [ActivityService],
-  exports: [ActivityService],
+  imports: [
+    TypeOrmModule.forFeature([
+      User,
+      UserAccessLog,
+      Rate,
+      UserAppDailyActivity,
+      RateVoteEvent,
+    ]),
+    AuthorizationModule,
+  ],
+  controllers: [ActivityController],
+  providers: [ActivityService, ActivityStatisticsService],
+  exports: [ActivityService, ActivityStatisticsService],
 })
 export class ActivityModule {}

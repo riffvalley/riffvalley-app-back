@@ -28,6 +28,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         'User is inactive, talk with an administrator',
       );
 
+    Object.defineProperty(user, 'clientType', {
+      value: payload.clientType,
+      configurable: true,
+      enumerable: false,
+    });
     return user;
   }
 }

@@ -14,7 +14,7 @@ const test = require('node:test');
 
 const script = path.resolve(__dirname, 'db-migrate-heroku.sh');
 const database = 'riffvalley_test';
-const migrationList = 'CreateAuthRateLimitWindows1791980000000';
+const migrationList = 'CreateUserAppDailyActivity1791990000000,CreateRateVoteEvents1792000000000';
 const destinationAck = `DESTINO ${database}`;
 const authorization = `AUTORIZO MIGRAR spammusic-back ${database} ${migrationList} COMPATIBLE_O_VENTANA_COORDINADA`;
 const backupAck = `BACKUP COMPLETED b123 ${database}`;
@@ -56,8 +56,8 @@ case "\${1-}" in
       valid)
         count=0
         [[ ! -f "$FAKE_STATUS_COUNT" ]] || count="$(cat "$FAKE_STATUS_COUNT")"
-        ledger_rows=96
-        distinct_names=96
+        ledger_rows=95
+        distinct_names=95
         orphan_count=1
         if [[ "$count" -ge 3 ]]; then
           ledger_rows=97
@@ -104,22 +104,22 @@ case "\${1-}" in
         [[ ! -f "$FAKE_STATUS_COUNT" ]] || count="$(cat "$FAKE_STATUS_COUNT")"
         count=$((count + 1))
         printf '%s\n' "$count" > "$FAKE_STATUS_COUNT"
-        pending='["CreateAuthRateLimitWindows1791980000000"]'
+        pending='["CreateUserAppDailyActivity1791990000000","CreateRateVoteEvents1792000000000"]'
         if [[ "\${FAKE_NO_PENDING:-0}" == 1 ]]; then
           pending='[]'
         elif [[ "\${FAKE_EXTRA_PENDING:-0}" == 1 ]]; then
-          pending='["Unexpected1700000000","CreateAuthRateLimitWindows1791980000000"]'
+          pending='["Unexpected1700000000","CreateUserAppDailyActivity1791990000000","CreateRateVoteEvents1792000000000"]'
         elif [[ "\${FAKE_CHANGE_LIST:-0}" == 1 && "$count" -ge 2 ]]; then
           pending='["Changed1700000000002"]'
         elif [[ "\${FAKE_POST_PENDING:-0}" == 1 && "$count" -ge 3 ]]; then
-          pending='["StillPending1791980000000"]'
+          pending='["StillPending1791990000000"]'
         elif [[ "$count" -ge 3 ]]; then
           pending='[]'
         fi
-        applied_count=96
+        applied_count=95
         [[ "$count" -lt 3 ]] || applied_count=97
         if [[ "\${FAKE_CHANGE_LIST:-0}" == 1 && "$count" -ge 2 ]]; then
-          applied_count=96
+          applied_count=95
         elif [[ "\${FAKE_POST_PENDING:-0}" == 1 && "$count" -ge 3 ]]; then
           applied_count=96
         fi
@@ -130,7 +130,7 @@ case "\${1-}" in
           printf 'migration failed\n' >&2
           exit 13
         fi
-        printf 'Applied: CreateAuthRateLimitWindows1791980000000\n'
+        printf 'Applied: CreateUserAppDailyActivity1791990000000,CreateRateVoteEvents1792000000000\n'
         ;;
       *'yarn db:check'*)
         if [[ "\${FAKE_CHECK_FAIL:-0}" == 1 ]]; then

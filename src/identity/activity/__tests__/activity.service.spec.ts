@@ -43,6 +43,7 @@ describe('ActivityService', () => {
     createQueryBuilder: jest.fn(() => loginQuery),
   };
   const rateRepository = { findAndCount: jest.fn(), find: jest.fn() };
+  const appDailyActivityRepository = { query: jest.fn() };
   let service: ActivityService;
 
   beforeEach(() => {
@@ -61,6 +62,21 @@ describe('ActivityService', () => {
       userRepository as never,
       userAccessLogRepository as never,
       rateRepository as never,
+      appDailyActivityRepository as never,
+    );
+  });
+
+  it('inserts the authenticated user once per Madrid calendar day', async () => {
+    await service.recordAppDailyActivity('user-1');
+
+    expect(appDailyActivityRepository.query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `(CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date`,
+      ),
+      ['user-1'],
+    );
+    expect(appDailyActivityRepository.query.mock.calls[0][0]).toContain(
+      'ON CONFLICT ("user_id", "activity_date") DO NOTHING',
     );
   });
 
