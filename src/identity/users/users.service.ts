@@ -89,6 +89,22 @@ export class UsersService {
     return this.userRepository.findOneBy({ id });
   }
 
+  findSessionProfileById(id: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        isActive: true,
+        image: true,
+        dashboardConfig: true,
+        mobileDashboardConfig: true,
+        dashboardButtonsEnabled: true,
+      },
+    });
+  }
+
   findIdentityById(id: string): Promise<UserIdentity | null> {
     return this.userRepository.findOne({
       where: { id },

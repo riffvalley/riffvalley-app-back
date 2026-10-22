@@ -29,6 +29,7 @@ describe('AuthService authentication', () => {
     findCredentialsByUsername: jest.fn(),
     findIdentityById: jest.fn(),
     findById: jest.fn(),
+    findSessionProfileById: jest.fn(),
     recordLogin: jest.fn(),
   } satisfies Pick<
     UsersService,
@@ -36,6 +37,7 @@ describe('AuthService authentication', () => {
     | 'findCredentialsByUsername'
     | 'findIdentityById'
     | 'findById'
+    | 'findSessionProfileById'
     | 'recordLogin'
   >;
   const jwtService = {
@@ -117,13 +119,16 @@ describe('AuthService authentication', () => {
       expiresAt,
       refreshToken: 'rotated-refresh-token',
     });
-    usersService.findById.mockResolvedValue(
+    usersService.findSessionProfileById.mockResolvedValue(
       makeUser({
         id: 'user-1',
         username: 'listener',
         role: ValidRoles.user,
         isActive: true,
         password: 'secret',
+        dashboardConfig: null,
+        mobileDashboardConfig: [{ id: 'news', enabled: false }],
+        dashboardButtonsEnabled: false,
       }),
     );
 
@@ -145,7 +150,14 @@ describe('AuthService authentication', () => {
     expect(result).toMatchObject({
       accessToken: 'signed-token',
       refreshCredential: { expiresAt, refreshToken: 'rotated-refresh-token' },
-      user: { id: 'user-1', username: 'listener', role: ValidRoles.user },
+      user: {
+        id: 'user-1',
+        username: 'listener',
+        role: ValidRoles.user,
+        dashboardConfig: null,
+        mobileDashboardConfig: [{ id: 'news', enabled: false }],
+        dashboardButtonsEnabled: false,
+      },
     });
     expect(result.user).not.toHaveProperty('password');
   });
