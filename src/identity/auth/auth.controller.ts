@@ -1,5 +1,6 @@
 import {
   Controller,
+  Logger,
   BadRequestException,
   ForbiddenException,
   HttpException,
@@ -51,6 +52,7 @@ import {
   validateSessionCookieRequestMetadata,
   validateSessionCookieRequest,
   validateSessionCsrfBootstrapRequest,
+  SessionRequestRejectionReason,
 } from './session-http/session-http-security';
 import { SessionRefreshCookieAdapter } from './session-http/session-refresh-cookie-adapter';
 import { SessionLoginCsrfCookieAdapter } from './session-http/session-login-csrf-cookie';
@@ -68,9 +70,13 @@ import {
 
 const REFRESH_OPERATION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const REQUEST_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
@@ -224,7 +230,13 @@ export class AuthController {
       this.configService,
     );
     const origins = this.sessionOrigins();
-    const clientType = validateSessionCookieRequestMetadata(metadata, origins);
+    const onRejected = (reason: SessionRequestRejectionReason): void =>
+      this.logRefreshRejection(request, reason);
+    const clientType = validateSessionCookieRequestMetadata(
+      metadata,
+      origins,
+      onRejected,
+    );
     await this.enforceIpRateLimit(
       httpResponse,
       `refresh_ip_${clientType}`,
@@ -257,6 +269,7 @@ export class AuthController {
       metadata,
       origins,
       csrfVerifier,
+      onRejected,
     );
     if (resolvedClient !== binding.clientType) {
       throw new UnauthorizedException('Session is not available');
@@ -279,11 +292,19 @@ export class AuthController {
       throw new BadRequestException('Refresh operation is not valid');
     }
 
-    const session = await this.authService.refreshWithSession(
-      refreshToken,
-      operationId,
-      { mode: sessionMode, origin: metadata.origin },
-    );
+    let session: Awaited<ReturnType<AuthService['refreshWithSession']>>;
+    try {
+      session = await this.authService.refreshWithSession(
+        refreshToken,
+        operationId,
+        { mode: sessionMode, origin: metadata.origin },
+      );
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        onRejected('origin_invalid');
+      }
+      throw error;
+    }
     this.refreshCookie.emitRefreshToken(
       httpResponse,
       clientType,
@@ -296,6 +317,8 @@ export class AuthController {
         'refresh',
         session.refreshCredential.sessionId,
       ),
+      undefined,
+      onRejected,
     );
     httpResponse.status(200);
 
@@ -410,6 +433,20 @@ export class AuthController {
   private setNoStoreHeaders(response: Response | undefined): void {
     response?.setHeader('Cache-Control', 'no-store');
     response?.setHeader('Pragma', 'no-cache');
+  }
+
+  private logRefreshRejection(
+    request: Request,
+    reason: SessionRequestRejectionReason,
+  ): void {
+    const requestId = request.headers['x-request-id'];
+    const safeRequestId =
+      typeof requestId === 'string' && REQUEST_ID_PATTERN.test(requestId)
+        ? ` request_id=${requestId}`
+        : '';
+    this.logger.warn(
+      `security_event=auth_refresh_rejected endpoint=/api/auth/refresh status=403 reason=${reason} occurred_at=${new Date().toISOString()}${safeRequestId}`,
+    );
   }
 
   private loginAccountLimit(username: string): AuthRateLimitDimension {

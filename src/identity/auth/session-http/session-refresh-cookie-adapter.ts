@@ -10,6 +10,7 @@ import {
   SessionClientOrigins,
   SessionCookieRequestMetadata,
   SessionCsrfVerifier,
+  SessionRequestRejectionHandler,
   validateSessionCookieRequest,
 } from './session-http-security';
 
@@ -64,12 +65,14 @@ export class SessionRefreshCookieAdapter {
     configuredOrigins: SessionClientOrigins,
     verifyCsrfToken: SessionCsrfVerifier,
     now = new Date(),
+    onRejected?: SessionRequestRejectionHandler,
   ): void {
     this.validateClientRequest(
       metadata,
       configuredOrigins,
       verifyCsrfToken,
       clientType,
+      onRejected,
     );
     if (!REFRESH_TOKEN_PATTERN.test(refreshToken)) {
       throw new InternalServerErrorException(
@@ -110,13 +113,16 @@ export class SessionRefreshCookieAdapter {
     configuredOrigins: SessionClientOrigins,
     verifyCsrfToken: SessionCsrfVerifier,
     expectedClient: SessionClientType,
+    onRejected?: SessionRequestRejectionHandler,
   ): void {
     const resolvedClient = validateSessionCookieRequest(
       metadata,
       configuredOrigins,
       verifyCsrfToken,
+      onRejected,
     );
     if (resolvedClient !== expectedClient) {
+      onRejected?.('client_type_mismatch');
       throw new ForbiddenException('Request is not allowed');
     }
   }
