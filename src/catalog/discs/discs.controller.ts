@@ -13,7 +13,8 @@ import { DiscsService } from './discs.service';
 import { CreateDiscDto } from './dto/create-discs.dto';
 import { CreateDiscWithArtistDto } from './dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from './dto/update-discs.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { DiscsCalendarQueryDto } from './dto/discs-calendar-query.dto';
+import { DiscsListQueryDto } from './dto/discs-list-query.dto';
 
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
@@ -60,13 +61,13 @@ export class DiscsController {
 
   @Get('date')
   @Auth()
-  findAllByDate(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
-    return this.discsServices.findAllByDate(paginationDto, user);
+  findAllByDate(@Query() query: DiscsCalendarQueryDto, @GetUser() user: User) {
+    return this.discsServices.findAllByDate(query, user);
   }
 
   @Get('date/public')
-  findAllByDatePublic(@Query() paginationDto: PaginationDto) {
-    return this.discsServices.findAllByDatePublic(paginationDto);
+  findAllByDatePublic(@Query() query: DiscsCalendarQueryDto) {
+    return this.discsServices.findAllByDatePublic(query);
   }
 
   @Get('date/public/filters')
@@ -89,8 +90,8 @@ export class DiscsController {
 
   @Get()
   @Auth()
-  findAll(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
-    return this.discsServices.findAll(paginationDto, user);
+  findAll(@Query() query: DiscsListQueryDto, @GetUser() user: User) {
+    return this.discsServices.findAll(query, user);
   }
 
   @Get('spotify/album')

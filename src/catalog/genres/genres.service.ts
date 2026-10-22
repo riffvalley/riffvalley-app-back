@@ -10,7 +10,7 @@ import { EntityNotFoundError, Repository } from 'typeorm';
 import { Genre } from './entities/genre.entity';
 import { CreateGenreDto } from './dto/create-genre.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { GenresQueryDto } from './dto/genres-query.dto';
 
 function isDuplicateKeyError(
   error: unknown,
@@ -71,7 +71,7 @@ export class GenresService {
     }
   }
 
-  async findAll(paginationDto: PaginationDto) {
+  async findAll(paginationDto: GenresQueryDto) {
     const { limit = 10, offset = 0 } = paginationDto;
 
     const [units, totalItems] = await this.unitRepository.findAndCount({

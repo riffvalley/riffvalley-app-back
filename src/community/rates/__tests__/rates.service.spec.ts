@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { Disc } from '../../../catalog/discs/entities/disc.entity';
 import { User } from '../../../identity/auth/entities/user.entity';
-import { PaginationDto } from '../../../platform/common/dtos/pagination.dto';
+import { PaginationDto } from '../../../shared/dto/pagination.dto';
 import { CreateRateDto } from '../dto/create-rates.dto';
 import { UpdateRateDto } from '../dto/update-rates.dto';
 import { Rate } from '../entities/rate.entity';

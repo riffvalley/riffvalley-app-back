@@ -58,30 +58,6 @@
       "occurrence": 0
     },
     {
-      "rule": "@typescript-eslint/no-unused-vars",
-      "path": "src/platform/common/dtos/pagination.dto.ts",
-      "line": 12,
-      "column": 3,
-      "fingerprint": "62fdf3e7e93386e85f7ed371e8257a55cd17fb71ffcda377ac44677aa617fba2",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/no-unused-vars",
-      "path": "src/platform/common/dtos/pagination.dto.ts",
-      "line": 5,
-      "column": 3,
-      "fingerprint": "cbac66f7371427271d2b1a6cccbed9377aab644cdde0f0bd8dbf3e7c7872f658",
-      "occurrence": 0
-    },
-    {
-      "rule": "@typescript-eslint/no-unused-vars",
-      "path": "src/platform/common/dtos/pagination.dto.ts",
-      "line": 8,
-      "column": 3,
-      "fingerprint": "9c03895a01ee17b6ff271db33d5ac444f75513ddac6f81c3cea3324d42e56275",
-      "occurrence": 0
-    },
-    {
       "rule": "@typescript-eslint/no-var-requires",
       "path": "src/migrations/__tests__/db-migrations.spec.ts",
       "line": 7,
@@ -95,14 +71,6 @@
       "line": 202,
       "column": 11,
       "fingerprint": "c0c9e3f7e018163a9383cd8a9ec985f142aee526bc99de3ba3f4442a724a3def",
-      "occurrence": 0
-    },
-    {
-      "rule": "prefer-const",
-      "path": "src/platform/uploads/uploads.module.spec.ts",
-      "line": 52,
-      "column": 5,
-      "fingerprint": "8d45aa25ea6accb6160716904270700ead6e05b054f6e9ab0d404d71ccb070c8",
       "occurrence": 0
     },
     {

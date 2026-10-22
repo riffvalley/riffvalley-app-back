@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Disc } from '../entities/disc.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { DiscsListQueryDto } from '../dto/discs-list-query.dto';
 import { RandomQueryDto } from '../dto/random-query.dto';
 import { OptionsQueryDto } from '../dto/options-query.dto';
 import { User } from 'src/identity/auth/entities/user.entity';
@@ -50,7 +50,7 @@ export class DiscCatalogService {
     }
   }
 
-  async findAll(paginationDto: PaginationDto, user: User) {
+  async findAll(paginationDto: DiscsListQueryDto, user: User) {
     const {
       limit = 10,
       offset = 0,

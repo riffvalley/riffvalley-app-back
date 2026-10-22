@@ -11,7 +11,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Pending } from 'src/community/pendings/entities/pending.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { CreateFavoriteDto } from '../dto/create-favorites.dto';
 import { Favorite } from '../entities/favorite.entity';
 import { FavoritesService } from '../favorites.service';

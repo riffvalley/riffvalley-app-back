@@ -16,7 +16,7 @@ import { RatesHistoryService } from './history/rates-history.service';
 import { CreateRateDto } from './dto/create-rates.dto';
 import { UpdateRateDto } from './dto/update-rates.dto';
 import { RatesHistoryQueryDto } from './dto/rates-history-query.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
@@ -87,8 +87,8 @@ export class RatesController {
 
   @Get() // Este es el GET /rates
   @Auth()
-  findAll(@Query() paginationDto: PaginationDto, @GetUser() user: User) {
-    return this.ratesService.findAllByUser(paginationDto, user);
+  findAll(@Query() query: CommunityListQueryDto, @GetUser() user: User) {
+    return this.ratesService.findAllByUser(query, user);
   }
 
   // ==========================================

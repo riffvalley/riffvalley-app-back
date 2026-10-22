@@ -2,7 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Artist } from '../../entities/artist.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { ArtistCatalogService } from '../artist-catalog.service';
 
 describe('ArtistCatalogService', () => {

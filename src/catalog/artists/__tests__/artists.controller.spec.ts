@@ -13,7 +13,7 @@ import { User } from 'src/identity/auth/entities/user.entity';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { ArtistManagementQueryDto } from '../dto/artist-management-query.dto';
 import { CreateArtistDto } from '../dto/create-artist.dto';
 import { UpdateArtistDto } from '../dto/update-artist.dto';

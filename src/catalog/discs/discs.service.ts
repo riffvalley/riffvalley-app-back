@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Disc } from './entities/disc.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { DiscsCalendarQueryDto } from './dto/discs-calendar-query.dto';
+import { DiscsListQueryDto } from './dto/discs-list-query.dto';
+import { TopStatsQueryDto } from './dto/top-stats-query.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
 import { OptionsQueryDto } from './dto/options-query.dto';
 import { CreateDiscDto } from './dto/create-discs.dto';
@@ -53,8 +55,8 @@ export class DiscsService {
     return this.discWriteService.createWithArtist(dto);
   }
 
-  findAll(paginationDto: PaginationDto, user: User) {
-    return this.discCatalogService.findAll(paginationDto, user);
+  findAll(query: DiscsListQueryDto, user: User) {
+    return this.discCatalogService.findAll(query, user);
   }
 
   findRandom(dto: RandomQueryDto, user: User) {
@@ -65,12 +67,12 @@ export class DiscsService {
     return this.discCatalogService.findOptions(dto);
   }
 
-  async findAllByDate(paginationDto: PaginationDto, user: User) {
-    return this.discCalendarService.findAllByDate(paginationDto, user);
+  async findAllByDate(query: DiscsCalendarQueryDto, user: User) {
+    return this.discCalendarService.findAllByDate(query, user);
   }
 
-  async findAllByDatePublic(paginationDto: PaginationDto) {
-    return this.discCalendarService.findAllByDatePublic(paginationDto);
+  async findAllByDatePublic(query: DiscsCalendarQueryDto) {
+    return this.discCalendarService.findAllByDatePublic(query);
   }
 
   getPublicFilters() {
@@ -90,12 +92,12 @@ export class DiscsService {
   }
 
   findTopRatedOrFeaturedAndStats(
-    paginationDto: PaginationDto,
+    query: TopStatsQueryDto,
     user: User,
     genreId?: string,
   ): Promise<DiscHomeResult> {
     return this.discHomeService.findTopRatedOrFeaturedAndStats(
-      paginationDto,
+      query,
       user,
       genreId,
     );

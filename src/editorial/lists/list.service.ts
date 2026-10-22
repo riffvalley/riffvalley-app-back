@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { ListQueryDto } from './dto/list-query.dto';
 import { List, ListType } from './entities/list.entity';
 import { ListCalendarService } from './application/list-calendar.service';
 import { ListContentCoordinator } from './application/list-content-coordinator.service';
@@ -31,7 +31,7 @@ export class ListsService {
     return this.listCrudService.create(createListDto);
   }
 
-  findAll(paginationDto: PaginationDto) {
+  findAll(paginationDto: ListQueryDto) {
     return this.listCrudService.findAll(paginationDto);
   }
 

@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Country } from 'src/catalog/countries/entities/country.entity';
 import { Genre } from 'src/catalog/genres/entities/genre.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { DiscsCalendarQueryDto } from '../dto/discs-calendar-query.dto';
 import { Disc } from '../entities/disc.entity';
 import { getCalendarPageMetadata } from './helpers/get-calendar-page-metadata';
 import {
@@ -97,7 +97,7 @@ export class DiscCalendarService {
     );
   }
 
-  async findAllByDate(paginationDto: PaginationDto, user: User) {
+  async findAllByDate(paginationDto: DiscsCalendarQueryDto, user: User) {
     const {
       limit = 10,
       offset = 0,
@@ -215,7 +215,7 @@ export class DiscCalendarService {
 
   // Igual que findAllByDate pero sin datos por-usuario (rate, favoritos,
   // pendientes), pensado para el calendario público sin autenticar.
-  async findAllByDatePublic(paginationDto: PaginationDto) {
+  async findAllByDatePublic(paginationDto: DiscsCalendarQueryDto) {
     const {
       limit = 10,
       offset = 0,

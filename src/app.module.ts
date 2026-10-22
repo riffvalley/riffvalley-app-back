@@ -1,108 +1,107 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
-import { CommonModule } from './catalog/overview/common.module';
-import { I18nConfigModule } from './platform/i18n/i18n.module';
-import { shouldEnableCronJobs } from './platform/scheduling/schedule-options';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { typeOrmOptions } from './config/typeorm-options';
 
-//MODULES
+// Catalog
 import { ArtistsModule } from './catalog/artists/artists.module';
 import { CountriesModule } from './catalog/countries/countries.module';
 import { DiscModule } from './catalog/discs/discs.module';
 import { GenresModule } from './catalog/genres/genres.module';
 import { CatalogImportModule } from './catalog/import/catalog-import.module';
-import { AuthModule } from './identity/auth/auth.module';
+import { LastfmModule } from './catalog/lastfm/lastfm.module';
+import { CommonModule } from './catalog/overview/common.module';
+
+// Community
+import { FavoritesModule } from './community/favorites/favorites.module';
+import { CommentsModule } from './community/comments/comments.module';
+import { PendingsModule } from './community/pendings/pendings.module';
 import { RatesModule } from './community/rates/rates.module';
+import { RequestsModule } from './community/requests/requests.module';
+
+// Editorial
 import { AsignationsModule } from './editorial/lists/asignations/asignations.module';
 import { ListsModule } from './editorial/lists/list.module';
 import { ReunionsModule } from './editorial/reunions/reunions.module';
 import { PointsModule } from './editorial/reunions/points/points.module';
-import { SeedModule } from './platform/seeds/seed.module';
-import { FavoritesModule } from './community/favorites/favorites.module';
-import { PendingsModule } from './community/pendings/pendings.module';
-import { CommentsModule } from './community/comments/comments.module';
-import { VersionsModule } from './product/versions/versions.module';
-import { SpotifyIntegrationModule } from './integrations/spotify-integration/spotify-integration.module';
 import { RiffValleyPlaylistModule } from './editorial/playlists/riff-valley-playlists/riff-valley-playlist.module';
 import { ContentsModule } from './editorial/contents/contents.module';
 import { ArticlesModule } from './editorial/articles/articles.module';
 import { VideosModule } from './editorial/videos/videos.module';
-import { TelegramIntegrationModule } from './integrations/telegram-integration/telegram-integration.module';
-import { NewsModule } from './product/news/news.module';
-import { UploadsModule } from './platform/uploads/uploads.module';
-import { RequestsModule } from './community/requests/requests.module';
 import { NationalReleasesModule } from './editorial/national-releases/national-releases.module';
-import { LastfmModule } from './catalog/lastfm/lastfm.module';
-import { SuggestionsModule } from './product/suggestions/suggestions.module';
-import { AccessRequestsModule } from './identity/access-requests/access-requests.module';
-import { InstagramIntegrationModule } from './integrations/instagram-integration/instagram-integration.module';
 import { SpotifyPlaylistsModule } from './editorial/playlists/spotify-playlists/spotify-playlists.module';
+
+// Identity
+import { AuthModule } from './identity/auth/auth.module';
+import { AccessRequestsModule } from './identity/access-requests/access-requests.module';
+
+// Integrations
+import { SpotifyIntegrationModule } from './integrations/spotify-integration/spotify-integration.module';
+import { TelegramIntegrationModule } from './integrations/telegram-integration/telegram-integration.module';
+import { InstagramIntegrationModule } from './integrations/instagram-integration/instagram-integration.module';
 import { TiktokIntegrationModule } from './integrations/tiktok-integration/tiktok-integration.module';
+
+// Product
+import { NewsModule } from './product/news/news.module';
+import { SuggestionsModule } from './product/suggestions/suggestions.module';
+import { VersionsModule } from './product/versions/versions.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     ScheduleModule.forRoot({
-      cronJobs: shouldEnableCronJobs(
-        process.env.STAGE,
-        process.env.DISABLE_SCHEDULED_TASKS,
+      cronJobs: !(
+        process.env.STAGE === 'dev' &&
+        process.env.DISABLE_SCHEDULED_TASKS === 'true'
       ),
     }),
-    TypeOrmModule.forRoot({
-      ssl: process.env.STAGE === 'prod',
-      extra: {
-        ssl:
-          process.env.STAGE === 'prod' ? { rejectUnauthorized: false } : null,
-      },
-      type: 'postgres',
-      host: process.env.DB_HOST,
-      port: +process.env.DB_PORT,
-      database: process.env.DB_NAME,
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      autoLoadEntities: true,
-      synchronize: false,
-      migrationsRun: false,
-    }),
+    TypeOrmModule.forRoot(typeOrmOptions()),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
-    I18nConfigModule,
-    CommonModule,
 
-    //MODULES
+    // Catalog
     ArtistsModule,
     CountriesModule,
     DiscModule,
     GenresModule,
     CatalogImportModule,
-    AuthModule,
+    LastfmModule,
+    CommonModule,
+
+    // Community
+    CommentsModule,
+    FavoritesModule,
+    PendingsModule,
     RatesModule,
+    RequestsModule,
+
+    // Editorial
     AsignationsModule,
     ListsModule,
     ReunionsModule,
     PointsModule,
-    SeedModule,
-    FavoritesModule,
-    PendingsModule,
-    CommentsModule,
-    VersionsModule,
-    SpotifyIntegrationModule,
     RiffValleyPlaylistModule,
     ContentsModule,
     ArticlesModule,
     VideosModule,
-    TelegramIntegrationModule,
-    NewsModule,
-    UploadsModule,
-    RequestsModule,
     NationalReleasesModule,
-    LastfmModule,
-    SuggestionsModule,
-    AccessRequestsModule,
-    InstagramIntegrationModule,
     SpotifyPlaylistsModule,
+
+    // Identity
+    AuthModule,
+    AccessRequestsModule,
+
+    // Integrations
+    SpotifyIntegrationModule,
+    TelegramIntegrationModule,
+    InstagramIntegrationModule,
     TiktokIntegrationModule,
+
+    // Product
+    NewsModule,
+    SuggestionsModule,
+    VersionsModule,
   ],
 })
 export class AppModule {}

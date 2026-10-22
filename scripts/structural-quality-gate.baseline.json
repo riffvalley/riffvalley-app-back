@@ -11,30 +11,6 @@
     },
     {
       "rule": "module-root-file",
-      "path": "src/platform/i18n/en.json"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/platform/i18n/es.json"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/platform/seeds/seed.module.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/platform/uploads/uploads.controller.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/platform/uploads/uploads.module.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
-      "path": "src/platform/uploads/uploads.service.spec.ts"
-    },
-    {
-      "rule": "module-root-file",
       "path": "src/product/news/news.controller.spec.ts"
     },
     {
@@ -76,22 +52,6 @@
     {
       "rule": "spec-outside-tests",
       "path": "src/migrations/1791920000000-MigrateUsersToSingleRole.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/platform/seeds/seed.module.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/platform/uploads/uploads.controller.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/platform/uploads/uploads.module.spec.ts"
-    },
-    {
-      "rule": "spec-outside-tests",
-      "path": "src/platform/uploads/uploads.service.spec.ts"
     },
     {
       "rule": "spec-outside-tests",

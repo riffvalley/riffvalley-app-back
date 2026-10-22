@@ -4,7 +4,7 @@ import {
 } from './home-postgres-types';
 import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { User } from '../../../../identity/auth/entities/user.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { TopStatsQueryDto } from 'src/catalog/discs/dto/top-stats-query.dto';
 import { DiscHomeService } from '../disc-home.service';
 
 const describePostgres =
@@ -147,7 +147,7 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
     };
     const service = new DiscHomeService(repository);
     const result = await service.findTopRatedOrFeaturedAndStats(
-      Object.assign(new PaginationDto(), {
+      Object.assign(new TopStatsQueryDto(), {
         dateRange: [new Date('2020-01-01'), new Date('2025-12-31')],
       }),
       homeUser(),

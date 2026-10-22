@@ -10,7 +10,7 @@ import { UpdateAsignationDto } from './dto/update-asignations.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, QueryFailedError, Repository } from 'typeorm';
 import { Asignation } from './entities/asignations.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { List, ListType } from 'src/editorial/lists/entities/list.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';

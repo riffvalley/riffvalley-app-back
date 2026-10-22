@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../../../identity/auth/entities/user.entity';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { TopStatsQueryDto } from '../dto/top-stats-query.dto';
 import { Disc } from '../entities/disc.entity';
 import { loadHomeGlobalStats } from './loaders/home-global-stats';
 import { loadHomeDiscTotals } from './loaders/home-totals';
@@ -35,7 +35,7 @@ export class DiscHomeService {
   ) {}
 
   async findTopRatedOrFeaturedAndStats(
-    paginationDto: PaginationDto,
+    paginationDto: TopStatsQueryDto,
     user: User,
     genreId?: string,
   ): Promise<DiscHomeResult> {

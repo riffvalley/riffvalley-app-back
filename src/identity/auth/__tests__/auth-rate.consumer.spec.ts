@@ -12,7 +12,7 @@ import { RateVoteEvent } from '../../../community/rates/entities/rate-vote-event
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { RatesModule } from 'src/community/rates/rates.module';
 import { CatalogImportModule } from 'src/catalog/import/catalog-import.module';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 
 describe('Activity → Rate consumer characterization', () => {

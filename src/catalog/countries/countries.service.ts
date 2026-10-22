@@ -10,7 +10,7 @@ import { EntityNotFoundError, Repository } from 'typeorm';
 import { Country } from './entities/country.entity';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { CountriesQueryDto } from './dto/countries-query.dto';
 
 function isDuplicateKeyError(
   error: unknown,
@@ -44,7 +44,7 @@ export class CountriesService {
     }
   }
 
-  async findAll(paginationDto: PaginationDto) {
+  async findAll(paginationDto: CountriesQueryDto) {
     const { limit = 10, offset = 0 } = paginationDto;
 
     const [units, totalItems] = await this.unitRepository.findAndCount({

@@ -1,4 +1,3 @@
-// apply-order.helper.ts
 import { SelectQueryBuilder } from 'typeorm';
 
 export type OrderDirection = 'ASC' | 'DESC';
@@ -6,7 +5,7 @@ export type OrderDirection = 'ASC' | 'DESC';
 export type OrderOption = {
   field: string;
   direction?: OrderDirection;
-  nulls?: 'NULLS FIRST' | 'NULLS LAST'; // 👈 así
+  nulls?: 'NULLS FIRST' | 'NULLS LAST';
 };
 
 export type ParseOptions = {
@@ -34,10 +33,8 @@ export function parseOrdersRaw(
     if (opts.allowlist instanceof Set) {
       return opts.allowlist.has(field) ? field : undefined;
     }
-    // allowlist como mapa alias->col
     const map = opts.allowlist as Record<string, string>;
     if (map[field]) return map[field];
-    // si el field está como clave y valor a la vez, también vale
     const ok = Object.values(map).includes(field);
     return ok ? field : undefined;
   };

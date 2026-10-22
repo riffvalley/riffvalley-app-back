@@ -1,5 +1,5 @@
 import { DiscHomeService } from '../disc-home.service';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { TopStatsQueryDto } from 'src/catalog/discs/dto/top-stats-query.dto';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { HomeQueryRunner } from '../loaders/home-query-runner';
 
@@ -45,7 +45,7 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
 
     try {
       await service.findTopRatedOrFeaturedAndStats(
-        Object.assign(new PaginationDto(), {
+        Object.assign(new TopStatsQueryDto(), {
           dateRange: [new Date('2020-01-01'), new Date('2024-12-31')],
           country: '123e4567-e89b-12d3-a456-426614174000',
           countryId: 'ignored-country-id',
@@ -180,7 +180,7 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
     );
 
     const response = await service.findTopRatedOrFeaturedAndStats(
-      new PaginationDto(),
+      new TopStatsQueryDto(),
       makeUser(),
     );
 
@@ -267,7 +267,10 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
     const { service } = makeService(() => []);
 
     await expect(
-      service.findTopRatedOrFeaturedAndStats(new PaginationDto(), makeUser()),
+      service.findTopRatedOrFeaturedAndStats(
+        new TopStatsQueryDto(),
+        makeUser(),
+      ),
     ).resolves.toEqual({
       discs: [],
       totalDiscs: 0,
@@ -315,7 +318,7 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
     });
 
     const response = await service.findTopRatedOrFeaturedAndStats(
-      new PaginationDto(),
+      new TopStatsQueryDto(),
       makeUser(),
     );
 

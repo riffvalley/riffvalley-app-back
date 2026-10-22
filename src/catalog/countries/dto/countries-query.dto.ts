@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { PaginationDto } from 'src/shared/dto/pagination.dto';
 
 export class CountriesQueryDto extends PaginationDto {
   @IsOptional()

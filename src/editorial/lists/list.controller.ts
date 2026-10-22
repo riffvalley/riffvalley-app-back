@@ -18,7 +18,7 @@ import {
   ListYearMonthParamsDto,
   ListYearParamsDto,
 } from './dto/list-period-params.dto';
-import { PaginationDto } from 'src/platform/common/dtos/pagination.dto';
+import { ListQueryDto } from './dto/list-query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
@@ -34,8 +34,8 @@ export class ListsController {
 
   @Get()
   @Auth()
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.listsServices.findAll(paginationDto);
+  findAll(@Query() query: ListQueryDto) {
+    return this.listsServices.findAll(query);
   }
 
   @Get('weeks')
