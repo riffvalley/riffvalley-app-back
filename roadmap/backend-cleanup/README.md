@@ -18,6 +18,7 @@ Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gate
 
 - [Auditoría de Platform](platform.md) — responsabilidades y consumers; BC-PLAT-R1 (Seeds), R2 (I18n), U2 (Uploads), R3 (filtros por dominio), R4 (cierre estructural) y R5 (composición de AppModule) completadas el 2026-10-22; `src/platform/` eliminado.
 - [Logging y Winston](logging.md) — integración con Nest, destinos, auditoría de logs reales y tareas BC-LOG-1–9; BC-LOG-4 completada.
+- [Investigación final de `check-spotify`](standalone.md) — comparación del release desplegado, explicación del resultado 0, cron activos en el contexto CLI y correcciones mínimas BC-STANDALONE-1–2.
 
 ### Community
 
