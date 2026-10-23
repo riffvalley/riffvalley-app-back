@@ -92,4 +92,43 @@ describe('SpotifyClientCredentialsService', () => {
     await expect(noCredentials.getOptionalAccessToken()).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('returns an empty album list for a successful search without results', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        response({ access_token: 'token', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(response({ albums: { items: [] } }));
+
+    await expect(
+      service.searchAlbumsByRawQuery('album:missing'),
+    ).resolves.toEqual({ albums: { items: [] } });
+  });
+
+  it.each([400, 503])(
+    'throws for a Spotify search HTTP response with status %i',
+    async (status) => {
+      fetchMock
+        .mockResolvedValueOnce(
+          response({ access_token: 'token', expires_in: 3600 }),
+        )
+        .mockResolvedValueOnce(response({ error: 'request failed' }, status));
+
+      await expect(
+        service.searchAlbumsByRawQuery('album:missing'),
+      ).rejects.toThrow(`Spotify search failed: ${status}`);
+    },
+  );
+
+  it('propagates Spotify search connection errors', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        response({ access_token: 'token', expires_in: 3600 }),
+      )
+      .mockRejectedValueOnce(new Error('Spotify connection failed'));
+
+    await expect(
+      service.searchAlbumsByRawQuery('album:missing'),
+    ).rejects.toThrow('Spotify connection failed');
+  });
 });

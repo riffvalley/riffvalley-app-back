@@ -28,6 +28,9 @@ export class SpotifyClientCredentialsService {
     const response = await fetch(this.albumSearchUrl(query), {
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (!response.ok) {
+      throw new Error(`Spotify search failed: ${response.status}`);
+    }
     return response.json();
   }
 

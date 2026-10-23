@@ -16,8 +16,7 @@ async function bootstrap() {
 
     switch (command) {
       case 'check-spotify':
-        console.log('Running check-spotify...');
-        await app.get(DiscLinkMaintenanceService).checkMissingSpotifyLinks();
+        await app.get(DiscLinkMaintenanceService).runDailyLinkMaintenance();
         break;
       case 'create-weekly':
         console.log('Running create-weekly...');
