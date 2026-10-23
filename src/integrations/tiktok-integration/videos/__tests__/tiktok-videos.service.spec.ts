@@ -156,6 +156,7 @@ describe('TiktokVideosService', () => {
     tiktokApi.fetchVideoPage
       .mockResolvedValueOnce({
         ok: false,
+        status: 503,
         body: {
           error: { code: 'ok', message: '', log_id: '' },
         },
@@ -177,6 +178,56 @@ describe('TiktokVideosService', () => {
 
     expect(videoRepository.upsert).not.toHaveBeenCalled();
     expect(tiktokApi.fetchVideoPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs only safe TikTok diagnostics and the HTTP status for provider errors', async () => {
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    tiktokApi.fetchVideoPage.mockResolvedValue({
+      ok: false,
+      status: 429,
+      body: {
+        error: {
+          code: 'rate_limit_exceeded',
+          message:
+            'Rate limited; access_token=provider-access-secret; client_secret=provider-client-secret',
+          log_id: 'provider-log-id',
+        },
+        data: { secret: 'full-provider-response-secret' },
+      },
+    });
+
+    await service.syncVideos('access-token');
+
+    expect(loggerError).toHaveBeenCalledTimes(1);
+    const logMessage = String(loggerError.mock.calls[0][0]);
+    expect(logMessage).toContain('HTTP 429');
+    expect(logMessage).toContain('code=rate_limit_exceeded');
+    expect(logMessage).toContain('message=Rate limited');
+    expect(logMessage).toContain('log_id=provider-log-id');
+    expect(logMessage).not.toContain('provider-access-secret');
+    expect(logMessage).not.toContain('provider-client-secret');
+    expect(logMessage).not.toContain('full-provider-response-secret');
+  });
+
+  it('redacts credentials from TikTok request exceptions', async () => {
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    tiktokApi.fetchVideoPage.mockRejectedValue(
+      new Error(
+        'Request failed: Authorization: Bearer provider-bearer-secret access_token=provider-access-secret',
+      ),
+    );
+
+    await service.syncVideos('access-token');
+
+    expect(loggerError).toHaveBeenCalledTimes(1);
+    const logMessage = String(loggerError.mock.calls[0][0]);
+    expect(logMessage).toContain('TikTok sync failed: Error: Request failed');
+    expect(logMessage).not.toContain('provider-bearer-secret');
+    expect(logMessage).not.toContain('provider-access-secret');
   });
 
   it('absorbs a persistence failure after earlier writes and skips remaining rows/pages', async () => {

@@ -17,6 +17,7 @@ Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gate
 ### Platform / Infrastructure
 
 - [Auditoría de Platform](platform.md) — responsabilidades y consumers; BC-PLAT-R1 (Seeds), R2 (I18n), U2 (Uploads), R3 (filtros por dominio), R4 (cierre estructural) y R5 (composición de AppModule) completadas el 2026-10-22; `src/platform/` eliminado.
+- [Logging y Winston](logging.md) — integración con Nest, destinos, auditoría de logs reales y tareas BC-LOG-1–9; BC-LOG-4 completada.
 
 ### Community
 
@@ -24,11 +25,15 @@ Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gate
 
 ### Product
 
-- [Auditoría de Product](product.md) — News, Suggestions y Versions auditados (2026-10-22); los tres tienen consumidores frontend. Quedan tareas de simplificación y deuda de gateways; no se propone fusionarlos ni crear un agregador.
+- [Cierre de Product](product.md) — BC-PROD-1 y BC-PROD-3 completadas; BC-PROD-2 trasladada al frontend como BC-APP-VERS-1. Product queda cerrado en backend, sin cambios de endpoints ni contratos.
 
 ### Communications
 
 - [Mail](communications.md) — BC-COM-1/2 completados; el hallazgo de seguridad HTML sigue pendiente.
+
+### Limpieza histórica
+
+- [Retirada del runner de migración de roles](roles-migration.md) — BC-ROLES-MIG-1 completada tras confirmar los ledgers de local y producción; runner y guards específicos retirados.
 
 ### Identity
 
@@ -93,7 +98,7 @@ La secuencia se amplía después de cada dominio; no constituye una orden para a
 | 1     | Catalog                   | Artists, Countries, Genres, Discs, CatalogImport, CatalogOverview, LastfmCatalog                                                 | **Completado** por BC-CAT (2026-10-20); QG-1–QG-18 completadas, cero entradas Catalog en los tres baselines y `yarn verify` aprobado                                    |
 | 2     | Community                 | Comments, Favorites, Pendings, Rates, Requests                                                                                   | **Completado** por BC-COMM-9 (2026-10-21); cero deuda Community en los tres baselines y `yarn verify` aprobado en [community.md](community.md)                              |
 | 3     | Editorial                 | Articles, Asignations, Contents, SpotifyPlaylists, Links, Lists, NationalReleases, Points, Reunions, RiffValleyPlaylists, Videos | **Completado** por BC-ED-0; diez módulos activos completados, Links retirado por BC-LNK-1, BC-ED-1–10 completados y cero infracciones editoriales en los tres baselines |
-| 4     | Product                   | News, Suggestions, Versions                                                                                                      | **Auditado** (2026-10-22); simplificación y saneamiento pendientes en [product.md](product.md)                                                                          |
+| 4     | Product                   | News, Suggestions, Versions                                                                                                      | **Completado** (2026-10-22); BC-PROD-1/3 completadas y BC-PROD-2 trasladada al frontend ([cierre](product.md))                                                      |
 | 5     | Identity                  | Auth, AccessRequests                                                                                                             | Pendiente                                                                                                                                                               |
 | 6     | Integrations              | CloudflareR2, Instagram, LastfmIntegration, SMTP, Spotify, Telegram, TikTok, WordPress                                           | Pendiente                                                                                                                                                               |
 | 7     | Platform / Infrastructure | Scheduling, Common                                                                                                               | **Completado**; Seeds, I18n y Uploads retirados; filtros separados por owner y estructura Platform cerrada en BC-PLAT-R3/R4 ([auditoría](platform.md))                |
@@ -128,9 +133,9 @@ Estados válidos: **pendiente**, **auditado**, **en cleanup**, **completado** y 
 | Editorial                 | Reunions            | completado |
 | Editorial                 | RiffValleyPlaylists | completado |
 | Editorial                 | Videos              | completado |
-| Product                   | News                | auditado   |
-| Product                   | Suggestions         | auditado   |
-| Product                   | Versions            | auditado   |
+| Product                   | News                | completado |
+| Product                   | Suggestions         | completado |
+| Product                   | Versions            | completado |
 | Identity                  | Auth                | pendiente  |
 | Identity                  | AccessRequests      | pendiente  |
 | Integrations              | CloudflareR2        | pendiente  |

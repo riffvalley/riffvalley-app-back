@@ -151,9 +151,11 @@ describe('TiktokApiService', () => {
         {
           error: {
             code: 'invalid_token',
-            message: 'Profile unavailable',
+            message:
+              'Profile unavailable; access_token=provider-access-secret; Authorization: Bearer provider-bearer-secret',
             log_id: 'log',
           },
+          data: { secret: 'full-response-secret' },
         },
         false,
         401,
@@ -164,6 +166,16 @@ describe('TiktokApiService', () => {
     await expect(service.fetchUserInfo('access-token')).resolves.toBeNull();
     await expect(service.fetchUserInfo('access-token')).resolves.toBeNull();
     expect(loggerSpy).toHaveBeenCalledTimes(2);
+    const logOutput = loggerSpy.mock.calls.map(([message]) => String(message));
+    expect(logOutput[0]).toContain('HTTP 401');
+    expect(logOutput[0]).toContain('code=invalid_token');
+    expect(logOutput[0]).toContain('message=Profile unavailable');
+    expect(logOutput[0]).toContain('log_id=log');
+    expect(logOutput[0]).not.toContain('provider-access-secret');
+    expect(logOutput[0]).not.toContain('provider-bearer-secret');
+    expect(logOutput[0]).not.toContain('full-response-secret');
+    expect(logOutput[1]).toContain('HTTP 200');
+    expect(logOutput[1]).toContain('details unavailable');
   });
 
   it('requests video pages with provider fields, bearer auth and the current cursor', async () => {
@@ -175,6 +187,7 @@ describe('TiktokApiService', () => {
 
     await expect(service.fetchVideoPage('access-token', 456)).resolves.toEqual({
       ok: true,
+      status: 200,
       body,
     });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -207,6 +220,7 @@ describe('TiktokApiService', () => {
 
     await expect(service.fetchVideoPage('access-token')).resolves.toEqual({
       ok: false,
+      status: 403,
       body,
     });
     await expect(service.fetchVideoPage('access-token')).rejects.toThrow(

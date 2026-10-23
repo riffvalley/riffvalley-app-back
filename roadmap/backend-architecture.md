@@ -74,7 +74,7 @@ Cada módulo tiene controller/service/module Nest salvo que se indique. La ruta 
 
 ### Componentes técnicos anidados ya agrupados
 
-Los subdirectorios internos no son módulos Nest adicionales salvo cuando se indica: Artist/Disc responsibility services; Excel y Manual Import; Rates history/stats; Spotify `api/http/oauth`; TikTok `api/http/oauth/videos`. Se conservan junto a su módulo dueño. `src/roles-migration/run-roles-migration-chain.ts` es utilidad operacional, no un módulo de dominio; las migraciones siguen en `src/migrations/`. `src/i18n/en.json` y `es.json` son recursos de configuración. Las 95 entradas de `src/migrations` y sus tests no forman 95 módulos; continúan en `src/migrations` por requerimiento del discovery TypeORM.
+Los subdirectorios internos no son módulos Nest adicionales salvo cuando se indica: Artist/Disc responsibility services; Excel y Manual Import; Rates history/stats; Spotify `api/http/oauth`; TikTok `api/http/oauth/videos`. Se conservan junto a su módulo dueño. Las migraciones siguen en `src/migrations/`; `src/i18n/en.json` y `es.json` son recursos de configuración. Las 95 entradas de `src/migrations` y sus tests no forman 95 módulos; continúan en `src/migrations` por requerimiento del discovery TypeORM.
 
 ## Evaluación de Editorial
 
@@ -151,7 +151,6 @@ src/
     wordpress-integration/
   migrations/                       # discovery por glob, ubicación estable
     __tests__/
-  roles-migration/                  # script operacional histórico
 ```
 
 No hay que mover `main.ts`, `app.module.ts`, `standalone.ts`, `data-source.ts` ni `winston.config.ts` para alcanzar ownership funcional. `src/migrations/` se mantiene como raíz requerida por globs/configuración; no se agrupa bajo una carpeta técnica nueva. El árbol muestra módulos y archivos de raíz representativos; subcarpetas internas existentes `dto/`, `entities/`, specs, servicios de responsabilidad, helpers/loaders y tests permanecen según su volumen real.
@@ -177,7 +176,7 @@ Traslado significa mover módulo, controller, service, DTOs, entities, specs y h
 - Los ocho módulos de `integrations/`; la integración SMTP no absorbe Mail; R2 no absorbe Uploads; WordPress no absorbe News/Lists; Spotify no absorbe playlists locales; Telegram no absorbe News.
 - `communications/mail`, que es notificación de aplicación y consumidor del adaptador SMTP.
 - Los seis módulos de Catalog existentes permanecen; CommonModule es el séptimo ownership de Catalog. Los DTOs/helpers comunes sí pasan a `platform/common` por su uso en varios dominios.
-- `main.ts`, `app.module.ts`, `standalone.ts`, `data-source.ts`, `winston.config.ts`, `migrations/` y el runner operacional `roles-migration/`.
+- `main.ts`, `app.module.ts`, `standalone.ts`, `data-source.ts`, `winston.config.ts` y `migrations/`.
 - DTOs/rutas/guards/payloads/schema y comportamiento de jobs, publicación, cache o notificaciones. Cualquier excepción requerirá una tarea independiente y una decisión explícita.
 
 ## Dependencias, ciclos y riesgos

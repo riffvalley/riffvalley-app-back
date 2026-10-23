@@ -58,6 +58,9 @@ export type RefreshTokenSessionBinding = {
   clientType: SessionClientType;
 };
 
+export type RecoverableRefreshTokenSessionBinding =
+  RefreshTokenSessionBinding & { expiresAt: Date };
+
 type RotationOutcome =
   | { kind: 'rotated'; credential: SessionCredential }
   | { kind: 'invalid' }
@@ -302,6 +305,46 @@ export class SessionsService {
         sessionId: token.sessionId,
         userId: token.session.userId,
         clientType: token.session.clientType,
+      };
+    });
+  }
+
+  /** Resolves only an active refresh credential for read-only CSRF recovery. */
+  async findRecoverableRefreshTokenSessionBinding(
+    refreshToken: string,
+    clientType: unknown,
+  ): Promise<RecoverableRefreshTokenSessionBinding | null> {
+    if (
+      !this.isClientType(clientType) ||
+      !REFRESH_TOKEN_PATTERN.test(refreshToken)
+    ) {
+      return null;
+    }
+
+    return this.persistence.withTransaction(async (unitOfWork) => {
+      const token = await unitOfWork.findRefreshTokenByHash(
+        this.hash(refreshToken),
+      );
+      const now = new Date();
+      if (
+        !token ||
+        token.session.clientType !== clientType ||
+        token.consumedAt !== null ||
+        token.replacedById !== null ||
+        token.session.revokedAt !== null ||
+        token.session.expiresAt.getTime() <= now.getTime()
+      ) {
+        return null;
+      }
+
+      const owner = await unitOfWork.findUserState(token.session.userId, false);
+      if (!owner?.isActive) return null;
+
+      return {
+        sessionId: token.sessionId,
+        userId: token.session.userId,
+        clientType: token.session.clientType,
+        expiresAt: token.session.expiresAt,
       };
     });
   }

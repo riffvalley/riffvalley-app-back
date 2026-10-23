@@ -17,7 +17,7 @@ Los comandos manuales del proyecto trabajan con JavaScript compilado: `yarn db:s
 - No ejecutes una migración en producción sin autorización explícita para la aplicación, base de datos y conjunto ordenado de migraciones. La autorización general para crear esta skill o desplegar código no cuenta.
 - No ejecutes automáticamente migraciones destructivas, restauraciones ni rollbacks. Si una ejecución falla, detente; no la repitas ni reviertas por iniciativa propia.
 - Verifica el destino real antes de conectar. No infieras que una conexión es local por el nombre de una variable ni imprimas credenciales.
-- Usa Yarn para comandos del proyecto. No uses pnpm. `migration:roles` es un runner de una cadena concreta; no lo uses ni lo presentes como runner general.
+- Usa Yarn para comandos del proyecto. No uses pnpm.
 - No modifiques `.impeccable/config.json`, no alteres el esquema durante tareas de análisis y no borres ni ocultes hallazgos preexistentes o fuera de alcance.
 
 ## Modo de trabajo

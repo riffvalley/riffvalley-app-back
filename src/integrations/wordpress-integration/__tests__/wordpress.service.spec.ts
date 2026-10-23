@@ -324,10 +324,78 @@ describe('WordpressService public reads', () => {
         `WordPress API error: ${status}`,
       );
       expect(loggerError).toHaveBeenCalledWith(
-        `Failed to fetch WP post 41: ${status} - request rejected`,
+        `Failed to fetch WP post 41: ${status}`,
       );
     },
   );
+
+  it('logs only WordPress error codes and sanitized messages for write and edit failures', async () => {
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    const config = createConfigService({
+      WP_USER: 'publisher',
+      WP_APP_PASSWORD: 'wp-app-password-secret',
+      WP_API_URL: 'https://wp.test/wp-json/wp/v2',
+    });
+    service = new WordpressService(config);
+    const authorizationSecret = Buffer.from(
+      'publisher:wp-app-password-secret',
+    ).toString('base64');
+    const responseBody = JSON.stringify({
+      code: 'rest_cannot_edit',
+      message: `Authorization: Basic ${authorizationSecret}; access_token=wp-access-secret; refresh_token=wp-refresh-secret; client_secret=wp-client-secret; Password=wp-password-secret; Request rejected`,
+      data: { debug: 'full-provider-body-secret' },
+    });
+    global.fetch = jest.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        status: 401,
+        text: jest.fn().mockResolvedValue(responseBody),
+      }),
+    );
+
+    await expect(service.createPost('Title', 'Body')).rejects.toMatchObject({
+      status: 401,
+    });
+    await expect(service.updatePostContent(41, 'Body')).rejects.toMatchObject({
+      status: 401,
+    });
+    await expect(service.getPost(41)).rejects.toThrow(
+      'WordPress API error: 401',
+    );
+    await expect(service.findPostBySlug('private-list')).rejects.toThrow(
+      'WordPress API error: 401',
+    );
+
+    const logMessages = loggerError.mock.calls.map(([message]) =>
+      String(message),
+    );
+    expect(logMessages).toHaveLength(4);
+    expect(logMessages[0]).toContain('Failed to create WP post: 401');
+    expect(logMessages[1]).toContain('Failed to update WP post 41: 401');
+    expect(logMessages[2]).toContain('Failed to fetch WP post 41: 401');
+    expect(logMessages[3]).toContain(
+      'Failed to find WordPress post by slug private-list: 401',
+    );
+    for (const message of logMessages) {
+      expect(message).toContain('code=rest_cannot_edit');
+      expect(message).toContain('Request rejected');
+    }
+
+    const combinedLogs = logMessages.join('\n');
+    for (const secret of [
+      authorizationSecret,
+      'wp-app-password-secret',
+      'wp-access-secret',
+      'wp-refresh-secret',
+      'wp-client-secret',
+      'wp-password-secret',
+      'full-provider-body-secret',
+    ]) {
+      expect(combinedLogs).not.toContain(secret);
+    }
+  });
 
   it('translates private create and update HTTP errors while preserving network errors', async () => {
     const config = createConfigService({
