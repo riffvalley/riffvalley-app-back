@@ -10,6 +10,17 @@ interface DiscLinkMaintenanceOptions {
   summaryOnly?: boolean;
 }
 
+type BandcampSearchResult =
+  | {
+      status: 'found';
+      link: string;
+      image: string | null;
+      albumName: string | null;
+      artistName: string | null;
+    }
+  | { status: 'not-found' }
+  | { status: 'error' };
+
 @Injectable()
 export class DiscLinkMaintenanceService {
   private readonly logger = new Logger(DiscLinkMaintenanceService.name);
@@ -35,6 +46,9 @@ export class DiscLinkMaintenanceService {
       this.logger.log('Starting daily check for missing Spotify links...');
     }
     const today = new Date();
+    let updatedCount = 0;
+    let noMatchCount = 0;
+    let queryErrorCount = 0;
 
     try {
       // Find discs with missing links or errors that are already released
@@ -53,7 +67,11 @@ export class DiscLinkMaintenanceService {
         )
         .getMany();
 
-      if (!summaryOnly) {
+      if (summaryOnly) {
+        this.logger.log(
+          `check-spotify iniciado: ${discsToUpdate.length} discos pendientes`,
+        );
+      } else {
         this.logger.log(
           `Found ${discsToUpdate.length} discs to check for Spotify links.`,
         );
@@ -61,9 +79,7 @@ export class DiscLinkMaintenanceService {
 
       if (discsToUpdate.length === 0) {
         if (summaryOnly) {
-          this.logger.log(
-            'Importación diaria completada: 0 correctos, 0 fallidos',
-          );
+          this.logDailySummary(updatedCount, noMatchCount, queryErrorCount);
         } else {
           this.logger.log('Found 0 discs to check. Daily check finished.');
         }
@@ -75,10 +91,8 @@ export class DiscLinkMaintenanceService {
         token = await this.spotifyClient.getOptionalAccessToken();
       } catch (error) {
         if (summaryOnly) {
-          this.logger.error(
-            'Importación diaria interrumpida: no se pudo obtener el token de Spotify',
-            error,
-          );
+          queryErrorCount++;
+          this.logDailySummary(updatedCount, noMatchCount, queryErrorCount);
           return;
         }
         this.logger.error('Error getting Spotify token', error);
@@ -86,9 +100,8 @@ export class DiscLinkMaintenanceService {
       }
       if (!token) {
         if (summaryOnly) {
-          this.logger.error(
-            'Importación diaria interrumpida: no se pudo obtener el token de Spotify',
-          );
+          queryErrorCount++;
+          this.logDailySummary(updatedCount, noMatchCount, queryErrorCount);
         } else {
           this.logger.error(
             'Could not get Spotify token. Daily check finished.',
@@ -96,9 +109,6 @@ export class DiscLinkMaintenanceService {
         }
         return;
       }
-
-      let updatedCount = 0;
-      let failedCount = 0;
 
       for (const disc of discsToUpdate) {
         try {
@@ -112,10 +122,25 @@ export class DiscLinkMaintenanceService {
           if (!summaryOnly) {
             this.logger.log(`Spotify Search URL: ${url}`);
           }
-          const data = await this.spotifyClient.searchAlbumsByRawQuery(query);
+          let data: Awaited<
+            ReturnType<
+              SpotifyClientCredentialsService['searchAlbumsByRawQuery']
+            >
+          > = null;
+          try {
+            data = await this.spotifyClient.searchAlbumsByRawQuery(query);
+            if (!data) {
+              throw new Error('Spotify search returned no response');
+            }
+          } catch (error) {
+            queryErrorCount++;
+            if (!summaryOnly) {
+              this.logger.error(`Error searching album ${disc.name}`, error);
+            }
+          }
 
-          if (data!.albums?.items?.length > 0) {
-            const album = data!.albums.items[0];
+          if (data?.albums?.items?.length > 0) {
+            const album = data.albums.items[0];
             disc.link = album.external_urls.spotify;
             disc.image = album.images?.[0]?.url || null;
             disc.verified = true;
@@ -139,7 +164,11 @@ export class DiscLinkMaintenanceService {
               ? await this.searchBandcamp(disc.artist.name, disc.name, true)
               : await this.searchBandcamp(disc.artist.name, disc.name);
 
-            if (bandcampResult) {
+            if (bandcampResult.status === 'error') {
+              queryErrorCount++;
+            }
+
+            if (bandcampResult.status === 'found') {
               disc.link = bandcampResult.link;
               disc.image = bandcampResult.image || disc.image;
               disc.verified = true;
@@ -161,11 +190,29 @@ export class DiscLinkMaintenanceService {
               const looseQuery = encodeURIComponent(
                 `${normalizedArtist} ${normalizedAlbum}`,
               );
-              const looseData =
-                await this.spotifyClient.searchAlbumsByRawQuery(looseQuery);
+              let looseData: Awaited<
+                ReturnType<
+                  SpotifyClientCredentialsService['searchAlbumsByRawQuery']
+                >
+              > = null;
+              try {
+                looseData =
+                  await this.spotifyClient.searchAlbumsByRawQuery(looseQuery);
+                if (!looseData) {
+                  throw new Error('Spotify search returned no response');
+                }
+              } catch (error) {
+                queryErrorCount++;
+                if (!summaryOnly) {
+                  this.logger.error(
+                    `Error searching album ${disc.name}`,
+                    error,
+                  );
+                }
+              }
 
-              if (looseData!.albums?.items?.length > 0) {
-                const album = looseData!.albums.items[0];
+              if (looseData?.albums?.items?.length > 0) {
+                const album = looseData.albums.items[0];
                 const artistMatch = album.artists.some(
                   (artist) =>
                     this.normalizeString(artist.name).toLowerCase() ===
@@ -194,19 +241,22 @@ export class DiscLinkMaintenanceService {
                     disc.link = 'No se encontró el álbum';
                     await this.discRepo.save(disc);
                   }
-                  failedCount++;
+                  noMatchCount++;
                 }
-              } else if (disc.link !== 'No se encontró el álbum') {
+              } else if (looseData && disc.link !== 'No se encontró el álbum') {
                 disc.link = 'No se encontró el álbum';
                 await this.discRepo.save(disc);
-                failedCount++;
-              } else {
-                failedCount++;
+                noMatchCount++;
+              } else if (looseData) {
+                noMatchCount++;
+              } else if (disc.link !== 'Error al realizar la búsqueda') {
+                disc.link = 'Error al realizar la búsqueda';
+                await this.discRepo.save(disc);
               }
             }
           }
         } catch (error) {
-          failedCount++;
+          queryErrorCount++;
           if (!summaryOnly) {
             this.logger.error(`Error searching album ${disc.name}`, error);
           }
@@ -218,9 +268,7 @@ export class DiscLinkMaintenanceService {
       }
 
       if (summaryOnly) {
-        this.logger.log(
-          `Importación diaria completada: ${updatedCount} correctos, ${failedCount} fallidos`,
-        );
+        this.logDailySummary(updatedCount, noMatchCount, queryErrorCount);
       } else {
         this.logger.log(
           `Daily check completed. Updated links for ${updatedCount} discs.`,
@@ -228,14 +276,22 @@ export class DiscLinkMaintenanceService {
       }
     } catch (error) {
       if (summaryOnly) {
-        this.logger.error(
-          'Importación diaria interrumpida al comprobar enlaces de discos',
-          error,
-        );
+        queryErrorCount++;
+        this.logDailySummary(updatedCount, noMatchCount, queryErrorCount);
       } else {
         this.logger.error('Error checking missing Spotify links', error);
       }
     }
+  }
+
+  private logDailySummary(
+    updatedCount: number,
+    noMatchCount: number,
+    queryErrorCount: number,
+  ): void {
+    this.logger.log(
+      `check-spotify finalizado: enlaces guardados=${updatedCount}, búsquedas sin coincidencia=${noMatchCount}, errores de consulta=${queryErrorCount}`,
+    );
   }
 
   private normalizeString(str: string): string {
@@ -250,12 +306,7 @@ export class DiscLinkMaintenanceService {
     artist: string,
     album: string,
     summaryOnly = false,
-  ): Promise<{
-    link: string;
-    image: string | null;
-    albumName: string | null;
-    artistName: string | null;
-  } | null> {
+  ): Promise<BandcampSearchResult> {
     try {
       const query = encodeURIComponent(`${artist} ${album}`);
       const url = `https://bandcamp.com/search?q=${query}&item_type=a`;
@@ -275,7 +326,7 @@ export class DiscLinkMaintenanceService {
         if (!summaryOnly) {
           this.logger.warn(`Bandcamp search failed: ${response.statusText}`);
         }
-        return null;
+        return { status: 'error' };
       }
 
       const html = await response.text();
@@ -311,11 +362,17 @@ export class DiscLinkMaintenanceService {
             );
           }
 
-          return { link: linkUrl.split('?')[0], image, albumName, artistName };
+          return {
+            status: 'found',
+            link: linkUrl.split('?')[0],
+            image,
+            albumName,
+            artistName,
+          };
         }
       }
 
-      return null;
+      return { status: 'not-found' };
     } catch (error) {
       if (!summaryOnly) {
         this.logger.error(
@@ -323,7 +380,7 @@ export class DiscLinkMaintenanceService {
           error,
         );
       }
-      return null;
+      return { status: 'error' };
     }
   }
 }

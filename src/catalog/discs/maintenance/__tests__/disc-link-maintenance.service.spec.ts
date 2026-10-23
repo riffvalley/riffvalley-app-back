@@ -18,7 +18,7 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
   let queryBuilder: Record<string, jest.Mock>;
   let spotifyClient: SpotifyClientCredentialsService;
   let bandcampSearch: jest.Mock<
-    Promise<null>,
+    Promise<{ status: 'not-found' }>,
     [artistName: string, albumName: string]
   >;
 
@@ -42,6 +42,16 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
       },
     ],
   });
+  const bandcampHtml = `
+    <ul class="result-items">
+      <li class="searchresult">
+        <a href="https://artist.bandcamp.com/album/record?from=search">
+          <img src="https://img.test/cover_3.jpg">
+        </a>
+        <div class="heading">Record Name</div>
+        <div class="subhead">by Artist Name</div>
+      </li>
+    </ul>`;
 
   beforeEach(() => {
     fetchMock = jest.fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>();
@@ -72,8 +82,8 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
     );
     service = new DiscLinkMaintenanceService(discRepo, spotifyClient);
     bandcampSearch = jest
-      .fn<Promise<null>, [string, string]>()
-      .mockResolvedValue(null);
+      .fn<Promise<{ status: 'not-found' }>, [string, string]>()
+      .mockResolvedValue({ status: 'not-found' });
     Object.defineProperty(service, 'searchBandcamp', {
       configurable: true,
       value: bandcampSearch,
@@ -84,6 +94,15 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
     global.fetch = originalFetch;
     jest.restoreAllMocks();
   });
+
+  const useRealBandcampSearch = () => {
+    const searchBandcamp =
+      Object.getPrototypeOf(service).searchBandcamp.bind(service);
+    Object.defineProperty(service, 'searchBandcamp', {
+      configurable: true,
+      value: searchBandcamp,
+    });
+  };
 
   it('usa Client Credentials y conserva la búsqueda estricta, endpoint, filtros y respuesta', async () => {
     fetchMock
@@ -175,6 +194,97 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
     expect(discRepo.save).toHaveBeenCalledWith(disc);
   });
 
+  it('cuenta una respuesta vacía válida como no coincidencia, no como error', async () => {
+    const loggerLog = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'token', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(jsonResponse(spotifyResult([])))
+      .mockResolvedValueOnce(jsonResponse(spotifyResult([])));
+
+    await service.runDailyLinkMaintenance();
+
+    expect(loggerLog).toHaveBeenCalledWith(
+      'check-spotify finalizado: enlaces guardados=0, búsquedas sin coincidencia=1, errores de consulta=0',
+    );
+    expect(disc.link).toBe('No se encontró el álbum');
+  });
+
+  it('intenta Bandcamp y guarda su resultado si falla la búsqueda estricta de Spotify', async () => {
+    const loggerLog = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    useRealBandcampSearch();
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'token', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ error: 'rate limited' }, 429))
+      .mockResolvedValueOnce(new Response(bandcampHtml));
+
+    await service.runDailyLinkMaintenance();
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(disc.link).toBe('https://artist.bandcamp.com/album/record');
+    expect(disc.verified).toBe(true);
+    expect(discRepo.save).toHaveBeenCalledWith(disc);
+    expect(loggerLog.mock.calls.map(([message]) => message)).toEqual([
+      'check-spotify iniciado: 1 discos pendientes',
+      'check-spotify finalizado: enlaces guardados=1, búsquedas sin coincidencia=0, errores de consulta=1',
+    ]);
+  });
+
+  it.each([400, 503])(
+    'cuenta el error HTTP %i de Bandcamp y continúa con la búsqueda Spotify alternativa',
+    async (status) => {
+      const loggerLog = jest
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation();
+      useRealBandcampSearch();
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse({ access_token: 'token', expires_in: 3600 }),
+        )
+        .mockResolvedValueOnce(jsonResponse(spotifyResult([])))
+        .mockResolvedValueOnce(
+          new Response('Bandcamp error', { status, statusText: 'Unavailable' }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse(spotifyResult([album("Banda' Norte")])),
+        );
+
+      await service.runDailyLinkMaintenance();
+
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(disc.link).toBe('https://open.spotify.com/album/remote-id');
+      expect(disc.verified).toBe(true);
+      expect(loggerLog).toHaveBeenCalledWith(
+        'check-spotify finalizado: enlaces guardados=1, búsquedas sin coincidencia=0, errores de consulta=1',
+      );
+    },
+  );
+
+  it('cuenta un error de conexión de Bandcamp y conserva el fallback Spotify', async () => {
+    const loggerLog = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    useRealBandcampSearch();
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'token', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(jsonResponse(spotifyResult([])))
+      .mockRejectedValueOnce(new Error('Bandcamp connection failed'))
+      .mockResolvedValueOnce(
+        jsonResponse(spotifyResult([album("Banda' Norte")])),
+      );
+
+    await service.runDailyLinkMaintenance();
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(disc.link).toBe('https://open.spotify.com/album/remote-id');
+    expect(loggerLog).toHaveBeenCalledWith(
+      'check-spotify finalizado: enlaces guardados=1, búsquedas sin coincidencia=0, errores de consulta=1',
+    );
+  });
+
   it('mantiene el error de búsqueda ante fallo al obtener el token', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({}, 503));
 
@@ -205,12 +315,6 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
       link: null,
     });
     queryBuilder.getMany.mockResolvedValue([disc, secondDisc, thirdDisc]);
-    const searchBandcamp =
-      Object.getPrototypeOf(service).searchBandcamp.bind(service);
-    Object.defineProperty(service, 'searchBandcamp', {
-      configurable: true,
-      value: searchBandcamp,
-    });
     fetchMock
       .mockResolvedValueOnce(
         jsonResponse({ access_token: 'token', expires_in: 3600 }),
@@ -218,27 +322,29 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
       .mockResolvedValueOnce(
         jsonResponse(spotifyResult([album('Bánda’ Norte')])),
       )
-      .mockRejectedValueOnce(new Error('Spotify item request failed'))
+      .mockResolvedValueOnce(jsonResponse({ error: 'unavailable' }, 503))
       .mockResolvedValueOnce(jsonResponse(spotifyResult([])))
-      .mockResolvedValueOnce(
-        new Response('Bandcamp unavailable', {
-          status: 503,
-          statusText: 'Service Unavailable',
-        }),
-      )
+      .mockResolvedValueOnce(jsonResponse(spotifyResult([])))
       .mockResolvedValueOnce(jsonResponse(spotifyResult([])));
 
     await service.runDailyLinkMaintenance();
 
-    expect(loggerLog).toHaveBeenCalledTimes(1);
+    expect(loggerLog).toHaveBeenCalledTimes(2);
     expect(loggerLog).toHaveBeenCalledWith(
-      'Importación diaria completada: 1 correctos, 2 fallidos',
+      'check-spotify iniciado: 3 discos pendientes',
+    );
+    expect(loggerLog).toHaveBeenCalledWith(
+      'check-spotify finalizado: enlaces guardados=1, búsquedas sin coincidencia=2, errores de consulta=1',
     );
     expect(loggerError).not.toHaveBeenCalled();
     expect(loggerWarn).not.toHaveBeenCalled();
     expect(disc.link).toBe('https://open.spotify.com/album/remote-id');
-    expect(secondDisc.link).toBe('Error al realizar la búsqueda');
+    expect(secondDisc.link).toBe('No se encontró el álbum');
     expect(thirdDisc.link).toBe('No se encontró el álbum');
+    expect(loggerLog.mock.calls.map(([message]) => message)).toEqual([
+      'check-spotify iniciado: 3 discos pendientes',
+      'check-spotify finalizado: enlaces guardados=1, búsquedas sin coincidencia=2, errores de consulta=1',
+    ]);
   });
 
   it('emite un resumen cero cuando no hay discos que actualizar', async () => {
@@ -250,15 +356,18 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
 
     await service.runDailyLinkMaintenance();
 
-    expect(loggerLog).toHaveBeenCalledTimes(1);
+    expect(loggerLog).toHaveBeenCalledTimes(2);
     expect(loggerLog).toHaveBeenCalledWith(
-      'Importación diaria completada: 0 correctos, 0 fallidos',
+      'check-spotify iniciado: 0 discos pendientes',
+    );
+    expect(loggerLog).toHaveBeenCalledWith(
+      'check-spotify finalizado: enlaces guardados=0, búsquedas sin coincidencia=0, errores de consulta=0',
     );
     expect(loggerError).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('emite un único error operativo si no se puede obtener el token diario', async () => {
+  it('emite inicio y un resumen con el error de token', async () => {
     const loggerLog = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const loggerError = jest
       .spyOn(Logger.prototype, 'error')
@@ -267,15 +376,17 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
 
     await service.runDailyLinkMaintenance();
 
-    expect(loggerLog).not.toHaveBeenCalled();
-    expect(loggerError).toHaveBeenCalledTimes(1);
-    expect(loggerError).toHaveBeenCalledWith(
-      'Importación diaria interrumpida: no se pudo obtener el token de Spotify',
-      expect.any(Error),
+    expect(loggerLog).toHaveBeenCalledTimes(2);
+    expect(loggerLog).toHaveBeenCalledWith(
+      'check-spotify iniciado: 1 discos pendientes',
     );
+    expect(loggerLog).toHaveBeenCalledWith(
+      'check-spotify finalizado: enlaces guardados=0, búsquedas sin coincidencia=0, errores de consulta=1',
+    );
+    expect(loggerError).not.toHaveBeenCalled();
   });
 
-  it('emite un único error operativo si falla la consulta de discos diarios', async () => {
+  it('emite un único resumen con un error si falla la consulta de discos diarios', async () => {
     const loggerLog = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const loggerError = jest
       .spyOn(Logger.prototype, 'error')
@@ -284,12 +395,11 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
 
     await service.runDailyLinkMaintenance();
 
-    expect(loggerLog).not.toHaveBeenCalled();
-    expect(loggerError).toHaveBeenCalledTimes(1);
-    expect(loggerError).toHaveBeenCalledWith(
-      'Importación diaria interrumpida al comprobar enlaces de discos',
-      expect.any(Error),
+    expect(loggerLog).toHaveBeenCalledTimes(1);
+    expect(loggerLog).toHaveBeenCalledWith(
+      'check-spotify finalizado: enlaces guardados=0, búsquedas sin coincidencia=0, errores de consulta=1',
     );
+    expect(loggerError).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -336,6 +446,7 @@ describe('DiscLinkMaintenanceService Spotify transport characterization', () => 
 
     await expect(searchBandcamp('Artist Name', 'Record Name')).resolves.toEqual(
       {
+        status: 'found',
         link: 'https://artist.bandcamp.com/album/record',
         image: 'https://img.test/cover_10.jpg',
         albumName: 'Record Name',
