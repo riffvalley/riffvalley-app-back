@@ -13,12 +13,22 @@ export interface ChannelPost {
   link: string;
 }
 
+export interface ChannelPostsReadResult {
+  posts: ChannelPost[];
+  successful: boolean;
+}
+
+interface ParsedChannelHtml {
+  posts: ChannelPost[];
+  successful: boolean;
+}
+
 @Injectable()
 export class TelegramService {
   private readonly logger = new Logger('TelegramService');
   private readonly cache = new Map<
     string,
-    { data: ChannelPost[]; timestamp: number }
+    { data: ChannelPost[]; timestamp: number; successful: boolean }
   >();
   private readonly CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
@@ -26,11 +36,22 @@ export class TelegramService {
     channel: string,
     limit: number,
   ): Promise<ChannelPost[]> {
+    const result = await this.getChannelPostsWithStatus(channel, limit);
+    return result.posts;
+  }
+
+  async getChannelPostsWithStatus(
+    channel: string,
+    limit: number,
+  ): Promise<ChannelPostsReadResult> {
     const cacheKey = channel;
     const cached = this.cache.get(cacheKey);
 
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-      return cached.data.slice(0, limit);
+      return {
+        posts: cached.data.slice(0, limit),
+        successful: cached.successful,
+      };
     }
 
     try {
@@ -40,18 +61,25 @@ export class TelegramService {
         this.logger.error(
           `Failed to fetch Telegram channel: ${response.status}`,
         );
-        return [];
+        return { posts: [], successful: false };
       }
 
       const html = await response.text();
-      const posts = this.parseChannelHtml(html, channel);
+      const parsed = this.parseChannelHtml(html, channel);
 
-      this.cache.set(cacheKey, { data: posts, timestamp: Date.now() });
+      this.cache.set(cacheKey, {
+        data: parsed.posts,
+        timestamp: Date.now(),
+        successful: parsed.successful,
+      });
 
-      return posts.slice(0, limit);
+      return {
+        posts: parsed.posts.slice(0, limit),
+        successful: parsed.successful,
+      };
     } catch (error) {
       this.logger.error(`Error fetching Telegram channel: ${error.message}`);
-      return [];
+      return { posts: [], successful: false };
     }
   }
 
@@ -85,8 +113,13 @@ export class TelegramService {
         }
 
         const html = await response.text();
-        posts = this.parseChannelHtml(html, channel);
-        this.cache.set(cacheKey, { data: posts, timestamp: Date.now() });
+        const parsed = this.parseChannelHtml(html, channel);
+        posts = parsed.posts;
+        this.cache.set(cacheKey, {
+          data: posts,
+          timestamp: Date.now(),
+          successful: parsed.successful,
+        });
       } catch (error) {
         this.logger.error(
           `Error fetching Telegram channel page: ${error.message}`,
@@ -105,7 +138,7 @@ export class TelegramService {
     return { data, nextBefore, hasMore: data.length > 0 };
   }
 
-  private parseChannelHtml(html: string, channel: string): ChannelPost[] {
+  private parseChannelHtml(html: string, channel: string): ParsedChannelHtml {
     const $ = cheerio.load(html);
     const posts: ChannelPost[] = [];
 
@@ -139,9 +172,16 @@ export class TelegramService {
       posts.push({ id, text, image: images[0] ?? null, images, date, link });
     });
 
-    return posts.sort((a, b) => {
-      if (!a.date || !b.date) return 0;
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
+    const hasRecognizedHistory = $('.tgme_channel_history').length > 0;
+    const hasRecognizedMessage =
+      $('.tgme_widget_message_wrap [data-post]').length > 0;
+
+    return {
+      posts: posts.sort((a, b) => {
+        if (!a.date || !b.date) return 0;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }),
+      successful: hasRecognizedHistory || hasRecognizedMessage,
+    };
   }
 }

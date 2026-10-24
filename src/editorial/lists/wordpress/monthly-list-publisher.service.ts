@@ -96,6 +96,7 @@ export class MonthlyListPublisherService {
         allDiscs,
         title,
         existingPost.content,
+        existingPost.status === 'publish',
       );
     }
 
@@ -163,6 +164,7 @@ export class MonthlyListPublisherService {
       list.wpPostId,
       updatedContent,
       alreadyPublished ? [] : [asignation.disc.id],
+      existingPost.status === 'publish',
     );
 
     if (!alreadyPublished) {
@@ -271,6 +273,7 @@ export class MonthlyListPublisherService {
     allDiscs: PublishableGutenbergDiscAssignment[],
     title: string,
     currentContent: string,
+    publicPost: boolean,
   ) {
     const publishedDiscs = list.wpPublishedDiscs ?? [];
 
@@ -282,6 +285,7 @@ export class MonthlyListPublisherService {
       (discs, spotifyTrackIds, authors) =>
         buildDiscSections(discs, spotifyTrackIds, authors),
       true,
+      publicPost,
     );
 
     if (syncResult.trackingChanged) {

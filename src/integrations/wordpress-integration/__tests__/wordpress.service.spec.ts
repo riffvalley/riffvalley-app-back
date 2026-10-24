@@ -110,6 +110,82 @@ describe('WordpressService public reads', () => {
     await expect(service.getPublicPosts()).resolves.toEqual([]);
   });
 
+  it('reports successful non-empty and empty public post lists', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest
+          .fn()
+          .mockResolvedValue([
+            { title: { rendered: 'Valid post' }, link: 'https://wp.test/post' },
+          ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue([]),
+      });
+
+    await expect(service.getPublicPostsWithStatus()).resolves.toMatchObject({
+      posts: [
+        { title: { rendered: 'Valid post' }, link: 'https://wp.test/post' },
+      ],
+      successful: true,
+    });
+    await expect(service.getPublicPostsWithStatus()).resolves.toEqual({
+      posts: [],
+      successful: true,
+    });
+  });
+
+  it('marks HTTP, transport, JSON and invalid-shape responses unsuccessful', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockRejectedValue(new SyntaxError('invalid JSON')),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ message: 'not a posts array' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue([null]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue([{ title: 'wrong shape' }]),
+      });
+
+    await expect(service.getPublicPostsWithStatus()).resolves.toEqual({
+      posts: [],
+      successful: false,
+    });
+    await expect(service.getPublicPostsWithStatus()).resolves.toEqual({
+      posts: [],
+      successful: false,
+    });
+    await expect(service.getPublicPostsWithStatus()).resolves.toEqual({
+      posts: [],
+      successful: false,
+    });
+    await expect(service.getPublicPostsWithStatus()).resolves.toEqual({
+      posts: [],
+      successful: false,
+    });
+    await expect(service.getPublicPostsWithStatus()).resolves.toEqual({
+      posts: [],
+      successful: false,
+    });
+    await expect(service.getPublicPostsWithStatus()).resolves.toEqual({
+      posts: [],
+      successful: false,
+    });
+  });
+
   it('keeps Basic Auth on authenticated post reads', async () => {
     const config = createConfigService({
       WP_USER: 'publisher',

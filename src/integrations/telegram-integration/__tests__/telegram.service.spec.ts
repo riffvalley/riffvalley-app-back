@@ -73,6 +73,9 @@ describe('TelegramService public HTML client', () => {
         link: 'https://t.me/conciertosrockmetal/100',
       },
     ]);
+    await expect(
+      service.getChannelPostsWithStatus('conciertosrockmetal', 6),
+    ).resolves.toMatchObject({ successful: true, posts: expect.any(Array) });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://t.me/s/conciertosrockmetal',
     );
@@ -91,6 +94,56 @@ describe('TelegramService public HTML client', () => {
     });
 
     await expect(service.getChannelPosts('channel', 6)).resolves.toEqual([]);
+  });
+
+  it('marks a recognized empty channel history successful and retains that status in its cache', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      text: jest
+        .fn()
+        .mockResolvedValue('<div class="tgme_channel_history"></div>'),
+    });
+
+    await expect(
+      service.getChannelPostsWithStatus('empty-channel', 6),
+    ).resolves.toEqual({ posts: [], successful: true });
+    await expect(
+      service.getChannelPostsWithStatus('empty-channel', 3),
+    ).resolves.toEqual({ posts: [], successful: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks HTTP, transport and unrecognized HTML responses unsuccessful', async () => {
+    const logger = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        ok: true,
+        text: jest
+          .fn()
+          .mockResolvedValue('<html><body>Changed markup</body></html>'),
+      });
+
+    await expect(
+      service.getChannelPostsWithStatus('http-error', 6),
+    ).resolves.toEqual({ posts: [], successful: false });
+    await expect(
+      service.getChannelPostsWithStatus('network-error', 6),
+    ).resolves.toEqual({ posts: [], successful: false });
+    await expect(
+      service.getChannelPostsWithStatus('invalid-html', 6),
+    ).resolves.toEqual({ posts: [], successful: false });
+    await expect(
+      service.getChannelPostsWithStatus('invalid-html', 6),
+    ).resolves.toEqual({ posts: [], successful: false });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(logger).toHaveBeenCalledWith(
+      'Failed to fetch Telegram channel: 503',
+    );
+    expect(logger).toHaveBeenCalledWith(
+      'Error fetching Telegram channel: offline',
+    );
   });
 
   it('caches provider pages for fifteen minutes and applies each caller limit', async () => {

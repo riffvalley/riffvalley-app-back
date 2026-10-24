@@ -12,6 +12,11 @@ export type { WpPost } from './types/wordpress.types';
 
 export type WordpressWriteOutcome = 'rejected' | 'unknown';
 
+export interface WordpressPostsReadResult {
+  posts: WpPublicPost[];
+  successful: boolean;
+}
+
 export class WordpressWriteError extends Error {
   constructor(
     message: string,
@@ -84,17 +89,113 @@ export class WordpressService {
   // Public read used by News. Keep this request anonymous: unlike the
   // publishing operations below, the posts endpoint is publicly accessible.
   async getPublicPosts(): Promise<WpPublicPost[] | null> {
+    const { posts } = await this.requestPublicPosts();
+    return posts as WpPublicPost[] | null;
+  }
+
+  /** Internal News read that also reports whether the provider payload is usable. */
+  async getPublicPostsWithStatus(): Promise<WordpressPostsReadResult> {
+    try {
+      const response = await this.requestPublicPosts();
+      if (!response.successful) {
+        return { posts: [], successful: false };
+      }
+      if (
+        !Array.isArray(response.posts) ||
+        !response.posts.every((post: unknown) => this.isPublicPost(post))
+      ) {
+        this.logger.error('Invalid WordPress public posts response');
+        return { posts: [], successful: false };
+      }
+
+      return { posts: response.posts, successful: true };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error fetching WordPress posts: ${message}`);
+      return { posts: [], successful: false };
+    }
+  }
+
+  private async requestPublicPosts(): Promise<{
+    posts: unknown | null;
+    successful: boolean;
+  }> {
     const response = await fetch(
       'https://riffvalley.es/wp-json/wp/v2/posts?_embed&per_page=6',
     );
 
     if (!response.ok) {
       this.logger.error(`Failed to fetch WordPress posts: ${response.status}`);
-      return null;
+      return { posts: null, successful: false };
     }
 
-    const posts: WpPublicPost[] = await response.json();
-    return posts;
+    return { posts: await response.json(), successful: true };
+  }
+
+  private isPublicPost(value: unknown): value is WpPublicPost {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return false;
+    }
+
+    const post = value as Record<string, unknown>;
+    if (
+      post.title === undefined &&
+      post.link === undefined &&
+      post.date === undefined
+    ) {
+      return false;
+    }
+    if (
+      !this.isOptionalString(post.link) ||
+      !this.isOptionalString(post.date)
+    ) {
+      return false;
+    }
+
+    if (post.title !== undefined) {
+      if (
+        typeof post.title !== 'object' ||
+        post.title === null ||
+        Array.isArray(post.title)
+      ) {
+        return false;
+      }
+      const title = post.title as Record<string, unknown>;
+      if (!this.isOptionalString(title.rendered)) return false;
+    }
+
+    if (post._embedded !== undefined) {
+      if (
+        typeof post._embedded !== 'object' ||
+        post._embedded === null ||
+        Array.isArray(post._embedded)
+      ) {
+        return false;
+      }
+      const embedded = post._embedded as Record<string, unknown>;
+      const media = embedded['wp:featuredmedia'];
+      if (
+        media !== undefined &&
+        (!Array.isArray(media) ||
+          !media.every((item: unknown) => this.isFeaturedMedia(item)))
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private isFeaturedMedia(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return false;
+    }
+    const media = value as Record<string, unknown>;
+    return this.isOptionalString(media.source_url);
+  }
+
+  private isOptionalString(value: unknown): boolean {
+    return value === undefined || typeof value === 'string';
   }
 
   async createPost(

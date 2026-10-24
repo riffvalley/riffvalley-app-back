@@ -60,5 +60,7 @@ describe('NewsController authorization metadata', () => {
         Reflect.getMetadata(GUARDS_METADATA, routeHandler),
       ).toBeUndefined();
     }
+
+    expect(NewsController.prototype.getFeed).toHaveLength(0);
   });
 });

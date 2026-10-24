@@ -506,7 +506,7 @@ describe('WeeklyListPublisherService', () => {
     expect(wordpressService.getPost).toHaveBeenCalledWith(202);
     expect(
       reconciliationService.updatePostContentWithReconciliation,
-    ).toHaveBeenCalledWith(202, expect.any(String), [discA]);
+    ).toHaveBeenCalledWith(202, expect.any(String), [discA], false);
     expect(radar.wpWeeklyPosts[0].publishedDiscs).toEqual([]);
     expect(radar.wpWeeklyPosts[1].publishedDiscs).toEqual([
       publishedRecord(moved),

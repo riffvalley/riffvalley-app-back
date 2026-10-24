@@ -5,6 +5,7 @@ import {
   WordpressWriteError,
 } from 'src/integrations/wordpress-integration/wordpress.service';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
+import { NewsService } from 'src/product/news/news.service';
 import { ListWordPressReconciliationService } from '../list-wordpress-reconciliation.service';
 import {
   GutenbergDiscAssignment,
@@ -88,11 +89,15 @@ describe('ListWordPressReconciliationService', () => {
         >()
         .mockResolvedValue([]),
     };
+    const newsService = {
+      invalidateWordPressAndNewsFeedCaches: jest.fn(),
+    };
     const module = await Test.createTestingModule({
       providers: [
         ListWordPressReconciliationService,
         { provide: WordpressService, useValue: wordpressService },
         { provide: SpotifyPublicApiService, useValue: spotifyApiService },
+        { provide: NewsService, useValue: newsService },
       ],
     }).compile();
 
@@ -100,15 +105,20 @@ describe('ListWordPressReconciliationService', () => {
       service: module.get(ListWordPressReconciliationService),
       wordpressService,
       spotifyApiService,
+      newsService,
     };
   };
 
-  it('is constructed by Nest with only WordPress and Spotify providers', async () => {
+  it('is constructed by Nest with WordPress, Spotify, and News providers', async () => {
     const module = await Test.createTestingModule({
       providers: [
         ListWordPressReconciliationService,
         { provide: WordpressService, useValue: {} },
         { provide: SpotifyPublicApiService, useValue: {} },
+        {
+          provide: NewsService,
+          useValue: { invalidateWordPressAndNewsFeedCaches: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -141,6 +151,81 @@ describe('ListWordPressReconciliationService', () => {
     ).resolves.toEqual({ post, reconciled: false });
     expect(wordpressService.createPost).toHaveBeenCalledTimes(1);
     expect(wordpressService.findPostBySlug).not.toHaveBeenCalled();
+  });
+
+  it('invalidates both News caches only after a public WordPress write succeeds', async () => {
+    const { service, wordpressService, newsService } = await setup();
+    const publishedPost = {
+      id: 43,
+      link: 'https://example.test/public-post',
+      title: { rendered: 'Public' },
+      status: 'publish',
+    };
+    wordpressService.createPost.mockResolvedValue(publishedPost);
+
+    await service.createPostAndReconcile(
+      'Public',
+      'HTML',
+      'publish',
+      {},
+      [],
+      [],
+      'public-post',
+    );
+
+    expect(
+      newsService.invalidateWordPressAndNewsFeedCaches,
+    ).toHaveBeenCalledTimes(1);
+    const invalidationCallOrder =
+      newsService.invalidateWordPressAndNewsFeedCaches.mock
+        .invocationCallOrder[0];
+    const publicationCallOrder =
+      wordpressService.createPost.mock.invocationCallOrder[0];
+    expect(invalidationCallOrder).toBeGreaterThan(publicationCallOrder);
+  });
+
+  it('keeps both News caches when a WordPress publication is rejected', async () => {
+    const { service, wordpressService, newsService } = await setup();
+    wordpressService.createPost.mockRejectedValue(
+      new WordpressWriteError('unauthorized', 'rejected', 401),
+    );
+
+    await expect(
+      service.createPostAndReconcile(
+        'Public',
+        'HTML',
+        'publish',
+        {},
+        [],
+        [],
+        'public-post',
+      ),
+    ).rejects.toThrow('unauthorized');
+    expect(
+      newsService.invalidateWordPressAndNewsFeedCaches,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('does not invalidate News caches when an updated WordPress post is a draft', async () => {
+    const { service, wordpressService, newsService } = await setup();
+
+    await service.updatePostContentWithReconciliation(42, 'updated', [], false);
+
+    expect(wordpressService.updatePostContent).toHaveBeenCalledTimes(1);
+    expect(
+      newsService.invalidateWordPressAndNewsFeedCaches,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('invalidates News caches after a confirmed update to a public post', async () => {
+    const { service, wordpressService, newsService } = await setup();
+
+    await service.updatePostContentWithReconciliation(42, 'updated', [], true);
+
+    expect(wordpressService.updatePostContent).toHaveBeenCalledTimes(1);
+    expect(
+      newsService.invalidateWordPressAndNewsFeedCaches,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it('adopts a post by slug after an uncertain create, and rejects confirmed failures', async () => {

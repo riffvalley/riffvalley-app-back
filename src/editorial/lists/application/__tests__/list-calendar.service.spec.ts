@@ -13,6 +13,7 @@ import { Content } from 'src/editorial/contents/entities/content.entity';
 import { WordpressService } from 'src/integrations/wordpress-integration/wordpress.service';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { ListsModule } from '../../list.module';
+import { NewsService } from 'src/product/news/news.service';
 
 describe('ListCalendarService Nest wiring', () => {
   it('is registered by ListsModule and injected into the ListsService facade', async () => {
@@ -33,6 +34,10 @@ describe('ListCalendarService Nest wiring', () => {
         { provide: getRepositoryToken(Content), useValue: {} },
         { provide: WordpressService, useValue: {} },
         { provide: SpotifyPublicApiService, useValue: {} },
+        {
+          provide: NewsService,
+          useValue: { invalidateWordPressAndNewsFeedCaches: jest.fn() },
+        },
       ],
     }).compile();
 

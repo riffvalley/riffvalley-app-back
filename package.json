@@ -70,6 +70,7 @@
     "dotenv": "16.4.5",
     "exceljs": "^4.4.0",
     "express": "4.21.2",
+    "lru-cache": "11.5.2",
     "nest-winston": "^1.10.2",
     "nodemailer": "^8.0.4",
     "passport": "^0.7.0",
