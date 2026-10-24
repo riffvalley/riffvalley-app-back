@@ -56,6 +56,7 @@ export class ActivityInactivityService {
     const sortBy = query.sortBy ?? 'daysSinceLastVote';
     const sortOrder = query.sortOrder ?? 'desc';
     const orderColumn = SORT_SQL[sortBy];
+    const pageOrderColumn = orderColumn.replace('classified.', 'page.');
     const orderDirection = sortOrder.toUpperCase();
     const groupsJson = GROUPS.map(
       (group) =>
@@ -158,7 +159,7 @@ export class ActivityInactivityService {
           'lastPresenceAt', page.last_presence_at,
           'lastRatingModifiedAt', to_char(page.last_rating_modified_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS'),
           'currentRatings', page.current_ratings
-        ) ORDER BY ${orderColumn} ${orderDirection} NULLS LAST, page.username ASC, page.user_id ASC) FROM page), '[]'::jsonb) AS data
+        ) ORDER BY ${pageOrderColumn} ${orderDirection} NULLS LAST, page.username ASC, page.user_id ASC) FROM page), '[]'::jsonb) AS data
       FROM summary
       `,
       [

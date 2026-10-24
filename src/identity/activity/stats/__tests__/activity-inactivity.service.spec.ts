@@ -139,5 +139,8 @@ describe('ActivityInactivityService', () => {
     );
     expect(sql).toContain('ORDER BY classified.username DESC NULLS LAST');
     expect(sql).toContain('classified.user_id ASC');
+    expect(sql).toContain(
+      ') ORDER BY page.username DESC NULLS LAST, page.username ASC, page.user_id ASC) FROM page',
+    );
   });
 });
