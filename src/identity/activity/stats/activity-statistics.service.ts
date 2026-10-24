@@ -8,9 +8,15 @@ import { Repository } from 'typeorm';
 import { User } from '../../auth/entities/user.entity';
 import {
   ActivityDateRangeQueryDto,
+  ActivitySummaryQueryDto,
   ActivityUsersQueryDto,
 } from './dto/activity-date-range-query.dto';
 import {
+  ActivityCoverage,
+  ActivityDashboardBaseAggregates,
+  ActivityDashboardResponse,
+  ActivityDashboardRanges,
+  ActivityMetricComparison,
   ActivitySummaryResponse,
   ActivityUserDetailResponse,
   ActivityUserStatistics,
@@ -36,6 +42,23 @@ type SummaryRow = {
   voteDataSince: string | null;
   periods: ActivitySummaryResponse['periods'];
   series: ActivitySummaryResponse['series'];
+};
+
+type DashboardBaseRow = ActivityDashboardBaseAggregates;
+
+type DashboardReturningCounts = {
+  current: number | null;
+  previous: number | null;
+};
+
+type DashboardReturningRow = {
+  currentReturningUsers: number | null;
+  previousReturningUsers: number | null;
+};
+
+type DashboardBaseOptions = {
+  includeCurrentRatings?: boolean;
+  includeSeries?: boolean;
 };
 
 @Injectable()
@@ -178,9 +201,9 @@ export class ActivityStatisticsService {
   }
 
   async getSummary(
-    query: ActivityDateRangeQueryDto,
+    query: ActivitySummaryQueryDto,
   ): Promise<ActivitySummaryResponse> {
-    const range = this.resolveRange(query);
+    const range = this.resolveSummaryRange(query);
     const rows = (await this.userRepository.query(
       `
       WITH context AS (
@@ -274,6 +297,21 @@ export class ActivityStatisticsService {
       [range.from, range.to],
     )) as SummaryRow[];
     const summary = rows[0];
+    const dashboardRanges = resolveDashboardRanges(range);
+    const [current, previous, baseline] = await Promise.all([
+      this.getDashboardBaseAggregates(dashboardRanges.current),
+      this.getDashboardBaseAggregates(dashboardRanges.previous, {
+        includeCurrentRatings: false,
+      }),
+      this.getDashboardBaseAggregates(dashboardRanges.baseline, {
+        includeCurrentRatings: false,
+        includeSeries: false,
+      }),
+    ]);
+    const returningUsers = await this.getDashboardReturningCounts(
+      dashboardRanges,
+      current.activityDataSince,
+    );
 
     return {
       from: summary.from,
@@ -283,6 +321,236 @@ export class ActivityStatisticsService {
       voteDataSince: summary.voteDataSince,
       periods: summary.periods,
       series: summary.series ?? [],
+      dashboard: buildDashboardResponse(
+        dashboardRanges,
+        current,
+        previous,
+        baseline,
+        returningUsers,
+        new Date().toISOString(),
+      ),
+    };
+  }
+
+  /**
+   * Internal base aggregates for I1-E03c. This is deliberately not returned
+   * from the HTTP endpoint until comparisons and derived metrics are ready.
+   */
+  async getDashboardBaseAggregates(
+    range: DateRange,
+    options: DashboardBaseOptions = {},
+  ): Promise<ActivityDashboardBaseAggregates> {
+    const currentRatingsCte =
+      options.includeCurrentRatings !== false
+        ? `current_ratings AS (
+          SELECT COUNT(*) FILTER (WHERE rate.rate IS NOT NULL)::int AS total
+          FROM rate
+        )`
+        : 'current_ratings AS (SELECT NULL::int AS total)';
+    const calendarCte =
+      options.includeSeries === false
+        ? ''
+        : `calendar AS (
+            SELECT generate_series(
+              context.from_date,
+              context.to_date,
+              '1 day'::interval
+            )::date AS day
+            FROM context
+          ),`;
+    const seriesCte =
+      options.includeSeries !== false
+        ? `series AS (
+          SELECT jsonb_agg(jsonb_build_object(
+            'date', calendar.day::text,
+            'dayIndex', calendar.day - context.from_date + 1,
+            'activeUsers', CASE
+              WHEN context.activity_data_since IS NULL
+                OR calendar.day < context.activity_data_since THEN NULL
+              ELSE COALESCE(activity_daily.active_users, 0)
+            END,
+            'newVotes', CASE
+              WHEN context.vote_data_since IS NULL
+                OR calendar.day < context.vote_data_since THEN NULL
+              ELSE COALESCE(vote_daily.new_votes, 0)
+            END
+          ) ORDER BY calendar.day) AS data
+          FROM calendar
+          CROSS JOIN context
+          LEFT JOIN activity_daily ON activity_daily.day = calendar.day
+          LEFT JOIN vote_daily ON vote_daily.day = calendar.day
+        )`
+        : "series AS (SELECT '[]'::jsonb AS data)";
+    const rows = (await this.userRepository.query(
+      `
+      WITH context AS (
+        SELECT
+          $1::date AS from_date,
+          $2::date AS to_date,
+          (SELECT MIN(activity_date) + 1 FROM user_app_daily_activity) AS activity_data_since,
+          (
+            SELECT (started_at AT TIME ZONE '${MADRID_TZ}')::date + 1
+            FROM rate_vote_event_capture WHERE id = 1
+          ) AS vote_data_since
+      ), ${calendarCte}
+      activity_in_range AS (
+        SELECT
+          activity.user_id,
+          activity.activity_date AS day
+        FROM user_app_daily_activity activity
+        CROSS JOIN context
+        WHERE activity.activity_date BETWEEN context.from_date AND context.to_date
+      ), activity_aggregates AS (
+        SELECT
+          activity.day,
+          GROUPING(activity.day)::int AS is_period,
+          COUNT(DISTINCT activity.user_id)::int AS active_users
+        FROM activity_in_range activity
+        GROUP BY GROUPING SETS ((activity.day), ())
+      ), activity_daily AS (
+        SELECT day, active_users
+        FROM activity_aggregates
+        WHERE is_period = 0
+      ), activity_period AS (
+        SELECT active_users
+        FROM activity_aggregates
+        WHERE is_period = 1
+      ), vote_set_in_range AS (
+        SELECT
+          event.user_id,
+          (event.occurred_at AT TIME ZONE '${MADRID_TZ}')::date AS day
+        FROM rate_vote_events event
+        CROSS JOIN context
+        WHERE event.event_type = 'set'
+          AND event.occurred_at >= (
+            context.from_date::timestamp AT TIME ZONE '${MADRID_TZ}'
+          )
+          AND event.occurred_at < (
+            (context.to_date + 1)::timestamp AT TIME ZONE '${MADRID_TZ}'
+          )
+          AND (event.occurred_at AT TIME ZONE '${MADRID_TZ}')::date
+            >= context.vote_data_since
+      ), vote_aggregates AS (
+        SELECT
+          vote_event.day,
+          GROUPING(vote_event.day)::int AS is_period,
+          COUNT(*)::int AS new_votes,
+          COUNT(DISTINCT vote_event.user_id)::int AS voting_users
+        FROM vote_set_in_range vote_event
+        GROUP BY GROUPING SETS ((vote_event.day), ())
+      ), vote_daily AS (
+        SELECT day, new_votes
+        FROM vote_aggregates
+        WHERE is_period = 0
+      ), vote_period AS (
+        SELECT new_votes, voting_users
+        FROM vote_aggregates
+        WHERE is_period = 1
+      ), ${currentRatingsCte}, ${seriesCte}
+      SELECT
+        context.from_date::text AS "from",
+        context.to_date::text AS "to",
+        context.activity_data_since::text AS "activityDataSince",
+        context.vote_data_since::text AS "voteDataSince",
+        CASE
+          WHEN context.activity_data_since IS NULL
+            OR context.from_date < context.activity_data_since THEN NULL
+          ELSE activity_period.active_users
+        END AS "activeUsers",
+        CASE
+          WHEN context.vote_data_since IS NULL
+            OR context.from_date < context.vote_data_since THEN NULL
+          ELSE vote_period.new_votes
+        END AS "newVotes",
+        CASE
+          WHEN context.vote_data_since IS NULL
+            OR context.from_date < context.vote_data_since THEN NULL
+          ELSE vote_period.voting_users
+        END AS "votingUsers",
+        current_ratings.total AS "currentRatings",
+        COALESCE(series.data, '[]'::jsonb) AS series
+      FROM context
+      CROSS JOIN activity_period
+      CROSS JOIN vote_period
+      CROSS JOIN current_ratings
+      CROSS JOIN series
+      `,
+      [range.from, range.to],
+    )) as DashboardBaseRow[];
+    const aggregates = rows[0];
+
+    return {
+      from: aggregates.from,
+      to: aggregates.to,
+      activityDataSince: aggregates.activityDataSince,
+      voteDataSince: aggregates.voteDataSince,
+      activeUsers: aggregates.activeUsers,
+      newVotes: aggregates.newVotes,
+      votingUsers: aggregates.votingUsers,
+      currentRatings: aggregates.currentRatings,
+      series: aggregates.series ?? [],
+    };
+  }
+
+  private async getDashboardReturningCounts(
+    ranges: ActivityDashboardRanges,
+    activityDataSince: string | null,
+  ): Promise<DashboardReturningCounts> {
+    const rows = (await this.userRepository.query(
+      `
+      WITH period_ranges AS (
+        SELECT 'current'::text AS period, $1::date AS from_date, $2::date AS to_date
+        UNION ALL
+        SELECT 'previous', $3::date, $4::date
+        UNION ALL
+        SELECT 'baseline', $5::date, $6::date
+      ), activity_in_span AS (
+        SELECT activity.user_id, activity.activity_date
+        FROM user_app_daily_activity activity
+        WHERE activity.activity_date BETWEEN $5::date AND $2::date
+      ), active_by_period AS (
+        SELECT period_ranges.period, activity.user_id
+        FROM period_ranges
+        JOIN activity_in_span activity
+          ON activity.activity_date BETWEEN period_ranges.from_date AND period_ranges.to_date
+        GROUP BY period_ranges.period, activity.user_id
+      )
+      SELECT
+        CASE
+          WHEN $7::date IS NULL OR $1::date < $7::date OR $3::date < $7::date THEN NULL
+          ELSE (
+            SELECT COUNT(*)::int
+            FROM active_by_period current_active
+            JOIN active_by_period previous_active USING (user_id)
+            WHERE current_active.period = 'current'
+              AND previous_active.period = 'previous'
+          )
+        END AS "currentReturningUsers",
+        CASE
+          WHEN $7::date IS NULL OR $3::date < $7::date OR $5::date < $7::date THEN NULL
+          ELSE (
+            SELECT COUNT(*)::int
+            FROM active_by_period previous_active
+            JOIN active_by_period baseline_active USING (user_id)
+            WHERE previous_active.period = 'previous'
+              AND baseline_active.period = 'baseline'
+          )
+        END AS "previousReturningUsers"
+      `,
+      [
+        ranges.current.from,
+        ranges.current.to,
+        ranges.previous.from,
+        ranges.previous.to,
+        ranges.baseline.from,
+        ranges.baseline.to,
+        activityDataSince,
+      ],
+    )) as DashboardReturningRow[];
+    const row = rows[0];
+    return {
+      current: row.currentReturningUsers,
+      previous: row.previousReturningUsers,
     };
   }
 
@@ -387,6 +655,21 @@ export class ActivityStatisticsService {
     }
     return { from, to };
   }
+
+  private resolveSummaryRange(query: ActivitySummaryQueryDto): DateRange {
+    if (query.period !== undefined) {
+      if (query.from !== undefined || query.to !== undefined) {
+        throw new BadRequestException(
+          'period cannot be combined with from or to',
+        );
+      }
+      const to = madridDate(new Date());
+      return { from: addDays(to, -(query.period - 1)), to };
+    }
+
+    // Keep the legacy one-sided from/to behavior for callers that omit period.
+    return this.resolveRange(query);
+  }
 }
 
 function madridDate(value: Date): string {
@@ -405,4 +688,276 @@ function addDays(date: string, days: number): string {
   const value = new Date(`${date}T00:00:00.000Z`);
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
+}
+
+function resolveDashboardRanges(current: DateRange): ActivityDashboardRanges {
+  const days =
+    (Date.parse(`${current.to}T00:00:00.000Z`) -
+      Date.parse(`${current.from}T00:00:00.000Z`)) /
+      86_400_000 +
+    1;
+  const previous = {
+    from: addDays(current.from, -days),
+    to: addDays(current.from, -1),
+  };
+  const baseline = {
+    from: addDays(previous.from, -days),
+    to: addDays(previous.from, -1),
+  };
+
+  return { current, previous, baseline };
+}
+
+function coverageFor(
+  range: DateRange,
+  dataSince: string | null,
+): ActivityCoverage {
+  if (dataSince === null) return { status: 'unavailable', dataSince: null };
+  return {
+    status: range.from >= dataSince ? 'complete' : 'incomplete',
+    dataSince,
+  };
+}
+
+function combinedCoverage(
+  first: ActivityCoverage,
+  second: ActivityCoverage,
+): ActivityCoverage {
+  if (first.status === 'unavailable' || second.status === 'unavailable') {
+    return { status: 'unavailable', dataSince: null };
+  }
+  return {
+    status:
+      first.status === 'incomplete' || second.status === 'incomplete'
+        ? 'incomplete'
+        : 'complete',
+    dataSince:
+      first.dataSince && second.dataSince
+        ? first.dataSince >= second.dataSince
+          ? first.dataSince
+          : second.dataSince
+        : null,
+  };
+}
+
+function compareMetric(
+  current: number | null,
+  previous: number | null,
+  coverage: ActivityMetricComparison['coverage'],
+  explicitReason?: ActivityMetricComparison['reason'],
+): ActivityMetricComparison {
+  const delta =
+    current !== null && previous !== null ? current - previous : null;
+  const changePercent =
+    delta !== null && previous !== 0 ? (delta / previous) * 100 : null;
+  const requiredCoverage = [
+    coverage.current,
+    coverage.previous,
+    ...(coverage.baseline ? [coverage.baseline] : []),
+  ];
+  const hasInsufficientCoverage = requiredCoverage.some(
+    (item) => item.status !== 'complete',
+  );
+  const reason = hasInsufficientCoverage
+    ? 'unavailable'
+    : (explicitReason ??
+      (current === null || previous === null
+        ? 'unavailable'
+        : previous === 0
+          ? 'zero_denominator'
+          : undefined));
+
+  return {
+    current,
+    previous,
+    delta,
+    changePercent,
+    coverage,
+    ...(reason ? { reason } : {}),
+  };
+}
+
+type RatioResult = {
+  value: number | null;
+  reason?: 'zero_denominator' | 'unavailable';
+};
+
+function ratio(
+  numerator: number | null,
+  denominator: number | null,
+  multiplier: number,
+  coverage: ActivityCoverage,
+): RatioResult {
+  if (
+    coverage.status !== 'complete' ||
+    numerator === null ||
+    denominator === null
+  ) {
+    return { value: null, reason: 'unavailable' };
+  }
+  if (denominator === 0) {
+    return { value: null, reason: 'zero_denominator' };
+  }
+  return { value: (numerator / denominator) * multiplier };
+}
+
+function buildDashboardResponse(
+  ranges: ActivityDashboardRanges,
+  current: ActivityDashboardBaseAggregates,
+  previous: ActivityDashboardBaseAggregates,
+  baseline: ActivityDashboardBaseAggregates,
+  returningUsers: DashboardReturningCounts,
+  asOf: string,
+): ActivityDashboardResponse {
+  const currentActivityCoverage = coverageFor(
+    ranges.current,
+    current.activityDataSince,
+  );
+  const previousActivityCoverage = coverageFor(
+    ranges.previous,
+    current.activityDataSince,
+  );
+  const baselineActivityCoverage = coverageFor(
+    ranges.baseline,
+    current.activityDataSince,
+  );
+  const currentVoteCoverage = coverageFor(
+    ranges.current,
+    current.voteDataSince,
+  );
+  const previousVoteCoverage = coverageFor(
+    ranges.previous,
+    current.voteDataSince,
+  );
+  const currentDerivedCoverage = combinedCoverage(
+    currentActivityCoverage,
+    currentVoteCoverage,
+  );
+  const previousDerivedCoverage = combinedCoverage(
+    previousActivityCoverage,
+    previousVoteCoverage,
+  );
+  const currentReturningCoverage = combinedCoverage(
+    currentActivityCoverage,
+    previousActivityCoverage,
+  );
+  const previousReturningCoverage = combinedCoverage(
+    previousActivityCoverage,
+    baselineActivityCoverage,
+  );
+  const activeUsers = compareMetric(current.activeUsers, previous.activeUsers, {
+    current: currentActivityCoverage,
+    previous: previousActivityCoverage,
+  });
+  const newVotes = compareMetric(current.newVotes, previous.newVotes, {
+    current: currentVoteCoverage,
+    previous: previousVoteCoverage,
+  });
+  const votingUsers = compareMetric(current.votingUsers, previous.votingUsers, {
+    current: currentVoteCoverage,
+    previous: previousVoteCoverage,
+  });
+  const currentParticipation = ratio(
+    current.votingUsers,
+    current.activeUsers,
+    100,
+    currentDerivedCoverage,
+  );
+  const previousParticipation = ratio(
+    previous.votingUsers,
+    previous.activeUsers,
+    100,
+    previousDerivedCoverage,
+  );
+  const currentVotesPerActiveUser = ratio(
+    current.newVotes,
+    current.activeUsers,
+    1,
+    currentDerivedCoverage,
+  );
+  const previousVotesPerActiveUser = ratio(
+    previous.newVotes,
+    previous.activeUsers,
+    1,
+    previousDerivedCoverage,
+  );
+  const currentRetention = ratio(
+    returningUsers.current,
+    previous.activeUsers,
+    100,
+    currentReturningCoverage,
+  );
+  const previousRetention = ratio(
+    returningUsers.previous,
+    baseline.activeUsers,
+    100,
+    previousReturningCoverage,
+  );
+  const currentRatingsAvailable = current.currentRatings !== null;
+
+  return {
+    periods: ranges,
+    timezone: MADRID_TZ,
+    asOf,
+    activityDataSince: current.activityDataSince,
+    voteDataSince: current.voteDataSince,
+    activeUsers,
+    newVotes,
+    votingUsers,
+    participationRate: compareMetric(
+      currentParticipation.value,
+      previousParticipation.value,
+      {
+        current: currentDerivedCoverage,
+        previous: previousDerivedCoverage,
+      },
+      currentParticipation.reason ?? previousParticipation.reason,
+    ),
+    votesPerActiveUser: compareMetric(
+      currentVotesPerActiveUser.value,
+      previousVotesPerActiveUser.value,
+      {
+        current: currentDerivedCoverage,
+        previous: previousDerivedCoverage,
+      },
+      currentVotesPerActiveUser.reason ?? previousVotesPerActiveUser.reason,
+    ),
+    returningUsers: compareMetric(
+      returningUsers.current,
+      returningUsers.previous,
+      {
+        current: currentReturningCoverage,
+        previous: previousReturningCoverage,
+        baseline: baselineActivityCoverage,
+      },
+    ),
+    retentionRate: compareMetric(
+      currentRetention.value,
+      previousRetention.value,
+      {
+        current: currentReturningCoverage,
+        previous: previousReturningCoverage,
+        baseline: baselineActivityCoverage,
+      },
+      currentRetention.reason ?? previousRetention.reason,
+    ),
+    currentRatings: {
+      current: current.currentRatings,
+      previous: null,
+      delta: null,
+      changePercent: null,
+      coverage: {
+        current: {
+          status: currentRatingsAvailable ? 'complete' : 'unavailable',
+          dataSince: null,
+        },
+        previous: { status: 'unavailable', dataSince: null },
+      },
+      reason: 'unavailable',
+    },
+    series: {
+      current: current.series,
+      previous: previous.series,
+    },
+  };
 }

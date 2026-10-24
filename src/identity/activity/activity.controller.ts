@@ -18,6 +18,7 @@ import { GetAccessClient } from './decorators/get-access-client.decorator';
 import { ActivityStatisticsService } from './stats/activity-statistics.service';
 import {
   ActivityDateRangeQueryDto,
+  ActivitySummaryQueryDto,
   ActivityUsersQueryDto,
 } from './stats/dto/activity-date-range-query.dto';
 
@@ -36,7 +37,7 @@ export class ActivityController {
 
   @Get('summary')
   @Auth(ValidRoles.superadmin)
-  getSummary(@Query() query: ActivityDateRangeQueryDto) {
+  getSummary(@Query() query: ActivitySummaryQueryDto) {
     return this.activityStatisticsService.getSummary(query);
   }
 
