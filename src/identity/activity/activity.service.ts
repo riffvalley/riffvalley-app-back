@@ -52,29 +52,6 @@ export class ActivityService {
     };
   }
 
-  async getUserActivity(id: string) {
-    const [votes, logins] = await Promise.all([
-      this.rateRepository.find({
-        where: { user: { id } },
-        relations: ['disc'],
-        order: { createdAt: 'DESC' },
-        select: {
-          id: true,
-          rate: true,
-          cover: true,
-          createdAt: true,
-          editedAt: true,
-        },
-      }),
-      this.userAccessLogRepository.find({
-        where: { userId: id },
-        order: { date: 'DESC' },
-        select: { date: true },
-      }),
-    ]);
-    return { votes, logins };
-  }
-
   async findAllAdminStats(paginationDto: ActivityListQueryDto) {
     const {
       limit = 10,

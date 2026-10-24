@@ -1,6 +1,16 @@
 export interface ActivityDailyCount {
   date: string;
-  count: number;
+  count: number | null;
+}
+
+export interface ActivityDailyPresence {
+  date: string;
+  present: boolean | null;
+}
+
+export interface ActivityDataCoverage {
+  status: ActivityCoverageStatus;
+  dataSince: string | null;
 }
 
 export interface ActivityUserStatistics {
@@ -121,12 +131,19 @@ export interface ActivityUserDetailResponse {
   activeDays7: number | null;
   activeDays30: number | null;
   activeDates: string[];
+  presenceByDay: ActivityDailyPresence[];
   activityDataSince: string | null;
+  activityCoverage: ActivityDataCoverage;
   currentVotes: number;
-  voteActions7: number | null;
-  voteActions30: number | null;
-  voteActionsRecorded: number;
-  lastVoteAt: string | null;
+  newVotes7: number | null;
+  newVotes30: number | null;
+  newVotesRecorded: number;
+  changedVotes7: number | null;
+  changedVotes30: number | null;
+  changedVotesRecorded: number;
+  lastVoteEventAt: string | null;
   voteDataSince: string | null;
-  votesByDay: ActivityDailyCount[];
+  voteCoverage: ActivityDataCoverage;
+  newVotesByDay: ActivityDailyCount[];
+  changedVotesByDay: ActivityDailyCount[];
 }

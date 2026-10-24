@@ -477,24 +477,51 @@ export class ActivityStatisticsService {
         CROSS JOIN context
         WHERE user_id = $1::uuid
       ), vote_summary AS (
-        SELECT COUNT(*)::int AS vote_actions_recorded,
+        SELECT COUNT(*) FILTER (WHERE event_type = 'set')::int AS new_votes_recorded,
+          COUNT(*) FILTER (WHERE event_type = 'change')::int AS changed_votes_recorded,
           MAX(occurred_at) AS last_vote_at,
           COUNT(*) FILTER (
-            WHERE (occurred_at AT TIME ZONE '${MADRID_TZ}')::date BETWEEN context.today - 6 AND context.today
-          )::int AS vote_actions_7,
+            WHERE event_type = 'set'
+              AND (occurred_at AT TIME ZONE '${MADRID_TZ}')::date BETWEEN context.today - 6 AND context.today
+          )::int AS new_votes_7,
           COUNT(*) FILTER (
-            WHERE (occurred_at AT TIME ZONE '${MADRID_TZ}')::date BETWEEN context.today - 29 AND context.today
-          )::int AS vote_actions_30
+            WHERE event_type = 'set'
+              AND (occurred_at AT TIME ZONE '${MADRID_TZ}')::date BETWEEN context.today - 29 AND context.today
+          )::int AS new_votes_30,
+          COUNT(*) FILTER (
+            WHERE event_type = 'change'
+              AND (occurred_at AT TIME ZONE '${MADRID_TZ}')::date BETWEEN context.today - 6 AND context.today
+          )::int AS changed_votes_7,
+          COUNT(*) FILTER (
+            WHERE event_type = 'change'
+              AND (occurred_at AT TIME ZONE '${MADRID_TZ}')::date BETWEEN context.today - 29 AND context.today
+          )::int AS changed_votes_30
         FROM rate_vote_events
         CROSS JOIN context
         WHERE user_id = $1::uuid
       ), activity_dates AS (
         SELECT COALESCE(jsonb_agg(activity_date::text ORDER BY activity_date), '[]'::jsonb) AS dates
         FROM user_app_daily_activity, context
-        WHERE user_id = $1::uuid AND activity_date BETWEEN context.from_date AND context.to_date
+        WHERE user_id = $1::uuid
+          AND activity_date BETWEEN context.from_date AND context.to_date
+          AND activity_date >= context.activity_data_since
+      ), calendar AS (
+        SELECT generate_series(context.from_date, context.to_date, '1 day'::interval)::date AS day
+        FROM context
+      ), presence_daily AS (
+        SELECT calendar.day,
+          CASE
+            WHEN context.activity_data_since IS NULL OR calendar.day < context.activity_data_since THEN NULL
+            ELSE EXISTS (
+              SELECT 1 FROM user_app_daily_activity activity
+              WHERE activity.user_id = $1::uuid AND activity.activity_date = calendar.day
+            )
+          END AS present
+        FROM calendar CROSS JOIN context
       ), vote_daily AS (
         SELECT (event.occurred_at AT TIME ZONE '${MADRID_TZ}')::date AS day,
-          COUNT(*)::int AS action_count
+          COUNT(*) FILTER (WHERE event.event_type = 'set')::int AS new_vote_count,
+          COUNT(*) FILTER (WHERE event.event_type = 'change')::int AS changed_vote_count
         FROM rate_vote_events event
         CROSS JOIN context
         WHERE event.user_id = $1::uuid
@@ -502,11 +529,15 @@ export class ActivityStatisticsService {
           AND event.occurred_at < ((context.to_date + 1)::timestamp AT TIME ZONE '${MADRID_TZ}')
           AND (event.occurred_at AT TIME ZONE '${MADRID_TZ}')::date >= context.vote_data_since
         GROUP BY day
-      ), vote_dates AS (
-        SELECT COALESCE(jsonb_agg(
-          jsonb_build_object('date', day::text, 'count', action_count) ORDER BY day
-        ), '[]'::jsonb) AS dates
-        FROM vote_daily
+      ), daily_series AS (
+        SELECT
+          COALESCE(jsonb_agg(jsonb_build_object('date', presence_daily.day::text, 'present', presence_daily.present) ORDER BY presence_daily.day), '[]'::jsonb) AS presence_by_day,
+          COALESCE(jsonb_agg(jsonb_build_object('date', calendar.day::text, 'count', CASE WHEN context.vote_data_since IS NULL OR calendar.day < context.vote_data_since THEN NULL ELSE COALESCE(vote_daily.new_vote_count, 0) END) ORDER BY calendar.day), '[]'::jsonb) AS new_votes_by_day,
+          COALESCE(jsonb_agg(jsonb_build_object('date', calendar.day::text, 'count', CASE WHEN context.vote_data_since IS NULL OR calendar.day < context.vote_data_since THEN NULL ELSE COALESCE(vote_daily.changed_vote_count, 0) END) ORDER BY calendar.day), '[]'::jsonb) AS changed_votes_by_day
+        FROM calendar
+        CROSS JOIN context
+        JOIN presence_daily ON presence_daily.day = calendar.day
+        LEFT JOIN vote_daily ON vote_daily.day = calendar.day
       ), current_votes AS (
         SELECT COUNT(DISTINCT "discId") FILTER (WHERE rate IS NOT NULL)::int AS count
         FROM rate WHERE "userId" = $1::uuid
@@ -517,19 +548,32 @@ export class ActivityStatisticsService {
         CASE WHEN context.activity_data_since IS NULL OR context.today - 6 < context.activity_data_since THEN NULL ELSE COALESCE(activity.active_days_7, 0) END AS "activeDays7",
         CASE WHEN context.activity_data_since IS NULL OR context.today - 29 < context.activity_data_since THEN NULL ELSE COALESCE(activity.active_days_30, 0) END AS "activeDays30",
         activity_dates.dates AS "activeDates",
+        daily_series.presence_by_day AS "presenceByDay",
         context.activity_data_since::text AS "activityDataSince",
+        jsonb_build_object(
+          'status', CASE WHEN context.activity_data_since IS NULL THEN 'unavailable' WHEN context.from_date < context.activity_data_since THEN 'incomplete' ELSE 'complete' END,
+          'dataSince', context.activity_data_since::text
+        ) AS "activityCoverage",
         COALESCE(current_votes.count, 0)::int AS "currentVotes",
-        CASE WHEN context.vote_data_since IS NULL OR context.today - 6 < context.vote_data_since THEN NULL ELSE COALESCE(vote_summary.vote_actions_7, 0) END AS "voteActions7",
-        CASE WHEN context.vote_data_since IS NULL OR context.today - 29 < context.vote_data_since THEN NULL ELSE COALESCE(vote_summary.vote_actions_30, 0) END AS "voteActions30",
-        COALESCE(vote_summary.vote_actions_recorded, 0)::int AS "voteActionsRecorded",
-        to_char(vote_summary.last_vote_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "lastVoteAt",
         context.vote_data_since::text AS "voteDataSince",
-        vote_dates.dates AS "votesByDay"
+        jsonb_build_object(
+          'status', CASE WHEN context.vote_data_since IS NULL THEN 'unavailable' WHEN context.from_date < context.vote_data_since THEN 'incomplete' ELSE 'complete' END,
+          'dataSince', context.vote_data_since::text
+        ) AS "voteCoverage",
+        CASE WHEN context.vote_data_since IS NULL OR context.today - 6 < context.vote_data_since THEN NULL ELSE COALESCE(vote_summary.new_votes_7, 0) END AS "newVotes7",
+        CASE WHEN context.vote_data_since IS NULL OR context.today - 29 < context.vote_data_since THEN NULL ELSE COALESCE(vote_summary.new_votes_30, 0) END AS "newVotes30",
+        COALESCE(vote_summary.new_votes_recorded, 0)::int AS "newVotesRecorded",
+        CASE WHEN context.vote_data_since IS NULL OR context.today - 6 < context.vote_data_since THEN NULL ELSE COALESCE(vote_summary.changed_votes_7, 0) END AS "changedVotes7",
+        CASE WHEN context.vote_data_since IS NULL OR context.today - 29 < context.vote_data_since THEN NULL ELSE COALESCE(vote_summary.changed_votes_30, 0) END AS "changedVotes30",
+        COALESCE(vote_summary.changed_votes_recorded, 0)::int AS "changedVotesRecorded",
+        to_char(vote_summary.last_vote_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "lastVoteEventAt",
+        daily_series.new_votes_by_day AS "newVotesByDay",
+        daily_series.changed_votes_by_day AS "changedVotesByDay"
       FROM context
       CROSS JOIN activity
       CROSS JOIN vote_summary
       CROSS JOIN activity_dates
-      CROSS JOIN vote_dates
+      CROSS JOIN daily_series
       CROSS JOIN current_votes
       `,
       [userId, range.from, range.to],

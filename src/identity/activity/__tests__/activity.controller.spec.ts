@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { ActivityController } from '../activity.controller';
 import { ActivityService } from '../activity.service';
 import { ActivityStatisticsService } from '../stats/activity-statistics.service';
+import { ActivityInactivityService } from '../stats/activity-inactivity.service';
 
 describe('ActivityController', () => {
   const activityService = {
@@ -15,6 +16,9 @@ describe('ActivityController', () => {
     ActivityStatisticsService,
     'findUsers' | 'getSummary' | 'getUserDetail'
   >;
+  const activityInactivityService = {
+    getInactivity: jest.fn(),
+  } satisfies Pick<ActivityInactivityService, 'getInactivity'>;
   let controller: ActivityController;
 
   beforeEach(() => {
@@ -23,6 +27,7 @@ describe('ActivityController', () => {
     controller = new ActivityController(
       activityService as never,
       activityStatisticsService as never,
+      activityInactivityService as never,
     );
   });
 
@@ -56,5 +61,20 @@ describe('ActivityController', () => {
     ) as unknown[];
 
     expect(guards).toHaveLength(2);
+  });
+
+  it('delegates inactivity queries to the inactivity statistics service', async () => {
+    const result = { totalUsers: 1 };
+    activityInactivityService.getInactivity.mockResolvedValue(result);
+    const query = { asOf: '2026-10-24', limit: 10 };
+
+    await expect(controller.getInactivity(query)).resolves.toBe(result);
+    expect(activityInactivityService.getInactivity).toHaveBeenCalledWith(query);
+    expect(
+      Reflect.getMetadata(
+        '__guards__',
+        ActivityController.prototype.getInactivity,
+      ),
+    ).toHaveLength(2);
   });
 });

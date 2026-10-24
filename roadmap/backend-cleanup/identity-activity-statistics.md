@@ -114,7 +114,11 @@ activeUsers es COUNT(*) de filas usuario/día. periods cuenta usuarios distintos
 
 ### GET /api/activity/users/:userId
 
-Solo superadmin. Devuelve para un usuario los días activos y el detalle de actividad/votos en el rango Madrid solicitado (from/to; por defecto 30 días hasta hoy): { userId, lastActiveDate, activeDays7, activeDays30, activeDates, currentVotes, voteActions7, voteActions30, voteActionsRecorded, lastVoteAt, votesByDay }. voteActionsRecorded suma eventos desde que se activa la captura; no es un total histórico anterior. El rango limita activeDates y votesByDay; activeDays7/30 y voteActions7/30 siempre son ventanas móviles de días naturales Madrid terminadas hoy. Usuarios inexistentes conservan el 404 habitual.
+Solo superadmin. Devuelve las fechas de presencia registrada, `activeDates`, y `presenceByDay` (una fila diaria; `present` es `true`/`false` con cobertura y `null` antes del corte), `lastActiveDate`, `activeDays7/30` y `activityCoverage`. La presencia significa login o restauración diaria de App según el contrato de captura; no es cantidad de sesiones ni interacciones.
+
+El stock `currentVotes` cuenta discos distintos con una valoración actual (`rate IS NOT NULL`) y es independiente del ledger histórico. Los eventos se separan en `newVotes7/30/Recorded` (`set`) y `changedVotes7/30/Recorded` (`change`), con `newVotesByDay` y `changedVotesByDay`. Cada serie contiene todos los días solicitados: `null` antes de `voteDataSince` y `0` en los días cubiertos sin eventos. `voteCoverage` y `activityCoverage` indican `complete`, `incomplete` o `unavailable` para el rango solicitado. Los cortes mantienen el criterio conservador existente: primer día observado + 1 para presencia y día Madrid siguiente al inicio de captura para eventos. `activeDates` no incluye días previos al corte.
+
+`lastActiveDate` es la última presencia registrada y `lastVoteEventAt` la última acción registrada, sea `set` o `change`; ambos son `null` cuando no hay datos. `activeDays7/30`, los campos separados de voto `*7/30` y sus series usan días naturales Madrid. Las cifras de ventana y series son `null` si no hay cobertura suficiente; un cero solo significa período cubierto sin eventos/presencia. `newVotesRecorded` y `changedVotesRecorded` son totales del ledger desde el inicio de captura, no una reconstrucción histórica anterior. I1-E04e retiró los campos combinados temporales del detalle. No hay consumidor interno confirmado en el backend; la migración del frontend desde `GET /api/auth/:id/activity` a esta ruta está en curso en I1-E04d. Usuarios inexistentes conservan 404 y el UUID continúa validado por Nest.
 
 ### Captura de acciones de voto (BC-ID-3F.3)
 
@@ -212,6 +216,32 @@ La tabla tiene FK a `User` con borrado en cascada e índices por `(user_id, occu
 
 La revisión justificó el ledger mínimo de transiciones de `rate`: sin él, las estadísticas exactas de votación diaria solicitadas eran irrecuperables a partir de `Rate`. No se guardan copias de puntuaciones ni datos de disco. BC-ID-3F.1, 3F.2 y 3F.3 están completadas; la integración de 3F.4 está implementada localmente y su cierre depende de publicar el registro y confirmar la captura real.
 
+### Implementación I1-E04b — Actividad individual por tipo de evento
+
+**Estado:** completada el 2026-10-24. No se inicia I1-E04c.
+
+- `GET /api/activity/users/:userId` mantiene ruta, DTO de fechas, UUID, `superadmin`, 404 y zona Madrid. La consulta conserva `currentVotes` como conteo actual de valoraciones Rate y ya no confunde `change` con votos nuevos en los campos nuevos.
+- El contrato añade `newVotes7`, `newVotes30`, `newVotesRecorded`, `changedVotes7`, `changedVotes30`, `changedVotesRecorded`, `lastVoteEventAt`, `newVotesByDay`, `changedVotesByDay`, `presenceByDay`, `activityCoverage` y `voteCoverage`. Los diarios se generan para cada fecha solicitada; las fechas previas a cobertura son `null`, y días cubiertos sin presencia/eventos son `false`/`0`. `activeDates` se limita a `activity_data_since` para no sugerir presencia histórica anterior al tracking.
+- Cobertura del rango: `unavailable` si no hay corte conocido; `incomplete` si `from` es anterior al corte; `complete` en otro caso. Los agregados móviles de 7/30 días quedan `null` si no se cubre toda la ventana. Se conserva la última presencia (`lastActiveDate`) y la última acción del ledger (`lastVoteEventAt`), también en el día parcial del inicio cuando existe timestamp fiable.
+- En I1-E04e se retiraron del detalle los campos temporales combinados `voteActions7/30`, `voteActionsRecorded`, `lastVoteAt` y `votesByDay`; la ruta de listado `/activity/users` conserva sus propios campos combinados por estar fuera de este contrato.
+- Pruebas focalizadas de separación, ceros/null, cobertura parcial, rangos anteriores al corte, series, stock actual y HTTP de UUID, permisos y 404: 2 suites, 24 tests aprobados. El primer intento sandboxed de HTTP falló al abrir listener por `EPERM`; repetido con permiso loopback, pasó.
+- Typecheck (`yarn quality:typecheck`), build (`yarn build`) y `git diff --check` pasaron. `yarn verify` pasó integración, estructura y tipado seguro, y se detuvo en ESLint global: 839 diagnósticos, 0 nuevos y 35 entradas históricas obsoletas de `src/winston.config.ts`, archivo que ya tenía cambios locales ajenos; se dejó intacto. Tras ajustar solo el formato de las pruebas añadidas, el gate informó 0 diagnósticos nuevos.
+- Riesgos pendientes: no se ejecutó SQL contra PostgreSQL, por lo que la consulta se verifica estáticamente y con pruebas de servicio/HTTP, no como integración; tampoco se midieron planes SQL. No se consultó producción ni se ejecutaron migraciones.
+
+### Limpieza I1-E04e — Retirada del contrato legacy de actividad individual
+
+**Estado:** limpieza backend implementada localmente el 2026-10-24. El cierre global de I1-E04e queda pendiente de completar e integrar I1-E04d, ejecutar su regresión frontend y desplegar esa versión frontend.
+
+- Se retiró `GET /api/auth/:id/activity`, su handler `AuthController.getUserActivity()` y `ActivityService.getUserActivity()`. La consulta específica que devolvía ratings con disco y fechas de `UserAccessLog` quedó sin consumidores internos, así que se eliminó. `ActivityService` mantiene `UserAccessLog` porque `findAllAdminStats()` todavía lo usa.
+- Se limpiaron únicamente los campos combinados temporales de `GET /api/activity/users/:userId`: `voteActions7`, `voteActions30`, `voteActionsRecorded`, `lastVoteAt` y `votesByDay`. También se retiraron sus agregados 7/30/recorded de la CTE `vote_summary`, el conteo combinado diario y la serie combinada. `MAX(occurred_at)` se conserva para `lastVoteEventAt`.
+- El detalle mantiene `newVotes7/30/Recorded`, `changedVotes7/30/Recorded`, `newVotesByDay`, `changedVotesByDay`, `presenceByDay`, `lastVoteEventAt`, `activityCoverage`, `voteCoverage`, `activeDays7/30`, `activeDates` y `currentVotes`, con las semánticas actuales de `null`, cero, `false` y coberturas `complete`, `incomplete` y `unavailable`.
+- Se conservan `GET /api/auth/activity` y `ActivityService.getAllActivity()` para el feed global administrativo, además de `findAllAdminStats()`, `/api/activity/summary`, `/api/activity/users`, `/api/activity/app/daily`, captura diaria, captura `set`/`change` y el conteo actual de Rate. El contrato combinado del listado `/api/activity/users` se preserva; solo se limpió el detalle individual solicitado.
+- La búsqueda de referencias en el backend encontró la ruta Auth individual únicamente en el controller, su prueba de roles y llamadas al método en pruebas del servicio/consumidor. La búsqueda de los workspaces Riff Valley disponibles encontró el consumidor histórico frontend en `views/UserActivity.vue` y el servicio legacy; el worktree frontend actual ya consulta el detalle mediante `getActivityUserDetail()` → `/activity/users/:userId` y conserva `getGlobalActivity()` para el feed. Ese worktree tiene numerosos cambios locales sin integrar, así que no demuestra que la migración esté integrada o desplegada. No se identificaron otros consumidores en los repositorios buscados; los documentos `roadmap/roles/*` y `roadmap/backend-cleanup/identity.md` mantienen inventarios históricos que aún mencionan la ruta.
+- Las pruebas actualizadas cubren ausencia de `getUserActivity`/ruta, conservación y contrato del feed global, contrato HTTP definitivo del detalle, separación `set`/`change`, presencia/cobertura, stock de valoraciones actuales, UUID, `superadmin` y 404. También permanecen las pruebas de endpoints compartidos y registro/captura. Resultado focalizado: 7 suites aprobadas, 74 tests aprobados y 7 opt-in omitidos.
+- Typecheck (`yarn quality:typecheck`), Build (`yarn build`) y `git diff --check` pasaron. ESLint de solo lectura (`yarn quality:lint`) informó 839 diagnósticos: 0 nuevos y 35 entradas históricas obsoletas de `src/winston.config.ts`. `yarn verify` se detuvo en ese mismo gate después de aprobar estructura, tipado seguro y pruebas de gates; no se modificaron Winston ni baselines. No se ejecutaron migraciones, SQL contra bases, consultas ni modificaciones de producción o despliegues.
+- **Dependencia de despliegue:** no desplegar esta retirada hasta completar e integrar I1-E04d, ejecutar su regresión y desplegar una versión frontend que ya no consuma `/api/auth/:id/activity`. El código del worktree frontend consultado ya usa `/api/activity/users/:userId`, pero sus cambios aún no están integrados ni se confirmó la versión activa. Antes de autorizar producción, comprobar nuevamente consumidores externos conocidos y confirmar que la versión activa de frontend usa el endpoint nuevo.
+- **Riesgos pendientes:** un frontend o cliente externo todavía en la ruta Auth retirada recibirá 404 tras el despliegue backend. La migración I1-E04d aún está en curso; regresión frontend, inventario completo de consumidores externos e integración/despliegue coordinado siguen pendientes. I1-E04e no se marca globalmente cerrada.
+
 ## Siguiente tarea de implementación recomendada
 
 BC-ID-3F.4 queda pendiente de publicación ordenada del backend, aplicación de migraciones, publicación de App y confirmación de la captura real. No incluye Wiki ni dashboard.
@@ -219,3 +249,83 @@ BC-ID-3F.4 queda pendiente de publicación ordenada del backend, aplicación de 
 ## Procedimiento de PR para futuras tareas autorizadas
 
 Cuando una tarea futura autorice publicar: preparar commit y PR; esperar a que el gateway complete sus checks; si todos pasan, hacer merge; si alguno falla, detenerse e informar. No añadir verificaciones manuales posteriores al gateway, repetir pruebas ni consultar estados adicionales innecesariamente. Esta tarea documental no autoriza push, merge ni despliegue.
+
+### Implementación I1-E05b — Estadísticas de inactividad
+
+**Estado:** backend implementado localmente el 2026-10-24. I1-E05c no se inicia. `roadmap/frontend-architecture.md` no existe en este checkout; se usa como referencia la definición entregada en la tarea y esta sección fija el contrato backend definitivo.
+
+#### Contrato HTTP
+
+`GET /api/activity/inactivity` requiere `@Auth(ValidRoles.superadmin)`. Admite:
+
+| Query | Tipo/valores | Default |
+| --- | --- | --- |
+| `asOf` | fecha estricta `YYYY-MM-DD` | día actual calculado por PostgreSQL en `Europe/Madrid` |
+| `role` | `user`, `collaborator`, `riffvalley`, `superadmin` | sin filtro |
+| `isActive` | `true` o `false` | sin filtro; incluye cuentas deshabilitadas por defecto |
+| `limit` | entero 1–100 | `20` |
+| `offset` | entero >= 0 | `0` |
+| `sortBy` | `lastVoteAt`, `daysSinceLastVote`, `username`, `lastPresenceAt`, `lastRatingModifiedAt`, `currentRatings` | `daysSinceLastVote` |
+| `sortOrder` | `asc` o `desc` | `desc` |
+
+Respuesta definitiva:
+
+```json
+{
+  "asOf": "2026-10-24",
+  "timezone": "Europe/Madrid",
+  "totalUsers": 1,
+  "groups": {
+    "0_2_days": 0,
+    "3_6_days": 0,
+    "7_13_days": 0,
+    "14_29_days": 0,
+    "30_59_days": 0,
+    "60_plus_days": 0,
+    "never_voted": 1,
+    "insufficient_history": 0
+  },
+  "coverage": {
+    "status": "partial",
+    "captureStartedAt": "2026-10-22T10:00:00.000Z",
+    "captureDataSince": "2026-10-22",
+    "interpretation": "set events are reliable from captureStartedAt. Users without any vote event are never_voted only when createdAt is at or after that instant and before the end of asOf; earlier accounts, contradictory vote events, and accounts created after asOf are insufficient_history."
+  },
+  "limit": 20,
+  "offset": 0,
+  "sortBy": "daysSinceLastVote",
+  "sortOrder": "desc",
+  "data": [{
+    "userId": "uuid",
+    "username": "listener",
+    "role": "user",
+    "isActive": true,
+    "lastVoteAt": null,
+    "daysSinceLastVote": null,
+    "inactivityGroup": "never_voted",
+    "lastPresenceAt": "2026-10-24",
+    "lastRatingModifiedAt": null,
+    "currentRatings": 0
+  }]
+}
+```
+
+`groups` siempre contiene los ocho contadores y su suma es `totalUsers`; refleja la población filtrada completa, no solo la página. `data` es la página de esa misma población. Los empates de orden se resuelven por `username ASC` y luego `userId ASC`; los valores nulos van al final. `lastVoteAt` y `coverage.captureStartedAt` son timestamps UTC ISO cuando existen; `lastRatingModifiedAt` conserva el timestamp sin zona de la columna `Rate.editedAt`, sin sufijo de zona. Esa columna puede cambiar por una edición exclusiva de portada, así que informa la última modificación de la fila Rate valorada, no atribuye el cambio a la nota. `lastPresenceAt` es fecha de calendario Madrid. `daysSinceLastVote` es `null` si no hay un último `set` fiable hasta `asOf`.
+
+#### Clasificación y cobertura
+
+- Se usa exclusivamente `rate_vote_events.event_type = 'set'` para el último voto nuevo. `change`, presencia App y modificaciones de Rate no reinician el contador.
+- El límite superior es el inicio del día posterior a `asOf` en `Europe/Madrid`, exclusivo. Cada instante se convierte a fecha Madrid y se restan fechas de calendario; la duración del día (23/25 horas en DST) no interviene.
+- Los tramos son exactamente `0_2_days` (0–2), `3_6_days` (3–6), `7_13_days` (7–13), `14_29_days` (14–29), `30_59_days` (30–59) y `60_plus_days` (60+). Son exclusivos y se aplican solo si existe un `set` en o antes de `asOf`.
+- Sin evento aplicable, `never_voted` requiere fila singleton de captura, alta igual o posterior al corte, alta anterior al final del día `asOf` y ausencia de cualquier evento de voto contradictorio (`set` o `change`). `users.createdAt` es timestamp sin zona, por lo que la comparación interpreta el valor en la zona horaria de sesión PostgreSQL (`current_setting('TimeZone')`) antes de compararlo con instantes `timestamptz`; ese es el convenio de almacenamiento de la columna. Cualquier usuario anterior al corte queda `insufficient_history`; las cuentas creadas después de `asOf` también quedan sin clasificar como nunca. Cualquier evento de voto solo posterior a `asOf` queda `insufficient_history`; `change` nunca reinicia el contador. Usuarios sin eventos y sin fila/corte de captura no se consideran nunca votantes. No se usa fecha de alta como voto ni fecha ficticia.
+- `coverage.status` es `partial` cuando existe el corte global, porque la captura no cubre a todas las cuentas desde su alta; es `unavailable` si falta la fila de captura. `captureDataSince` comunica el día Madrid del corte, que puede ser parcial. Un usuario creado el mismo día pero antes del instante de captura se mantiene desconocido; la comparación se hace por timestamp.
+
+#### Consulta y rendimiento
+
+`ActivityInactivityService` ejecuta una consulta PostgreSQL para ambas salidas. CTEs agregan el último `set` aplicable y evidencia total de `set`/`change`, las valoraciones actuales (`rate IS NOT NULL`), su última modificación y la última presencia. Después se aplica una sola clasificación y población filtrable; la CTE de resumen cuenta todos los grupos y la de página ordena, pagina y proyecta usuarios. No hay lecturas por usuario ni joins de relaciones personales. La consulta usa los índices existentes de eventos; no se añade migración ni índice. No se midió `EXPLAIN ANALYZE` al no acceder a una base PostgreSQL aislada.
+
+#### Pruebas, verificaciones y despliegue
+
+- Pruebas añadidas: clasificación SQL para límites 2/6/13/29/59, aritmética por fechas Madrid e invariancia DST mediante `AT TIME ZONE` (con casos PostgreSQL opt-in de primavera/otoño añadidos a la suite de integración existente), `set` separado de `change`, exclusión de eventos posteriores a `asOf`, corte y fecha de alta, historial insuficiente incluso con evidencia de eventos posteriores, valoraciones/presencia agregadas, filtros, cuenta deshabilitada, paginación y desempate estable, consistencia de suma y respuesta paginada; HTTP cubre `superadmin`, rol/estado, validaciones de fecha, paginación y orden. Resultado focalizado: 7 suites pasaron, 94 tests pasaron y 7 quedaron omitidos por opt-in. Las pruebas PostgreSQL de DST no se ejecutaron porque requieren una base loopback vacía con opt-in.
+- Typecheck (`yarn quality:typecheck`), build (`yarn build`) y `git diff --check` pasaron. `yarn verify` se detuvo en ESLint: 839 diagnósticos totales, cero nuevos y 35 entradas históricas obsoletas de `src/winston.config.ts`. Los gates estructural y de tipado seguro previos aprobaron con cero hallazgos nuevos. Winston, sus baselines y diagnósticos ajenos no se modificaron.
+- Despliegue: requiere que la migración previa de captura de eventos (`1792000000000-CreateRateVoteEvents`) esté aplicada y que `rate_vote_events` y `rate_vote_event_capture` existan. Esta subtarea no ejecuta migraciones, consulta ni modifica producción, ni despliega. No se necesitan cambios de frontend aquí; I1-E05c puede consumir los nombres y estructuras anteriores.

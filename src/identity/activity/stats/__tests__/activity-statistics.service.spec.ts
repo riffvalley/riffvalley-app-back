@@ -878,14 +878,30 @@ describe('ActivityStatisticsService', () => {
         activeDays7: 1,
         activeDays30: 1,
         activeDates: ['2026-10-22'],
+        presenceByDay: [
+          { date: '2026-10-21', present: null },
+          { date: '2026-10-22', present: true },
+        ],
         activityDataSince: '2026-10-22',
+        activityCoverage: { status: 'incomplete', dataSince: '2026-10-22' },
         currentVotes: 1,
-        voteActions7: 1,
-        voteActions30: 1,
-        voteActionsRecorded: 1,
-        lastVoteAt: '2026-10-22T12:00:00.000Z',
+        newVotes7: 1,
+        newVotes30: 1,
+        newVotesRecorded: 1,
+        changedVotes7: 0,
+        changedVotes30: 0,
+        changedVotesRecorded: 0,
+        lastVoteEventAt: '2026-10-22T12:00:00.000Z',
         voteDataSince: '2026-10-22',
-        votesByDay: [{ date: '2026-10-22', count: 1 }],
+        voteCoverage: { status: 'incomplete', dataSince: '2026-10-22' },
+        newVotesByDay: [
+          { date: '2026-10-21', count: null },
+          { date: '2026-10-22', count: 1 },
+        ],
+        changedVotesByDay: [
+          { date: '2026-10-21', count: null },
+          { date: '2026-10-22', count: 0 },
+        ],
       },
     ]);
 
@@ -897,10 +913,29 @@ describe('ActivityStatisticsService', () => {
     ).resolves.toMatchObject({
       userId: 'user-1',
       activeDates: ['2026-10-22'],
-      votesByDay: [{ date: '2026-10-22', count: 1 }],
+      currentVotes: 1,
+      newVotesRecorded: 1,
+      changedVotesRecorded: 0,
+      newVotesByDay: [
+        { date: '2026-10-21', count: null },
+        { date: '2026-10-22', count: 1 },
+      ],
+      changedVotesByDay: [
+        { date: '2026-10-21', count: null },
+        { date: '2026-10-22', count: 0 },
+      ],
+      activityCoverage: { status: 'incomplete', dataSince: '2026-10-22' },
+      voteCoverage: { status: 'incomplete', dataSince: '2026-10-22' },
     });
-    expect(userRepository.query.mock.calls[0][0]).toContain(
-      "AT TIME ZONE 'Europe/Madrid'",
+    const detailSql = userRepository.query.mock.calls[0][0];
+    expect(detailSql).toContain("AT TIME ZONE 'Europe/Madrid'");
+    expect(detailSql).toContain("event_type = 'set'");
+    expect(detailSql).toContain("event_type = 'change'");
+    expect(detailSql).toContain('activity_date >= context.activity_data_since');
+    expect(detailSql).toContain('generate_series');
+    expect(detailSql).toContain('current_votes.count');
+    expect(detailSql).not.toMatch(
+      /voteActions(?:7|30|Recorded)|lastVoteAt|votesByDay|vote_actions_(?:7|30|recorded)|action_count/,
     );
   });
 });

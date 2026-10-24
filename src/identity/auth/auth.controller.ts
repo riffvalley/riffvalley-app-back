@@ -696,12 +696,6 @@ export class AuthController {
     return this.activityService.getAllActivity(query);
   }
 
-  @Get(':id/activity')
-  @Auth(ValidRoles.superadmin)
-  getUserActivity(@Param('id') id: string) {
-    return this.activityService.getUserActivity(id);
-  }
-
   @Get(':id')
   @Auth(ValidRoles.superadmin)
   findOne(@Param('id') id: string) {

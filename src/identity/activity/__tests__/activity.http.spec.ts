@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -13,6 +14,7 @@ import { ValidRoles } from '../../authorization/interfaces/valid-roles';
 import { ActivityController } from '../activity.controller';
 import { ActivityService } from '../activity.service';
 import { ActivityStatisticsService } from '../stats/activity-statistics.service';
+import { ActivityInactivityService } from '../stats/activity-inactivity.service';
 
 describe('App daily activity HTTP authorization', () => {
   const secret = 'app-daily-activity-http-test-secret';
@@ -26,6 +28,7 @@ describe('App daily activity HTTP authorization', () => {
     getSummary: jest.fn(),
     getUserDetail: jest.fn(),
   };
+  const activityInactivityService = { getInactivity: jest.fn() };
   let app: INestApplication;
   let moduleRef: TestingModule;
   let jwtService: JwtService;
@@ -49,6 +52,10 @@ describe('App daily activity HTTP authorization', () => {
         {
           provide: ActivityStatisticsService,
           useValue: activityStatisticsService,
+        },
+        {
+          provide: ActivityInactivityService,
+          useValue: activityInactivityService,
         },
       ],
     }).compile();
@@ -91,6 +98,9 @@ describe('App daily activity HTTP authorization', () => {
     activityStatisticsService.getSummary.mockResolvedValue({ dashboard: {} });
     activityStatisticsService.getUserDetail.mockResolvedValue({
       userId: '00000000-0000-4000-8000-000000000001',
+    });
+    activityInactivityService.getInactivity.mockResolvedValue({
+      totalUsers: 0,
     });
   });
 
@@ -157,6 +167,104 @@ describe('App daily activity HTTP authorization', () => {
     expect(activityStatisticsService.getSummary).toHaveBeenCalledWith(
       expect.objectContaining({ from: '2026-10-01', to: '2026-10-22' }),
     );
+  });
+
+  it('protects inactivity statistics and validates its filters and dates', async () => {
+    await getWithToken('/activity/inactivity', {
+      id: 'user-1',
+      username: 'listener',
+      role: ValidRoles.user,
+    }).expect(403);
+    expect(activityInactivityService.getInactivity).not.toHaveBeenCalled();
+
+    const admin = {
+      id: 'admin-1',
+      username: 'admin',
+      role: ValidRoles.superadmin,
+    };
+    await getWithToken('/activity/inactivity?asOf=2026-02-30', admin).expect(
+      400,
+    );
+    await getWithToken('/activity/inactivity?role=owner', admin).expect(400);
+    await getWithToken('/activity/inactivity?isActive=yes', admin).expect(400);
+    await getWithToken('/activity/inactivity?sortBy=createdAt', admin).expect(
+      400,
+    );
+    expect(activityInactivityService.getInactivity).not.toHaveBeenCalled();
+
+    await getWithToken(
+      '/activity/inactivity?asOf=2026-10-24&role=collaborator&isActive=false&limit=5&offset=10&sortBy=username&sortOrder=desc',
+      admin,
+    ).expect(200);
+    expect(activityInactivityService.getInactivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asOf: '2026-10-24',
+        role: 'collaborator',
+        isActive: 'false',
+        limit: 5,
+        offset: 10,
+        sortBy: 'username',
+        sortOrder: 'desc',
+      }),
+    );
+  });
+
+  it('validates the individual detail UUID and keeps superadmin authorization', async () => {
+    await getWithToken('/activity/users/not-a-uuid', {
+      id: 'admin-1',
+      username: 'admin',
+      role: ValidRoles.superadmin,
+    }).expect(400);
+    expect(activityStatisticsService.getUserDetail).not.toHaveBeenCalled();
+
+    await getWithToken('/activity/users/00000000-0000-4000-8000-000000000001', {
+      id: 'user-1',
+      username: 'listener',
+      role: ValidRoles.user,
+    }).expect(403);
+    expect(activityStatisticsService.getUserDetail).not.toHaveBeenCalled();
+  });
+
+  it('returns separated individual vote activity and preserves 404 for missing users', async () => {
+    const detail = {
+      userId: '00000000-0000-4000-8000-000000000001',
+      lastActiveDate: '2026-10-22',
+      activeDays7: 1,
+      activeDays30: 1,
+      activeDates: ['2026-10-22'],
+      presenceByDay: [{ date: '2026-10-22', present: true }],
+      activityDataSince: '2026-10-22',
+      activityCoverage: { status: 'complete', dataSince: '2026-10-22' },
+      currentVotes: 2,
+      newVotes7: 2,
+      newVotes30: 2,
+      newVotesRecorded: 2,
+      changedVotes7: 1,
+      changedVotes30: 1,
+      changedVotesRecorded: 1,
+      lastVoteEventAt: '2026-10-22T12:00:00.000Z',
+      voteDataSince: '2026-10-22',
+      voteCoverage: { status: 'complete', dataSince: '2026-10-22' },
+      newVotesByDay: [{ date: '2026-10-22', count: 2 }],
+      changedVotesByDay: [{ date: '2026-10-22', count: 1 }],
+    };
+    activityStatisticsService.getUserDetail.mockResolvedValueOnce(detail);
+
+    await getWithToken(
+      '/activity/users/00000000-0000-4000-8000-000000000001?from=2026-10-22&to=2026-10-22',
+      { id: 'admin-1', username: 'admin', role: ValidRoles.superadmin },
+    )
+      .expect(200)
+      .expect(detail);
+
+    activityStatisticsService.getUserDetail.mockRejectedValueOnce(
+      new NotFoundException(),
+    );
+    await getWithToken('/activity/users/00000000-0000-4000-8000-000000000001', {
+      id: 'admin-1',
+      username: 'admin',
+      role: ValidRoles.superadmin,
+    }).expect(404);
   });
 
   it('returns only the definitive dashboard summary contract', async () => {
