@@ -16,5 +16,6 @@ import { WordpressIntegrationModule } from 'src/integrations/wordpress-integrati
     TelegramIntegrationModule,
     WordpressIntegrationModule,
   ],
+  exports: [NewsService],
 })
 export class NewsModule {}

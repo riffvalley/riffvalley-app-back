@@ -162,6 +162,7 @@ export class WeeklyListPublisherService {
             entry.publishedDiscs ?? [],
             (d, trackIds) => buildWeeklyDiscSections(d, trackIds, title),
             false,
+            existingPost.status === 'publish',
           );
 
           list.wpWeeklyPosts = [
@@ -224,6 +225,7 @@ export class WeeklyListPublisherService {
           [],
           (d, trackIds) => buildWeeklyDiscSections(d, trackIds, title),
           false,
+          existingContent.status === 'publish',
         );
 
         const newEntry: PublishedWeeklyPostRecord = {
@@ -289,6 +291,7 @@ export class WeeklyListPublisherService {
           [],
           (d, trackIds) => buildWeeklyDiscSections(d, trackIds, title),
           false,
+          remotePost.status === 'publish',
         );
         publishedDiscs = result.publishedDiscs;
       }
@@ -389,6 +392,7 @@ export class WeeklyListPublisherService {
       entry.wpPostId,
       updatedContent,
       alreadyPublished ? [] : [asignation.disc.id],
+      existingPost.status === 'publish',
     );
 
     if (!alreadyPublished) {

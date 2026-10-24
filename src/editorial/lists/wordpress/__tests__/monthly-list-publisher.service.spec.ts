@@ -376,6 +376,7 @@ describe('MonthlyListPublisherService', () => {
       [],
       expect.any(Function),
       true,
+      false,
     );
     expect(month.wpPublishedDiscs).toEqual([
       toPublishedRecord(month.asignations[0]),
@@ -509,7 +510,7 @@ describe('MonthlyListPublisherService', () => {
     expect(reconciliationService.resolveAuthors).toHaveBeenCalledWith([manual]);
     expect(
       reconciliationService.updatePostContentWithReconciliation,
-    ).toHaveBeenCalledWith(42, expect.stringContaining(footer), [discA]);
+    ).toHaveBeenCalledWith(42, expect.stringContaining(footer), [discA], false);
     expect(month.wpPublishedDiscs).toEqual([toPublishedRecord(manual)]);
     expect(repository.save).toHaveBeenCalledWith(month);
   });
@@ -535,7 +536,7 @@ describe('MonthlyListPublisherService', () => {
     );
     expect(
       reconciliationService.updatePostContentWithReconciliation,
-    ).toHaveBeenCalledWith(42, 'updated remote content', []);
+    ).toHaveBeenCalledWith(42, 'updated remote content', [], false);
     expect(repository.save).not.toHaveBeenCalled();
 
     for (const unavailable of [null, { content: footer, status: 'trash' }]) {

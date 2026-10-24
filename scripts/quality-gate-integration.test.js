@@ -4,19 +4,20 @@ const test = require('node:test');
 const { scripts } = require('../package.json');
 
 const VERIFY_STEPS = [
-  'yarn test:quality-integration',
-  'yarn test:quality-structure',
-  'yarn quality:structure',
-  'yarn test:quality-types',
-  'yarn quality:types',
-  'yarn test:quality-lint',
-  'yarn quality:lint',
-  'yarn test:quality-typecheck',
-  'yarn quality:typecheck',
-  'yarn test:quality-build',
-  'yarn build',
-  'yarn test:quality-tests',
-  'yarn test:unit --runInBand',
+  'pnpm run test:quality-integration',
+  'pnpm run test:quality-structure',
+  'pnpm run quality:structure',
+  'pnpm run test:quality-types',
+  'pnpm run quality:types',
+  'pnpm run test:quality-lint',
+  'pnpm run quality:lint',
+  'pnpm run test:quality-typecheck',
+  'pnpm run quality:typecheck',
+  'pnpm run test:quality-build',
+  'pnpm run test:runtime-dependencies',
+  'pnpm run build',
+  'pnpm run test:quality-tests',
+  'pnpm run test:unit --runInBand',
 ];
 
 test('verify runs every documented control in order and fails fast on a nonzero command', () => {
@@ -26,11 +27,11 @@ test('verify runs every documented control in order and fails fast on a nonzero 
   assert.deepEqual(actualSteps, VERIFY_STEPS);
   assert.ok(
     actualSteps.every((step) => {
-      const scriptName = step.slice('yarn '.length).split(' ')[0];
+      const scriptName = step.slice('pnpm run '.length).split(' ')[0];
       return Boolean(scripts[scriptName]);
     }),
   );
-  assert.equal(actualSteps.some((step) => step.startsWith('yarn test:e2e')), false);
+  assert.equal(actualSteps.some((step) => step.startsWith('pnpm run test:e2e')), false);
   assert.equal(verifyScript.includes('--fix'), false);
   assert.equal(verifyScript.includes('baseline'), false);
 });

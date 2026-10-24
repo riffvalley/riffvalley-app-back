@@ -10,6 +10,7 @@ import {
 } from 'src/integrations/wordpress-integration/wordpress.service';
 import { WpPost } from 'src/integrations/wordpress-integration/types/wordpress.types';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
+import { NewsService } from 'src/product/news/news.service';
 import { PublishedDiscRecord } from '../entities/list.entity';
 import {
   FOOTER_MARKER_CLASS,
@@ -31,15 +32,18 @@ export class ListWordPressReconciliationService {
   constructor(
     private readonly wordpressService: WordpressService,
     private readonly spotifyApiService: SpotifyPublicApiService,
+    private readonly newsService: NewsService,
   ) {}
 
   async updatePostContentWithReconciliation(
     postId: number,
     content: string,
     insertedDiscIds: string[],
+    publicPost = true,
   ) {
     try {
       await this.wordpressService.updatePostContent(postId, content);
+      if (publicPost) this.newsService.invalidateWordPressAndNewsFeedCaches();
       return;
     } catch (error) {
       if (
@@ -68,7 +72,12 @@ export class ListWordPressReconciliationService {
         (discId) =>
           this.getUniqueDiscSection(remotePost.content, discId) !== null,
       );
-      if (insertedBlocksConfirmed && remotePost.content === content) return;
+      if (insertedBlocksConfirmed && remotePost.content === content) {
+        if (remotePost.status === 'publish') {
+          this.newsService.invalidateWordPressAndNewsFeedCaches();
+        }
+        return;
+      }
 
       throw this.uncertainWordPressResult(
         `post #${postId} does not exactly match the requested content`,
@@ -95,6 +104,9 @@ export class ListWordPressReconciliationService {
         tags,
         slug,
       );
+      if (post.status === 'publish') {
+        this.newsService.invalidateWordPressAndNewsFeedCaches();
+      }
       return { post, reconciled: false };
     } catch (error) {
       if (
@@ -122,6 +134,10 @@ export class ListWordPressReconciliationService {
         throw new ConflictException(
           `WordPress post slug ${slug} is in the trash; review it manually before retrying`,
         );
+      }
+
+      if (post.status === 'publish') {
+        this.newsService.invalidateWordPressAndNewsFeedCaches();
       }
 
       return { post, reconciled: true };
@@ -201,6 +217,7 @@ export class ListWordPressReconciliationService {
     publishedDiscs: PublishedDiscRecord[],
     buildSections: DiscBlockBuilder,
     useAuthors: boolean,
+    publicPost = true,
   ): Promise<{
     publishedDiscs: PublishedDiscRecord[];
     updatedContent: string;
@@ -298,6 +315,7 @@ export class ListWordPressReconciliationService {
           wpPostId,
           updatedContent,
           newDiscs.map((a) => a.disc.id),
+          publicPost,
         );
       }
     }

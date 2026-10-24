@@ -1,3 +1,66 @@
+# N24-01 — Preparación Node 24 y pnpm 11 (2026-10-24)
+
+**Estado:** migración local preparada; no desplegada. No se modificaron configuración, releases ni dynos de producción, y no se ejecutaron migraciones PostgreSQL.
+
+### Inspección de Heroku CLI
+
+- Aplicación confirmada: `spammusic-back`; remoto Heroku existente: `https://git.heroku.com/spammusic-back.git`; stack `heroku-24`; formación observada: `web: 1`.
+- Buildpacks actuales, en orden: `heroku/nodejs` y `https://github.com/jontewks/puppeteer-heroku-buildpack`. Se conservan ambos y el stack.
+- Release observado: `v352` (`Deploy 15932635`). Una ejecución one-off de solo lectura confirmó Node `v22.23.4`; pnpm no está disponible en ese release. La rama y el commit de trabajo locales no coinciden con ese release.
+- El mecanismo Heroku Git existe y está configurado como remoto; no se ha confirmado desde CLI si Automatic Deploys del dashboard está activo.
+
+### Preparación local
+
+`package.json` fija Node `24.x` y pnpm `11.28.7`; `.nvmrc`, `Procfile`, Docker, CI, scripts y documentación activa usan esas versiones. `pnpm-lock.yaml` se importó de `yarn.lock` sin upgrades deliberados; `multer@2.0.2` quedó declarado como dependencia de desarrollo para que su mock de Jest funcione con resolución estricta. La instalación congelada, gates de calidad, build y `pnpm run verify` pasan con Node `24.22.1` y pnpm `11.28.7`.
+
+El preflight, el comando de publicación por SHA confirmado, las comprobaciones del build/runtime y el rollback están descritos en [README.md](../../README.md#despliegue-en-heroku). Repetir el preflight contra la rama y commit finales y confirmar el build de Heroku antes de considerar el cambio desplegado. La autorización explícita de despliegue sigue pendiente.
+
+## N24-02 — Candidato de despliegue (2026-10-24)
+
+**Estado:** commit local preparado; no publicado. El commit de runtime es `0b1b49c00422317f3b6b3f339e1f111fd068a7aa` en `chore/n24-node24-pnpm11`, basado en el árbol desplegado. `origin/main` y la release `v352` apuntan a `15932635ba9093d669f7a30a69362543f4a7328d`; la diferencia de árbol entre `origin/main` y el HEAD anterior al cambio N24 era cero. El cambio Activity `e857473` ya está incluido en ese merge de producción. Identity, Activity, estadísticas, integraciones, autenticación y migraciones no tienen cambios funcionales pendientes que entren con este candidato.
+
+### Archivos del commit N24
+
+El commit contiene 16 paths de la migración: `.github/workflows/backend-quality.yml`, `.nvmrc`, `AGENTS.md`, `CLAUDE.md`, `Dockerfile`, `Procfile`, `README.md`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, este runbook, `scripts/db-migrate-heroku.sh`, `scripts/db-migrate-heroku.test.js`, `scripts/db-migrations.js`, `scripts/quality-gate-integration.test.js` y la eliminación de `yarn.lock`. No incluye cambios de otros worktrees ni cambios de lógica de negocio.
+
+### Estado actual de Heroku
+
+- App `spammusic-back`, stack `heroku-24`, un dyno web y release actual `v352` (`Deploy 15932635`). Runtime comprobado por one-off: Node `v22.23.4`; `pnpm` no está instalado en ese release.
+- La consulta CLI actual lista únicamente el buildpack clásico `heroku/nodejs`. N24-01 había registrado también el buildpack de Puppeteer; en la inspección actual ya no aparece, y no se ha cambiado configuración.
+- GitHub `main` apunta a `15932635ba9093d669f7a30a69362543f4a7328d`. El remoto Git Heroku `main` apunta a `4dd586a7a326e1d982e50b3b633cd23092b4a1e2`, antecesor del commit candidato; el push indicado abajo sería fast-forward.
+- La release actual coincide con GitHub `main`, mientras que `heroku/main` permanece atrás. Esto sugiere que la release llegó desde la integración GitHub; la CLI no confirma si Automatic Deploys está habilitado. Verificarlo en el dashboard antes de publicar para evitar una segunda vía de despliegue concurrente.
+- No se consultaron config vars, secretos ni logs de producción. No se cambiaron buildpacks, stack, dynos ni releases.
+
+### Comprobaciones y comando preparado
+
+`pnpm install --frozen-lockfile` pasó con Node `24.22.1` y pnpm `11.28.7`. `pnpm run verify` reutiliza el resultado de N24-01: desde entonces no cambiaron código ni dependencias; solo se actualizó documentación. Ese resultado incluye build, typecheck, gates estructurales y 206 suites/2.035 tests aprobados. `git diff --check` pasó antes del commit de runtime; se repitió para este cambio documental.
+
+El commit de runtime que se desplegaría es:
+
+```sh
+git push heroku 0b1b49c00422317f3b6b3f339e1f111fd068a7aa:main
+```
+
+No se ejecutó. Antes de usarlo hay que confirmar de nuevo app/remoto, SHA, estado del buildpack, Automatic Deploys y relación fast-forward. Tras autorizar el despliegue, revisar el resultado del build, comprobar `node --version` y `pnpm --version` con one-offs, confirmar `web.1` y el arranque NestJS, y examinar logs de arranque sin divulgar credenciales. La release anterior identificada para rollback es `v352`; el comando disponible es `heroku releases:rollback v352 --app spammusic-back`. No se ejecutarán migraciones PostgreSQL; los smoke tests funcionales quedan a cargo del responsable.
+
+### N24-03/N24-04 — Primer intento de build y corrección (2026-10-24)
+
+El push autorizado del commit `0b1b49c00422317f3b6b3f339e1f111fd068a7aa` fue rechazado por Heroku durante `nest build`. Heroku instaló Node `24.22.1`, pnpm `11.28.7` y las dependencias con `pnpm-lock.yaml`; la compilación falló porque `src/data-source.ts` importa `dotenv`, que no estaba declarado directamente y por ello no era resoluble con pnpm en el entorno de build. No se creó release ni cambió el ref Git de Heroku. La consulta de solo lectura posterior confirmó `v352` actual; `web.1` seguía activo.
+
+N24-04 corrige únicamente la declaración de producción, fijando `dotenv@16.4.5`, versión ya presente en el lockfile. El candidato de corrección es `adf34d3` (`fix(deps): declare dotenv for data source`), con cambios solo en `package.json` y `pnpm-lock.yaml`. Se verificó con instalación limpia, build y `pnpm run verify`. No se hizo un segundo push, ni se ejecutaron migraciones o cambios de configuración de Heroku.
+
+### N24-05 — Crash de v353 y corrección local de runtime (2026-10-24)
+
+La consulta segura de Heroku confirmó `v354` (`Rollback to v352`) activa y `web.1` `up`; `v353` fue el deploy de `adf34d3` y quedó con `web.1` `crashed`. Los logs de v353 señalaron `Cannot find module 'express'` al arrancar.
+
+La causa fue el import de valores `json` y `urlencoded` desde `express` en `src/main.ts`. `@nestjs/platform-express` instala Express como dependencia suya, pero la aplicación no lo tenía declarado en sus propias `dependencies`; pnpm no crea un enlace raíz para una dependencia transitiva. Nest podía compilar usando los tipos de `@types/express` (devDependency), aunque el módulo no estaba disponible para el `require('express')` de runtime.
+
+N24-05 añade `express@4.21.2` como dependencia de producción, la misma versión ya resuelta por `@nestjs/platform-express`. El commit candidato es `78585cb` (`fix(runtime): declare Express and gate production module loading`). También añade una comprobación al build que carga los imports externos detectados en los JS de `dist`, exige que estén declarados en `dependencies` y se integra en `verify`. La instalación aislada `--prod` con lockfile congelado pudo cargar 25 módulos externos de 447 archivos compilados. No se conectó PostgreSQL ni se arrancó la aplicación completa contra servicios externos.
+
+El preflight antes del push confirmó `v354` con `web.1` `up`, stack `heroku-24`, buildpack `heroku/nodejs` y `heroku/main` en `adf34d3`. Tras autorización explícita se publicó `78585cb017b8e59eb8b0aa3ad3536e03e502d2f9`; Heroku creó `v355`.
+
+El build instaló Node `24.22.1` y pnpm `11.28.7`, compiló NestJS y pasó el gate de runtime (447 archivos compilados; 25 módulos externos declarados en producción y cargables). Heroku podó las devDependencies. La verificación posterior mostró `web.1` `up`; un one-off confirmó Node `24.22.1`, pnpm `11.28.7`, Express `4.21.2` y dotenv `16.4.5`. El resumen filtrado de logs encontró el marcador de arranque NestJS y ninguna señal de `ERROR`, `FATAL` o módulo ausente. No se consultaron secretos, no se ejecutaron migraciones ni pruebas funcionales de la aplicación.
+
 # P.1 — Preflight PostgreSQL de producción y secuencia de corte
 
 > **Nota de vigencia (2026-10-22):** P.3.6 registra la migración de roles completada. El comando `migration:roles` y su runner fueron retirados después de confirmar en lectura los ledgers local y de producción (BC-ROLES-MIG-1). Las instrucciones que nombran ese comando describen el procedimiento histórico ejecutado y no son comandos disponibles.

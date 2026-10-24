@@ -6,6 +6,7 @@ import { List } from './entities/list.entity';
 import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { WordpressIntegrationModule } from 'src/integrations/wordpress-integration/wordpress-integration.module';
+import { NewsModule } from 'src/product/news/news.module';
 import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 import { ListCalendarService } from './application/list-calendar.service';
 import { ListCrudService } from './application/list-crud.service';
@@ -29,6 +30,7 @@ import { MonthlyListPublisherService } from './wordpress/monthly-list-publisher.
     TypeOrmModule.forFeature([List, Content]),
     AuthorizationModule,
     WordpressIntegrationModule,
+    NewsModule,
     SpotifyIntegrationModule,
   ],
   exports: [ListsService],

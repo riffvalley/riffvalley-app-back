@@ -146,7 +146,7 @@ same_attachment_snapshot() {
 
 fetch_status() {
   local output
-  output="$(heroku run --app "$APP" --no-tty --exit-code -- yarn db:status --json)" || return 1
+  output="$(heroku run --app "$APP" --no-tty --exit-code -- pnpm run db:status --json)" || return 1
   STATUS_JSON="$(printf '%s\n' "$output" | parse_status_output)" || return 1
   node -e '
     const status = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
@@ -228,7 +228,7 @@ fi
 pending_count="$(json_pending_count "$STATUS_INITIAL")"
 if [[ "$pending_count" == "0" ]]; then
   printf 'No hay migraciones pendientes. No se creó backup ni se ejecutaron migraciones.\n'
-  heroku run --app "$APP" --no-tty --exit-code -- yarn db:check || fail 'db:check no confirmó un ledger al día.'
+  heroku run --app "$APP" --no-tty --exit-code -- pnpm run db:check || fail 'db:check no confirmó un ledger al día.'
   exit 0
 fi
 
@@ -301,7 +301,7 @@ if ! fetch_attachment_status || ! validate_migration_inventory "$STATUS_JSON" "$
 fi
 
 printf 'Revalidación correcta. Ejecutando db:migrate una única vez.\n'
-if migration_output="$(heroku run --app "$APP" --no-tty --exit-code -- yarn db:migrate --confirm "$confirmation")"; then
+if migration_output="$(heroku run --app "$APP" --no-tty --exit-code -- pnpm run db:migrate --confirm "$confirmation")"; then
   printf '%s\n' "$migration_output"
 else
   migration_exit=$?
@@ -322,7 +322,7 @@ else
   verification_ok=0
 fi
 
-if check_output="$(heroku run --app "$APP" --no-tty --exit-code -- yarn db:check)"; then
+if check_output="$(heroku run --app "$APP" --no-tty --exit-code -- pnpm run db:check)"; then
   printf '%s\n' "$check_output"
 else
   check_exit=$?
