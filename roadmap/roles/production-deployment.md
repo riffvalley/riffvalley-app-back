@@ -1,3 +1,20 @@
+# N24-01 — Preparación Node 24 y pnpm 11 (2026-10-24)
+
+**Estado:** migración local preparada; no desplegada. No se modificaron configuración, releases ni dynos de producción, y no se ejecutaron migraciones PostgreSQL.
+
+### Inspección de Heroku CLI
+
+- Aplicación confirmada: `spammusic-back`; remoto Heroku existente: `https://git.heroku.com/spammusic-back.git`; stack `heroku-24`; formación observada: `web: 1`.
+- Buildpacks actuales, en orden: `heroku/nodejs` y `https://github.com/jontewks/puppeteer-heroku-buildpack`. Se conservan ambos y el stack.
+- Release observado: `v352` (`Deploy 15932635`). Una ejecución one-off de solo lectura confirmó Node `v22.23.4`; pnpm no está disponible en ese release. La rama y el commit de trabajo locales no coinciden con ese release.
+- El mecanismo Heroku Git existe y está configurado como remoto; no se ha confirmado desde CLI si Automatic Deploys del dashboard está activo.
+
+### Preparación local
+
+`package.json` fija Node `24.x` y pnpm `11.28.7`; `.nvmrc`, `Procfile`, Docker, CI, scripts y documentación activa usan esas versiones. `pnpm-lock.yaml` se importó de `yarn.lock` sin upgrades deliberados; `multer@2.0.2` quedó declarado como dependencia de desarrollo para que su mock de Jest funcione con resolución estricta. La instalación congelada, gates de calidad, build y `pnpm run verify` pasan con Node `24.22.1` y pnpm `11.28.7`.
+
+El preflight, el comando de publicación por SHA confirmado, las comprobaciones del build/runtime y el rollback están descritos en [README.md](../../README.md#despliegue-en-heroku). Repetir el preflight contra la rama y commit finales y confirmar el build de Heroku antes de considerar el cambio desplegado. La autorización explícita de despliegue sigue pendiente.
+
 # P.1 — Preflight PostgreSQL de producción y secuencia de corte
 
 > **Nota de vigencia (2026-10-22):** P.3.6 registra la migración de roles completada. El comando `migration:roles` y su runner fueron retirados después de confirmar en lectura los ledgers local y de producción (BC-ROLES-MIG-1). Las instrucciones que nombran ese comando describen el procedimiento histórico ejecutado y no son comandos disponibles.

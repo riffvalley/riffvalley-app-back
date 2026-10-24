@@ -83,13 +83,13 @@ function printJsonStatus(dataSource, status) {
 async function run(command, args = process.argv.slice(3)) {
   if (args.includes('--help') || args.includes('-h')) {
     console.log(
-      'Uso: yarn db:status [--json] | yarn db:check | yarn db:migrate [--confirm <DB_NAME>:<Migracion1,Migracion2>]',
+      'Uso: pnpm run db:status [--json] | pnpm run db:check | pnpm run db:migrate [--confirm <DB_NAME>:<Migracion1,Migracion2>]',
     );
     return;
   }
   if (!['status', 'check', 'migrate'].includes(command)) {
     throw new Error(
-      'Uso: yarn db:status [--json] | yarn db:check | yarn db:migrate [--confirm <base>:<Migracion1,Migracion2>]',
+      'Uso: pnpm run db:status [--json] | pnpm run db:check | pnpm run db:migrate [--confirm <base>:<Migracion1,Migracion2>]',
     );
   }
   const jsonStatus = args.includes('--json');
@@ -107,12 +107,12 @@ async function run(command, args = process.argv.slice(3)) {
   const compiledMigrationsPath = path.resolve(__dirname, '../dist/migrations');
   if (!require('node:fs').existsSync(compiledDataSourcePath)) {
     throw new Error(
-      'No existe dist/data-source.js. Ejecuta yarn build antes del comando de migraciones.',
+      'No existe dist/data-source.js. Ejecuta pnpm run build antes del comando de migraciones.',
     );
   }
   if (!require('node:fs').existsSync(compiledMigrationsPath)) {
     throw new Error(
-      'No existe dist/migrations. Ejecuta yarn build antes del comando de migraciones.',
+      'No existe dist/migrations. Ejecuta pnpm run build antes del comando de migraciones.',
     );
   }
 

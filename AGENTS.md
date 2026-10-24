@@ -4,53 +4,53 @@ Guía de trabajo para el backend Riff Valley, una API REST con NestJS y TypeORM.
 
 ## Entorno y comandos
 
-El repositorio admite Node `20.18.1+` y `22.x` en `package.json`; `.nvmrc` mantiene Node 20 como referencia local. Usa Yarn `1.22.22`, fijado por `packageManager`, para las tareas del proyecto.
+El repositorio requiere Node `24.x` y pnpm `11.28.7`, fijado en `packageManager`. `.nvmrc` mantiene Node 24 como referencia local. Usa pnpm para instalar dependencias y ejecutar tareas del proyecto.
 
-El mínimo `20.18.1` viene de los engines de Cheerio y Undici. `sanitize-html` se fija en `2.17.5` porque `2.17.6` requiere Node `>=22.12.0`; la aplicación configura allowlists que no permiten `svg`, `math`, `textarea` ni `xmp`, etiquetas necesarias para los casos vulnerables corregidos en `2.17.6`. Antes de subir esa dependencia, revisa la compatibilidad de engines y esas opciones.
+El mínimo anterior `20.18.1` venía de los engines de Cheerio y Undici; Node 24 satisface ambos requisitos. `sanitize-html` se fija en `2.17.5` porque `2.17.6` requiere Node `>=22.12.0`; la aplicación configura allowlists que no permiten `svg`, `math`, `textarea` ni `xmp`, etiquetas necesarias para los casos vulnerables corregidos en `2.17.6`. Antes de subir esa dependencia, revisa la compatibilidad de engines y esas opciones.
 
 ```bash
-yarn start:dev
-yarn build
-yarn test
-yarn test:unit
-yarn test:watch
-yarn test:e2e
-yarn lint
-yarn migration:generate src/migrations/NombreMigracion
-yarn migration:run
-yarn migration:revert
-yarn test:quality-structure
-yarn quality:structure
-yarn test:quality-lint
-yarn quality:lint
-yarn test:quality-build
-yarn test:quality-tests
-yarn test:quality-typecheck
-yarn quality:typecheck
-yarn test:quality-types
-yarn quality:types
-yarn verify
+pnpm run start:dev
+pnpm run build
+pnpm run test
+pnpm run test:unit
+pnpm run test:watch
+pnpm run test:e2e
+pnpm run lint
+pnpm run migration:generate src/migrations/NombreMigracion
+pnpm run migration:run
+pnpm run migration:revert
+pnpm run test:quality-structure
+pnpm run quality:structure
+pnpm run test:quality-lint
+pnpm run quality:lint
+pnpm run test:quality-build
+pnpm run test:quality-tests
+pnpm run test:quality-typecheck
+pnpm run quality:typecheck
+pnpm run test:quality-types
+pnpm run quality:types
+pnpm run verify
 ```
 
-`yarn lint` ejecuta ESLint con `--fix` y puede modificar archivos. Revisa su alcance antes de ejecutarlo. Para comprobar un archivo sin autocorrección, invoca ESLint con `--no-fix`. `yarn quality:typecheck` es el chequeo de tipos independiente: comprueba `tsconfig.json` con `noEmit` e `incremental: false`, equivalente al comando directo `yarn tsc --noEmit --incremental false`. `yarn test:quality-typecheck` prueba el control con proyectos TypeScript temporales limpios y fallidos. `yarn build` ejecuta `nest build` de forma independiente y sin baseline. `yarn test:quality-build` comprueba el BuildAction de Nest CLI con un fixture válido y otro con un error de compilación.
+`pnpm run lint` ejecuta ESLint con `--fix` y puede modificar archivos. Revisa su alcance antes de ejecutarlo. Para comprobar un archivo sin autocorrección, invoca ESLint con `--no-fix`. `pnpm run quality:typecheck` es el chequeo de tipos independiente: comprueba `tsconfig.json` con `noEmit` e `incremental: false`, equivalente al comando directo `pnpm exec tsc --noEmit --incremental false`. `pnpm run test:quality-typecheck` prueba el control con proyectos TypeScript temporales limpios y fallidos. `pnpm run build` ejecuta `nest build` de forma independiente y sin baseline. `pnpm run test:quality-build` comprueba el BuildAction de Nest CLI con un fixture válido y otro con un error de compilación.
 
-`yarn verify` es el control estándar completo y ejecuta, en orden, las pruebas y el validador estructural, las pruebas y el validador de tipado seguro, las pruebas y ESLint de solo lectura, las pruebas y el typecheck, las pruebas del build y `yarn build`, las pruebas del propio control Jest y todas las suites unitarias en modo serial. Cada paso se encadena con `&&`: cualquier fallo detiene la secuencia y devuelve un código no cero. Los comandos independientes siguen disponibles para trabajo focalizado. E2E permanece separado y no forma parte de `verify` porque puede requerir PostgreSQL u otros servicios reales.
+`pnpm run verify` es el control estándar completo y ejecuta, en orden, las pruebas y el validador estructural, las pruebas y el validador de tipado seguro, las pruebas y ESLint de solo lectura, las pruebas y el typecheck, las pruebas del build y `pnpm run build`, las pruebas del propio control Jest y todas las suites unitarias en modo serial. Cada paso se encadena con `&&`: cualquier fallo detiene la secuencia y devuelve un código no cero. Los comandos independientes siguen disponibles para trabajo focalizado. E2E permanece separado y no forma parte de `verify` porque puede requerir PostgreSQL u otros servicios reales.
 
-GitHub Actions ejecuta `yarn verify` en `push` y `pull_request`, con matriz Node 20/22. El workflow conserva estado de fallo y logs visibles. No configura protección de ramas ni checks obligatorios para merge; esa política se gestiona fuera de este repositorio.
+GitHub Actions ejecuta `pnpm run verify` en `push` y `pull_request`, con Node 24. El workflow conserva estado de fallo y logs visibles. No configura protección de ramas ni checks obligatorios para merge; esa política se gestiona fuera de este repositorio.
 
 ### Quality Gate de pruebas
 
-`yarn test:unit` ejecuta las suites unitarias de `src/` usando la configuración Jest de `package.json`; `yarn test:e2e` ejecuta únicamente los specs `*.e2e-spec.ts` mediante `test/jest-e2e.json`. Ambos comandos propagan el resultado de Jest: cualquier test fallido termina con código distinto de cero. No hay baseline de tests. `yarn test:quality-tests` comprueba esa conducta con un fixture Jest aprobado y otro que falla una expectativa. Las reglas y pruebas unitarias son obligatorias para código nuevo y `yarn test:unit` forma parte de `yarn verify`. E2E queda fuera del control estándar; ejecútalo solo cuando el entorno esté aislado y autorizado. No conectes tests a PostgreSQL ni servicios reales por defecto.
+`pnpm run test:unit` ejecuta las suites unitarias de `src/` usando la configuración Jest de `package.json`; `pnpm run test:e2e` ejecuta únicamente los specs `*.e2e-spec.ts` mediante `test/jest-e2e.json`. Ambos comandos propagan el resultado de Jest: cualquier test fallido termina con código distinto de cero. No hay baseline de tests. `pnpm run test:quality-tests` comprueba esa conducta con un fixture Jest aprobado y otro que falla una expectativa. Las reglas y pruebas unitarias son obligatorias para código nuevo y `pnpm run test:unit` forma parte de `pnpm run verify`. E2E queda fuera del control estándar; ejecútalo solo cuando el entorno esté aislado y autorizado. No conectes tests a PostgreSQL ni servicios reales por defecto.
 
 ### Quality Gate de ESLint
 
-`yarn quality:lint` ejecuta ESLint sobre `src/` y `test/` mediante su API con `fix: false` y `cache: false`, y presenta diagnósticos agrupados por regla y ruta. No uses `yarn lint` para comprobar el gate: ese script aplica `--fix` y puede modificar archivos. Las pruebas del control son `yarn test:quality-lint`; ambos se ejecutan en `yarn verify` y son obligatorios para código nuevo.
+`pnpm run quality:lint` ejecuta ESLint sobre `src/` y `test/` mediante su API con `fix: false` y `cache: false`, y presenta diagnósticos agrupados por regla y ruta. No uses `pnpm run lint` para comprobar el gate: ese script aplica `--fix` y puede modificar archivos. Las pruebas del control son `pnpm run test:quality-lint`; ambos se ejecutan en `pnpm run verify` y son obligatorios para código nuevo.
 
-El baseline temporal `scripts/eslint-quality-gate.baseline.json` identifica cada diagnóstico mediante regla, ruta relativa, huella de regla/severidad/mensaje normalizado/línea de origen y ordinal de ocurrencia entre firmas idénticas del archivo. La identidad no incluye línea ni columna de ubicación, que se conservan solo para los informes; así, insertar o eliminar líneas ajenas no invalida entradas históricas. El ordinal conserva cada repetición y el comparador rechaza ocurrencias nuevas, entradas obsoletas y claves duplicadas. La versión 2 del baseline conserva los 2.226 hallazgos preexistentes documentados en BC-QG2; no agregues infracciones nuevas. Cuando un diagnóstico se resuelva, elimina su entrada correspondiente. `yarn verify` y CI ejecutan este gate sin autocorrección ni regeneración de baseline.
+El baseline temporal `scripts/eslint-quality-gate.baseline.json` identifica cada diagnóstico mediante regla, ruta relativa, huella de regla/severidad/mensaje normalizado/línea de origen y ordinal de ocurrencia entre firmas idénticas del archivo. La identidad no incluye línea ni columna de ubicación, que se conservan solo para los informes; así, insertar o eliminar líneas ajenas no invalida entradas históricas. El ordinal conserva cada repetición y el comparador rechaza ocurrencias nuevas, entradas obsoletas y claves duplicadas. La versión 2 del baseline conserva los 2.226 hallazgos preexistentes documentados en BC-QG2; no agregues infracciones nuevas. Cuando un diagnóstico se resuelva, elimina su entrada correspondiente. `pnpm run verify` y CI ejecutan este gate sin autocorrección ni regeneración de baseline.
 
 ### Quality Gate de typecheck
 
-`yarn quality:typecheck` comprueba el proyecto configurado en `tsconfig.json`, sin emitir archivos y sin depender de Nest build ni Jest. El estado inicial comprobado no tiene diagnósticos, así que no hay baseline histórico. Si una captura futura reproduce deuda preexistente, cualquier baseline temporal debe enumerar diagnósticos exactos por código TypeScript, ruta relativa, línea, columna y huella; el gate rechaza diagnósticos nuevos, entradas obsoletas y duplicadas. Las pruebas son `yarn test:quality-typecheck`. `yarn verify` y CI ejecutan ambos pasos por separado del build y de Jest.
+`pnpm run quality:typecheck` comprueba el proyecto configurado en `tsconfig.json`, sin emitir archivos y sin depender de Nest build ni Jest. El estado inicial comprobado no tiene diagnósticos, así que no hay baseline histórico. Si una captura futura reproduce deuda preexistente, cualquier baseline temporal debe enumerar diagnósticos exactos por código TypeScript, ruta relativa, línea, columna y huella; el gate rechaza diagnósticos nuevos, entradas obsoletas y duplicadas. Las pruebas son `pnpm run test:quality-typecheck`. `pnpm run verify` y CI ejecutan ambos pasos por separado del build y de Jest.
 
 ## Estructura NestJS obligatoria
 
@@ -65,13 +65,13 @@ Esta norma se aplica a todos los módulos NestJS, incluidos los anidados, y a cu
 
 El validador `scripts/structural-quality-gate.js` descubre módulos NestJS reales —también anidados— en `src/`, `apps/`, `libs/` y `test/`, y comprueba los archivos de sus raíces y la ubicación de los specs. Sus pruebas están en `scripts/structural-quality-gate.test.js`.
 
-Las infracciones preexistentes se permiten solo mediante rutas exactas y regla en `scripts/structural-quality-gate.baseline.json`. El baseline es temporal: no añadas entradas para código nuevo; al corregir una infracción, elimina su entrada correspondiente. El gate falla ante infracciones nuevas, entradas obsoletas o duplicadas. `yarn verify` ejecuta sus pruebas y validador; CI lo comprueba en `.github/workflows/backend-quality.yml`.
+Las infracciones preexistentes se permiten solo mediante rutas exactas y regla en `scripts/structural-quality-gate.baseline.json`. El baseline es temporal: no añadas entradas para código nuevo; al corregir una infracción, elimina su entrada correspondiente. El gate falla ante infracciones nuevas, entradas obsoletas o duplicadas. `pnpm run verify` ejecuta sus pruebas y validador; CI lo comprueba en `.github/workflows/backend-quality.yml`.
 
 ### Quality Gate de tipado seguro
 
-Todo código TypeScript dentro de `src/`, `apps/`, `libs/` y `test/` debe evitar tipos explícitos `any`, cadenas de aserciones `expresión as unknown as Tipo` y directivas `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck` o `eslint-disable` (incluidas sus variantes por línea). El validador AST/scanner es `scripts/type-safety-quality-gate.js`; `yarn quality:types` lo ejecuta y `yarn test:quality-types` corre sus pruebas. Las pruebas Jest `expect.any(...)` no son infracciones.
+Todo código TypeScript dentro de `src/`, `apps/`, `libs/` y `test/` debe evitar tipos explícitos `any`, cadenas de aserciones `expresión as unknown as Tipo` y directivas `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck` o `eslint-disable` (incluidas sus variantes por línea). El validador AST/scanner es `scripts/type-safety-quality-gate.js`; `pnpm run quality:types` lo ejecuta y `pnpm run test:quality-types` corre sus pruebas. Las pruebas Jest `expect.any(...)` no son infracciones.
 
-El baseline temporal `scripts/type-safety-quality-gate.baseline.json` identifica cada hallazgo mediante regla, ruta relativa, huella del texto infractor y su línea de código normalizada, y ordinal entre firmas idénticas del mismo archivo. La identidad no depende de línea ni columna absolutas; esas posiciones se conservan solo para los informes. El comparador conserva cada repetición y rechaza hallazgos nuevos, entradas obsoletas y claves duplicadas. La versión 2 conserva los 551 hallazgos históricos documentados en BC-QG2. No añadas hallazgos nuevos; elimina cada entrada en el mismo cambio que corrija su infracción. No añadas excepciones para código nuevo. `yarn verify` y CI ejecutan las pruebas y el validador. Esta regla es obligatoria para código TypeScript nuevo o modificado.
+El baseline temporal `scripts/type-safety-quality-gate.baseline.json` identifica cada hallazgo mediante regla, ruta relativa, huella del texto infractor y su línea de código normalizada, y ordinal entre firmas idénticas del mismo archivo. La identidad no depende de línea ni columna absolutas; esas posiciones se conservan solo para los informes. El comparador conserva cada repetición y rechaza hallazgos nuevos, entradas obsoletas y claves duplicadas. La versión 2 conserva los 551 hallazgos históricos documentados en BC-QG2. No añadas hallazgos nuevos; elimina cada entrada en el mismo cambio que corrija su infracción. No añadas excepciones para código nuevo. `pnpm run verify` y CI ejecutan las pruebas y el validador. Esta regla es obligatoria para código TypeScript nuevo o modificado.
 
 El inventario documentado en `roadmap/backend-cleanup/README.md` cubre los 40 módulos y enlaza las auditorías de Editorial, completado por BC-ED-0 el 2026-10-20. Las normas transversales y el registro BC-QG2 están en `roadmap/backend-cleanup/quality-gates.md`. El registro histórico partió de 201 infracciones del baseline: 46 en Editorial y 155 en el resto del backend. Editorial ya no tiene infracciones en los tres baselines; el resto del backend reduce su deuda progresivamente y, cuando no queden infracciones, se retirarán los baselines y el validador quedará como regla estricta.
 

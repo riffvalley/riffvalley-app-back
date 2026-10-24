@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "engines": {
-    "node": "^20.18.1 || ^22"
+    "node": "24.x"
   },
   "scripts": {
     "build": "nest build",
@@ -21,7 +21,7 @@
     "test:quality-types": "node --test scripts/type-safety-quality-gate.test.js",
     "test:quality-structure": "node --test scripts/structural-quality-gate.test.js",
     "test:quality-integration": "node --test scripts/quality-gate-integration.test.js",
-    "verify": "yarn test:quality-integration && yarn test:quality-structure && yarn quality:structure && yarn test:quality-types && yarn quality:types && yarn test:quality-lint && yarn quality:lint && yarn test:quality-typecheck && yarn quality:typecheck && yarn test:quality-build && yarn build && yarn test:quality-tests && yarn test:unit --runInBand",
+    "verify": "pnpm run test:quality-integration && pnpm run test:quality-structure && pnpm run quality:structure && pnpm run test:quality-types && pnpm run quality:types && pnpm run test:quality-lint && pnpm run quality:lint && pnpm run test:quality-typecheck && pnpm run quality:typecheck && pnpm run test:quality-build && pnpm run build && pnpm run test:quality-tests && pnpm run test:unit --runInBand",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
@@ -96,6 +96,7 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
     "jest": "^29.5.0",
+    "multer": "2.0.2",
     "prettier": "^3.0.0",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
@@ -125,5 +126,5 @@
       "^src/(.*)$": "<rootDir>/src/$1"
     }
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "pnpm@11.28.7"
 }

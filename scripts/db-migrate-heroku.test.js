@@ -99,7 +99,7 @@ case "\${1-}" in
     ;;
   run)
     case "$*" in
-      *'yarn db:status --json'*)
+      *'pnpm run db:status --json'*)
         count=0
         [[ ! -f "$FAKE_STATUS_COUNT" ]] || count="$(cat "$FAKE_STATUS_COUNT")"
         count=$((count + 1))
@@ -125,14 +125,14 @@ case "\${1-}" in
         fi
         printf '{"formatVersion":1,"stage":"prod","database":"%s","ledgerExists":true,"ledgerTable":"migrations","compiledMigrations":96,"appliedCount":%s,"pending":%s}\n' "$FAKE_STATUS_DATABASE" "$applied_count" "$pending"
         ;;
-      *'yarn db:migrate --confirm'*)
+      *'pnpm run db:migrate --confirm'*)
         if [[ "\${FAKE_MIGRATE_FAIL:-0}" == 1 ]]; then
           printf 'migration failed\n' >&2
           exit 13
         fi
         printf 'Applied: CreateUserAppDailyActivity1791990000000,CreateRateVoteEvents1792000000000\n'
         ;;
-      *'yarn db:check'*)
+      *'pnpm run db:check'*)
         if [[ "\${FAKE_CHECK_FAIL:-0}" == 1 ]]; then
           printf 'db:check failed\n' >&2
           exit 14
@@ -201,8 +201,8 @@ test('no pending migrations stops before backup and migration', () => {
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /No hay migraciones pendientes/);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
-  assert.equal(countCalls(result.calls, 'yarn db:check'), 1);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:check'), 1);
 });
 
 test('cancellation stops before creating a backup', () => {
@@ -210,7 +210,7 @@ test('cancellation stops before creating a backup', () => {
 
   assert.notEqual(result.status, 0);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
 });
 
 test('backup failure stops before migration', () => {
@@ -219,7 +219,7 @@ test('backup failure stops before migration', () => {
   assert.notEqual(result.status, 0);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 1);
   assert.equal(countCalls(result.calls, 'pg:backups:info'), 0);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
 });
 
 test('an incomplete backup is not confirmed and migration is not run', () => {
@@ -231,32 +231,32 @@ test('an incomplete backup is not confirmed and migration is not run', () => {
   assert.notEqual(result.status, 0);
   assert.match(result.output, /Status: In progress/);
   assert.equal(countCalls(result.calls, 'pg:backups:info'), 1);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
 });
 
 test('a changed migration list stops before migration', () => {
   const result = runScenario({ FAKE_CHANGE_LIST: '1' });
 
   assert.notEqual(result.status, 0);
-  assert.equal(countCalls(result.calls, 'yarn db:status --json'), 2);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:status --json'), 2);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
 });
 
 test('a migration error is not retried', () => {
   const result = runScenario({ FAKE_MIGRATE_FAIL: '1' });
 
   assert.notEqual(result.status, 0);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 1);
-  assert.equal(countCalls(result.calls, 'yarn db:status --json'), 2);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 1);
+  assert.equal(countCalls(result.calls, 'pnpm run db:status --json'), 2);
 });
 
 test('post-migration verification errors are reported without another migration', () => {
   const result = runScenario({ FAKE_POST_PENDING: '1', FAKE_CHECK_FAIL: '1' });
 
   assert.notEqual(result.status, 0);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 1);
-  assert.equal(countCalls(result.calls, 'yarn db:status --json'), 3);
-  assert.equal(countCalls(result.calls, 'yarn db:check'), 1);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 1);
+  assert.equal(countCalls(result.calls, 'pnpm run db:status --json'), 3);
+  assert.equal(countCalls(result.calls, 'pnpm run db:check'), 1);
 });
 
 test('a mismatch between DB_NAME and the TypeORM datasource stops safely', () => {
@@ -266,7 +266,7 @@ test('a mismatch between DB_NAME and the TypeORM datasource stops safely', () =>
   assert.match(result.output, /DB_NAME no coincide/);
   assert.equal(countCalls(result.calls, 'pg:info'), 0);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
 });
 
 test('a different current_database() from the attachment is rejected before backup', () => {
@@ -276,7 +276,7 @@ test('a different current_database() from the attachment is rejected before back
   assert.match(result.output, /destino PostgreSQL o el inventario/);
   assert.equal(countCalls(result.calls, 'pg:psql'), 1);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
 });
 
 test('missing or unverifiable attachment identity stops before backup', () => {
@@ -286,7 +286,7 @@ test('missing or unverifiable attachment identity stops before backup', () => {
     assert.notEqual(result.status, 0, mode);
     assert.match(result.output, /No se pudo verificar mediante SELECT/);
     assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
-    assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+    assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
   }
 });
 
@@ -296,7 +296,7 @@ test('an unexpected pending migration is rejected before backup', () => {
   assert.notEqual(result.status, 0);
   assert.match(result.output, /inventario de migraciones no coincide/);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
 });
 
 test('duplicate or unrecognized ledger inventory is rejected before backup', () => {
@@ -309,7 +309,7 @@ test('duplicate or unrecognized ledger inventory is rejected before backup', () 
     assert.notEqual(result.status, 0);
     assert.match(result.output, /inventario de migraciones no coincide/);
     assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
-    assert.equal(countCalls(result.calls, 'yarn db:migrate'), 0);
+    assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 0);
   }
 });
 
@@ -317,7 +317,7 @@ test('a wrong Heroku application is rejected before database operations', () => 
   const result = runScenario({ FAKE_APP_NAME: 'wrong-app' });
 
   assert.notEqual(result.status, 0);
-  assert.equal(countCalls(result.calls, 'yarn db:status'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:status'), 0);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
 });
 
@@ -326,7 +326,7 @@ test('invalid Heroku app JSON is rejected before database operations', () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.output, /La aplicación devuelta por Heroku no es spammusic-back/);
-  assert.equal(countCalls(result.calls, 'yarn db:status'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:status'), 0);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
 });
 
@@ -335,7 +335,7 @@ test('missing Heroku app identity is rejected before database operations', () =>
 
   assert.notEqual(result.status, 0);
   assert.match(result.output, /La aplicación devuelta por Heroku no es spammusic-back/);
-  assert.equal(countCalls(result.calls, 'yarn db:status'), 0);
+  assert.equal(countCalls(result.calls, 'pnpm run db:status'), 0);
   assert.equal(countCalls(result.calls, 'pg:backups:capture'), 0);
 });
 
@@ -343,14 +343,14 @@ test('valid nested Heroku app info allows the exact ordered simulation', () => {
   const result = runScenario();
 
   assert.equal(result.status, 0, result.output);
-  assert.equal(countCalls(result.calls, 'yarn db:migrate'), 1);
+  assert.equal(countCalls(result.calls, 'pnpm run db:migrate'), 1);
   assert.ok(
     result.calls.some((call) =>
-      call.includes(`yarn db:migrate --confirm ${database}:${migrationList}`),
+      call.includes(`pnpm run db:migrate --confirm ${database}:${migrationList}`),
     ),
   );
-  assert.equal(countCalls(result.calls, 'yarn db:status --json'), 3);
+  assert.equal(countCalls(result.calls, 'pnpm run db:status --json'), 3);
   assert.equal(countCalls(result.calls, 'pg:psql'), 3);
-  assert.equal(countCalls(result.calls, 'yarn db:check'), 1);
+  assert.equal(countCalls(result.calls, 'pnpm run db:check'), 1);
   assert.match(result.output, /Migraciones y ledger verificados/);
 });
