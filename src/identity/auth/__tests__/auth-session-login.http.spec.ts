@@ -21,6 +21,7 @@ import {
 
 const appOrigin = 'https://app.riffvalley.es';
 const wikiOrigin = 'https://wiki.riffvalley.es';
+const localAppOrigin = 'http://localhost:5173';
 const edgeSecret = Buffer.alloc(32, 9).toString('base64url');
 const jwtSecret = 'test-jwt-secret-for-csrf-signing';
 const refreshToken = Buffer.alloc(32, 6).toString('base64url');
@@ -160,7 +161,10 @@ describe('renewable login HTTP contract', () => {
       .get('/api/auth/csrf')
       .set('Origin', origin)
       .set('X-RV-Session-Edge', edgeSecret)
-      .set('Sec-Fetch-Site', 'same-site');
+      .set(
+        'Sec-Fetch-Site',
+        origin === localAppOrigin ? 'cross-site' : 'same-site',
+      );
     expect(response.status).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
     const cookieHeader = response.headers['set-cookie'];
@@ -171,7 +175,12 @@ describe('renewable login HTTP contract', () => {
     expect(nonceCookie).toBeDefined();
     expect(nonceCookie).toContain('HttpOnly');
     expect(nonceCookie).toContain('Secure');
-    expect(nonceCookie).toContain('SameSite=Lax');
+    expect(nonceCookie).toContain(
+      origin === localAppOrigin ? 'SameSite=None' : 'SameSite=Lax',
+    );
+    if (origin === localAppOrigin) {
+      expect(nonceCookie).toContain('Partitioned');
+    }
     return {
       csrfToken: response.body.csrfToken as string,
       cookie: nonceCookie!.split(';', 1)[0],
@@ -263,6 +272,27 @@ describe('renewable login HTTP contract', () => {
       origin: appOrigin,
     });
     expect(authService.loginWithSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows localhost app login with partitioned cross-site session cookies', async () => {
+    const bootstrap = await getBootstrap(localAppOrigin);
+    const response = await postLogin(bootstrap.csrfToken, bootstrap.cookie, {
+      Origin: localAppOrigin,
+      'Sec-Fetch-Site': 'cross-site',
+    });
+
+    expect(response.status).toBe(200);
+    const cookieHeader = response.headers['set-cookie'];
+    const setCookie = Array.isArray(cookieHeader) ? cookieHeader : [];
+    expect(setCookie).toHaveLength(1);
+    expect(setCookie[0]).toMatch(/^__Secure-rv_app_refresh=/);
+    expect(setCookie[0]).toContain('Secure');
+    expect(setCookie[0]).toContain('SameSite=None');
+    expect(setCookie[0]).toContain('Partitioned');
+    expect(authService.resolveSessionLoginClient).toHaveBeenCalledWith({
+      mode: AUTH_SESSION_MODE,
+      origin: localAppOrigin,
+    });
   });
 
   it('returns a generic 429 with Retry-After when the CSRF bootstrap IP is limited', async () => {

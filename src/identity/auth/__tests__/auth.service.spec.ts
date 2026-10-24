@@ -189,7 +189,7 @@ describe('AuthService authentication', () => {
     },
   );
 
-  it('resolves only the two exact configured client origins after the gate opens', () => {
+  it('resolves the configured origins and the exact localhost app alias after the gate opens', () => {
     const context = { mode: 'refresh-v1', origin: 'https://app.example.test' };
     expect(() => service.resolveSessionLoginClient(context)).toThrow(
       ServiceUnavailableException,
@@ -203,6 +203,12 @@ describe('AuthService authentication', () => {
     expect(
       service.resolveSessionLoginClient({
         mode: 'refresh-v1',
+        origin: 'http://localhost:5173',
+      }),
+    ).toBe('app');
+    expect(
+      service.resolveSessionLoginClient({
+        mode: 'refresh-v1',
         origin: 'https://wiki.example.test',
       }),
     ).toBe('wiki');
@@ -210,6 +216,12 @@ describe('AuthService authentication', () => {
       service.resolveSessionLoginClient({
         mode: 'refresh-v1',
         origin: 'https://evil.example.test',
+      }),
+    ).toThrow(ForbiddenException);
+    expect(() =>
+      service.resolveSessionLoginClient({
+        mode: 'refresh-v1',
+        origin: 'http://localhost:5174',
       }),
     ).toThrow(ForbiddenException);
     expect(() =>

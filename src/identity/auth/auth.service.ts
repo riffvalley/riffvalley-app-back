@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { resolveSessionClientFromOrigin } from './session-http/session-http-security';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
@@ -211,33 +212,12 @@ export class AuthService {
   private resolveSessionClient(
     context: SessionLoginContext,
   ): SessionClientType | null {
-    if (
-      context.mode !== 'refresh-v1' ||
-      !this.isCanonicalOrigin(context.origin)
-    ) {
-      return null;
-    }
+    if (context.mode !== 'refresh-v1') return null;
 
-    const appOrigin = this.configService.get<string>('AUTH_SESSION_APP_ORIGIN');
-    const wikiOrigin = this.configService.get<string>(
-      'AUTH_SESSION_WIKI_ORIGIN',
-    );
-    if (!appOrigin || !wikiOrigin || appOrigin === wikiOrigin) return null;
-    if (context.origin === appOrigin) return 'app';
-    if (context.origin === wikiOrigin) return 'wiki';
-    return null;
-  }
-
-  private isCanonicalOrigin(origin: string | undefined): origin is string {
-    if (!origin) return false;
-    try {
-      const parsedOrigin = new URL(origin);
-      return (
-        parsedOrigin.protocol === 'https:' && parsedOrigin.origin === origin
-      );
-    } catch {
-      return false;
-    }
+    return resolveSessionClientFromOrigin(context.origin, {
+      app: this.configService.get<string>('AUTH_SESSION_APP_ORIGIN'),
+      wiki: this.configService.get<string>('AUTH_SESSION_WIKI_ORIGIN'),
+    });
   }
 
   private withoutPassword(user: User): SessionLoginResult['user'] {

@@ -204,7 +204,7 @@ export class AuthController {
       throw new ServiceUnavailableException('CSRF bootstrap is not available');
     }
 
-    this.loginCsrfCookie.issue(response, nonce);
+    this.loginCsrfCookie.issue(response, nonce, metadata.origin);
     return { csrfToken };
   }
 

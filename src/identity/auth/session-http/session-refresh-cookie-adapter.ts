@@ -82,7 +82,12 @@ export class SessionRefreshCookieAdapter {
 
     let policy: ReturnType<typeof createSessionRefreshCookiePolicy>;
     try {
-      policy = createSessionRefreshCookiePolicy(clientType, expiresAt, now);
+      policy = createSessionRefreshCookiePolicy(
+        clientType,
+        expiresAt,
+        now,
+        metadata.origin,
+      );
     } catch {
       throw new InternalServerErrorException(
         'Session cookie could not be prepared',
@@ -104,7 +109,10 @@ export class SessionRefreshCookieAdapter {
       verifyCsrfToken,
       clientType,
     );
-    const policy = createSessionRefreshCookieClearPolicy(clientType);
+    const policy = createSessionRefreshCookieClearPolicy(
+      clientType,
+      metadata.origin,
+    );
     response.clearCookie(policy.name, policy.options);
   }
 

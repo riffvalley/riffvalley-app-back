@@ -21,7 +21,8 @@ const EDGE_SECRET_BYTES = 32;
 export interface SessionRefreshCookieOptions {
   httpOnly: true;
   secure: true;
-  sameSite: 'lax';
+  sameSite: 'lax' | 'none';
+  partitioned?: true;
   path: '/api/auth';
   expires: Date;
 }
@@ -187,13 +188,23 @@ const SESSION_REFRESH_COOKIE_NAMES: Record<SessionClientType, string> = {
 
 const SESSION_COOKIE_PATH = '/api/auth';
 const ALLOWED_FETCH_SITES = new Set(['cross-site', 'same-origin', 'same-site']);
+export const LOCAL_SESSION_APP_ORIGIN = 'http://localhost:5173';
+
+function sessionCookieSameSite(origin: string | undefined): 'lax' | 'none' {
+  return origin === LOCAL_SESSION_APP_ORIGIN ? 'none' : 'lax';
+}
+
+function sessionCookiePartitionOption(
+  origin: string | undefined,
+): { partitioned: true } | Record<never, never> {
+  return origin === LOCAL_SESSION_APP_ORIGIN ? { partitioned: true } : {};
+}
 
 export function resolveSessionClientFromOrigin(
   origin: string | undefined,
   configuredOrigins: SessionClientOrigins,
 ): SessionClientType | null {
   if (
-    !isCanonicalHttpsOrigin(origin) ||
     !isCanonicalHttpsOrigin(configuredOrigins.app) ||
     !isCanonicalHttpsOrigin(configuredOrigins.wiki) ||
     configuredOrigins.app === configuredOrigins.wiki
@@ -203,6 +214,7 @@ export function resolveSessionClientFromOrigin(
 
   if (origin === configuredOrigins.app) return 'app';
   if (origin === configuredOrigins.wiki) return 'wiki';
+  if (origin === LOCAL_SESSION_APP_ORIGIN) return 'app';
   return null;
 }
 
@@ -214,6 +226,7 @@ export function createSessionRefreshCookiePolicy(
   clientType: SessionClientType,
   sessionExpiresAt: Date,
   now = new Date(),
+  origin?: string,
 ): SessionRefreshCookiePolicy {
   if (
     !Number.isFinite(sessionExpiresAt.getTime()) ||
@@ -227,7 +240,8 @@ export function createSessionRefreshCookiePolicy(
     options: {
       httpOnly: true,
       secure: true,
-      sameSite: 'lax',
+      sameSite: sessionCookieSameSite(origin),
+      ...sessionCookiePartitionOption(origin),
       path: SESSION_COOKIE_PATH,
       expires: new Date(sessionExpiresAt.getTime()),
     },
@@ -236,13 +250,15 @@ export function createSessionRefreshCookiePolicy(
 
 export function createSessionRefreshCookieClearPolicy(
   clientType: SessionClientType,
+  origin?: string,
 ): SessionRefreshCookiePolicy {
   return {
     name: SESSION_REFRESH_COOKIE_NAMES[clientType],
     options: {
       httpOnly: true,
       secure: true,
-      sameSite: 'lax',
+      sameSite: sessionCookieSameSite(origin),
+      ...sessionCookiePartitionOption(origin),
       path: SESSION_COOKIE_PATH,
       expires: new Date(0),
     },
