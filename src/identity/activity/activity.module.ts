@@ -9,6 +9,7 @@ import { ActivityController } from './activity.controller';
 import { AuthorizationModule } from '../authorization/authorization.module';
 import { ActivityStatisticsService } from './stats/activity-statistics.service';
 import { RateVoteEvent } from '../../community/rates/entities/rate-vote-event.entity';
+import { ActivityInactivityService } from './stats/activity-inactivity.service';
 
 @Module({
   imports: [
@@ -22,7 +23,15 @@ import { RateVoteEvent } from '../../community/rates/entities/rate-vote-event.en
     AuthorizationModule,
   ],
   controllers: [ActivityController],
-  providers: [ActivityService, ActivityStatisticsService],
-  exports: [ActivityService, ActivityStatisticsService],
+  providers: [
+    ActivityService,
+    ActivityStatisticsService,
+    ActivityInactivityService,
+  ],
+  exports: [
+    ActivityService,
+    ActivityStatisticsService,
+    ActivityInactivityService,
+  ],
 })
 export class ActivityModule {}

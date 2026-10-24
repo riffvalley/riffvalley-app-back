@@ -107,4 +107,20 @@ integrationSuite('App daily activity PostgreSQL integration', () => {
     )) as Array<{ day: string }>;
     expect(rows[0]?.day).toBe(expectedDate);
   });
+
+  it.each([
+    ['2026-03-30', '2026-03-29T22:30:00Z', 0],
+    ['2026-03-30', '2026-03-28T23:30:00Z', 1],
+    ['2026-10-26', '2026-10-25T01:30:00Z', 1],
+    ['2026-10-26', '2026-10-24T22:30:00Z', 1],
+  ] as const)(
+    'calculates Madrid calendar-day inactivity across DST for %s and %s',
+    async (asOf, timestamp, expectedDays) => {
+      const rows = (await dataSource.query(
+        `SELECT $1::date - ($2::timestamptz AT TIME ZONE 'Europe/Madrid')::date AS days`,
+        [asOf, timestamp],
+      )) as Array<{ days: number }>;
+      expect(rows[0]?.days).toBe(expectedDays);
+    },
+  );
 });

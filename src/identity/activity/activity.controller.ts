@@ -16,6 +16,8 @@ import { ValidRoles } from '../authorization/interfaces/valid-roles';
 import { ActivityService } from './activity.service';
 import { GetAccessClient } from './decorators/get-access-client.decorator';
 import { ActivityStatisticsService } from './stats/activity-statistics.service';
+import { ActivityInactivityService } from './stats/activity-inactivity.service';
+import { ActivityInactivityQueryDto } from './stats/dto/activity-inactivity-query.dto';
 import {
   ActivityDateRangeQueryDto,
   ActivityUsersQueryDto,
@@ -26,6 +28,7 @@ export class ActivityController {
   constructor(
     private readonly activityService: ActivityService,
     private readonly activityStatisticsService: ActivityStatisticsService,
+    private readonly activityInactivityService: ActivityInactivityService,
   ) {}
 
   @Get('users')
@@ -38,6 +41,12 @@ export class ActivityController {
   @Auth(ValidRoles.superadmin)
   getSummary(@Query() query: ActivityDateRangeQueryDto) {
     return this.activityStatisticsService.getSummary(query);
+  }
+
+  @Get('inactivity')
+  @Auth(ValidRoles.superadmin)
+  getInactivity(@Query() query: ActivityInactivityQueryDto) {
+    return this.activityInactivityService.getInactivity(query);
   }
 
   @Get('users/:userId')
