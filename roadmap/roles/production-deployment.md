@@ -49,6 +49,16 @@ El push autorizado del commit `0b1b49c00422317f3b6b3f339e1f111fd068a7aa` fue rec
 
 N24-04 corrige únicamente la declaración de producción, fijando `dotenv@16.4.5`, versión ya presente en el lockfile. El candidato de corrección es `adf34d3` (`fix(deps): declare dotenv for data source`), con cambios solo en `package.json` y `pnpm-lock.yaml`. Se verificó con instalación limpia, build y `pnpm run verify`. No se hizo un segundo push, ni se ejecutaron migraciones o cambios de configuración de Heroku.
 
+### N24-05 — Crash de v353 y corrección local de runtime (2026-10-24)
+
+La consulta segura de Heroku confirmó `v354` (`Rollback to v352`) activa y `web.1` `up`; `v353` fue el deploy de `adf34d3` y quedó con `web.1` `crashed`. Los logs de v353 señalaron `Cannot find module 'express'` al arrancar.
+
+La causa fue el import de valores `json` y `urlencoded` desde `express` en `src/main.ts`. `@nestjs/platform-express` instala Express como dependencia suya, pero la aplicación no lo tenía declarado en sus propias `dependencies`; pnpm no crea un enlace raíz para una dependencia transitiva. Nest podía compilar usando los tipos de `@types/express` (devDependency), aunque el módulo no estaba disponible para el `require('express')` de runtime.
+
+N24-05 añade `express@4.21.2` como dependencia de producción, la misma versión ya resuelta por `@nestjs/platform-express`. El commit candidato es `78585cb` (`fix(runtime): declare Express and gate production module loading`). También añade una comprobación al build que carga los imports externos detectados en los JS de `dist`, exige que estén declarados en `dependencies` y se integra en `verify`. La instalación aislada `--prod` con lockfile congelado pudo cargar 25 módulos externos de 447 archivos compilados. No se conectó PostgreSQL ni se arrancó la aplicación completa contra servicios externos.
+
+No se hizo un nuevo push. La comprobación de producción más reciente sigue siendo `v354` con `web.1` `up`; el próximo despliegue requiere autorización explícita.
+
 # P.1 — Preflight PostgreSQL de producción y secuencia de corte
 
 > **Nota de vigencia (2026-10-22):** P.3.6 registra la migración de roles completada. El comando `migration:roles` y su runner fueron retirados después de confirmar en lectura los ledgers local y de producción (BC-ROLES-MIG-1). Las instrucciones que nombran ese comando describen el procedimiento histórico ejecutado y no son comandos disponibles.
