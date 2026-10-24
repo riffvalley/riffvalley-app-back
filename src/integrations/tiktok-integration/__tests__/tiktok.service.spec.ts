@@ -739,6 +739,29 @@ describe('TiktokService facade integration', () => {
     expect(videoRepository.upsert).not.toHaveBeenCalled();
   });
 
+  it('redacts provider credentials from the skipped-sync warning', async () => {
+    const loggerWarn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn(tiktokConnection, 'getValidAccessToken')
+      .mockRejectedValue(
+        new Error(
+          'Provider rejected access_token=provider-access-secret Authorization: Bearer provider-bearer-secret',
+        ),
+      );
+
+    await service.syncVideos();
+
+    expect(loggerWarn).toHaveBeenCalledTimes(1);
+    const logMessage = String(loggerWarn.mock.calls[0][0]);
+    expect(logMessage).toContain(
+      'TikTok sync omitido: Error: Provider rejected',
+    );
+    expect(logMessage).not.toContain('provider-access-secret');
+    expect(logMessage).not.toContain('provider-bearer-secret');
+  });
+
   it('does not persist video rows when the HTTP response fails even if its TikTok error code is ok', async () => {
     connectionRepository.createQueryBuilder.mockReturnValue(
       createQueryBuilder({

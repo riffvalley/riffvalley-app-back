@@ -17,10 +17,7 @@ import { AuthorizationModule } from 'src/identity/authorization/authorization.mo
 
 describe('Activity → Rate consumer characterization', () => {
   let moduleRef: TestingModule;
-  const rateRepository = {
-    findAndCount: jest.fn(),
-    find: jest.fn(),
-  };
+  const rateRepository = { findAndCount: jest.fn() };
   const userRepository = {};
   const accessLogRepository = { find: jest.fn(), query: jest.fn() };
 
@@ -62,8 +59,6 @@ describe('Activity → Rate consumer characterization', () => {
       disc: { id: 'disc-1', name: 'Record', artist: { name: 'Band' } },
     };
     rateRepository.findAndCount.mockResolvedValue([[rate], 1]);
-    rateRepository.find.mockResolvedValue([rate]);
-    accessLogRepository.find.mockResolvedValue([{ date: createdAt }]);
     const service = moduleRef.get(ActivityService);
 
     await expect(
@@ -92,28 +87,6 @@ describe('Activity → Rate consumer characterization', () => {
       order: { createdAt: 'DESC' },
       take: 10,
       skip: 0,
-    });
-
-    await expect(service.getUserActivity('user-1')).resolves.toEqual({
-      votes: [rate],
-      logins: [{ date: createdAt }],
-    });
-    expect(rateRepository.find).toHaveBeenCalledWith({
-      where: { user: { id: 'user-1' } },
-      relations: ['disc'],
-      order: { createdAt: 'DESC' },
-      select: {
-        id: true,
-        rate: true,
-        cover: true,
-        createdAt: true,
-        editedAt: true,
-      },
-    });
-    expect(accessLogRepository.find).toHaveBeenCalledWith({
-      where: { userId: 'user-1' },
-      order: { date: 'DESC' },
-      select: { date: true },
     });
   });
 

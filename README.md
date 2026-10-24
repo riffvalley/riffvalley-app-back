@@ -23,7 +23,7 @@ git push heroku main
 
 ## Migraciones de base de datos
 
-Las migraciones PostgreSQL se gestionan manualmente y son independientes de los despliegues de Heroku. `migrationsRun` y `synchronize` permanecen en `false`; ningún despliegue ni arranque de NestJS aplica migraciones automáticamente. `migration:roles` es un runner histórico específico para la cadena de roles y no debe usarse para migraciones futuras.
+Las migraciones PostgreSQL se gestionan manualmente y son independientes de los despliegues de Heroku. `migrationsRun` y `synchronize` permanecen en `false`; ningún despliegue ni arranque de NestJS aplica migraciones automáticamente.
 
 ### Desarrollo local
 

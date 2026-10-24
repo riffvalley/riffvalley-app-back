@@ -1,5 +1,4 @@
 import { DataSource, MigrationInterface } from 'typeorm';
-import { runRolesMigrationChain } from '../../scripts/run-roles-migration-chain';
 import { MigrateCanonicalUserRoles1791910000000 } from './1791910000000-MigrateCanonicalUserRoles';
 import { MigrateUsersToSingleRole1791920000000 } from './1791920000000-MigrateUsersToSingleRole';
 
@@ -11,15 +10,6 @@ const migrationClasses = [historicalMigration, singularMigration];
 const historicalSnapshot = 'user_roles_migration_snapshot_1791910000000';
 const singleRoleSnapshot = 'user_roles_single_snapshot_1791920000000';
 const schemaSnapshot = 'user_roles_single_schema_snapshot_1791920000000';
-const roleConstraint = 'CHK_users_role_canonical_1791920000000';
-
-class UnrelatedPendingMigration1791930000000 implements MigrationInterface {
-  name = 'UnrelatedPendingMigration1791930000000';
-
-  async up(): Promise<void> {}
-
-  async down(): Promise<void> {}
-}
 
 function createDataSource(migrations: Array<new () => MigrationInterface>) {
   if (!databaseUrl) throw new Error('ROLE_MIGRATION_TEST_URL is required');
@@ -144,90 +134,6 @@ describePostgres('MigrateUsersToSingleRole1791920000000 PostgreSQL', () => {
     if (dataSource?.isInitialized) await dataSource.destroy();
   });
 
-  it('runs the full pending migration chain from the legacy schema for the six observed combinations', async () => {
-    const originalInputs = [
-      ['babyUser'],
-      ['user', 'riffValley'],
-      ['user', 'riffValley', 'superUser'],
-      ['user', 'superUser', 'riffValley'],
-      ['riffValley'],
-      ['riffValley', 'user', 'superUser'],
-    ];
-    const ids = originalInputs.map(
-      (_roles, index) => `00000000-0000-0000-0000-00000000000${index + 1}`,
-    );
-    for (const [index, roles] of originalInputs.entries()) {
-      await insertUser(dataSource, ids[index], roles);
-    }
-
-    const executed = await runRolesMigrationChain(
-      createDataSource(migrationClasses),
-    );
-    const users = await readUsers(dataSource);
-
-    expect(executed).toEqual([
-      'MigrateCanonicalUserRoles1791910000000',
-      'MigrateUsersToSingleRole1791920000000',
-    ]);
-    expect(
-      await dataSource.query(
-        'SELECT "name" FROM "migrations" ORDER BY "timestamp"',
-      ),
-    ).toEqual([
-      { name: 'MigrateCanonicalUserRoles1791910000000' },
-      { name: 'MigrateUsersToSingleRole1791920000000' },
-    ]);
-    expect(users.map(({ role }) => role)).toEqual([
-      'user',
-      'riffvalley',
-      'superadmin',
-      'superadmin',
-      'riffvalley',
-      'superadmin',
-    ]);
-    expect(
-      users.map(({ id, username, email, isActive }) => [
-        id,
-        username,
-        email,
-        isActive,
-      ]),
-    ).toEqual(
-      originalInputs.map((_roles, index) => {
-        const id = ids[index];
-        return [id, `username-${id}`, `${id}@example.test`, id.endsWith('1')];
-      }),
-    );
-
-    const columns = await dataSource.query(
-      `SELECT "column_name", "data_type", "is_nullable", "column_default" FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'users' AND column_name IN ('roles', 'role') ORDER BY column_name`,
-    );
-    expect(columns).toEqual([
-      {
-        column_name: 'role',
-        data_type: 'text',
-        is_nullable: 'NO',
-        column_default: "'user'::text",
-      },
-    ]);
-    const constraints = await dataSource.query(
-      "SELECT pg_get_constraintdef(oid, true) AS definition FROM pg_constraint WHERE conrelid = to_regclass('users') AND conname = $1",
-      [roleConstraint],
-    );
-    expect(constraints).toHaveLength(1);
-    expect(constraints[0].definition).toContain('user');
-    expect(constraints[0].definition).toContain('superadmin');
-    expect(
-      await dataSource.query(`SELECT 1 FROM "${singleRoleSnapshot}"`),
-    ).toHaveLength(6);
-    expect(
-      await dataSource.query(`SELECT 1 FROM "${schemaSnapshot}"`),
-    ).toHaveLength(1);
-    expect(
-      await dataSource.query(`SELECT 1 FROM "${historicalSnapshot}"`),
-    ).toHaveLength(6);
-  });
-
   it('uses the historical snapshot to establish babyUser provenance after that migration is recorded', async () => {
     await insertUser(dataSource, '00000000-0000-0000-0000-000000000001', [
       'babyUser',
@@ -244,13 +150,13 @@ describePostgres('MigrateUsersToSingleRole1791920000000 PostgreSQL', () => {
     );
 
     await dataSource.destroy();
-    dataSource = createDataSource(migrationClasses);
+    dataSource = createDataSource([singularMigration]);
     await dataSource.initialize();
-    const executed = await runRolesMigrationChain(
-      createDataSource(migrationClasses),
-    );
+    const executed = await dataSource.runMigrations({ transaction: 'each' });
 
-    expect(executed).toEqual(['MigrateUsersToSingleRole1791920000000']);
+    expect(executed.map(({ name }) => name)).toEqual([
+      'MigrateUsersToSingleRole1791920000000',
+    ]);
     expect((await readUsers(dataSource)).map(({ role }) => role)).toEqual([
       'user',
     ]);
@@ -265,60 +171,6 @@ describePostgres('MigrateUsersToSingleRole1791920000000 PostgreSQL', () => {
       dataSource.runMigrations({ transaction: 'all' }),
     ).rejects.toThrow('transaction mode');
     expect((await readLegacyUsers(dataSource))[0].roles).toEqual(['babyUser']);
-  });
-
-  it('uses the scoped compatibility runner to execute the pending chain transactionally', async () => {
-    await insertUser(dataSource, '00000000-0000-0000-0000-000000000001', [
-      'babyUser',
-    ]);
-
-    const completed = await runRolesMigrationChain(
-      createDataSource(migrationClasses),
-    );
-
-    expect(completed).toEqual([
-      'MigrateCanonicalUserRoles1791910000000',
-      'MigrateUsersToSingleRole1791920000000',
-    ]);
-    expect((await readUsers(dataSource))[0].role).toBe('user');
-  });
-
-  it('refuses to run when unrelated migrations are pending', async () => {
-    await insertUser(dataSource, '00000000-0000-0000-0000-000000000001', [
-      'babyUser',
-    ]);
-
-    await expect(
-      runRolesMigrationChain(
-        createDataSource([
-          ...migrationClasses,
-          UnrelatedPendingMigration1791930000000,
-        ]),
-      ),
-    ).rejects.toThrow('hay migraciones ajenas pendientes');
-
-    expect((await readLegacyUsers(dataSource))[0].roles).toEqual(['babyUser']);
-    expect(
-      await dataSource.query(
-        `SELECT to_regclass('${historicalSnapshot}') AS table`,
-      ),
-    ).toEqual([{ table: null }]);
-  });
-
-  it('requires an existing migration ledger instead of creating one during preflight', async () => {
-    await dataSource.query('DROP TABLE "migrations"');
-    await insertUser(dataSource, '00000000-0000-0000-0000-000000000001', [
-      'babyUser',
-    ]);
-
-    await expect(
-      runRolesMigrationChain(createDataSource(migrationClasses)),
-    ).rejects.toThrow('no existe el ledger migrations');
-
-    expect((await readLegacyUsers(dataSource))[0].roles).toEqual(['babyUser']);
-    expect(
-      await dataSource.query(`SELECT to_regclass('migrations') AS table`),
-    ).toEqual([{ table: null }]);
   });
 
   it.each([

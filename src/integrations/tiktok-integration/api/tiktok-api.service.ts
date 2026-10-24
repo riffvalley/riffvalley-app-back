@@ -37,7 +37,13 @@ export interface TiktokTokenResponse {
 
 export interface TiktokUserInfoResponse {
   data?: { user?: { open_id: string; display_name?: string | null } };
-  error?: { code: string; message: string; log_id: string };
+  error?: TiktokProviderError;
+}
+
+export interface TiktokProviderError {
+  code: string;
+  message: string;
+  log_id: string;
 }
 
 export interface TiktokVideoNode {
@@ -58,20 +64,64 @@ export interface TiktokVideoNode {
 
 export interface TiktokVideoListResponse {
   data?: { videos?: TiktokVideoNode[]; cursor?: number; has_more?: boolean };
-  error?: { code: string; message: string; log_id: string };
+  error?: TiktokProviderError;
 }
 
 export interface TiktokVideoPageResult {
   ok: boolean;
+  status: number;
   body: TiktokVideoListResponse;
 }
 
+export function sanitizeTiktokDiagnostic(value: string): string {
+  return value
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, '$1 [REDACTED]')
+    .replace(
+      /((?:access|refresh)[_-]?token|client[_-]?(?:key|secret)|authorization|password|credential(?:s)?|api[_-]?key)\s*[:=]\s*["']?[^,\s"'&}]+/gi,
+      '$1=[REDACTED]',
+    )
+    .replace(/(https?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[REDACTED]@')
+    .replace(
+      /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+)?\b/g,
+      '[REDACTED]',
+    )
+    .slice(0, 240);
+}
+
+export function formatTiktokProviderError(
+  error: TiktokProviderError | undefined,
+): string {
+  if (!error) return 'details unavailable';
+
+  const details = [
+    typeof error.code === 'string' && error.code
+      ? `code=${sanitizeTiktokDiagnostic(error.code)}`
+      : undefined,
+    typeof error.message === 'string' && error.message
+      ? `message=${sanitizeTiktokDiagnostic(error.message)}`
+      : undefined,
+    typeof error.log_id === 'string' && error.log_id
+      ? `log_id=${sanitizeTiktokDiagnostic(error.log_id)}`
+      : undefined,
+  ].filter((value): value is string => value !== undefined);
+
+  return details.length ? details.join(' ') : 'details unavailable';
+}
+
+export function formatTiktokException(error: unknown): string {
+  if (error instanceof Error) {
+    return `${sanitizeTiktokDiagnostic(error.name)}: ${sanitizeTiktokDiagnostic(
+      error.message,
+    )}`;
+  }
+  return typeof error === 'string'
+    ? sanitizeTiktokDiagnostic(error)
+    : 'Unknown error';
+}
+
 // TikTok includes `error: { code: "ok" }` on successful Display API responses.
-export function isTiktokError(error?: {
-  code: string;
-  message: string;
-  log_id: string;
-}): boolean {
+export function isTiktokError(error?: TiktokProviderError): boolean {
   return !!error && error.code !== 'ok';
 }
 
@@ -115,7 +165,7 @@ export class TiktokApiService {
       .catch(() => ({}))) as TiktokUserInfoResponse;
     if (!response.ok || isTiktokError(body.error) || !body.data?.user) {
       this.logger.error(
-        `No se pudo obtener el perfil de TikTok: ${JSON.stringify(body.error ?? body)}`,
+        `No se pudo obtener el perfil de TikTok (HTTP ${response.status}): ${formatTiktokProviderError(body.error)}`,
       );
       return null;
     }
@@ -142,6 +192,7 @@ export class TiktokApiService {
     );
     return {
       ok: response.ok,
+      status: response.status,
       body: (await response.json()) as TiktokVideoListResponse,
     };
   }

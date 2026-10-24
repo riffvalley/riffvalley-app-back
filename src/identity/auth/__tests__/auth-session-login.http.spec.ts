@@ -21,6 +21,7 @@ import {
 
 const appOrigin = 'https://app.riffvalley.es';
 const wikiOrigin = 'https://wiki.riffvalley.es';
+const localAppOrigin = 'http://localhost:5173';
 const edgeSecret = Buffer.alloc(32, 9).toString('base64url');
 const jwtSecret = 'test-jwt-secret-for-csrf-signing';
 const refreshToken = Buffer.alloc(32, 6).toString('base64url');
@@ -35,6 +36,7 @@ describe('renewable login HTTP contract', () => {
   let configService: ConfigService;
   let sessionsService: {
     findRefreshTokenSessionBinding: jest.Mock;
+    findRecoverableRefreshTokenSessionBinding: jest.Mock;
     revokeSession: jest.Mock;
   };
   let authRateLimitService: { consume: jest.Mock };
@@ -89,6 +91,12 @@ describe('renewable login HTTP contract', () => {
         userId: 'user-1',
         clientType: 'app',
       }),
+      findRecoverableRefreshTokenSessionBinding: jest.fn().mockResolvedValue({
+        sessionId: 'internal-session-id',
+        userId: 'user-1',
+        clientType: 'app',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      }),
       revokeSession: jest.fn().mockResolvedValue(true),
     };
     authRateLimitService = {
@@ -141,6 +149,7 @@ describe('renewable login HTTP contract', () => {
     authService.resolveSessionLoginClient.mockClear();
     authService.refreshWithSession.mockClear();
     sessionsService.findRefreshTokenSessionBinding.mockClear();
+    sessionsService.findRecoverableRefreshTokenSessionBinding.mockClear();
     sessionsService.revokeSession.mockClear();
     authRateLimitService.consume.mockReset().mockResolvedValue(null);
   });
@@ -152,7 +161,10 @@ describe('renewable login HTTP contract', () => {
       .get('/api/auth/csrf')
       .set('Origin', origin)
       .set('X-RV-Session-Edge', edgeSecret)
-      .set('Sec-Fetch-Site', 'same-site');
+      .set(
+        'Sec-Fetch-Site',
+        origin === localAppOrigin ? 'cross-site' : 'same-site',
+      );
     expect(response.status).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
     const cookieHeader = response.headers['set-cookie'];
@@ -163,7 +175,12 @@ describe('renewable login HTTP contract', () => {
     expect(nonceCookie).toBeDefined();
     expect(nonceCookie).toContain('HttpOnly');
     expect(nonceCookie).toContain('Secure');
-    expect(nonceCookie).toContain('SameSite=Lax');
+    expect(nonceCookie).toContain(
+      origin === localAppOrigin ? 'SameSite=None' : 'SameSite=Lax',
+    );
+    if (origin === localAppOrigin) {
+      expect(nonceCookie).toContain('Partitioned');
+    }
     return {
       csrfToken: response.body.csrfToken as string,
       cookie: nonceCookie!.split(';', 1)[0],
@@ -257,6 +274,27 @@ describe('renewable login HTTP contract', () => {
     expect(authService.loginWithSession).toHaveBeenCalledTimes(1);
   });
 
+  it('allows localhost app login with partitioned cross-site session cookies', async () => {
+    const bootstrap = await getBootstrap(localAppOrigin);
+    const response = await postLogin(bootstrap.csrfToken, bootstrap.cookie, {
+      Origin: localAppOrigin,
+      'Sec-Fetch-Site': 'cross-site',
+    });
+
+    expect(response.status).toBe(200);
+    const cookieHeader = response.headers['set-cookie'];
+    const setCookie = Array.isArray(cookieHeader) ? cookieHeader : [];
+    expect(setCookie).toHaveLength(1);
+    expect(setCookie[0]).toMatch(/^__Secure-rv_app_refresh=/);
+    expect(setCookie[0]).toContain('Secure');
+    expect(setCookie[0]).toContain('SameSite=None');
+    expect(setCookie[0]).toContain('Partitioned');
+    expect(authService.resolveSessionLoginClient).toHaveBeenCalledWith({
+      mode: AUTH_SESSION_MODE,
+      origin: localAppOrigin,
+    });
+  });
+
   it('returns a generic 429 with Retry-After when the CSRF bootstrap IP is limited', async () => {
     authRateLimitService.consume.mockResolvedValueOnce(37);
 
@@ -271,6 +309,41 @@ describe('renewable login HTTP contract', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(JSON.stringify(response.body)).not.toContain('refresh');
     expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('does not recover a refresh proof for an unapproved Origin', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/auth/refresh/csrf')
+      .set({
+        Origin: 'https://evil.example.test',
+        Cookie: `__Secure-rv_app_refresh=${refreshToken}`,
+        'X-RV-Session-Edge': edgeSecret,
+        'Sec-Fetch-Site': 'same-site',
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expect(
+      sessionsService.findRecoverableRefreshTokenSessionBinding,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('does not recover a refresh proof without a live session cookie', async () => {
+    sessionsService.findRecoverableRefreshTokenSessionBinding.mockResolvedValueOnce(
+      null,
+    );
+    const response = await request(app.getHttpServer())
+      .get('/api/auth/refresh/csrf')
+      .set({
+        Origin: appOrigin,
+        Cookie: `__Secure-rv_app_refresh=${refreshToken}`,
+        'X-RV-Session-Edge': edgeSecret,
+        'Sec-Fetch-Site': 'same-site',
+      });
+
+    expect(response.status).toBe(401);
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expect(response.body).not.toHaveProperty('csrfToken');
   });
 
   it('applies the account and IP limit to renewable login before issuing a cookie', async () => {
@@ -431,6 +504,81 @@ describe('renewable login HTTP contract', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(JSON.stringify(response.body)).not.toContain('database');
     expect(authService.loginWithSession).not.toHaveBeenCalled();
+  });
+
+  it('recovers an expired refresh proof from the active session cookie and refreshes', async () => {
+    const initialTime = Date.now();
+    const expiredProof = createSessionCsrfToken(
+      jwtSecret,
+      'refresh',
+      'app',
+      'internal-session-id',
+      initialTime + 30 * 60 * 1000,
+      initialTime,
+    );
+    const operationId = '123e4567-e89b-42d3-a456-426614174000';
+    const nowAfterProofExpiry = initialTime + 30 * 60 * 1000 + 1;
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(nowAfterProofExpiry);
+
+    try {
+      const expiredResponse = await request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .set({
+          Origin: appOrigin,
+          'Content-Type': 'application/json',
+          'X-Auth-Session-Mode': AUTH_SESSION_MODE,
+          'X-Refresh-Operation': operationId,
+          'X-CSRF-Token': expiredProof!,
+          Cookie: `__Secure-rv_app_refresh=${refreshToken}`,
+          'X-RV-Session-Edge': edgeSecret,
+          'Sec-Fetch-Site': 'same-site',
+        })
+        .send({});
+
+      expect(expiredResponse.status).toBe(403);
+      expect(authService.refreshWithSession).not.toHaveBeenCalled();
+
+      const recoveryResponse = await request(app.getHttpServer())
+        .get('/api/auth/refresh/csrf')
+        .set({
+          Origin: appOrigin,
+          Cookie: `__Secure-rv_app_refresh=${refreshToken}`,
+          'X-RV-Session-Edge': edgeSecret,
+          'Sec-Fetch-Site': 'same-site',
+        });
+
+      expect(recoveryResponse.status).toBe(200);
+      expect(recoveryResponse.headers['cache-control']).toBe('no-store');
+      expect(recoveryResponse.headers['set-cookie']).toBeUndefined();
+      expect(Object.keys(recoveryResponse.body)).toEqual(['csrfToken']);
+      expect(
+        createSessionCsrfVerifier(
+          jwtSecret,
+          'refresh',
+          'internal-session-id',
+          nowAfterProofExpiry,
+        )(recoveryResponse.body.csrfToken as string, 'app'),
+      ).toEqual({ valid: true });
+
+      const refreshResponse = await request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .set({
+          Origin: appOrigin,
+          'Content-Type': 'application/json',
+          'X-Auth-Session-Mode': AUTH_SESSION_MODE,
+          'X-Refresh-Operation': operationId,
+          'X-CSRF-Token': recoveryResponse.body.csrfToken as string,
+          Cookie: `__Secure-rv_app_refresh=${refreshToken}`,
+          'X-RV-Session-Edge': edgeSecret,
+          'Sec-Fetch-Site': 'same-site',
+        })
+        .send({});
+
+      expect(refreshResponse.status).toBe(200);
+      expect(authService.refreshWithSession).toHaveBeenCalledTimes(1);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it('rejects login without refresh-v1 and never creates a legacy token or session', async () => {

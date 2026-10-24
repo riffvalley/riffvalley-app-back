@@ -20,6 +20,7 @@ import { ActivityInactivityService } from './stats/activity-inactivity.service';
 import { ActivityInactivityQueryDto } from './stats/dto/activity-inactivity-query.dto';
 import {
   ActivityDateRangeQueryDto,
+  ActivitySummaryQueryDto,
   ActivityUsersQueryDto,
 } from './stats/dto/activity-date-range-query.dto';
 
@@ -39,7 +40,7 @@ export class ActivityController {
 
   @Get('summary')
   @Auth(ValidRoles.superadmin)
-  getSummary(@Query() query: ActivityDateRangeQueryDto) {
+  getSummary(@Query() query: ActivitySummaryQueryDto) {
     return this.activityStatisticsService.getSummary(query);
   }
 

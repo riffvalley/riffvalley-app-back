@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import {
   InstagramMediaType,
@@ -197,6 +198,59 @@ describe('InstagramService', () => {
 
       expect(repository.upsert).not.toHaveBeenCalled();
     });
+
+    it('logs the HTTP status and safe Graph error details without tokens', async () => {
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+      fetchMock.mockResolvedValueOnce(
+        response(
+          {
+            error: {
+              message: 'Invalid OAuth access token',
+              type: 'OAuthException',
+              code: 190,
+              fbtrace_id: 'trace-123',
+              access_token: 'leaked-response-token',
+            },
+            access_token: 'another-response-token',
+          },
+          false,
+          401,
+        ),
+      );
+
+      await createService().syncPosts();
+
+      const logged = JSON.stringify(loggerError.mock.calls);
+      expect(logged).toContain('HTTP 401');
+      expect(logged).toContain('Invalid OAuth access token');
+      expect(logged).toContain('OAuthException');
+      expect(logged).toContain('190');
+      expect(logged).toContain('trace-123');
+      expect(logged).not.toContain('test-access-token');
+      expect(logged).not.toContain('leaked-response-token');
+      expect(logged).not.toContain('another-response-token');
+    });
+
+    it('redacts access tokens and credential parameters from sync exceptions', async () => {
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+      fetchMock.mockRejectedValueOnce(
+        new Error(
+          'request failed https://graph.instagram.com/media?access_token=test-access-token&client_secret=client-secret-value',
+        ),
+      );
+
+      await createService().syncPosts();
+
+      const logged = JSON.stringify(loggerError.mock.calls);
+      expect(logged).toContain('Instagram sync failed');
+      expect(logged).toContain('request failed');
+      expect(logged).not.toContain('test-access-token');
+      expect(logged).not.toContain('client-secret-value');
+    });
   });
 
   describe('refreshAccessToken', () => {
@@ -238,6 +292,53 @@ describe('InstagramService', () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(tokenStorage.persistAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('logs safe Graph refresh details and the HTTP status without tokens', async () => {
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+      fetchMock.mockResolvedValueOnce(
+        response(
+          {
+            error: {
+              message: 'Invalid token for IG_ACCESS_TOKEN=test-access-token',
+              type: 'OAuthException',
+              code: 190,
+            },
+            access_token: 'response-secret-token',
+          },
+          false,
+          400,
+        ),
+      );
+
+      await createService().refreshAccessToken();
+
+      const logged = JSON.stringify(loggerError.mock.calls);
+      expect(logged).toContain('HTTP 400');
+      expect(logged).toContain('Invalid token');
+      expect(logged).toContain('OAuthException');
+      expect(logged).not.toContain('test-access-token');
+      expect(logged).not.toContain('response-secret-token');
+    });
+
+    it('redacts access tokens and credentials from refresh exceptions', async () => {
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+      fetchMock.mockRejectedValueOnce(
+        new Error(
+          'request failed https://graph.instagram.com/refresh?access_token=test-access-token Authorization: Bearer heroku-api-secret',
+        ),
+      );
+
+      await createService().refreshAccessToken();
+
+      const logged = JSON.stringify(loggerError.mock.calls);
+      expect(logged).toContain('Instagram token refresh failed');
+      expect(logged).not.toContain('test-access-token');
+      expect(logged).not.toContain('heroku-api-secret');
     });
 
     it('does not call Meta when no token is configured', async () => {

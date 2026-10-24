@@ -1,6 +1,6 @@
 # Preflight y migración de roles — nuevo diseño de rol único
 
-**Estado histórico:** R.13a/R.13b y R.15a registran preflights y pruebas locales de 2026-10-13; las notas originales de esta página no describen el estado remoto final. La migración de producción y su postflight se completaron después; el registro autoritativo está en [cierre de despliegue](production-deployment.md). Las menciones antiguas a Heroku sin modificar, release phase o migraciones pendientes son históricas y quedan supersedidas.
+**Estado histórico:** R.13a/R.13b y R.15a registran preflights y pruebas locales de 2026-10-13; las notas originales de esta página no describen el estado remoto final. La migración de producción y su postflight se completaron después; el registro autoritativo está en [cierre de despliegue](production-deployment.md). El runner `migration:roles` fue retirado por BC-ROLES-MIG-1 tras confirmar los ledgers activos. Los comandos de ese runner que aparecen en este documento son evidencia histórica y no están disponibles. Las menciones antiguas a Heroku sin modificar, release phase o migraciones pendientes también son históricas y quedan supersedidas.
 
 ### R.15c — Arranque del backend local (2026-10-13)
 

@@ -204,8 +204,69 @@ export class AuthController {
       throw new ServiceUnavailableException('CSRF bootstrap is not available');
     }
 
-    this.loginCsrfCookie.issue(response, nonce);
+    this.loginCsrfCookie.issue(response, nonce, metadata.origin);
     return { csrfToken };
+  }
+
+  @Get('refresh/csrf')
+  async getRefreshCsrfRecovery(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ csrfToken: string }> {
+    this.setNoStoreHeaders(response);
+    this.assertSessionModeEnabled();
+    const metadata = readSessionCookieRequestMetadata(
+      request,
+      this.configService,
+    );
+    const clientType = validateSessionCsrfBootstrapRequest(
+      metadata,
+      this.sessionOrigins(),
+    );
+    await this.enforceIpRateLimit(
+      response,
+      `refresh_csrf_ip_${clientType}`,
+      AUTH_RATE_LIMIT_POLICY.refreshIp.limit,
+      AUTH_RATE_LIMIT_POLICY.refreshIp.windowSeconds,
+      request,
+    );
+
+    const refreshToken = this.refreshCookie.readRefreshTokenForValidatedClient(
+      request.headers.cookie,
+      clientType,
+    );
+    if (!refreshToken) {
+      throw new UnauthorizedException('Session is not available');
+    }
+
+    const binding =
+      await this.sessionsService.findRecoverableRefreshTokenSessionBinding(
+        refreshToken,
+        clientType,
+      );
+    if (!binding) {
+      throw new UnauthorizedException('Session is not available');
+    }
+
+    await this.enforceRateLimit(
+      [
+        {
+          scope: `refresh_session_${clientType}`,
+          subject: binding.sessionId,
+          limit: AUTH_RATE_LIMIT_POLICY.refreshSession.limit,
+          windowSeconds: AUTH_RATE_LIMIT_POLICY.refreshSession.windowSeconds,
+        },
+      ],
+      response,
+    );
+
+    return {
+      csrfToken: this.createRefreshCsrfToken(
+        clientType,
+        binding.sessionId,
+        binding.expiresAt,
+      ),
+    };
   }
 
   @Post('refresh')
@@ -633,12 +694,6 @@ export class AuthController {
   @Auth(ValidRoles.superadmin)
   getAllActivity(@Query() query: ActivityListQueryDto) {
     return this.activityService.getAllActivity(query);
-  }
-
-  @Get(':id/activity')
-  @Auth(ValidRoles.superadmin)
-  getUserActivity(@Param('id') id: string) {
-    return this.activityService.getUserActivity(id);
   }
 
   @Get(':id')

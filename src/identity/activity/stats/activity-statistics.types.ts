@@ -1,6 +1,16 @@
 export interface ActivityDailyCount {
   date: string;
-  count: number;
+  count: number | null;
+}
+
+export interface ActivityDailyPresence {
+  date: string;
+  present: boolean | null;
+}
+
+export interface ActivityDataCoverage {
+  status: ActivityCoverageStatus;
+  dataSince: string | null;
 }
 
 export interface ActivityUserStatistics {
@@ -29,30 +39,90 @@ export interface ActivityUsersResponse {
   data: ActivityUserStatistics[];
 }
 
-export interface ActivitySummaryPeriod {
-  activeUsers7: number | null;
-  activeUsers30: number | null;
-  voteActions7: number | null;
-  voteActions30: number | null;
-  votingUsers7: number | null;
-  votingUsers30: number | null;
-}
+export type ActivityCoverageStatus = 'complete' | 'incomplete' | 'unavailable';
 
-export interface ActivitySummaryDay {
+export type ActivityCoverage = {
+  status: ActivityCoverageStatus;
+  dataSince: string | null;
+};
+
+export type ActivityDashboardRanges = {
+  current: { from: string; to: string };
+  previous: { from: string; to: string };
+  baseline: { from: string; to: string };
+};
+
+export type ActivityMetricComparison = {
+  current: number | null;
+  previous: number | null;
+  delta: number | null;
+  changePercent: number | null;
+  coverage: {
+    current: ActivityCoverage;
+    previous: ActivityCoverage;
+    baseline?: ActivityCoverage;
+  };
+  reason?: 'zero_denominator' | 'unavailable';
+};
+
+/** Current Rate row count; historical snapshots do not exist. */
+export type ActivityCurrentRatings = {
+  current: number | null;
+  previous: null;
+  delta: null;
+  changePercent: null;
+  coverage: {
+    current: ActivityCoverage;
+    previous: ActivityCoverage;
+  };
+  reason?: 'unavailable';
+};
+
+export type ActivityDashboardDay = {
   date: string;
+  dayIndex: number;
   activeUsers: number | null;
-  voteActions: number | null;
-  votingUsers: number | null;
-}
+  newVotes: number | null;
+};
 
-export interface ActivitySummaryResponse {
+/** Raw, coverage-aware aggregates used by I1-E03c to build comparisons. */
+export type ActivityDashboardBaseAggregates = {
   from: string;
   to: string;
-  timezone: 'Europe/Madrid';
   activityDataSince: string | null;
   voteDataSince: string | null;
-  periods: ActivitySummaryPeriod;
-  series: ActivitySummaryDay[];
+  activeUsers: number | null;
+  newVotes: number | null;
+  votingUsers: number | null;
+  currentRatings: number | null;
+  series: ActivityDashboardDay[];
+};
+
+/** Definitive contract for GET /activity/summary. */
+export type ActivityDashboardResponse = {
+  periods: ActivityDashboardRanges;
+  timezone: 'Europe/Madrid';
+  asOf: string;
+  activityDataSince: string | null;
+  voteDataSince: string | null;
+  activeUsers: ActivityMetricComparison;
+  /** Counts only `rate_vote_events` with `event_type = 'set'`; never `change`. */
+  newVotes: ActivityMetricComparison;
+  /** Distinct users with at least one `set` event in the period. */
+  votingUsers: ActivityMetricComparison;
+  participationRate: ActivityMetricComparison;
+  votesPerActiveUser: ActivityMetricComparison;
+  returningUsers: ActivityMetricComparison;
+  retentionRate: ActivityMetricComparison;
+  currentRatings: ActivityCurrentRatings;
+  series: {
+    current: ActivityDashboardDay[];
+    previous: ActivityDashboardDay[];
+  };
+};
+
+export interface ActivitySummaryResponse {
+  dashboard: ActivityDashboardResponse;
 }
 
 export interface ActivityUserDetailResponse {
@@ -61,12 +131,19 @@ export interface ActivityUserDetailResponse {
   activeDays7: number | null;
   activeDays30: number | null;
   activeDates: string[];
+  presenceByDay: ActivityDailyPresence[];
   activityDataSince: string | null;
+  activityCoverage: ActivityDataCoverage;
   currentVotes: number;
-  voteActions7: number | null;
-  voteActions30: number | null;
-  voteActionsRecorded: number;
-  lastVoteAt: string | null;
+  newVotes7: number | null;
+  newVotes30: number | null;
+  newVotesRecorded: number;
+  changedVotes7: number | null;
+  changedVotes30: number | null;
+  changedVotesRecorded: number;
+  lastVoteEventAt: string | null;
   voteDataSince: string | null;
-  votesByDay: ActivityDailyCount[];
+  voteCoverage: ActivityDataCoverage;
+  newVotesByDay: ActivityDailyCount[];
+  changedVotesByDay: ActivityDailyCount[];
 }

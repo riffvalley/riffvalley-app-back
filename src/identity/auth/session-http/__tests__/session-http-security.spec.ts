@@ -9,6 +9,7 @@ import {
   SESSION_HTTP_TRUST_PROXY,
   SESSION_EDGE_SECRET_CONFIG_KEY,
   SESSION_TRUSTED_EDGE_HEADER,
+  LOCAL_SESSION_APP_ORIGIN,
   SessionCookieRequestMetadata,
   SessionRequestRejectionReason,
   validateSessionCookieRequest,
@@ -246,6 +247,7 @@ describe('session HTTP security helpers', () => {
     it.each([
       [origins.app, 'app'],
       [origins.wiki, 'wiki'],
+      [LOCAL_SESSION_APP_ORIGIN, 'app'],
     ] as const)('maps the exact origin %s to %s', (origin, client) => {
       expect(resolveSessionClientFromOrigin(origin, origins)).toBe(client);
     });
@@ -255,6 +257,8 @@ describe('session HTTP security helpers', () => {
       'http://app.riffvalley.es',
       'https://app.riffvalley.es/',
       'https://app.riffvalley.es.evil.example',
+      'http://localhost:5174',
+      'http://localhost:5173.evil.example',
       'null',
     ])('rejects an invalid or unconfigured origin: %s', (origin) => {
       expect(resolveSessionClientFromOrigin(origin, origins)).toBeNull();
@@ -309,6 +313,21 @@ describe('session HTTP security helpers', () => {
       );
     });
 
+    it('partitions cross-site app cookies only for the localhost dev origin', () => {
+      const policy = createSessionRefreshCookiePolicy(
+        'app',
+        expiry,
+        new Date('2026-10-21T10:00:00.000Z'),
+        LOCAL_SESSION_APP_ORIGIN,
+      );
+
+      expect(policy.options).toMatchObject({
+        secure: true,
+        sameSite: 'none',
+        partitioned: true,
+      });
+    });
+
     it('clears the same client-specific host-only cookie with matching scope', () => {
       const app = createSessionRefreshCookieClearPolicy('app');
       const wiki = createSessionRefreshCookieClearPolicy('wiki');
@@ -323,6 +342,18 @@ describe('session HTTP security helpers', () => {
         expires: new Date(0),
       });
       expect(app.options).not.toHaveProperty('domain');
+    });
+
+    it('keeps the localhost partition when clearing its app cookie', () => {
+      expect(
+        createSessionRefreshCookieClearPolicy('app', LOCAL_SESSION_APP_ORIGIN)
+          .options,
+      ).toMatchObject({
+        secure: true,
+        sameSite: 'none',
+        partitioned: true,
+        expires: new Date(0),
+      });
     });
   });
 

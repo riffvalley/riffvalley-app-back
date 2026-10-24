@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  instagramErrorMessage,
+  instagramResponseDiagnostic,
+  sanitizeInstagramLogValue,
+} from './helpers/instagram-log-sanitizer';
 
 @Injectable()
 export class InstagramTokenStorageService {
@@ -31,13 +36,14 @@ export class InstagramTokenStorageService {
         );
 
         if (!res.ok) {
+          const responseBody = await res.text();
           this.logger.error(
-            `Could not persist refreshed Instagram token to Heroku config vars: ${res.status} ${await res.text()}`,
+            `Could not persist refreshed Instagram token to Heroku config vars: ${res.status} ${instagramResponseDiagnostic(responseBody, [token, herokuApiKey])}`,
           );
         }
       } catch (error) {
         this.logger.error(
-          `Could not persist refreshed Instagram token to Heroku config vars: ${error}`,
+          `Could not persist refreshed Instagram token to Heroku config vars: ${this.safeErrorMessage(error, token, herokuApiKey)}`,
         );
       }
       return;
@@ -53,8 +59,16 @@ export class InstagramTokenStorageService {
       fs.writeFileSync(envPath, updated);
     } catch (error) {
       this.logger.error(
-        `Could not persist refreshed Instagram token to .env: ${error}`,
+        `Could not persist refreshed Instagram token to .env: ${this.safeErrorMessage(error, token)}`,
       );
     }
+  }
+
+  private safeLogValue(value: string, ...secrets: string[]) {
+    return sanitizeInstagramLogValue(value, secrets).slice(0, 500);
+  }
+
+  private safeErrorMessage(error: unknown, ...secrets: string[]) {
+    return this.safeLogValue(instagramErrorMessage(error), ...secrets);
   }
 }

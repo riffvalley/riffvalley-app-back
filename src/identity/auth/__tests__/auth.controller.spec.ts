@@ -24,7 +24,6 @@ describe('AuthController role contract', () => {
     ['findAll', 'users', ValidRoles.superadmin],
     ['findAllAdminStats', 'users/admin-stats', ValidRoles.superadmin],
     ['getAllActivity', 'activity', ValidRoles.superadmin],
-    ['getUserActivity', ':id/activity', ValidRoles.superadmin],
     ['updateSuperAdmin', '/superadmin/:id', ValidRoles.superadmin],
     ['deactivate', ':id/deactivate', ValidRoles.superadmin],
     ['activate', ':id/activate', ValidRoles.superadmin],
@@ -113,6 +112,17 @@ describe('AuthController role contract', () => {
   );
 
   it('delegates account and activity routes to their owning services', async () => {
+    const controllerMethods = Object.getOwnPropertyNames(prototype);
+    expect(controllerMethods).not.toContain('getUserActivity');
+    expect(
+      controllerMethods.some((propertyName) => {
+        const handler = prototype[propertyName as keyof AuthController];
+        return (
+          typeof handler === 'function' &&
+          Reflect.getMetadata(PATH_METADATA, handler) === ':id/activity'
+        );
+      }),
+    ).toBe(false);
     const pagination = { limit: 10, offset: 20 };
     const usersService = {
       findAll: jest.fn().mockResolvedValue(['users']),
@@ -124,7 +134,6 @@ describe('AuthController role contract', () => {
     const activityService = {
       findAllAdminStats: jest.fn().mockResolvedValue({ users: [] }),
       getAllActivity: jest.fn().mockResolvedValue({ data: [] }),
-      getUserActivity: jest.fn().mockResolvedValue({ votes: [], logins: [] }),
     };
     const controller = new AuthController(
       {} as never,
@@ -156,10 +165,6 @@ describe('AuthController role contract', () => {
     await expect(
       controller.getAllActivity(pagination as never),
     ).resolves.toEqual({ data: [] });
-    await expect(controller.getUserActivity('user-2')).resolves.toEqual({
-      votes: [],
-      logins: [],
-    });
 
     expect(usersService.updateUser).toHaveBeenCalledWith({}, actorId);
     expect(usersService.updateUserSuperAdmin).toHaveBeenCalledWith(
@@ -175,7 +180,6 @@ describe('AuthController role contract', () => {
     expect(usersService.remove).toHaveBeenCalledWith('user-2', actorId);
     expect(activityService.findAllAdminStats).toHaveBeenCalledWith(pagination);
     expect(activityService.getAllActivity).toHaveBeenCalledWith(pagination);
-    expect(activityService.getUserActivity).toHaveBeenCalledWith('user-2');
   });
 
   it('keeps an explicitly negotiated session login unavailable when its gate is off', async () => {
