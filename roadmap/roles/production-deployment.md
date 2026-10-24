@@ -43,6 +43,12 @@ git push heroku 0b1b49c00422317f3b6b3f339e1f111fd068a7aa:main
 
 No se ejecutó. Antes de usarlo hay que confirmar de nuevo app/remoto, SHA, estado del buildpack, Automatic Deploys y relación fast-forward. Tras autorizar el despliegue, revisar el resultado del build, comprobar `node --version` y `pnpm --version` con one-offs, confirmar `web.1` y el arranque NestJS, y examinar logs de arranque sin divulgar credenciales. La release anterior identificada para rollback es `v352`; el comando disponible es `heroku releases:rollback v352 --app spammusic-back`. No se ejecutarán migraciones PostgreSQL; los smoke tests funcionales quedan a cargo del responsable.
 
+### N24-03/N24-04 — Primer intento de build y corrección (2026-10-24)
+
+El push autorizado del commit `0b1b49c00422317f3b6b3f339e1f111fd068a7aa` fue rechazado por Heroku durante `nest build`. Heroku instaló Node `24.22.1`, pnpm `11.28.7` y las dependencias con `pnpm-lock.yaml`; la compilación falló porque `src/data-source.ts` importa `dotenv`, que no estaba declarado directamente y por ello no era resoluble con pnpm en el entorno de build. No se creó release ni cambió el ref Git de Heroku. La consulta de solo lectura posterior confirmó `v352` actual; `web.1` seguía activo.
+
+N24-04 corrige únicamente la declaración de producción, fijando `dotenv@16.4.5`, versión ya presente en el lockfile. El candidato de corrección es `adf34d3` (`fix(deps): declare dotenv for data source`), con cambios solo en `package.json` y `pnpm-lock.yaml`. Se verificó con instalación limpia, build y `pnpm run verify`. No se hizo un segundo push, ni se ejecutaron migraciones o cambios de configuración de Heroku.
+
 # P.1 — Preflight PostgreSQL de producción y secuencia de corte
 
 > **Nota de vigencia (2026-10-22):** P.3.6 registra la migración de roles completada. El comando `migration:roles` y su runner fueron retirados después de confirmar en lectura los ledgers local y de producción (BC-ROLES-MIG-1). Las instrucciones que nombran ese comando describen el procedimiento histórico ejecutado y no son comandos disponibles.
