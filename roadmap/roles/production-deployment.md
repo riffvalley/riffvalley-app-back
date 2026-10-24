@@ -15,6 +15,34 @@
 
 El preflight, el comando de publicación por SHA confirmado, las comprobaciones del build/runtime y el rollback están descritos en [README.md](../../README.md#despliegue-en-heroku). Repetir el preflight contra la rama y commit finales y confirmar el build de Heroku antes de considerar el cambio desplegado. La autorización explícita de despliegue sigue pendiente.
 
+## N24-02 — Candidato de despliegue (2026-10-24)
+
+**Estado:** commit local preparado; no publicado. El commit de runtime es `0b1b49c00422317f3b6b3f339e1f111fd068a7aa` en `chore/n24-node24-pnpm11`, basado en el árbol desplegado. `origin/main` y la release `v352` apuntan a `15932635ba9093d669f7a30a69362543f4a7328d`; la diferencia de árbol entre `origin/main` y el HEAD anterior al cambio N24 era cero. El cambio Activity `e857473` ya está incluido en ese merge de producción. Identity, Activity, estadísticas, integraciones, autenticación y migraciones no tienen cambios funcionales pendientes que entren con este candidato.
+
+### Archivos del commit N24
+
+El commit contiene 16 paths de la migración: `.github/workflows/backend-quality.yml`, `.nvmrc`, `AGENTS.md`, `CLAUDE.md`, `Dockerfile`, `Procfile`, `README.md`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, este runbook, `scripts/db-migrate-heroku.sh`, `scripts/db-migrate-heroku.test.js`, `scripts/db-migrations.js`, `scripts/quality-gate-integration.test.js` y la eliminación de `yarn.lock`. No incluye cambios de otros worktrees ni cambios de lógica de negocio.
+
+### Estado actual de Heroku
+
+- App `spammusic-back`, stack `heroku-24`, un dyno web y release actual `v352` (`Deploy 15932635`). Runtime comprobado por one-off: Node `v22.23.4`; `pnpm` no está instalado en ese release.
+- La consulta CLI actual lista únicamente el buildpack clásico `heroku/nodejs`. N24-01 había registrado también el buildpack de Puppeteer; en la inspección actual ya no aparece, y no se ha cambiado configuración.
+- GitHub `main` apunta a `15932635ba9093d669f7a30a69362543f4a7328d`. El remoto Git Heroku `main` apunta a `4dd586a7a326e1d982e50b3b633cd23092b4a1e2`, antecesor del commit candidato; el push indicado abajo sería fast-forward.
+- La release actual coincide con GitHub `main`, mientras que `heroku/main` permanece atrás. Esto sugiere que la release llegó desde la integración GitHub; la CLI no confirma si Automatic Deploys está habilitado. Verificarlo en el dashboard antes de publicar para evitar una segunda vía de despliegue concurrente.
+- No se consultaron config vars, secretos ni logs de producción. No se cambiaron buildpacks, stack, dynos ni releases.
+
+### Comprobaciones y comando preparado
+
+`pnpm install --frozen-lockfile` pasó con Node `24.22.1` y pnpm `11.28.7`. `pnpm run verify` reutiliza el resultado de N24-01: desde entonces no cambiaron código ni dependencias; solo se actualizó documentación. Ese resultado incluye build, typecheck, gates estructurales y 206 suites/2.035 tests aprobados. `git diff --check` pasó antes del commit de runtime; se repitió para este cambio documental.
+
+El commit de runtime que se desplegaría es:
+
+```sh
+git push heroku 0b1b49c00422317f3b6b3f339e1f111fd068a7aa:main
+```
+
+No se ejecutó. Antes de usarlo hay que confirmar de nuevo app/remoto, SHA, estado del buildpack, Automatic Deploys y relación fast-forward. Tras autorizar el despliegue, revisar el resultado del build, comprobar `node --version` y `pnpm --version` con one-offs, confirmar `web.1` y el arranque NestJS, y examinar logs de arranque sin divulgar credenciales. La release anterior identificada para rollback es `v352`; el comando disponible es `heroku releases:rollback v352 --app spammusic-back`. No se ejecutarán migraciones PostgreSQL; los smoke tests funcionales quedan a cargo del responsable.
+
 # P.1 — Preflight PostgreSQL de producción y secuencia de corte
 
 > **Nota de vigencia (2026-10-22):** P.3.6 registra la migración de roles completada. El comando `migration:roles` y su runner fueron retirados después de confirmar en lectura los ledgers local y de producción (BC-ROLES-MIG-1). Las instrucciones que nombran ese comando describen el procedimiento histórico ejecutado y no son comandos disponibles.
