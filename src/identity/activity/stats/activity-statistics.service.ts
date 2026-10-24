@@ -35,15 +35,6 @@ type UserStatisticsRow = ActivityUserStatistics & {
 
 type UserDetailRow = ActivityUserDetailResponse;
 
-type SummaryRow = {
-  from: string;
-  to: string;
-  activityDataSince: string | null;
-  voteDataSince: string | null;
-  periods: ActivitySummaryResponse['periods'];
-  series: ActivitySummaryResponse['series'];
-};
-
 type DashboardBaseRow = ActivityDashboardBaseAggregates;
 
 type DashboardReturningCounts = {
@@ -204,99 +195,6 @@ export class ActivityStatisticsService {
     query: ActivitySummaryQueryDto,
   ): Promise<ActivitySummaryResponse> {
     const range = this.resolveSummaryRange(query);
-    const rows = (await this.userRepository.query(
-      `
-      WITH context AS (
-        SELECT
-          $1::date AS from_date,
-          $2::date AS to_date,
-          (CURRENT_TIMESTAMP AT TIME ZONE '${MADRID_TZ}')::date AS today,
-          (SELECT MIN(activity_date) + 1 FROM user_app_daily_activity) AS activity_data_since,
-          (
-            SELECT (started_at AT TIME ZONE '${MADRID_TZ}')::date + 1
-            FROM rate_vote_event_capture WHERE id = 1
-          ) AS vote_data_since
-      ), calendar AS (
-        SELECT generate_series(context.from_date, context.to_date, '1 day'::interval)::date AS day
-        FROM context
-      ), activity_daily AS (
-        SELECT activity.activity_date AS day, COUNT(*)::int AS active_users
-        FROM user_app_daily_activity activity
-        CROSS JOIN context
-        WHERE activity.activity_date BETWEEN context.from_date AND context.to_date
-        GROUP BY activity.activity_date
-      ), vote_daily AS (
-        SELECT (event.occurred_at AT TIME ZONE '${MADRID_TZ}')::date AS day,
-          COUNT(*)::int AS vote_actions,
-          COUNT(DISTINCT event.user_id)::int AS voting_users
-        FROM rate_vote_events event
-        CROSS JOIN context
-        WHERE event.occurred_at >= (context.from_date::timestamp AT TIME ZONE '${MADRID_TZ}')
-          AND event.occurred_at < ((context.to_date + 1)::timestamp AT TIME ZONE '${MADRID_TZ}')
-          AND (event.occurred_at AT TIME ZONE '${MADRID_TZ}')::date >= context.vote_data_since
-        GROUP BY day
-      ), series AS (
-        SELECT jsonb_agg(jsonb_build_object(
-          'date', calendar.day::text,
-          'activeUsers', CASE
-            WHEN context.activity_data_since IS NULL OR calendar.day < context.activity_data_since THEN NULL
-            ELSE COALESCE(activity_daily.active_users, 0)
-          END,
-          'voteActions', CASE
-            WHEN context.vote_data_since IS NULL OR calendar.day < context.vote_data_since THEN NULL
-            ELSE COALESCE(vote_daily.vote_actions, 0)
-          END,
-          'votingUsers', CASE
-            WHEN context.vote_data_since IS NULL OR calendar.day < context.vote_data_since THEN NULL
-            ELSE COALESCE(vote_daily.voting_users, 0)
-          END
-        ) ORDER BY calendar.day) AS data
-        FROM calendar
-        CROSS JOIN context
-        LEFT JOIN activity_daily ON activity_daily.day = calendar.day
-        LEFT JOIN vote_daily ON vote_daily.day = calendar.day
-      )
-      SELECT
-        context.from_date::text AS "from",
-        context.to_date::text AS "to",
-        context.activity_data_since::text AS "activityDataSince",
-        context.vote_data_since::text AS "voteDataSince",
-        jsonb_build_object(
-          'activeUsers7', CASE WHEN context.activity_data_since IS NULL OR context.today - 6 < context.activity_data_since THEN NULL ELSE (
-            SELECT COUNT(DISTINCT activity.user_id)::int FROM user_app_daily_activity activity
-            WHERE activity.activity_date BETWEEN context.today - 6 AND context.today
-          ) END,
-          'activeUsers30', CASE WHEN context.activity_data_since IS NULL OR context.today - 29 < context.activity_data_since THEN NULL ELSE (
-            SELECT COUNT(DISTINCT activity.user_id)::int FROM user_app_daily_activity activity
-            WHERE activity.activity_date BETWEEN context.today - 29 AND context.today
-          ) END,
-          'voteActions7', CASE WHEN context.vote_data_since IS NULL OR context.today - 6 < context.vote_data_since THEN NULL ELSE (
-            SELECT COUNT(*)::int FROM rate_vote_events event
-            WHERE event.occurred_at >= ((context.today - 6)::timestamp AT TIME ZONE '${MADRID_TZ}')
-              AND event.occurred_at < ((context.today + 1)::timestamp AT TIME ZONE '${MADRID_TZ}')
-          ) END,
-          'voteActions30', CASE WHEN context.vote_data_since IS NULL OR context.today - 29 < context.vote_data_since THEN NULL ELSE (
-            SELECT COUNT(*)::int FROM rate_vote_events event
-            WHERE event.occurred_at >= ((context.today - 29)::timestamp AT TIME ZONE '${MADRID_TZ}')
-              AND event.occurred_at < ((context.today + 1)::timestamp AT TIME ZONE '${MADRID_TZ}')
-          ) END,
-          'votingUsers7', CASE WHEN context.vote_data_since IS NULL OR context.today - 6 < context.vote_data_since THEN NULL ELSE (
-            SELECT COUNT(DISTINCT event.user_id)::int FROM rate_vote_events event
-            WHERE event.occurred_at >= ((context.today - 6)::timestamp AT TIME ZONE '${MADRID_TZ}')
-              AND event.occurred_at < ((context.today + 1)::timestamp AT TIME ZONE '${MADRID_TZ}')
-          ) END,
-          'votingUsers30', CASE WHEN context.vote_data_since IS NULL OR context.today - 29 < context.vote_data_since THEN NULL ELSE (
-            SELECT COUNT(DISTINCT event.user_id)::int FROM rate_vote_events event
-            WHERE event.occurred_at >= ((context.today - 29)::timestamp AT TIME ZONE '${MADRID_TZ}')
-              AND event.occurred_at < ((context.today + 1)::timestamp AT TIME ZONE '${MADRID_TZ}')
-          ) END
-        ) AS periods,
-        (SELECT data FROM series) AS series
-      FROM context
-      `,
-      [range.from, range.to],
-    )) as SummaryRow[];
-    const summary = rows[0];
     const dashboardRanges = resolveDashboardRanges(range);
     const [current, previous, baseline] = await Promise.all([
       this.getDashboardBaseAggregates(dashboardRanges.current),
@@ -314,13 +212,6 @@ export class ActivityStatisticsService {
     );
 
     return {
-      from: summary.from,
-      to: summary.to,
-      timezone: MADRID_TZ,
-      activityDataSince: summary.activityDataSince,
-      voteDataSince: summary.voteDataSince,
-      periods: summary.periods,
-      series: summary.series ?? [],
       dashboard: buildDashboardResponse(
         dashboardRanges,
         current,

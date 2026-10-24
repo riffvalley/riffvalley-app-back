@@ -88,7 +88,7 @@ describe('App daily activity HTTP authorization', () => {
     );
     activityService.recordAppDailyActivity.mockResolvedValue(undefined);
     activityStatisticsService.findUsers.mockResolvedValue({ data: [] });
-    activityStatisticsService.getSummary.mockResolvedValue({ series: [] });
+    activityStatisticsService.getSummary.mockResolvedValue({ dashboard: {} });
     activityStatisticsService.getUserDetail.mockResolvedValue({
       userId: '00000000-0000-4000-8000-000000000001',
     });
@@ -153,13 +153,13 @@ describe('App daily activity HTTP authorization', () => {
       role: ValidRoles.superadmin,
     })
       .expect(200)
-      .expect({ series: [] });
+      .expect({ dashboard: {} });
     expect(activityStatisticsService.getSummary).toHaveBeenCalledWith(
       expect.objectContaining({ from: '2026-10-01', to: '2026-10-22' }),
     );
   });
 
-  it('returns the full additive dashboard contract and preserves legacy fields', async () => {
+  it('returns only the definitive dashboard summary contract', async () => {
     const coverage = {
       current: { status: 'complete', dataSince: '2026-10-01' },
       previous: { status: 'complete', dataSince: '2026-10-01' },
@@ -172,27 +172,6 @@ describe('App daily activity HTTP authorization', () => {
       coverage,
     };
     const summary = {
-      from: '2026-10-22',
-      to: '2026-10-22',
-      timezone: 'Europe/Madrid',
-      activityDataSince: '2026-10-01',
-      voteDataSince: '2026-10-01',
-      periods: {
-        activeUsers7: 3,
-        activeUsers30: 8,
-        voteActions7: 4,
-        voteActions30: 9,
-        votingUsers7: 2,
-        votingUsers30: 5,
-      },
-      series: [
-        {
-          date: '2026-10-22',
-          activeUsers: 2,
-          voteActions: 3,
-          votingUsers: 1,
-        },
-      ],
       dashboard: {
         periods: {
           current: { from: '2026-10-22', to: '2026-10-22' },
@@ -261,7 +240,10 @@ describe('App daily activity HTTP authorization', () => {
       role: ValidRoles.superadmin,
     })
       .expect(200)
-      .expect(summary);
+      .expect(summary)
+      .expect((response) => {
+        expect(Object.keys(response.body)).toEqual(['dashboard']);
+      });
 
     expect(activityStatisticsService.getSummary).toHaveBeenCalledWith(
       expect.objectContaining({ period: 7 }),

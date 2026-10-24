@@ -44,29 +44,8 @@ describe('ActivityStatisticsService', () => {
       currentReturningUsers: number | null;
       previousReturningUsers: number | null;
     };
-    from?: string;
-    to?: string;
   }): void {
-    const from = options?.from ?? '2026-10-22';
-    const to = options?.to ?? '2026-10-22';
     userRepository.query
-      .mockResolvedValueOnce([
-        {
-          from,
-          to,
-          activityDataSince: '2026-10-01',
-          voteDataSince: '2026-10-01',
-          periods: {
-            activeUsers7: 0,
-            activeUsers30: 0,
-            voteActions7: 0,
-            voteActions30: 0,
-            votingUsers7: 0,
-            votingUsers30: 0,
-          },
-          series: [],
-        },
-      ])
       .mockResolvedValueOnce([dashboardBaseRow(options?.current)])
       .mockResolvedValueOnce([dashboardBaseRow(options?.previous)])
       .mockResolvedValueOnce([dashboardBaseRow(options?.baseline)])
@@ -264,33 +243,7 @@ describe('ActivityStatisticsService', () => {
     ]);
   });
 
-  it('adds dashboard comparisons while preserving legacy summary fields', async () => {
-    const summary = {
-      activeUsers7: 5,
-      activeUsers30: 8,
-      voteActions7: 11,
-      voteActions30: 22,
-      votingUsers7: 3,
-      votingUsers30: 4,
-    };
-    const series = [
-      {
-        date: '2026-10-22',
-        activeUsers: 2,
-        voteActions: 9,
-        votingUsers: 3,
-      },
-    ];
-    userRepository.query.mockResolvedValueOnce([
-      {
-        from: '2026-10-22',
-        to: '2026-10-22',
-        activityDataSince: '2026-10-01',
-        voteDataSince: '2026-10-01',
-        periods: summary,
-        series,
-      },
-    ]);
+  it('returns only the definitive dashboard summary contract', async () => {
     userRepository.query.mockResolvedValueOnce([
       dashboardBaseRow({
         activeUsers: 4,
@@ -344,13 +297,6 @@ describe('ActivityStatisticsService', () => {
       to: '2026-10-22',
     });
     expect(response).toEqual({
-      from: '2026-10-22',
-      to: '2026-10-22',
-      timezone: 'Europe/Madrid',
-      activityDataSince: '2026-10-01',
-      voteDataSince: '2026-10-01',
-      periods: summary,
-      series,
       dashboard: {
         periods: {
           current: { from: '2026-10-22', to: '2026-10-22' },
@@ -464,18 +410,20 @@ describe('ActivityStatisticsService', () => {
         },
       },
     });
+    expect(Object.keys(response)).toEqual(['dashboard']);
+    expect(userRepository.query).toHaveBeenCalledTimes(4);
     expect(response.dashboard.asOf).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
     expect(userRepository.query.mock.calls[0][0]).toContain('generate_series');
     expect(userRepository.query.mock.calls[0][0]).toContain(
-      'COUNT(DISTINCT event.user_id)',
+      'COUNT(DISTINCT vote_event.user_id)',
     );
-    expect(userRepository.query.mock.calls[4][0]).toContain(
+    expect(userRepository.query.mock.calls[3][0]).toContain(
       'JOIN active_by_period previous_active USING (user_id)',
     );
-    expect(userRepository.query.mock.calls[4][0]).toContain(
+    expect(userRepository.query.mock.calls[3][0]).toContain(
       'GROUP BY period_ranges.period, activity.user_id',
     );
-    expect(userRepository.query.mock.calls[4][1]).toEqual([
+    expect(userRepository.query.mock.calls[3][1]).toEqual([
       '2026-10-22',
       '2026-10-22',
       '2026-10-21',
@@ -683,7 +631,7 @@ describe('ActivityStatisticsService', () => {
       baselineTo,
     ) => {
       jest.useFakeTimers().setSystemTime(new Date('2026-10-24T22:30:00.000Z'));
-      primeSummaryQueries({ from: expectedFrom, to: '2026-10-25' });
+      primeSummaryQueries();
 
       await service.getSummary({ period });
 
@@ -692,14 +640,10 @@ describe('ActivityStatisticsService', () => {
         '2026-10-25',
       ]);
       expect(userRepository.query.mock.calls[1][1]).toEqual([
-        expectedFrom,
-        '2026-10-25',
-      ]);
-      expect(userRepository.query.mock.calls[2][1]).toEqual([
         previousFrom,
         previousTo,
       ]);
-      expect(userRepository.query.mock.calls[3][1]).toEqual([
+      expect(userRepository.query.mock.calls[2][1]).toEqual([
         baselineFrom,
         baselineTo,
       ]);
@@ -707,7 +651,7 @@ describe('ActivityStatisticsService', () => {
   );
 
   it('builds contiguous custom periods across the Madrid spring DST change', async () => {
-    primeSummaryQueries({ from: '2026-03-27', to: '2026-03-30' });
+    primeSummaryQueries();
 
     const response = await service.getSummary({
       from: '2026-03-27',
@@ -720,7 +664,7 @@ describe('ActivityStatisticsService', () => {
       baseline: { from: '2026-03-19', to: '2026-03-22' },
     });
     expect(
-      userRepository.query.mock.calls.slice(1, 4).map((call) => call[1]),
+      userRepository.query.mock.calls.slice(0, 3).map((call) => call[1]),
     ).toEqual([
       ['2026-03-27', '2026-03-30'],
       ['2026-03-23', '2026-03-26'],
@@ -802,8 +746,6 @@ describe('ActivityStatisticsService', () => {
 
   it('leaves metric values and derived comparisons null across partial coverage', async () => {
     primeSummaryQueries({
-      from: '2026-10-03',
-      to: '2026-10-04',
       current: {
         activityDataSince: '2026-10-03',
         voteDataSince: '2026-10-04',
@@ -880,24 +822,24 @@ describe('ActivityStatisticsService', () => {
 
   it('keeps the legacy 30-day default and one-sided custom range behavior', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-10-22T10:00:00.000Z'));
-    primeSummaryQueries({ from: '2026-09-23', to: '2026-10-22' });
+    primeSummaryQueries();
 
     await service.getSummary({});
     expect(userRepository.query.mock.calls[0][1]).toEqual([
       '2026-09-23',
       '2026-10-22',
     ]);
-    expect(userRepository.query.mock.calls[2][1]).toEqual([
+    expect(userRepository.query.mock.calls[1][1]).toEqual([
       '2026-08-24',
       '2026-09-22',
     ]);
-    expect(userRepository.query.mock.calls[3][1]).toEqual([
+    expect(userRepository.query.mock.calls[2][1]).toEqual([
       '2026-07-25',
       '2026-08-23',
     ]);
 
     userRepository.query.mockClear();
-    primeSummaryQueries({ from: '2026-10-01', to: '2026-10-22' });
+    primeSummaryQueries();
     await service.getSummary({ from: '2026-10-01' });
     expect(userRepository.query.mock.calls[0][1]).toEqual([
       '2026-10-01',
