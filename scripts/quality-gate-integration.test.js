@@ -14,6 +14,7 @@ const VERIFY_STEPS = [
   'pnpm run test:quality-typecheck',
   'pnpm run quality:typecheck',
   'pnpm run test:quality-build',
+  'pnpm run test:runtime-dependencies',
   'pnpm run build',
   'pnpm run test:quality-tests',
   'pnpm run test:unit --runInBand',

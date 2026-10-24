@@ -9,7 +9,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && node scripts/check-runtime-dependencies.js",
     "quality:types": "node scripts/type-safety-quality-gate.js",
     "quality:typecheck": "node scripts/typecheck-quality-gate.js",
     "quality:lint": "node scripts/eslint-quality-gate.js",
@@ -21,7 +21,8 @@
     "test:quality-types": "node --test scripts/type-safety-quality-gate.test.js",
     "test:quality-structure": "node --test scripts/structural-quality-gate.test.js",
     "test:quality-integration": "node --test scripts/quality-gate-integration.test.js",
-    "verify": "pnpm run test:quality-integration && pnpm run test:quality-structure && pnpm run quality:structure && pnpm run test:quality-types && pnpm run quality:types && pnpm run test:quality-lint && pnpm run quality:lint && pnpm run test:quality-typecheck && pnpm run quality:typecheck && pnpm run test:quality-build && pnpm run build && pnpm run test:quality-tests && pnpm run test:unit --runInBand",
+    "test:runtime-dependencies": "node --test scripts/check-runtime-dependencies.test.js",
+    "verify": "pnpm run test:quality-integration && pnpm run test:quality-structure && pnpm run quality:structure && pnpm run test:quality-types && pnpm run quality:types && pnpm run test:quality-lint && pnpm run quality:lint && pnpm run test:quality-typecheck && pnpm run quality:typecheck && pnpm run test:quality-build && pnpm run test:runtime-dependencies && pnpm run build && pnpm run test:quality-tests && pnpm run test:unit --runInBand",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
@@ -68,6 +69,7 @@
     "class-validator": "^0.14.1",
     "dotenv": "16.4.5",
     "exceljs": "^4.4.0",
+    "express": "4.21.2",
     "nest-winston": "^1.10.2",
     "nodemailer": "^8.0.4",
     "passport": "^0.7.0",
