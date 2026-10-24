@@ -29,33 +29,6 @@ export interface ActivityUsersResponse {
   data: ActivityUserStatistics[];
 }
 
-export interface ActivitySummaryPeriod {
-  activeUsers7: number | null;
-  activeUsers30: number | null;
-  voteActions7: number | null;
-  voteActions30: number | null;
-  votingUsers7: number | null;
-  votingUsers30: number | null;
-}
-
-export interface ActivitySummaryDay {
-  date: string;
-  activeUsers: number | null;
-  voteActions: number | null;
-  votingUsers: number | null;
-}
-
-export interface ActivitySummaryResponse {
-  from: string;
-  to: string;
-  timezone: 'Europe/Madrid';
-  activityDataSince: string | null;
-  voteDataSince: string | null;
-  periods: ActivitySummaryPeriod;
-  series: ActivitySummaryDay[];
-  dashboard: ActivityDashboardResponse;
-}
-
 export type ActivityCoverageStatus = 'complete' | 'incomplete' | 'unavailable';
 
 export type ActivityCoverage = {
@@ -115,7 +88,7 @@ export type ActivityDashboardBaseAggregates = {
   series: ActivityDashboardDay[];
 };
 
-/** Contract for the additive `dashboard` block planned for GET /activity/summary. */
+/** Definitive contract for GET /activity/summary. */
 export type ActivityDashboardResponse = {
   periods: ActivityDashboardRanges;
   timezone: 'Europe/Madrid';
@@ -137,6 +110,10 @@ export type ActivityDashboardResponse = {
     previous: ActivityDashboardDay[];
   };
 };
+
+export interface ActivitySummaryResponse {
+  dashboard: ActivityDashboardResponse;
+}
 
 export interface ActivityUserDetailResponse {
   userId: string;

@@ -84,7 +84,7 @@ Proyección inicial:
 
 activityDataSince y voteDataSince hacen explícitos los cortes de cobertura. La tabla diaria no se backfillea desde UserAccessLog; activeDays7/30 refleja solo fechas desde activityDataSince y los períodos iniciales serán parciales. lastActiveDate y activeDays7/30 salen de la tabla diaria. currentVotes cuenta discos distintos que tienen un Rate actual con rate IS NOT NULL; no es historial de votos. voteActions7/30, lastVoteAt y votesByDay se completan solo desde el inicio de captura de acciones descrito debajo; antes son null/desconocidos, no cero. No inferirlos de editedAt. Orden de usuarios por última actividad descendente, luego username; usuarios sin actividad al final. No devolver email ni perfil completo.
 
-### GET /api/activity/summary
+### Contrato histórico de `GET /api/activity/summary` (retirado en I1-E03h)
 
 Query from, to (fechas naturales Madrid inclusivas; por defecto últimos 30 días hasta hoy). Serie con un registro por día, incluso sin actividad:
 
@@ -140,9 +140,9 @@ La tabla tiene FK a `User` con borrado en cascada e índices por `(user_id, occu
 
 ### Implementación I1-E03b — Agregados base para el dashboard
 
-**Estado:** completada el 2026-10-24. I1-E03b preservó la respuesta legacy; el bloque HTTP se habilita en I1-E03c.
+**Estado:** completada el 2026-10-24. I1-E03b preservó temporalmente la respuesta legacy; el bloque HTTP se habilitó en I1-E03c. I1-E03h retiró después el payload y cálculo legacy.
 
-- `ActivityStatisticsService.getDashboardBaseAggregates(range)` calcula una sola ventana Madrid inclusiva y queda como método interno reutilizable por I1-E03c. No está conectado al controller: `GET /activity/summary` mantiene su respuesta legacy y todavía no emite `dashboard`.
+- `ActivityStatisticsService.getDashboardBaseAggregates(range)` calcula una ventana Madrid inclusiva y es reutilizado por I1-E03c para construir el contrato definitivo.
 - `activeUsers` cuenta `COUNT(DISTINCT user_id)` sobre `user_app_daily_activity` para todo el rango; la serie diaria cuenta usuarios distintos por fecha. No suma conteos diarios para obtener el total del período.
 - `newVotes` cuenta únicamente `rate_vote_events.event_type = 'set'`; `votingUsers` cuenta usuarios distintos con esos mismos eventos. El ledger existente registra `set` al crear o asignar una valoración y omite cambios solo de portada, la misma nota, retirada y borrado. No se reconstruyen eventos desde `Rate.createdAt` o `editedAt`.
 - `currentRatings` es el conteo actual de filas de `rate` con `rate IS NOT NULL`, independiente del rango y sin comparación histórica. No se usa como sustituto de votos nuevos.
@@ -155,7 +155,7 @@ La tabla tiene FK a `User` con borrado en cascada e índices por `(user_id, occu
 
 ### Implementación I1-E03c — Comparativas y métricas derivadas
 
-**Estado:** completada el 2026-10-24. `GET /api/activity/summary` conserva `from`, `to`, `timezone`, `activityDataSince`, `voteDataSince`, `periods` y `series` legacy, y añade ahora un `dashboard` completo.
+**Estado:** completada el 2026-10-24. I1-E03c añadió el bloque `dashboard`; I1-E03h retiró los campos de primer nivel legacy tras migrar el frontend.
 
 - La resolución actual continúa usando I1-E03a. Para una ventana inclusiva de `N` fechas Madrid, `previous` es `[current.from - N, current.from - 1]`; `baseline` es `[previous.from - N, previous.from - 1]`. Son ventanas contiguas sin solapamiento. La aritmética opera sobre fechas ISO/UTC de calendario, no en bloques de 24 horas, así que el cruce DST conserva N días.
 - `activeUsers` compara los distintos usuarios activos del rango; `newVotes` compara únicamente los eventos `set`; `votingUsers` compara los usuarios distintos con `set`. Sus deltas son actual menos previo y `changePercent` es delta / previo × 100 si el previo no es cero.
@@ -178,6 +178,18 @@ La tabla tiene FK a `User` con borrado en cascada e índices por `(user_id, occu
 - No se añadieron datos ficticios como sustituto de la integración ni se ejecutaron migraciones. E03d validará valores esperados para 7/30/90 días y rangos personalizados, cobertura y límites Madrid/DST usando preferentemente una copia aislada de producción; no requiere crear una base local sintética ni infraestructura nueva.
 - Typecheck (`yarn quality:typecheck`) y Build (`yarn build`) pasaron. `yarn verify` aprobó integración de gates, estructura y tipado seguro, y se detuvo en ESLint global: 839 diagnósticos, 0 nuevos y 35 entradas obsoletas asociadas al `src/winston.config.ts` con cambios locales preexistentes; no se tocó ese archivo ni su baseline. `git diff --check` pasó.
 - **Pendiente:** validar recuentos de activos y `set`, exclusión de `change`, cobertura/nulls y comparativas, y revisar planes SQL con volumen representativo. Se prefiere copia aislada; producción solo admite consultas estrictamente read-only tras autorización explícita, con cuenta dedicada, consultas acotadas/aprobadas, timeout y resultados agregados o anonimizados. Producción prohíbe escrituras, migraciones, cambios de esquema y `EXPLAIN ANALYZE`; no descargar datos personales innecesarios. No repetir las pruebas unitarias/HTTP ya aprobadas. E03d sigue pendiente hasta registrar esta evidencia; E03e y las tareas frontend posteriores pueden avanzar, pero activar el dashboard desplegado queda condicionado a verificar versión backend, migraciones aplicadas y cobertura real.
+
+### Limpieza I1-E03h — eliminación definitiva de estadísticas legacy
+
+**Estado:** completada el 2026-10-24.
+
+- Contrato final: `GET /api/activity/summary` devuelve únicamente `{ dashboard }`. Se conserva dentro de ese bloque la estructura establecida por I1-E03c: períodos actual/anterior/baseline, zona `Europe/Madrid`, `asOf`, cortes de cobertura, métricas y comparativas, stock de valoraciones, y series actuales/previas con valores `null` para datos no cubiertos.
+- Se eliminaron del nivel raíz `from`, `to`, `timezone`, `activityDataSince`, `voteDataSince`, `periods` y `series`, junto con `ActivitySummaryPeriod` y `ActivitySummaryDay`.
+- `getSummary()` ya no ejecuta la query antigua de calendario, actividad diaria, acciones de voto (`set` y `change`) y usuarios votantes. Las consultas del dashboard permanecen en `getDashboardBaseAggregates()` y `getDashboardReturningCounts()`; los eventos `change` continúan almacenados y disponibles para las estadísticas compartidas de usuario.
+- Auditoría de consumidores: el controller de Activity delega el resumen exclusivamente a `ActivityStatisticsService.getSummary`; el cliente frontend documentado para E03e/f/g usa `dashboard`. No se hallaron consumidores internos del backend para las propiedades raíz retiradas. `ActivityService.getAllActivity()`, `getUserActivity()` y `findAllAdminStats()` siguen conectados a los endpoints históricos de Auth y sus pruebas, por lo que se conservan. Las rutas `/activity/users`, `/activity/users/:userId` y `/activity/app/daily`, el registro diario y la lectura/escritura de Rate tampoco cambian.
+- Los tests unitarios y HTTP de Activity fijan el contrato de solo `dashboard`, presets/fechas, coberturas y `null`, comparativas, usuarios recurrentes, eventos `set` y Rate actual. Los endpoints compartidos conservan sus suites sin cambios de comportamiento.
+- No se requieren migraciones ni cambios de esquema. Riesgo de despliegue: cualquier cliente externo que aún lea los campos legacy de primer nivel dejará de recibirlos; el consumidor frontend revisado ya no depende de ellos. Desplegar el backend tras confirmar que la versión frontend que consume `dashboard` está activa; esta tarea no despliega ni consulta producción.
+- `roadmap/frontend-architecture.md` no existe en este workspace; no se modificó otro repositorio.
 
 ## Consultas PostgreSQL
 
