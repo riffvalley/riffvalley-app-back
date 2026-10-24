@@ -57,7 +57,9 @@ La causa fue el import de valores `json` y `urlencoded` desde `express` en `src/
 
 N24-05 añade `express@4.21.2` como dependencia de producción, la misma versión ya resuelta por `@nestjs/platform-express`. El commit candidato es `78585cb` (`fix(runtime): declare Express and gate production module loading`). También añade una comprobación al build que carga los imports externos detectados en los JS de `dist`, exige que estén declarados en `dependencies` y se integra en `verify`. La instalación aislada `--prod` con lockfile congelado pudo cargar 25 módulos externos de 447 archivos compilados. No se conectó PostgreSQL ni se arrancó la aplicación completa contra servicios externos.
 
-No se hizo un nuevo push. La comprobación de producción más reciente sigue siendo `v354` con `web.1` `up`; el próximo despliegue requiere autorización explícita.
+El preflight antes del push confirmó `v354` con `web.1` `up`, stack `heroku-24`, buildpack `heroku/nodejs` y `heroku/main` en `adf34d3`. Tras autorización explícita se publicó `78585cb017b8e59eb8b0aa3ad3536e03e502d2f9`; Heroku creó `v355`.
+
+El build instaló Node `24.22.1` y pnpm `11.28.7`, compiló NestJS y pasó el gate de runtime (447 archivos compilados; 25 módulos externos declarados en producción y cargables). Heroku podó las devDependencies. La verificación posterior mostró `web.1` `up`; un one-off confirmó Node `24.22.1`, pnpm `11.28.7`, Express `4.21.2` y dotenv `16.4.5`. El resumen filtrado de logs encontró el marcador de arranque NestJS y ninguna señal de `ERROR`, `FATAL` o módulo ausente. No se consultaron secretos, no se ejecutaron migraciones ni pruebas funcionales de la aplicación.
 
 # P.1 — Preflight PostgreSQL de producción y secuencia de corte
 
