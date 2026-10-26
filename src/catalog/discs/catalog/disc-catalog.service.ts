@@ -36,6 +36,45 @@ export class DiscCatalogService {
     return this.discRepository.count();
   }
 
+  async countCurrentGenresForDiscSets(
+    monthDiscIds: string[],
+    yearDiscIds: string[],
+  ): Promise<{ month: number; year: number }> {
+    if (monthDiscIds.length === 0 && yearDiscIds.length === 0) {
+      return { month: 0, year: 0 };
+    }
+
+    type GenreCountsRow = {
+      monthCount: number | string;
+      yearCount: number | string;
+    };
+    const [row] = (await this.discRepository.query(
+      `
+      WITH month_discs AS (
+        SELECT DISTINCT unnest($1::uuid[]) AS disc_id
+      ), year_discs AS (
+        SELECT DISTINCT unnest($2::uuid[]) AS disc_id
+      )
+      SELECT
+        (SELECT COUNT(DISTINCT disc."genreId")::int
+          FROM month_discs
+          INNER JOIN disc ON disc.id = month_discs.disc_id
+          WHERE disc."genreId" IS NOT NULL) AS "monthCount",
+        (SELECT COUNT(DISTINCT disc."genreId")::int
+          FROM year_discs
+          INNER JOIN disc ON disc.id = year_discs.disc_id
+          WHERE disc."genreId" IS NOT NULL) AS "yearCount"
+      `,
+      [monthDiscIds, yearDiscIds],
+    )) as GenreCountsRow[];
+
+    if (!row) {
+      throw new Error('Current genre aggregate query returned no row');
+    }
+
+    return { month: Number(row.monthCount), year: Number(row.yearCount) };
+  }
+
   async findOne(id: string): Promise<Disc> {
     try {
       const disc = await this.discRepository.findOneOrFail({
