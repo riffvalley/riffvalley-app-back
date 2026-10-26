@@ -33,6 +33,6 @@ import { DiscLinkMaintenanceService } from './maintenance/disc-link-maintenance.
     AuthorizationModule,
     SpotifyIntegrationModule,
   ],
-  exports: [DiscsService, DiscLinkMaintenanceService],
+  exports: [DiscsService, DiscLinkMaintenanceService, DiscCatalogService],
 })
 export class DiscModule {}

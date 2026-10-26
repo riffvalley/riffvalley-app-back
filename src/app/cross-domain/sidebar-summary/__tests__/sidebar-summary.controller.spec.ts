@@ -6,6 +6,8 @@ import {
 import { MODULE_METADATA } from '@nestjs/common/constants';
 import { AppModule } from '../../../../app.module';
 import { RequestsModule } from '../../../../community/requests/requests.module';
+import { RatesModule } from '../../../../community/rates/rates.module';
+import { DiscModule } from '../../../../catalog/discs/discs.module';
 import { RequestsController } from '../../../../community/requests/requests.controller';
 import { AuthorizationModule } from '../../../../identity/authorization/authorization.module';
 import { UserRoleGuard } from '../../../../identity/authorization/guards/user-role/user-role.guard';
@@ -53,6 +55,8 @@ describe('SidebarSummaryController and CrossDomainModule boundaries', () => {
 
     expect(summaryImports).toEqual([
       AuthorizationModule,
+      RatesModule,
+      DiscModule,
       VersionsModule,
       RequestsModule,
       SuggestionsModule,

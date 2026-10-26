@@ -200,7 +200,10 @@ describe('RatesService characterization', () => {
     expect(repository.save).toHaveBeenCalledWith(createdRate);
     expect(repository.voteEventInsert).toHaveBeenCalledWith({
       userId: user.id,
+      discId: disc.id,
       eventType: 'set',
+      previousValue: null,
+      newValue: 8,
     });
   });
 
@@ -436,7 +439,10 @@ describe('RatesService characterization', () => {
     expect(repository.save).toHaveBeenCalledWith(updatedRate);
     expect(repository.voteEventInsert).toHaveBeenCalledWith({
       userId: user.id,
+      discId: disc.id,
       eventType: 'set',
+      previousValue: null,
+      newValue: 9,
     });
   });
 
@@ -481,11 +487,13 @@ describe('RatesService characterization', () => {
       id: 'rate-existing',
       rate: 7,
       user,
+      disc,
     });
     const updatedRate = Object.assign(new Rate(), {
       id: existingRate.id,
       rate: 8,
       user,
+      disc,
     });
     const repository = createRepositoryMock({
       manager: new EntityManager(
@@ -513,7 +521,10 @@ describe('RatesService characterization', () => {
     expect(repository.save).toHaveBeenCalledWith(updatedRate);
     expect(repository.voteEventInsert).toHaveBeenCalledWith({
       userId: user.id,
+      discId: disc.id,
       eventType: 'change',
+      previousValue: 7,
+      newValue: 8,
     });
   });
 
@@ -523,6 +534,7 @@ describe('RatesService characterization', () => {
       rate: 7,
       cover: 5,
       user,
+      disc,
     });
     const updatedRate = Object.assign(new Rate(), {
       ...existingRate,
@@ -550,7 +562,10 @@ describe('RatesService characterization', () => {
     );
     expect(repository.voteEventInsert).toHaveBeenCalledWith({
       userId: user.id,
+      discId: disc.id,
       eventType: 'change',
+      previousValue: 7,
+      newValue: 8,
     });
 
     repository.voteEventInsert.mockClear();
@@ -728,11 +743,13 @@ describe('RatesService characterization', () => {
       id: 'rate-1',
       user,
       rate: null,
+      disc,
     });
     const updatedOwnRate = Object.assign(new Rate(), {
       id: 'rate-1',
       user,
       rate: 9,
+      disc,
     });
     const repository = createRepositoryMock({
       findOne: jest
@@ -753,12 +770,15 @@ describe('RatesService characterization', () => {
     ).resolves.toBe(updatedOwnRate);
     expect(repository.findOne).toHaveBeenNthCalledWith(1, {
       where: { id: 'rate-1' },
-      relations: ['user'],
+      relations: ['user', 'disc'],
       lock: { mode: 'pessimistic_write', tables: ['rate'] },
     });
     expect(repository.voteEventInsert).toHaveBeenCalledWith({
       userId: user.id,
+      discId: disc.id,
       eventType: 'set',
+      previousValue: null,
+      newValue: 9,
     });
     repository.voteEventInsert.mockClear();
     await expect(service.remove('rate-1', user)).resolves.toEqual({

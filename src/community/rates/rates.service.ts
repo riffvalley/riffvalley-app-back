@@ -70,6 +70,7 @@ export class RatesService {
           await this.recordVoteEvent(
             manager,
             user.id,
+            discId,
             existingRate.rate,
             updatedRate.rate,
           );
@@ -82,7 +83,13 @@ export class RatesService {
           disc,
         });
         await rateRepository.save(newRate);
-        await this.recordVoteEvent(manager, user.id, null, newRate.rate);
+        await this.recordVoteEvent(
+          manager,
+          user.id,
+          discId,
+          null,
+          newRate.rate,
+        );
         return newRate;
       });
     } catch (error) {
@@ -316,7 +323,7 @@ export class RatesService {
         const rateRepository = manager.getRepository(Rate);
         const existing = await rateRepository.findOne({
           where: { id },
-          relations: ['user'],
+          relations: ['user', 'disc'],
           lock: { mode: 'pessimistic_write', tables: ['rate'] },
         });
 
@@ -335,7 +342,13 @@ export class RatesService {
         if (!rate) throw new NotFoundException(`Rate with id ${id} not found`);
 
         await rateRepository.save(rate);
-        await this.recordVoteEvent(manager, user.id, existing.rate, rate.rate);
+        await this.recordVoteEvent(
+          manager,
+          user.id,
+          existing.disc.id,
+          existing.rate,
+          rate.rate,
+        );
         return rate;
       });
     } catch (error) {
@@ -367,6 +380,7 @@ export class RatesService {
   private async recordVoteEvent(
     manager: EntityManager,
     userId: string,
+    discId: string,
     previousRate: number | null | undefined,
     nextRate: number | null | undefined,
   ): Promise<void> {
@@ -380,7 +394,13 @@ export class RatesService {
           : 'change';
     if (!eventType) return;
 
-    await manager.getRepository(RateVoteEvent).insert({ userId, eventType });
+    await manager.getRepository(RateVoteEvent).insert({
+      userId,
+      discId,
+      eventType,
+      previousValue: previousRate ?? null,
+      newValue: nextRate,
+    });
   }
 
   private handleDbExceptions(error: unknown) {

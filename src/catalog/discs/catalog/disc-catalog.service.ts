@@ -32,6 +32,10 @@ export class DiscCatalogService {
     private readonly discRepository: Repository<Disc>,
   ) {}
 
+  countCatalogDiscs(): Promise<number> {
+    return this.discRepository.count();
+  }
+
   async findOne(id: string): Promise<Disc> {
     try {
       const disc = await this.discRepository.findOneOrFail({

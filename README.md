@@ -34,7 +34,7 @@ docker-compose up -d
 
 ## Despliegue en Heroku
 
-La aplicación existente es `spammusic-back`, con remoto Git `heroku` y stack `heroku-24`. El proceso web se define en `Procfile`; Heroku instala pnpm 11.28.7 desde `packageManager` y `pnpm-lock.yaml`, instala el lockfile congelado, y ejecuta `pnpm run build` durante el buildpack. El arranque es `pnpm run start:prod`. El repositorio se despliega por Heroku Git; no se crea una aplicación ni se cambia el stack o buildpack.
+La aplicación existente es `spammusic-back`, con remoto Git `heroku` y stack `heroku-24`. Heroku instala pnpm 11.28.7 desde `packageManager` y `pnpm-lock.yaml`, instala el lockfile congelado y ejecuta `pnpm run build` durante el buildpack. El proceso `release` ejecuta `pnpm run migration:run:prod` antes de activar el nuevo release; el proceso web arranca con `pnpm run start:prod`. El repositorio no crea otra aplicación ni cambia el stack o buildpack.
 
 Antes de publicar, desde el checkout que se va a desplegar, revisa explícitamente el remoto, rama, commit y diff:
 
@@ -73,7 +73,7 @@ Confirma el release activo, el arranque y los logs después del rollback. El rol
 
 ## Migraciones de base de datos
 
-Las migraciones PostgreSQL se gestionan manualmente y son independientes de los despliegues de Heroku. `migrationsRun` y `synchronize` permanecen en `false`; ningún despliegue ni arranque de NestJS aplica migraciones automáticamente.
+Las migraciones PostgreSQL se ejecutan automáticamente como fase `release` de cada despliegue Heroku, antes de activar la nueva versión web. TypeORM aplica todas las migraciones pendientes y, si alguna falla, Heroku no completa el release. Revisa las migraciones incluidas antes de integrar a `main`; no se usa maintenance como parte automática de este proceso. `migrationsRun` y `synchronize` permanecen en `false`: el arranque de NestJS no modifica el esquema. Los comandos `db:status`, `db:check` y `db:migrate` siguen disponibles para inspección y operaciones manuales controladas.
 
 ### Desarrollo local
 
