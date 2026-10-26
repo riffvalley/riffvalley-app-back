@@ -433,7 +433,7 @@ export class DiscCatalogService {
         );
         idsQueryBuilder.addSelect(
           criteria.communityVoteCountExpression,
-          'communityVoteCount',
+          'communityvotecount',
         );
         const ratePredicates = [
           criteria.notRatedPredicate,
@@ -470,7 +470,7 @@ export class DiscCatalogService {
         if (difficulty) {
           communityVoteCounts.set(
             row.id,
-            Number.parseInt(String(row.communityVoteCount), 10) || 0,
+            Number.parseInt(String(row.communityvotecount), 10) || 0,
           );
         }
       }
@@ -509,7 +509,7 @@ export class DiscCatalogService {
         'pending.userId = :userId',
         { userId },
       )
-      .addSelect('disc.id', 'discId')
+      .addSelect('disc.id', 'disc_id_for_mapping')
       .addSelect((subQuery) => {
         return subQuery
           .select('AVG(rate.rate)', 'averageRate')
@@ -539,7 +539,26 @@ export class DiscCatalogService {
     const { entities: discs, raw } = await queryBuilder.getRawAndEntities();
 
     // Preserve the random order decided by the IDs query above.
-    const orderedDiscs = restoreRandomDiscOrder(discs, randomIds);
+    const hydratedDiscIds = [
+      ...new Set(
+        raw
+          .map((row) => row.disc_id_for_mapping ?? row.discId ?? row.disc_id)
+          .filter(
+            (id): id is string => typeof id === 'string' && id.length > 0,
+          ),
+      ),
+    ];
+    const discsWithIds = discs.map((disc, index) => {
+      const id =
+        typeof disc.id === 'string' && disc.id.length > 0
+          ? disc.id
+          : hydratedDiscIds[index];
+      if (!id) {
+        throw new Error('Hydrated random disc is missing its database ID');
+      }
+      return { ...disc, id };
+    });
+    const orderedDiscs = restoreRandomDiscOrder(discsWithIds, randomIds);
     const rawById = indexCatalogRawRows(raw);
 
     return orderedDiscs.map((disc) => {
