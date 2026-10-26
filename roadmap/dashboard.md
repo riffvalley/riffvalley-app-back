@@ -12,7 +12,7 @@ La tabla `rate_vote_event_capture` conserva un registro singleton con `started_a
 
 Los eventos nuevos incluyen `disc_id`, `previous_value` y `new_value`. `disc_id` conserva una FK `ON DELETE SET NULL`; un evento retenido cuyo disco se borró no se reasigna ni se cuenta como otro disco. Los eventos creados antes de aplicar la captura enriquecida pueden conservar `disc_id = NULL`. No se ejecuta backfill.
 
-No existe un marcador fiable separado para el inicio de captura enriquecida de discos. Por eso la implementación no infiere ese límite desde la migración que añadió columnas: examina los eventos `set` del período y marca incompleto cualquier período que contenga un evento sin `disc_id`.
+No existe un marcador fiable separado para el inicio de captura enriquecida de discos. Los eventos sin `disc_id` no se atribuyen a un disco ni a un género; sí cuentan como actividad en su día local. No se infieren identificadores desde la migración ni se hace backfill.
 
 ## D-B1.3 — Estadísticas históricas de votación
 
@@ -23,10 +23,10 @@ No existe un marcador fiable separado para el inicio de captura enriquecida de d
 `HistoricalRatesStatsService.getUserHistoricalStats(userId)` devuelve:
 
 - `totalRatedDiscs`: discos distintos actualmente valorados musicalmente (`Rate.rate IS NOT NULL`), independiente de la cobertura histórica.
-- `month`: discos distintos con evento `set` en el mes Madrid actual (`ratedDiscs`), IDs de esos discos solo si el período está completo (uso interno de CrossDomain), días locales distintos con `set` (`activeDays`) y cobertura.
-- `year`: los mismos datos de discos para el año Madrid actual.
+- `month`: discos distintos identificables con evento `set` en el mes Madrid actual (`ratedDiscs`), sus IDs para CrossDomain y días locales distintos con `set` (`activeDays`).
+- `year`: los mismos datos de discos identificables para el año Madrid actual.
 - `history`: métricas de vida explícitamente `null`; el ledger comenzó después de que existieran votos.
-- `currentStreak`: días Madrid consecutivos con `set`, si la cobertura permite determinar el inicio de la secuencia.
+- `currentStreak`: días Madrid consecutivos con `set` observados en los eventos disponibles.
 - `discoveries`: explícitamente desconocido (`null`) porque no se puede demostrar el primer voto de vida por disco.
 - `timezone`: `Europe/Madrid`.
 
@@ -34,18 +34,13 @@ Los campos `ratedDiscs` mensuales/anuales cuentan discos distintos con actividad
 
 ### Consultas y propiedad de datos
 
-Rates hace una consulta agregada PostgreSQL por usuario que combina el conteo actual de Rate con eventos. Filtra `event_type = 'set'`, deriva límites semiabiertos desde medianoches Europe/Madrid, deduplica IDs, agrupa días locales y calcula la secuencia consecutiva con funciones de ventana. Se excluye el día local en que comenzó la captura para no tratarlo como día completo. Ni el histórico completo de eventos ni entidades `Disc` se cargan en memoria.
+Rates hace una consulta agregada PostgreSQL por usuario que combina el conteo actual de Rate con eventos. Filtra `event_type = 'set'`, deriva límites semiabiertos desde medianoches Europe/Madrid, deduplica IDs, agrupa días locales y calcula la secuencia consecutiva con funciones de ventana. Incluye todos los eventos disponibles sin condicionar los períodos al marcador de inicio de captura. Ni el histórico completo de eventos ni entidades `Disc` se cargan en memoria.
 
-Rates no consulta Catalog ni carga discos. Expone IDs distintos únicamente para períodos completos; CrossDomain los entrega a la operación pública de Catalog durante la composición D-B1.4. Catalog cuenta `COUNT(DISTINCT disc."genreId")` contra la clasificación actual. El modelo solo tiene una relación `Disc.genre`; no existe subgénero separado. La reclasificación actual afecta también las consultas de períodos pasados. Discos inexistentes/ids ya puestos a `NULL` no se inventan y provocan cobertura parcial del conteo de discos/géneros. Los IDs no forman parte del DTO HTTP.
+Rates no consulta Catalog ni carga discos. Expone los IDs distintos disponibles; CrossDomain los entrega a la operación pública de Catalog durante la composición D-B1.4. Catalog cuenta `COUNT(DISTINCT disc."genreId")` contra la clasificación actual. El modelo solo tiene una relación `Disc.genre`; no existe subgénero separado. La reclasificación actual afecta también las consultas de períodos pasados. Discos inexistentes/ids ya puestos a `NULL` no se inventan ni se cuentan como disco o género. Los IDs no forman parte del DTO HTTP.
 
-### Cobertura y límites
+### Límite histórico
 
-- `complete`: el período empieza en o después de `rate_vote_event_capture.started_at` y no contiene eventos `set` sin `disc_id`. Un período completo sin eventos devuelve cero.
-- `partial_missing_disc_ids`: el límite de captura cubre el período, pero hay eventos `set` sin disco identificable, incluidos eventos antiguos sin la captura enriquecida y discos borrados.
-- `before_capture`: el período comienza antes de `started_at`; no se devuelve cero ni se presenta como completo.
-- `unknown`: falta el marcador singleton o no se puede leer.
-- La cobertura de `activeDays` es distinta: depende de si el mes entero tuvo días completos desde el inicio de captura, no de la disponibilidad de `disc_id`. La racha también queda `null` si podría continuar antes del primer día completo conocido.
-- El total histórico de discos/géneros y los primeros descubrimientos permanecen desconocidos. No se deducen de `Rate` actual ni del primer evento conservado.
+Los contadores de mes y año devuelven los valores derivados de eventos disponibles, incluido `0` cuando no hay actividad conocida. Los eventos sin `disc_id` no se pueden atribuir a discos o géneros, aunque sus días sí cuentan como actividad. No se reconstruyen votos anteriores al inicio de captura. Los acumulados de 2026 son parciales y ganarán representatividad conforme avance el tiempo; no equivalen a un histórico completo. Los conteos de vida y los primeros descubrimientos permanecen desconocidos y no se deducen de `Rate` actual ni del primer evento conservado.
 
 No se introducen índices ni migraciones. La consulta usa los índices existentes de `rate_vote_events`; falta medir planes con datos representativos antes de proponer cambios de rendimiento.
 
@@ -57,18 +52,30 @@ La suite focalizada cubre deduplicación de discos, agregación actual de géner
 
 **Estado:** completada el 2026-10-26.
 
-`GET /api/app/dashboard-summary` compone `HistoricalRatesStatsService.getUserHistoricalStats(sessionUser.id)`, `DiscCatalogService.countCatalogDiscs()` y `DiscCatalogService.countCurrentGenresForDiscSets()` desde CrossDomain. El conteo de Rates y el total global de Catalog se ejecutan en paralelo. Tras conocer la cobertura, CrossDomain solicita una única agregación actual de `genreId` para los conjuntos completos de mes/año. No se usa el endpoint de discos ni se consultan discos individualmente.
+`GET /api/app/dashboard-summary` compone `HistoricalRatesStatsService.getUserHistoricalStats(sessionUser.id)`, `DiscCatalogService.countCatalogDiscs()` y `DiscCatalogService.countCurrentGenresForDiscSets()` desde CrossDomain. El conteo de Rates y el total global de Catalog se ejecutan en paralelo. CrossDomain solicita una única agregación actual de `genreId` para los IDs identificables de mes/año. No se usa el endpoint de discos ni se consultan discos individualmente.
 
-El DTO público conserva `personal.totalRatedDiscs`, `personal.currentStreak`, `personal.year.{ratedDiscs, exploredGenres}`, `personal.month.{ratedDiscs, exploredGenres, activeDays}` y `catalog.totalDiscs`. CrossDomain copia los valores ya agregados; las métricas temporales no cubiertas permanecen `null`. La identidad viene exclusivamente de `@GetUser()` y no se acepta un `userId` de entrada. Los errores de Rates o Catalog se propagan.
+El DTO público conserva `personal.totalRatedDiscs`, `personal.currentStreak`, `personal.year.{ratedDiscs, exploredGenres}`, `personal.month.{ratedDiscs, exploredGenres, activeDays}` y `catalog.totalDiscs`. Desde D-B2.2 las métricas temporales reflejan los eventos disponibles y devuelven cero si no hay eventos identificables; no quedan bloqueadas por historia previa incompleta. La identidad viene exclusivamente de `@GetUser()` y no se acepta un `userId` de entrada. Los errores de Rates o Catalog se propagan.
 
-CrossDomain omite la agregación de géneros de un período cuando su cobertura no es completa y evita la operación cuando ambos conjuntos están vacíos. El total actual de Rates y actividad mensual/anual se obtiene en la misma consulta histórica; DashboardSummary ya no llama también al agregado anterior de actividad, evitando duplicar consultas de eventos, rachas y días. Rates no depende del módulo de Catalog.
+CrossDomain evita la operación de géneros cuando ambos conjuntos están vacíos; Catalog devuelve cero para ambos. El total actual de Rates y actividad mensual/anual se obtiene en la misma consulta histórica; DashboardSummary no duplica consultas de eventos, rachas ni días. Rates no depende del módulo de Catalog.
 
-Durante la integración se corrigió una coma final en el SQL de D-B1.3 y se amplió esa misma agregación para incluir `totalRatedDiscs` actual. La ausencia del marcador ahora conserva ese conteo actual y deja desconocidas las métricas temporales. No se duplican la consulta de eventos, días ni racha del método anterior de Rates.
+Durante la integración se corrigió una coma final en el SQL de D-B1.3 y se amplió esa misma agregación para incluir `totalRatedDiscs` actual. La ausencia de eventos devuelve cero en las métricas temporales. No se duplican las consultas de eventos, días ni racha del método anterior de Rates.
 
 Las pruebas de DashboardSummary cubren ceros cubiertos, datos de mes/año, preservación de nulos temporales con días cubiertos, propagación de errores, contrato exacto, identidad de sesión y exports públicos de Rates/Catalog. Las pruebas focalizadas de Rates/Catalog cubren la consulta agregada y que no se soliciten géneros cuando el período no es publicable o está vacío. `pnpm run verify` pasó con 215 suites y 2.113 tests aprobados; 91 tests opt-in omitidos. ESLint reportó cero hallazgos nuevos; typecheck, build, gates estructural y de tipado seguro pasaron. `git diff --check` pasó.
 
-La verificación PostgreSQL real sigue pendiente: no hay una base aislada de pruebas configurada. Las consultas se verificaron mediante mocks y aserciones de SQL; no se afirma que hayan sido ejecutadas contra PostgreSQL. El frontend aún debe integrar el contrato final y no forma parte de esta tarea.
+La verificación PostgreSQL real sigue pendiente: no hay una base aislada de pruebas configurada. Las consultas se verificaron mediante mocks y aserciones de SQL; no se afirma que hayan sido ejecutadas contra PostgreSQL. La query tipada frontend ya consume este contrato sin una petición adicional; D-B2.2 no requiere cambiar sus tipos.
 
 ## D-B2
 
-**Pendiente.** No se inicia en esta tarea.
+**Estado:** desglosada en tareas. D-B2.2 activa las estadísticas de mes/año sin iniciar el rediseño del banner.
+
+## D-B2.2 — Activar estadísticas mensuales y anuales
+
+**Estado:** completada el 2026-10-26.
+
+DashboardSummary conserva el contrato actual. `year.ratedDiscs` y `month.ratedDiscs` cuentan discos distintos identificables con eventos `set` en el período Madrid correspondiente. `month.activeDays` cuenta fechas Madrid distintas que tienen al menos un evento `set`; la racha cuenta la secuencia consecutiva más reciente observada. Los eventos `change` no suman actividad. Si el mismo disco recibe varios `set`, cuenta una vez por período.
+
+Rates agrega eventos por usuario en una sola consulta PostgreSQL. La consulta aplica los límites semiabiertos Madrid de mes y año, deduplica `disc_id`, cuenta días locales y calcula la racha con funciones de ventana. Ya no limita resultados por `rate_vote_event_capture.started_at` ni condiciona mes/año a una cobertura completa. Eventos `set` con `disc_id = NULL` sí contribuyen a días activos, pero no se atribuyen a ningún disco ni género. CrossDomain siempre compone los conteos disponibles y reutiliza una única llamada a `countCurrentGenresForDiscSets`; Catalog cuenta géneros actuales distintos sobre los IDs conocidos y devuelve cero para conjuntos vacíos. No se cargan entidades ni historiales completos, no se añaden endpoints o migraciones y la autenticación permanece igual.
+
+Los períodos sin eventos devuelven cero. No se reconstruyen votos anteriores a la captura ni se infieren discos para eventos sin ID. Por eso los acumulados de 2026 son parciales y representarán mejor la actividad conforme avance la captura; no equivalen a un histórico musical completo. La consulta sigue propagando errores de Rates o Catalog.
+
+Las pruebas focalizadas cubren usuario sin actividad, conteos distintos de disco y día, filtro exclusivo `set`, límites Madrid, eventos sin `disc_id`, errores SQL/Catalog, composición con historia incompleta y el contrato HTTP autenticado. Pasaron 4 suites y 15 tests focalizados. `pnpm run verify` pasó con 215 suites y 2.112 tests aprobados; 91 tests opt-in omitidos. ESLint mantuvo 839 diagnósticos del baseline sin hallazgos nuevos; gates estructural, de tipado seguro, typecheck y build pasaron. `git diff --check` pasó. La suite PostgreSQL opt-in no se ejecutó porque el servidor configurado no acepta conexiones; no se afirma ejecución del SQL contra una base real. En frontend no hubo cambios de contrato ni de código; sus pruebas, typecheck y build ya pasaron con el estado local preexistente.

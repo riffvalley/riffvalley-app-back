@@ -9,28 +9,14 @@ describe('HistoricalRatesStatsService', () => {
   let service: HistoricalRatesStatsService;
 
   const row = (overrides: Record<string, unknown> = {}) => ({
-    captureStartedAt: new Date('2026-01-01T00:00:00.000Z'),
     totalRatedDiscs: 0,
-    today: '2026-10-26',
-    captureDay: '2026-01-01',
-    firstCoveredDay: '2026-01-02',
-    monthStart: '2026-10-01',
-    yearStart: '2026-01-01',
     monthRatedDiscIds: [],
     yearRatedDiscIds: [],
     monthRatedDiscCount: 0,
     yearRatedDiscCount: 0,
-    monthMissingDiscEvents: 0,
-    yearMissingDiscEvents: 0,
     historyMissingDiscEvents: 0,
     monthActiveDays: 0,
     streakDays: 0,
-    streakMayExtendBeforeCapture: false,
-    monthActiveDaysCovered: true,
-    streakCovered: true,
-    monthCovered: true,
-    yearCovered: false,
-    historyCovered: false,
     ...overrides,
   });
 
@@ -47,18 +33,36 @@ describe('HistoricalRatesStatsService', () => {
 
   afterEach(async () => moduleRef.close());
 
-  it('deduplicates repeated set events and returns distinct disc ids for covered periods', async () => {
+  it('returns numeric zeroes for a user with no activity, without capture coverage gating', async () => {
+    query.mockResolvedValue([row()]);
+
+    await expect(
+      service.getUserHistoricalStats('user-id'),
+    ).resolves.toMatchObject({
+      totalRatedDiscs: 0,
+      month: { ratedDiscs: 0, ratedDiscIds: [], activeDays: 0 },
+      year: { ratedDiscs: 0, ratedDiscIds: [] },
+      currentStreak: 0,
+    });
+
+    const [sql, parameters] = query.mock.calls[0];
+    expect(parameters).toEqual(['user-id']);
+    expect(sql).not.toContain('rate_vote_event_capture');
+    expect(sql).not.toContain('started_at');
+  });
+
+  it('deduplicates repeated set events by disc and activity day', async () => {
     query.mockResolvedValue([
       row({
         monthRatedDiscIds: ['disc-a', 'disc-b'],
         yearRatedDiscIds: ['disc-a', 'disc-b', 'disc-c'],
         monthRatedDiscCount: 2,
         yearRatedDiscCount: 3,
-        yearCovered: true,
         monthActiveDays: '2',
         streakDays: '2',
       }),
     ]);
+
     await expect(
       service.getUserHistoricalStats('user-id'),
     ).resolves.toMatchObject({
@@ -66,90 +70,23 @@ describe('HistoricalRatesStatsService', () => {
         ratedDiscs: 2,
         ratedDiscIds: ['disc-a', 'disc-b'],
         activeDays: 2,
-        coverage: 'complete',
       },
       year: {
         ratedDiscs: 3,
         ratedDiscIds: ['disc-a', 'disc-b', 'disc-c'],
-        coverage: 'complete',
       },
       currentStreak: 2,
     });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('SELECT DISTINCT disc_id FROM month_sets');
+    expect(sql).toContain('SELECT DISTINCT disc_id FROM year_sets');
+    expect(sql).toContain('SELECT DISTINCT activity_day FROM valid_sets');
+    expect(sql).toContain('(SELECT COUNT(*) FROM month_disc_ids)::int');
   });
 
-  it('marks pre-capture and missing-disc periods unknown instead of returning zero', async () => {
-    query.mockResolvedValue([
-      row({
-        monthCovered: true,
-        yearCovered: false,
-        monthMissingDiscEvents: '1',
-        historyMissingDiscEvents: '2',
-        monthActiveDays: 12,
-        monthActiveDaysCovered: true,
-      }),
-    ]);
-
-    await expect(
-      service.getUserHistoricalStats('user-id'),
-    ).resolves.toMatchObject({
-      month: {
-        ratedDiscs: null,
-        ratedDiscIds: null,
-        activeDays: 12,
-        coverage: 'partial_missing_disc_ids',
-      },
-      year: {
-        ratedDiscs: null,
-        ratedDiscIds: null,
-        coverage: 'before_capture',
-      },
-      history: {
-        ratedDiscs: null,
-        ratedDiscIds: null,
-        coverage: 'partial_missing_disc_ids',
-      },
-    });
-  });
-
-  it('returns known zero for a fully covered period with no events', async () => {
-    query.mockResolvedValue([row({ yearCovered: true })]);
-
-    await expect(
-      service.getUserHistoricalStats('user-id'),
-    ).resolves.toMatchObject({
-      month: {
-        ratedDiscs: 0,
-        ratedDiscIds: [],
-        activeDays: 0,
-        coverage: 'complete',
-      },
-      year: { ratedDiscs: 0, ratedDiscIds: [], coverage: 'complete' },
-      currentStreak: 0,
-    });
-  });
-
-  it('does not infer first discoveries or a streak that may reach before complete day coverage', async () => {
-    query.mockResolvedValue([
-      row({
-        streakMayExtendBeforeCapture: true,
-        streakDays: '4',
-      }),
-    ]);
-
-    await expect(
-      service.getUserHistoricalStats('user-id'),
-    ).resolves.toMatchObject({
-      discoveries: {
-        value: null,
-        coverage: 'unknown',
-        reason: 'incomplete_lifetime_ledger',
-      },
-      currentStreak: null,
-    });
-  });
-
-  it('uses Madrid local calendar boundaries and propagates SQL failures', async () => {
-    query.mockResolvedValue([row({ monthRatedDiscIds: ['disc-a'] })]);
+  it('counts only set events, uses Madrid month/year boundaries, and propagates SQL failures', async () => {
+    query.mockResolvedValue([row()]);
     await service.getUserHistoricalStats('user-id');
     const [sql, parameters] = query.mock.calls[0];
     expect(parameters).toEqual(['user-id']);
@@ -157,12 +94,9 @@ describe('HistoricalRatesStatsService', () => {
     expect(sql).toContain("INTERVAL '1 month'");
     expect(sql).toContain("INTERVAL '1 year'");
     expect(sql).toContain("event.event_type = 'set'");
-    expect(sql).toContain('SELECT DISTINCT disc_id FROM month_sets');
-    expect(sql).toContain('COUNT(DISTINCT disc_id)');
-    expect(sql).toContain('SELECT DISTINCT activity_day');
+    expect(sql).not.toContain("event.event_type = 'change'");
     expect(sql).toContain('COUNT(DISTINCT rate."discId")');
     expect(sql).not.toMatch(/,\s*FROM context/);
-    expect(sql).not.toContain("event.event_type IN ('set', 'change')");
 
     query.mockRejectedValue(new Error('database unavailable'));
     await expect(service.getUserHistoricalStats('user-id')).rejects.toThrow(
@@ -170,23 +104,53 @@ describe('HistoricalRatesStatsService', () => {
     );
   });
 
-  it('returns unknown when the singleton capture marker is unavailable', async () => {
+  it('counts activity days for set events with missing disc ids without attributing a disc', async () => {
     query.mockResolvedValue([
-      row({ captureStartedAt: null, totalRatedDiscs: '8' }),
+      row({
+        monthRatedDiscIds: ['disc-a'],
+        yearRatedDiscIds: ['disc-a'],
+        monthRatedDiscCount: 1,
+        yearRatedDiscCount: 1,
+        monthActiveDays: 2,
+        historyMissingDiscEvents: 1,
+      }),
     ]);
+
     await expect(
       service.getUserHistoricalStats('user-id'),
     ).resolves.toMatchObject({
-      totalRatedDiscs: 8,
-      month: {
-        ratedDiscs: null,
-        ratedDiscIds: null,
-        activeDays: null,
-        coverage: 'unknown',
-      },
-      year: { ratedDiscs: null, ratedDiscIds: null, coverage: 'unknown' },
-      history: { ratedDiscs: null, ratedDiscIds: null, coverage: 'unknown' },
-      currentStreak: null,
+      month: { ratedDiscs: 1, ratedDiscIds: ['disc-a'], activeDays: 2 },
+      year: { ratedDiscs: 1, ratedDiscIds: ['disc-a'] },
+      history: { coverage: 'partial_missing_disc_ids' },
     });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('WHERE disc_id IS NOT NULL');
+    expect(sql).toContain('FROM activity_days');
+    expect(sql).not.toContain('COALESCE(disc_id');
+  });
+
+  it('updates the returned aggregates when a subsequent read includes a new set event', async () => {
+    query.mockResolvedValueOnce([row()]).mockResolvedValueOnce([
+      row({
+        monthRatedDiscIds: ['disc-new'],
+        yearRatedDiscIds: ['disc-new'],
+        monthRatedDiscCount: 1,
+        yearRatedDiscCount: 1,
+        monthActiveDays: 1,
+        streakDays: 1,
+      }),
+    ]);
+
+    await expect(
+      service.getUserHistoricalStats('user-id'),
+    ).resolves.toMatchObject({ month: { ratedDiscs: 0, activeDays: 0 } });
+    await expect(
+      service.getUserHistoricalStats('user-id'),
+    ).resolves.toMatchObject({
+      month: { ratedDiscs: 1, ratedDiscIds: ['disc-new'], activeDays: 1 },
+      year: { ratedDiscs: 1, ratedDiscIds: ['disc-new'] },
+    });
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });
