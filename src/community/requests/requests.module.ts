@@ -16,5 +16,6 @@ import { AuthorizationModule } from '../../identity/authorization/authorization.
   ],
   controllers: [RequestsController],
   providers: [RequestsService],
+  exports: [RequestsService],
 })
 export class RequestsModule {}

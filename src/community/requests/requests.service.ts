@@ -57,6 +57,10 @@ export class RequestsService {
     return this.requestRepo.find({ order: { createdAt: 'DESC' } });
   }
 
+  countPendingRequests(): Promise<number> {
+    return this.requestRepo.count({ where: { status: RequestStatus.PENDING } });
+  }
+
   findByUser(user: User): Promise<DiscRequest[]> {
     return this.requestRepo.find({
       where: { user: { id: user.id } },

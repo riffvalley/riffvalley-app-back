@@ -216,6 +216,22 @@ function createService(
 }
 
 describe('RequestsService characterization', () => {
+  it('counts only pending requests without loading the request list', async () => {
+    const requestRepo = repositoryMock(DiscRequest, {
+      count: jest
+        .fn<Promise<number>, [{ where: FindOptionsWhere<DiscRequest> }]>()
+        .mockResolvedValue(3),
+      find: jest.fn<Promise<DiscRequest[]>, [FindManyOptions<DiscRequest>]>(),
+    });
+    const service = createService(requestRepo);
+
+    await expect(service.countPendingRequests()).resolves.toBe(3);
+    expect(requestRepo.count).toHaveBeenCalledWith({
+      where: { status: RequestStatus.PENDING },
+    });
+    expect(requestRepo.find).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid create input before controller persistence can run', async () => {
     const requestRepo = repositoryMock(DiscRequest, {
       create: jest.fn<DiscRequest, [DeepPartial<DiscRequest>]>(),

@@ -92,6 +92,18 @@ export class SuggestionsService {
     return suggestion;
   }
 
+  async listInProgressSuggestionIds(): Promise<string[]> {
+    const rows = await this.repo
+      .createQueryBuilder('suggestion')
+      .select('suggestion.id', 'id')
+      .where('suggestion.status = :status', {
+        status: SuggestionStatus.IN_PROGRESS,
+      })
+      .getRawMany<{ id: string }>();
+
+    return rows.map((row) => row.id);
+  }
+
   async update(id: string, dto: UpdateSuggestionDto): Promise<Suggestion> {
     const suggestion = await this.findOne(id);
     Object.assign(suggestion, dto);
