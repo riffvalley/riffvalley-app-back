@@ -30,9 +30,8 @@ describe('DashboardSummaryService', () => {
       ratedDiscs: 0,
       ratedDiscIds: [],
       activeDays: 0,
-      coverage: 'complete',
     },
-    year: { ratedDiscs: 0, ratedDiscIds: [], coverage: 'complete' },
+    year: { ratedDiscs: 0, ratedDiscIds: [] },
     history: {
       ratedDiscs: null,
       ratedDiscIds: null,
@@ -74,7 +73,7 @@ describe('DashboardSummaryService', () => {
     await moduleRef.close();
   });
 
-  it('returns covered zeroes for a user without votes and preserves the exact HTTP shape', async () => {
+  it('returns numeric zeroes for a user without activity and preserves the exact HTTP shape', async () => {
     await expect(
       service.getSummary(Object.assign(new User(), { id: 'session-user' })),
     ).resolves.toEqual({
@@ -104,13 +103,11 @@ describe('DashboardSummaryService', () => {
         year: {
           ratedDiscs: 94,
           ratedDiscIds: ['disc-a', 'disc-b', 'disc-c'],
-          coverage: 'complete',
         },
         month: {
           ratedDiscs: 12,
           ratedDiscIds: ['disc-a', 'disc-b'],
           activeDays: 8,
-          coverage: 'complete',
         },
       }),
     );
@@ -141,24 +138,31 @@ describe('DashboardSummaryService', () => {
     );
   });
 
-  it('preserves unknown disc metrics while retaining separately covered days and streak', async () => {
+  it('composes available event counts and genres even when lifetime history is incomplete', async () => {
     ratesStatsService.getUserHistoricalStats.mockResolvedValue(
       stats({
         totalRatedDiscs: 2,
         currentStreak: 3,
         month: {
-          ratedDiscs: null,
-          ratedDiscIds: null,
+          ratedDiscs: 2,
+          ratedDiscIds: ['disc-a'],
           activeDays: 12,
-          coverage: 'partial_missing_disc_ids',
         },
         year: {
+          ratedDiscs: 3,
+          ratedDiscIds: ['disc-a', 'disc-b'],
+        },
+        history: {
           ratedDiscs: null,
           ratedDiscIds: null,
-          coverage: 'before_capture',
+          coverage: 'partial_missing_disc_ids',
         },
       }),
     );
+    discCatalogService.countCurrentGenresForDiscSets.mockResolvedValue({
+      month: 1,
+      year: 2,
+    });
 
     await expect(
       service.getSummary(Object.assign(new User(), { id: 'session-user' })),
@@ -166,10 +170,10 @@ describe('DashboardSummaryService', () => {
       personal: {
         totalRatedDiscs: 2,
         currentStreak: 3,
-        year: { ratedDiscs: null, exploredGenres: null },
+        year: { ratedDiscs: 3, exploredGenres: 2 },
         month: {
-          ratedDiscs: null,
-          exploredGenres: null,
+          ratedDiscs: 2,
+          exploredGenres: 1,
           activeDays: 12,
         },
       },
@@ -177,7 +181,7 @@ describe('DashboardSummaryService', () => {
     });
     expect(
       discCatalogService.countCurrentGenresForDiscSets,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(['disc-a'], ['disc-a', 'disc-b']);
   });
 
   it('propagates Rates and Catalog failures rather than returning zeroes', async () => {
@@ -203,7 +207,6 @@ describe('DashboardSummaryService', () => {
           ratedDiscs: 1,
           ratedDiscIds: ['disc-a'],
           activeDays: 1,
-          coverage: 'complete',
         },
       }),
     );

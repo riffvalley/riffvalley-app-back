@@ -17,18 +17,8 @@ export class DashboardSummaryService {
       this.discCatalogService.countCatalogDiscs(),
     ]);
 
-    const monthGenresCovered =
-      personal.month.coverage === 'complete' &&
-      personal.month.ratedDiscIds !== null;
-    const yearGenresCovered =
-      personal.year.coverage === 'complete' &&
-      personal.year.ratedDiscIds !== null;
-    const monthDiscIds = monthGenresCovered
-      ? (personal.month.ratedDiscIds ?? [])
-      : [];
-    const yearDiscIds = yearGenresCovered
-      ? (personal.year.ratedDiscIds ?? [])
-      : [];
+    const monthDiscIds = personal.month.ratedDiscIds;
+    const yearDiscIds = personal.year.ratedDiscIds;
     const genreCounts =
       monthDiscIds.length > 0 || yearDiscIds.length > 0
         ? await this.discCatalogService.countCurrentGenresForDiscSets(
@@ -43,11 +33,11 @@ export class DashboardSummaryService {
         currentStreak: personal.currentStreak,
         year: {
           ratedDiscs: personal.year.ratedDiscs,
-          exploredGenres: yearGenresCovered ? genreCounts.year : null,
+          exploredGenres: genreCounts.year,
         },
         month: {
           ratedDiscs: personal.month.ratedDiscs,
-          exploredGenres: monthGenresCovered ? genreCounts.month : null,
+          exploredGenres: genreCounts.month,
           activeDays: personal.month.activeDays,
         },
       },

@@ -3,24 +3,21 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RateVoteEvent } from '../entities/rate-vote-event.entity';
 
-export type HistoricalPeriodCoverage =
-  | 'complete'
-  | 'partial_missing_disc_ids'
-  | 'before_capture'
-  | 'unknown';
-
 export interface HistoricalPeriodStats {
-  ratedDiscs: number | null;
-  ratedDiscIds: string[] | null;
-  coverage: HistoricalPeriodCoverage;
+  ratedDiscs: number;
+  ratedDiscIds: string[];
 }
 
 export interface HistoricalRatesStats {
   timezone: 'Europe/Madrid';
   totalRatedDiscs: number;
-  month: HistoricalPeriodStats & { activeDays: number | null };
+  month: HistoricalPeriodStats & { activeDays: number };
   year: HistoricalPeriodStats;
-  history: HistoricalPeriodStats;
+  history: {
+    ratedDiscs: null;
+    ratedDiscIds: null;
+    coverage: 'partial_missing_disc_ids' | 'before_capture';
+  };
   currentStreak: number | null;
   discoveries: {
     value: null;
@@ -38,22 +35,14 @@ export class HistoricalRatesStatsService {
 
   async getUserHistoricalStats(userId: string): Promise<HistoricalRatesStats> {
     type AggregateRow = {
-      captureStartedAt: Date | string | null;
       totalRatedDiscs: number | string;
       monthRatedDiscIds: string[] | null;
       yearRatedDiscIds: string[] | null;
       monthRatedDiscCount: number | string;
       yearRatedDiscCount: number | string;
-      monthMissingDiscEvents: number | string;
-      yearMissingDiscEvents: number | string;
       historyMissingDiscEvents: number | string;
       monthActiveDays: number | string;
       streakDays: number | string;
-      streakMayExtendBeforeCapture: boolean;
-      monthActiveDaysCovered: boolean;
-      streakCovered: boolean;
-      monthCovered: boolean;
-      yearCovered: boolean;
     };
 
     const [row] = (await this.eventRepository.query(
@@ -63,11 +52,7 @@ export class HistoricalRatesStatsService {
           $1::uuid AS user_id,
           (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date AS today,
           date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date AS month_start,
-          date_trunc('year', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date AS year_start,
-          capture.started_at,
-          (capture.started_at AT TIME ZONE 'Europe/Madrid')::date AS capture_day
-        FROM (SELECT 1) AS singleton
-        LEFT JOIN rate_vote_event_capture capture ON capture.id = 1
+          date_trunc('year', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date AS year_start
       ), valid_sets AS (
         SELECT event.disc_id, event.occurred_at,
           (event.occurred_at AT TIME ZONE 'Europe/Madrid')::date AS activity_day
@@ -75,7 +60,6 @@ export class HistoricalRatesStatsService {
         CROSS JOIN context
         WHERE event.user_id = context.user_id
           AND event.event_type = 'set'
-          AND event.occurred_at >= context.started_at
       ), month_sets AS (
         SELECT valid_sets.* FROM valid_sets CROSS JOIN context
         WHERE valid_sets.occurred_at >= (context.month_start::timestamp AT TIME ZONE 'Europe/Madrid')
@@ -84,14 +68,18 @@ export class HistoricalRatesStatsService {
         SELECT valid_sets.* FROM valid_sets CROSS JOIN context
         WHERE valid_sets.occurred_at >= (context.year_start::timestamp AT TIME ZONE 'Europe/Madrid')
           AND valid_sets.occurred_at < ((context.year_start + INTERVAL '1 year')::timestamp AT TIME ZONE 'Europe/Madrid')
-      ), full_activity_days AS (
+      ), month_disc_ids AS (
+        SELECT DISTINCT disc_id FROM month_sets WHERE disc_id IS NOT NULL
+      ), year_disc_ids AS (
+        SELECT DISTINCT disc_id FROM year_sets WHERE disc_id IS NOT NULL
+      ), activity_days AS (
         SELECT DISTINCT activity_day FROM valid_sets CROSS JOIN context
-        WHERE activity_day > context.capture_day AND activity_day <= context.today
+        WHERE activity_day <= context.today
       ), ordered_days AS (
         SELECT activity_day,
           ROW_NUMBER() OVER (ORDER BY activity_day DESC) AS day_position,
           MAX(activity_day) OVER () AS latest_day
-        FROM full_activity_days
+        FROM activity_days
       ), streak AS (
         SELECT
           COUNT(*) FILTER (
@@ -101,31 +89,19 @@ export class HistoricalRatesStatsService {
         FROM ordered_days
       )
       SELECT
-        context.started_at AS "captureStartedAt",
         (SELECT COUNT(DISTINCT rate."discId")::int
           FROM rate
           WHERE rate."userId" = context.user_id
             AND rate.rate IS NOT NULL) AS "totalRatedDiscs",
-        ARRAY(SELECT DISTINCT disc_id FROM month_sets WHERE disc_id IS NOT NULL) AS "monthRatedDiscIds",
-        ARRAY(SELECT DISTINCT disc_id FROM year_sets WHERE disc_id IS NOT NULL) AS "yearRatedDiscIds",
-        (SELECT COUNT(DISTINCT disc_id) FROM month_sets)::int AS "monthRatedDiscCount",
-        (SELECT COUNT(DISTINCT disc_id) FROM year_sets)::int AS "yearRatedDiscCount",
-        (SELECT COUNT(*) FROM month_sets WHERE disc_id IS NULL)::int AS "monthMissingDiscEvents",
-        (SELECT COUNT(*) FROM year_sets WHERE disc_id IS NULL)::int AS "yearMissingDiscEvents",
+        ARRAY(SELECT disc_id FROM month_disc_ids) AS "monthRatedDiscIds",
+        ARRAY(SELECT disc_id FROM year_disc_ids) AS "yearRatedDiscIds",
+        (SELECT COUNT(*) FROM month_disc_ids)::int AS "monthRatedDiscCount",
+        (SELECT COUNT(*) FROM year_disc_ids)::int AS "yearRatedDiscCount",
         (SELECT COUNT(*) FROM valid_sets WHERE disc_id IS NULL)::int AS "historyMissingDiscEvents",
-        (SELECT COUNT(*) FROM full_activity_days
+        (SELECT COUNT(*) FROM activity_days
           WHERE activity_day >= context.month_start AND activity_day <= context.today)::int AS "monthActiveDays",
         CASE WHEN streak.latest_day < context.today - 1 THEN 0
-          ELSE COALESCE(streak.days, 0)::int END AS "streakDays",
-        COALESCE(
-          streak.latest_day >= context.today - 1
-            AND streak.latest_day - (streak.days - 1)::int = context.capture_day + 1,
-          FALSE
-        ) AS "streakMayExtendBeforeCapture",
-        context.started_at < (context.month_start::timestamp AT TIME ZONE 'Europe/Madrid') AS "monthActiveDaysCovered",
-        context.capture_day < context.today - 1 AS "streakCovered",
-        context.started_at <= (context.month_start::timestamp AT TIME ZONE 'Europe/Madrid') AS "monthCovered",
-        context.started_at <= (context.year_start::timestamp AT TIME ZONE 'Europe/Madrid') AS "yearCovered"
+          ELSE COALESCE(streak.days, 0)::int END AS "streakDays"
       FROM context CROSS JOIN streak
       `,
       [userId],
@@ -135,38 +111,17 @@ export class HistoricalRatesStatsService {
       throw new Error('Historical rates aggregate query returned no row');
     }
 
-    const totalRatedDiscs = Number(row.totalRatedDiscs);
-    if (row.captureStartedAt === null) {
-      return this.unknownResult(totalRatedDiscs);
-    }
-
-    const monthIds = row.monthRatedDiscIds ?? [];
-    const yearIds = row.yearRatedDiscIds ?? [];
-    const monthCoverage = this.periodCoverage(
-      row.monthCovered,
-      Number(row.monthMissingDiscEvents) > 0,
-    );
-    const yearCoverage = this.periodCoverage(
-      row.yearCovered,
-      Number(row.yearMissingDiscEvents) > 0,
-    );
     return {
       timezone: 'Europe/Madrid',
-      totalRatedDiscs,
+      totalRatedDiscs: Number(row.totalRatedDiscs),
       month: {
-        ratedDiscs:
-          monthCoverage === 'complete' ? Number(row.monthRatedDiscCount) : null,
-        ratedDiscIds: monthCoverage === 'complete' ? monthIds : null,
-        coverage: monthCoverage,
-        activeDays: row.monthActiveDaysCovered
-          ? Number(row.monthActiveDays)
-          : null,
+        ratedDiscs: Number(row.monthRatedDiscCount),
+        ratedDiscIds: row.monthRatedDiscIds ?? [],
+        activeDays: Number(row.monthActiveDays),
       },
       year: {
-        ratedDiscs:
-          yearCoverage === 'complete' ? Number(row.yearRatedDiscCount) : null,
-        ratedDiscIds: yearCoverage === 'complete' ? yearIds : null,
-        coverage: yearCoverage,
+        ratedDiscs: Number(row.yearRatedDiscCount),
+        ratedDiscIds: row.yearRatedDiscIds ?? [],
       },
       history: {
         ratedDiscs: null,
@@ -176,49 +131,7 @@ export class HistoricalRatesStatsService {
             ? 'partial_missing_disc_ids'
             : 'before_capture',
       },
-      currentStreak: row.streakCovered
-        ? row.streakMayExtendBeforeCapture
-          ? null
-          : Number(row.streakDays)
-        : null,
-      discoveries: {
-        value: null,
-        coverage: 'unknown',
-        reason: 'incomplete_lifetime_ledger',
-      },
-    };
-  }
-
-  private periodCoverage(
-    coveredByCapture: boolean,
-    hasMissingDiscIds: boolean,
-  ): HistoricalPeriodCoverage {
-    if (!coveredByCapture) return 'before_capture';
-    if (hasMissingDiscIds) return 'partial_missing_disc_ids';
-    return 'complete';
-  }
-
-  private unknownResult(totalRatedDiscs = 0): HistoricalRatesStats {
-    return {
-      timezone: 'Europe/Madrid',
-      totalRatedDiscs,
-      month: {
-        ratedDiscs: null,
-        ratedDiscIds: null,
-        activeDays: null,
-        coverage: 'unknown',
-      },
-      year: {
-        ratedDiscs: null,
-        ratedDiscIds: null,
-        coverage: 'unknown',
-      },
-      history: {
-        ratedDiscs: null,
-        ratedDiscIds: null,
-        coverage: 'unknown',
-      },
-      currentStreak: null,
+      currentStreak: Number(row.streakDays),
       discoveries: {
         value: null,
         coverage: 'unknown',
