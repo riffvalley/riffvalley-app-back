@@ -18,5 +18,6 @@ import { RateVoteEvent } from './entities/rate-vote-event.entity';
     AuthorizationModule,
     UsersModule,
   ], // Registro de la entidad Rate en TypeORM
+  exports: [RatesStatsService],
 })
 export class RatesModule {}

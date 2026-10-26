@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
+import { AddDiscAndValuesToRateVoteEvents1792010000000 } from '../../../migrations/1792010000000-AddDiscAndValuesToRateVoteEvents';
 import { CreateRateVoteEvents1792000000000 } from '../../../migrations/1792000000000-CreateRateVoteEvents';
 
 const enabled = process.env.RATE_VOTE_EVENTS_PG_INTEGRATION === '1';
@@ -24,7 +25,9 @@ function assertIsolatedTarget(): void {
 integrationSuite('Rate vote events PostgreSQL integration', () => {
   let dataSource: DataSource;
   let migration: CreateRateVoteEvents1792000000000;
+  let discValuesMigration: AddDiscAndValuesToRateVoteEvents1792010000000;
   let userId: string;
+  let discId: string;
 
   beforeAll(async () => {
     assertIsolatedTarget();
@@ -51,6 +54,7 @@ integrationSuite('Rate vote events PostgreSQL integration', () => {
     }
 
     await dataSource.query('CREATE TABLE "users" ("id" uuid PRIMARY KEY)');
+    await dataSource.query('CREATE TABLE "disc" ("id" uuid PRIMARY KEY)');
     await dataSource.query('CREATE TABLE "rate" ("id" uuid PRIMARY KEY)');
     migration = new CreateRateVoteEvents1792000000000();
     const queryRunner = dataSource.createQueryRunner();
@@ -60,12 +64,31 @@ integrationSuite('Rate vote events PostgreSQL integration', () => {
     } finally {
       await queryRunner.release();
     }
+    discValuesMigration = new AddDiscAndValuesToRateVoteEvents1792010000000();
+    const discValuesQueryRunner = dataSource.createQueryRunner();
+    await discValuesQueryRunner.connect();
+    try {
+      await discValuesMigration.up(discValuesQueryRunner);
+    } finally {
+      await discValuesQueryRunner.release();
+    }
     userId = randomUUID();
+    discId = randomUUID();
     await dataSource.query('INSERT INTO "users" ("id") VALUES ($1)', [userId]);
+    await dataSource.query('INSERT INTO "disc" ("id") VALUES ($1)', [discId]);
   });
 
   afterAll(async () => {
     if (!dataSource?.isInitialized) return;
+    if (discValuesMigration) {
+      const queryRunner = dataSource.createQueryRunner();
+      await queryRunner.connect();
+      try {
+        await discValuesMigration.down(queryRunner);
+      } finally {
+        await queryRunner.release();
+      }
+    }
     if (migration) {
       const queryRunner = dataSource.createQueryRunner();
       await queryRunner.connect();
@@ -76,6 +99,7 @@ integrationSuite('Rate vote events PostgreSQL integration', () => {
       }
     }
     await dataSource.query('DROP TABLE IF EXISTS "rate"');
+    await dataSource.query('DROP TABLE IF EXISTS "disc"');
     await dataSource.query('DROP TABLE IF EXISTS "users"');
     await dataSource.destroy();
   });
@@ -114,13 +138,52 @@ integrationSuite('Rate vote events PostgreSQL integration', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('keeps vote event inserts independent from Rate snapshots', async () => {
+  it('keeps legacy events readable with nullable Disc and value fields', async () => {
     const rows = (await dataSource.query(
       `INSERT INTO "rate_vote_events" ("user_id", "event_type")
-       VALUES ($1, 'set') RETURNING "event_type", "occurred_at"`,
+       VALUES ($1, 'set')
+       RETURNING "event_type", "occurred_at", "disc_id", "previous_value", "new_value"`,
       [userId],
-    )) as Array<{ event_type: string; occurred_at: Date }>;
+    )) as Array<{
+      event_type: string;
+      occurred_at: Date;
+      disc_id: string | null;
+      previous_value: string | null;
+      new_value: string | null;
+    }>;
     expect(rows[0]?.event_type).toBe('set');
     expect(rows[0]?.occurred_at).toBeInstanceOf(Date);
+    expect(rows[0]?.disc_id).toBeNull();
+    expect(rows[0]?.previous_value).toBeNull();
+    expect(rows[0]?.new_value).toBeNull();
+  });
+
+  it('stores a new Disc and transition values, then preserves the event if the Disc is deleted', async () => {
+    const eventRows = (await dataSource.query(
+      `INSERT INTO "rate_vote_events" (
+         "user_id", "disc_id", "event_type", "previous_value", "new_value"
+       ) VALUES ($1, $2, 'set', NULL, 7)
+       RETURNING "disc_id", "previous_value", "new_value"`,
+      [userId, discId],
+    )) as Array<{
+      disc_id: string;
+      previous_value: string | null;
+      new_value: string;
+    }>;
+    expect(eventRows[0]).toMatchObject({
+      disc_id: discId,
+      previous_value: null,
+      new_value: '7.00',
+    });
+
+    await dataSource.query('DELETE FROM "disc" WHERE "id" = $1', [discId]);
+    const retainedRows = (await dataSource.query(
+      'SELECT "disc_id", "event_type" FROM "rate_vote_events" WHERE "user_id" = $1',
+      [userId],
+    )) as Array<{ disc_id: string | null; event_type: string }>;
+    expect(retainedRows[retainedRows.length - 1]).toEqual({
+      disc_id: null,
+      event_type: 'set',
+    });
   });
 });

@@ -15,6 +15,103 @@ export class RatesStatsService {
     private readonly usersService: UsersService,
   ) {}
 
+  async getDashboardActivitySummary(userId: string): Promise<{
+    totalRatedDiscs: number;
+    currentStreak: number | null;
+    monthActiveDays: number | null;
+  }> {
+    type DashboardActivityRow = {
+      totalRatedDiscs: number | string;
+      currentStreak: number | string | null;
+      monthActiveDays: number | string | null;
+    };
+
+    const [row] = (await this.rateRepository.query(
+      `
+      WITH context AS (
+        SELECT
+          $1::uuid AS user_id,
+          (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date AS today,
+          date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date AS month_start,
+          capture.started_at,
+          (capture.started_at AT TIME ZONE 'Europe/Madrid')::date AS capture_day
+        FROM rate_vote_event_capture capture
+        WHERE capture.id = 1
+      ), activity_days AS (
+        SELECT DISTINCT
+          (event.occurred_at AT TIME ZONE 'Europe/Madrid')::date AS activity_day
+        FROM rate_vote_events event
+        CROSS JOIN context
+        WHERE event.user_id = context.user_id
+          AND event.event_type = 'set'
+          AND event.occurred_at >= context.started_at
+      ), month_activity AS (
+        SELECT COUNT(*)::int AS active_days
+        FROM activity_days
+        CROSS JOIN context
+        WHERE activity_day >= context.month_start
+          AND activity_day <= context.today
+      ), ordered_activity AS (
+        SELECT activity_day,
+          ROW_NUMBER() OVER (ORDER BY activity_day DESC) AS day_position,
+          MAX(activity_day) OVER () AS latest_day
+        FROM activity_days
+      ), streak AS (
+        SELECT
+          COUNT(*) FILTER (
+            WHERE activity_day = latest_day - (day_position - 1)::int
+          )::int AS contiguous_days,
+          MAX(latest_day) AS latest_day,
+          MIN(activity_day) AS earliest_day,
+          COUNT(*)::int AS recorded_days
+        FROM ordered_activity
+      )
+      SELECT
+        (SELECT COUNT(DISTINCT rate."discId")::int
+          FROM rate
+          WHERE rate."userId" = context.user_id
+            AND rate.rate IS NOT NULL) AS "totalRatedDiscs",
+        CASE
+          WHEN context.capture_day > context.today - 2
+            AND (
+              streak.latest_day IS NULL
+              OR streak.latest_day < context.today - 1
+              OR (
+                streak.earliest_day = context.capture_day
+                AND streak.contiguous_days = streak.recorded_days
+              )
+            ) THEN NULL
+          WHEN streak.latest_day IS NULL THEN 0
+          WHEN streak.latest_day < context.today - 1 THEN 0
+          WHEN streak.earliest_day = context.capture_day
+            AND streak.contiguous_days = streak.recorded_days THEN NULL
+          ELSE streak.contiguous_days
+        END AS "currentStreak",
+        CASE
+          WHEN context.started_at > (context.month_start::timestamp AT TIME ZONE 'Europe/Madrid')
+            THEN NULL
+          ELSE month_activity.active_days
+        END AS "monthActiveDays"
+      FROM context
+      CROSS JOIN month_activity
+      CROSS JOIN streak
+      `,
+      [userId],
+    )) as DashboardActivityRow[];
+
+    if (!row) {
+      throw new Error('Dashboard activity summary query returned no row');
+    }
+
+    return {
+      totalRatedDiscs: Number(row.totalRatedDiscs),
+      currentStreak:
+        row.currentStreak === null ? null : Number(row.currentStreak),
+      monthActiveDays:
+        row.monthActiveDays === null ? null : Number(row.monthActiveDays),
+    };
+  }
+
   async getHomeInsights(user: User) {
     const userId = user.id;
 
