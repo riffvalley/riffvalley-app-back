@@ -4,6 +4,7 @@ export type RandomDiscDifficulty = (typeof RANDOM_DISC_DIFFICULTIES)[number];
 
 export type RandomDiscRateCriteria = {
   notRatedPredicate: string;
+  communityVoteCountExpression: string;
   communityVotePredicates: string[];
   genrePreferencePredicate?: string;
   parameters: Record<string, string | number>;

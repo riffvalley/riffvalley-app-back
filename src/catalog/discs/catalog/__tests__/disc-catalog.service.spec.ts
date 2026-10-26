@@ -1042,7 +1042,7 @@ describe('DiscCatalogService.findRandom candidate selection', () => {
       createQueryBuilder: jest.fn(() => {
         const builder = createQueryBuilderMock();
         builder.getRawMany.mockImplementation(async () =>
-          selectedIds.map((id) => ({ id })),
+          selectedIds.map((id) => ({ id, communityVoteCount: '3' })),
         );
         builder.getRawAndEntities.mockResolvedValue({ entities: [], raw: [] });
         queryBuilders.push(builder);
@@ -1480,7 +1480,7 @@ describe('DiscCatalogService.findRandom hydration', () => {
       createQueryBuilder: jest.fn(() => {
         const builder = createQueryBuilderMock();
         builder.getRawMany.mockImplementation(async () =>
-          selectedIds.map((id) => ({ id })),
+          selectedIds.map((id) => ({ id, communityVoteCount: '3' })),
         );
         builder.getRawAndEntities.mockImplementation(async () => ({
           entities: hydratedDiscs,
@@ -1531,9 +1531,9 @@ describe('DiscCatalogService.findRandom hydration', () => {
         }));
   };
 
-  const run = async () => {
+  const run = async (filters: Partial<RandomQueryDto> = {}) => {
     const result = await service.findRandom(
-      new RandomQueryDto(),
+      Object.assign(new RandomQueryDto(), filters),
       createUserFixture('user-id'),
     );
     return { result, builders: queryBuilders };
@@ -1555,6 +1555,42 @@ describe('DiscCatalogService.findRandom hydration', () => {
     expect(builders[1].getRawAndEntities).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(1);
     expect(result.map(({ id }) => id)).toEqual(['disc-1']);
+  });
+
+  it('serializes the real disc ID and returns the same distinct vote count used for difficulty selection', async () => {
+    setHydration(
+      ['disc-difficulty'],
+      { favorites: [{ id: 'favorite-id' }], pendings: [{ id: 'pending-id' }] },
+      [
+        {
+          rateCount: '0',
+          averagerate: null,
+          averageCover: null,
+          commentCount: '0',
+        },
+      ],
+    );
+
+    const { result, builders } = await run({ difficulty: 'normal' });
+    const serializedResult = JSON.parse(JSON.stringify(result)) as Array<{
+      id: string;
+      voteCount: number;
+      favoriteId: string;
+      pendingId: string;
+    }>;
+
+    expect(builders[0].addSelect).toHaveBeenCalledWith(
+      expect.stringContaining('COUNT(DISTINCT community_rate."userId")'),
+      'communityVoteCount',
+    );
+    expect(serializedResult).toEqual([
+      expect.objectContaining({
+        id: 'disc-difficulty',
+        voteCount: 3,
+        favoriteId: 'favorite-id',
+        pendingId: 'pending-id',
+      }),
+    ]);
   });
 
   it('hydrates multiple selected IDs in one query and returns one entity for each ID', async () => {

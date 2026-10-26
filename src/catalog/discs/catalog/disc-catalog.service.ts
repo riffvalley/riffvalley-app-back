@@ -431,6 +431,10 @@ export class DiscCatalogService {
           userId,
           difficulty,
         );
+        idsQueryBuilder.addSelect(
+          criteria.communityVoteCountExpression,
+          'communityVoteCount',
+        );
         const ratePredicates = [
           criteria.notRatedPredicate,
           ...criteria.communityVotePredicates,
@@ -457,19 +461,31 @@ export class DiscCatalogService {
         idsQueryBuilder.orderBy('RANDOM()');
       }
 
-      return (await idsQueryBuilder.limit(limit).getRawMany()).map(
-        (row) => row.id,
-      );
+      const rows = await idsQueryBuilder.limit(limit).getRawMany();
+      const ids: string[] = [];
+      const communityVoteCounts = new Map<string, number>();
+      for (const row of rows) {
+        if (typeof row.id !== 'string') continue;
+        ids.push(row.id);
+        if (difficulty) {
+          communityVoteCounts.set(
+            row.id,
+            Number.parseInt(String(row.communityVoteCount), 10) || 0,
+          );
+        }
+      }
+      return { ids, communityVoteCounts };
     };
 
     // Selecciona primero IDs aleatorios; Catalog hidrata únicamente esa selección.
-    let randomIds = await selectRandomIds(
+    let selection = await selectRandomIds(
       Boolean(difficulty && dto.previousDiscId),
     );
-    if (difficulty && dto.previousDiscId && randomIds.length === 0) {
+    if (difficulty && dto.previousDiscId && selection.ids.length === 0) {
       // Si no queda alternativa, se permite repetir el único candidato.
-      randomIds = await selectRandomIds(false);
+      selection = await selectRandomIds(false);
     }
+    const { ids: randomIds, communityVoteCounts } = selection;
 
     if (randomIds.length === 0) return [];
 
@@ -526,8 +542,8 @@ export class DiscCatalogService {
     const orderedDiscs = restoreRandomDiscOrder(discs, randomIds);
     const rawById = indexCatalogRawRows(raw);
 
-    return orderedDiscs.map((disc) =>
-      mapCatalogDisc(
+    return orderedDiscs.map((disc) => {
+      const mappedDisc = mapCatalogDisc(
         disc,
         rawById.get(disc.id) ?? {
           discId: disc.id,
@@ -536,8 +552,14 @@ export class DiscCatalogService {
           rateCount: null,
           commentCount: null,
         },
-      ),
-    );
+      );
+      if (!difficulty) return mappedDisc;
+      return {
+        ...mappedDisc,
+        id: disc.id,
+        voteCount: communityVoteCounts.get(disc.id) ?? mappedDisc.voteCount,
+      };
+    });
   }
 
   async findOptions(dto: OptionsQueryDto) {

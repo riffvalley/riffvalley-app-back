@@ -10,6 +10,10 @@ export class RatesRandomSelectionService {
     userId: string,
     difficulty: RandomDiscDifficulty,
   ): RandomDiscRateCriteria {
+    const communityVoteCountExpression = `(SELECT COUNT(DISTINCT community_rate."userId")
+      FROM rate community_rate
+      WHERE community_rate."discId" = disc.id
+        AND community_rate.rate IS NOT NULL)`;
     const criteria: RandomDiscRateCriteria = {
       notRatedPredicate: `NOT EXISTS (
           SELECT 1 FROM rate user_rate
@@ -18,6 +22,7 @@ export class RatesRandomSelectionService {
             AND user_rate.rate IS NOT NULL
         )`,
       communityVotePredicates: [],
+      communityVoteCountExpression,
       parameters: { randomUserId: userId },
     };
 
@@ -27,17 +32,11 @@ export class RatesRandomSelectionService {
       const maximumVotes = difficulty === 'easy' ? undefined : 4;
 
       criteria.communityVotePredicates.push(
-        `(SELECT COUNT(DISTINCT community_rate."userId")
-          FROM rate community_rate
-          WHERE community_rate."discId" = disc.id
-            AND community_rate.rate IS NOT NULL) >= :randomMinimumVotes`,
+        `${communityVoteCountExpression} >= :randomMinimumVotes`,
       );
       if (maximumVotes !== undefined) {
         criteria.communityVotePredicates.push(
-          `(SELECT COUNT(DISTINCT community_rate."userId")
-            FROM rate community_rate
-            WHERE community_rate."discId" = disc.id
-              AND community_rate.rate IS NOT NULL) <= :randomMaximumVotes`,
+          `${communityVoteCountExpression} <= :randomMaximumVotes`,
         );
       }
       criteria.genrePreferencePredicate = `(NOT EXISTS (
@@ -66,10 +65,7 @@ export class RatesRandomSelectionService {
     }
 
     criteria.communityVotePredicates.push(
-      `(SELECT COUNT(DISTINCT community_rate."userId")
-        FROM rate community_rate
-        WHERE community_rate."discId" = disc.id
-          AND community_rate.rate IS NOT NULL) <= :randomMaximumVotes`,
+      `${communityVoteCountExpression} <= :randomMaximumVotes`,
     );
     criteria.genrePreferencePredicate = `(
         NOT EXISTS (
