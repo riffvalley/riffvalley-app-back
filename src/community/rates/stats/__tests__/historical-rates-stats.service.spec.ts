@@ -10,12 +10,15 @@ describe('HistoricalRatesStatsService', () => {
 
   const row = (overrides: Record<string, unknown> = {}) => ({
     totalRatedDiscs: 0,
+    totalRatedDiscIds: [],
     monthRatedDiscIds: [],
     yearRatedDiscIds: [],
     monthRatedDiscCount: 0,
     yearRatedDiscCount: 0,
     historyMissingDiscEvents: 0,
     monthActiveDays: 0,
+    yearActiveDays: 0,
+    totalActiveDays: 0,
     streakDays: 0,
     ...overrides,
   });
@@ -40,8 +43,10 @@ describe('HistoricalRatesStatsService', () => {
       service.getUserHistoricalStats('user-id'),
     ).resolves.toMatchObject({
       totalRatedDiscs: 0,
+      totalRatedDiscIds: [],
+      totalActiveDays: 0,
       month: { ratedDiscs: 0, ratedDiscIds: [], activeDays: 0 },
-      year: { ratedDiscs: 0, ratedDiscIds: [] },
+      year: { ratedDiscs: 0, ratedDiscIds: [], activeDays: 0 },
       currentStreak: 0,
     });
 
@@ -59,6 +64,8 @@ describe('HistoricalRatesStatsService', () => {
         monthRatedDiscCount: 2,
         yearRatedDiscCount: 3,
         monthActiveDays: '2',
+        yearActiveDays: '3',
+        totalActiveDays: '4',
         streakDays: '2',
       }),
     ]);
@@ -74,7 +81,9 @@ describe('HistoricalRatesStatsService', () => {
       year: {
         ratedDiscs: 3,
         ratedDiscIds: ['disc-a', 'disc-b', 'disc-c'],
+        activeDays: 3,
       },
+      totalActiveDays: 4,
       currentStreak: 2,
     });
 
@@ -96,6 +105,13 @@ describe('HistoricalRatesStatsService', () => {
     expect(sql).toContain("event.event_type = 'set'");
     expect(sql).not.toContain("event.event_type = 'change'");
     expect(sql).toContain('COUNT(DISTINCT rate."discId")');
+    expect(sql).toContain('rate.rate IS NOT NULL');
+    expect(sql).toContain(
+      'COUNT(*) FROM activity_days)::int AS "totalActiveDays"',
+    );
+    expect(sql).toContain(
+      'context.year_start AND activity_day <= context.today',
+    );
     expect(sql).not.toMatch(/,\s*FROM context/);
 
     query.mockRejectedValue(new Error('database unavailable'));
@@ -112,6 +128,8 @@ describe('HistoricalRatesStatsService', () => {
         monthRatedDiscCount: 1,
         yearRatedDiscCount: 1,
         monthActiveDays: 2,
+        yearActiveDays: 5,
+        totalActiveDays: 7,
         historyMissingDiscEvents: 1,
       }),
     ]);
@@ -120,7 +138,8 @@ describe('HistoricalRatesStatsService', () => {
       service.getUserHistoricalStats('user-id'),
     ).resolves.toMatchObject({
       month: { ratedDiscs: 1, ratedDiscIds: ['disc-a'], activeDays: 2 },
-      year: { ratedDiscs: 1, ratedDiscIds: ['disc-a'] },
+      year: { ratedDiscs: 1, ratedDiscIds: ['disc-a'], activeDays: 5 },
+      totalActiveDays: 7,
       history: { coverage: 'partial_missing_disc_ids' },
     });
 
@@ -138,6 +157,8 @@ describe('HistoricalRatesStatsService', () => {
         monthRatedDiscCount: 1,
         yearRatedDiscCount: 1,
         monthActiveDays: 1,
+        yearActiveDays: 1,
+        totalActiveDays: 1,
         streakDays: 1,
       }),
     ]);

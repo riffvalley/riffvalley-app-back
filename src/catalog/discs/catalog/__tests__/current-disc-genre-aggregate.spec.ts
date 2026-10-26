@@ -22,10 +22,16 @@ describe('DiscCatalogService current genre aggregates', () => {
   afterEach(async () => moduleRef.close());
 
   it('counts distinct current genre ids once for each supplied disc set', async () => {
-    query.mockResolvedValue([{ monthCount: '2', yearCount: '4' }]);
+    query.mockResolvedValue([
+      { monthCount: '2', yearCount: '4', totalRatedCount: '3' },
+    ]);
     await expect(
-      service.countCurrentGenresForDiscSets(['a', 'b', 'b'], ['a', 'b', 'c']),
-    ).resolves.toEqual({ month: 2, year: 4 });
+      service.countCurrentGenresForDiscSets(
+        ['a', 'b', 'b'],
+        ['a', 'b', 'c'],
+        ['a', 'c', 'd'],
+      ),
+    ).resolves.toEqual({ month: 2, year: 4, totalRated: 3 });
     const [sql, parameters] = query.mock.calls[0];
     expect(sql).toContain('COUNT(DISTINCT disc."genreId")');
     expect(sql).toContain('INNER JOIN disc');
@@ -33,7 +39,9 @@ describe('DiscCatalogService current genre aggregates', () => {
     expect(parameters).toEqual([
       ['a', 'b', 'b'],
       ['a', 'b', 'c'],
+      ['a', 'c', 'd'],
     ]);
+    expect(sql).toContain('total_rated_discs AS');
   });
 
   it('returns zero without querying when both sets are empty', async () => {
@@ -42,8 +50,43 @@ describe('DiscCatalogService current genre aggregates', () => {
     ).resolves.toEqual({
       month: 0,
       year: 0,
+      totalRated: 0,
     });
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('counts distinct Madrid calendar release dates for current month and year', async () => {
+    query.mockResolvedValue([{ monthCount: '2', yearCount: '5' }]);
+
+    await expect(service.countDiscsByReleasePeriod()).resolves.toEqual({
+      thisMonth: 2,
+      thisYear: 5,
+    });
+
+    const [sql, parameters] = query.mock.calls[0];
+    expect(parameters).toBeUndefined();
+    expect(sql).toContain("CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid'");
+    expect(sql).toContain("date_trunc('month'");
+    expect(sql).toContain("date_trunc('year'");
+    expect(sql).toContain('disc."releaseDate" >= madrid_calendar.month_start');
+    expect(sql).toContain(
+      'disc."releaseDate" < (madrid_calendar.month_start + INTERVAL \'1 month\')::date',
+    );
+    expect(sql).toContain('disc."releaseDate" IS NOT NULL');
+    expect(sql).toContain('COUNT(DISTINCT disc.id) FILTER');
+    expect(sql).toContain("INTERVAL '1 year'");
+    expect(sql).not.toContain('createdAt');
+  });
+
+  it('propagates release-period errors and rejects a missing aggregate row', async () => {
+    query.mockRejectedValue(new Error('catalog unavailable'));
+    await expect(service.countDiscsByReleasePeriod()).rejects.toThrow(
+      'catalog unavailable',
+    );
+    query.mockResolvedValue([]);
+    await expect(service.countDiscsByReleasePeriod()).rejects.toThrow(
+      'Release period aggregate query returned no row',
+    );
   });
 
   it('propagates query errors and rejects an unexpected empty aggregate result', async () => {
