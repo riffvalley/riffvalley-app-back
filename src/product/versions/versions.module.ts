@@ -14,5 +14,6 @@ import { AuthorizationModule } from 'src/identity/authorization/authorization.mo
   ],
   controllers: [VersionsController],
   providers: [VersionsService],
+  exports: [VersionsService],
 })
 export class VersionsModule {}

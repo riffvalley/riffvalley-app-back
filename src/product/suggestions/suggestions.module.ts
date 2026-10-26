@@ -13,5 +13,6 @@ import { AuthorizationModule } from '../../identity/authorization/authorization.
   ],
   controllers: [SuggestionsController],
   providers: [SuggestionsService],
+  exports: [SuggestionsService],
 })
 export class SuggestionsModule {}

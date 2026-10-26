@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmOptions } from './config/typeorm-options';
+import { CrossDomainModule } from './app/cross-domain/cross-domain.module';
 
 // Catalog
 import { ArtistsModule } from './catalog/artists/artists.module';
@@ -102,6 +103,9 @@ import { VersionsModule } from './product/versions/versions.module';
     NewsModule,
     SuggestionsModule,
     VersionsModule,
+
+    // Application composition
+    CrossDomainModule,
   ],
 })
 export class AppModule {}
