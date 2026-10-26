@@ -16,10 +16,10 @@ describe('RatesRandomSelectionService', () => {
         randomGenreLimit: genreLimit,
         randomMinimumVotes: minimum,
       });
-      expect(criteria.communityVotePredicates.join('\n')).toContain(
+      expect(criteria.communityVoteCountExpression).toContain(
         'COUNT(DISTINCT community_rate."userId")',
       );
-      expect(criteria.communityVotePredicates.join('\n')).toContain(
+      expect(criteria.communityVoteCountExpression).toContain(
         'community_rate.rate IS NOT NULL',
       );
       expect(criteria.communityVotePredicates[0]).toContain(

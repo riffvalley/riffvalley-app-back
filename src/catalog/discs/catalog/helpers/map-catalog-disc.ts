@@ -4,6 +4,7 @@ import { CatalogRawRow } from './catalog-raw-rows';
 export function mapCatalogDisc(disc: Disc, raw: CatalogRawRow) {
   return {
     ...disc,
+    id: disc.id,
     artist: {
       ...disc.artist,
       country: {
