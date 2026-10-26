@@ -9,15 +9,21 @@ import { RatesStatsService } from './stats/rates-stats.service';
 import { RatesHistoryService } from './history/rates-history.service';
 import { UsersModule } from 'src/identity/users/users.module';
 import { RateVoteEvent } from './entities/rate-vote-event.entity';
+import { HistoricalRatesStatsService } from './stats/historical-rates-stats.service';
 
 @Module({
   controllers: [RatesController], // Controladores que gestionan las rutas
-  providers: [RatesService, RatesStatsService, RatesHistoryService],
+  providers: [
+    RatesService,
+    RatesStatsService,
+    RatesHistoryService,
+    HistoricalRatesStatsService,
+  ],
   imports: [
     TypeOrmModule.forFeature([Rate, Disc, RateVoteEvent]),
     AuthorizationModule,
     UsersModule,
   ], // Registro de la entidad Rate en TypeORM
-  exports: [RatesStatsService],
+  exports: [RatesStatsService, HistoricalRatesStatsService],
 })
 export class RatesModule {}
