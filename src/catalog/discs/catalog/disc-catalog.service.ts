@@ -10,6 +10,7 @@ import { indexCatalogRawRows } from './helpers/catalog-raw-rows';
 import { mapCatalogDisc } from './helpers/map-catalog-disc';
 import { mapOptionRows } from './helpers/map-option-rows';
 import { restoreRandomDiscOrder } from './helpers/restore-random-disc-order';
+import { RatesRandomSelectionService } from 'src/community/rates/random-selection/rates-random-selection.service';
 
 const FIND_ALL_ORDER_FIELDS: Record<string, string> = {
   'disc.releaseDate': 'disc.releaseDate',
@@ -30,6 +31,7 @@ export class DiscCatalogService {
   constructor(
     @InjectRepository(Disc)
     private readonly discRepository: Repository<Disc>,
+    private readonly ratesRandomSelectionService: RatesRandomSelectionService,
   ) {}
 
   countCatalogDiscs(): Promise<number> {
@@ -375,58 +377,99 @@ export class DiscCatalogService {
   }
 
   async findRandom(dto: RandomQueryDto, user: User) {
-    const { genre, year, ep, debut, limit = 5 } = dto;
+    const { genre, year, ep, debut, limit = 5, difficulty } = dto;
     const countryFilter = dto.country || dto.countryId;
     const userId = user.id;
     const today = new Date();
 
-    // Selecciona primero IDs aleatorios; une artista/país solo si hay filtro de país.
-    // La hidratación posterior carga las relaciones para esos IDs.
-    const idsQueryBuilder = this.discRepository
-      .createQueryBuilder('disc')
-      .select('disc.id', 'id')
-      .where('disc.releaseDate <= :today', { today });
+    const selectRandomIds = async (excludePreviousDisc: boolean) => {
+      const idsQueryBuilder = this.discRepository
+        .createQueryBuilder('disc')
+        .select('disc.id', 'id')
+        .where('disc.releaseDate <= :today', { today });
 
-    if (genre) {
-      idsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (countryFilter) {
-      idsQueryBuilder
-        .leftJoin('disc.artist', 'artist')
-        .leftJoin('artist.country', 'country');
-      const isUUID =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          countryFilter,
-        );
-      if (isUUID) {
-        idsQueryBuilder.andWhere('country.id = :countryFilter', {
-          countryFilter,
-        });
-      } else {
-        idsQueryBuilder.andWhere('country.name = :countryFilter', {
-          countryFilter,
-        });
+      if (genre) {
+        idsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
       }
-    }
 
-    if (year) {
-      idsQueryBuilder.andWhere('EXTRACT(YEAR FROM disc.releaseDate) = :year', {
-        year,
-      });
-    }
+      if (countryFilter) {
+        idsQueryBuilder
+          .leftJoin('disc.artist', 'artist')
+          .leftJoin('artist.country', 'country');
+        const isUUID =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            countryFilter,
+          );
+        if (isUUID) {
+          idsQueryBuilder.andWhere('country.id = :countryFilter', {
+            countryFilter,
+          });
+        } else {
+          idsQueryBuilder.andWhere('country.name = :countryFilter', {
+            countryFilter,
+          });
+        }
+      }
 
-    if (ep !== undefined) {
-      idsQueryBuilder.andWhere('disc.ep = :ep', { ep });
-    }
+      if (year) {
+        idsQueryBuilder.andWhere(
+          'EXTRACT(YEAR FROM disc.releaseDate) = :year',
+          { year },
+        );
+      }
 
-    if (debut !== undefined) {
-      idsQueryBuilder.andWhere('disc.debut = :debut', { debut });
-    }
+      if (ep !== undefined) {
+        idsQueryBuilder.andWhere('disc.ep = :ep', { ep });
+      }
 
-    const randomIds = (
-      await idsQueryBuilder.orderBy('RANDOM()').limit(limit).getRawMany()
-    ).map((row) => row.id);
+      if (debut !== undefined) {
+        idsQueryBuilder.andWhere('disc.debut = :debut', { debut });
+      }
+
+      if (difficulty) {
+        const criteria = this.ratesRandomSelectionService.getDiscCriteria(
+          userId,
+          difficulty,
+        );
+        const ratePredicates = [
+          criteria.notRatedPredicate,
+          ...criteria.communityVotePredicates,
+          ...(criteria.genrePreferencePredicate
+            ? [criteria.genrePreferencePredicate]
+            : []),
+        ];
+        for (const predicate of ratePredicates) {
+          idsQueryBuilder.andWhere(predicate, criteria.parameters);
+        }
+        if (excludePreviousDisc && dto.previousDiscId) {
+          idsQueryBuilder.andWhere('disc.id <> :previousDiscId', {
+            previousDiscId: dto.previousDiscId,
+          });
+        }
+        if (criteria.priorityOrder) {
+          idsQueryBuilder
+            .orderBy(criteria.priorityOrder)
+            .addOrderBy('RANDOM()');
+        } else {
+          idsQueryBuilder.orderBy('RANDOM()');
+        }
+      } else {
+        idsQueryBuilder.orderBy('RANDOM()');
+      }
+
+      return (await idsQueryBuilder.limit(limit).getRawMany()).map(
+        (row) => row.id,
+      );
+    };
+
+    // Selecciona primero IDs aleatorios; Catalog hidrata únicamente esa selección.
+    let randomIds = await selectRandomIds(
+      Boolean(difficulty && dto.previousDiscId),
+    );
+    if (difficulty && dto.previousDiscId && randomIds.length === 0) {
+      // Si no queda alternativa, se permite repetir el único candidato.
+      randomIds = await selectRandomIds(false);
+    }
 
     if (randomIds.length === 0) return [];
 

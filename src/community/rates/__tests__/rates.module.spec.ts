@@ -17,6 +17,7 @@ import { RatesHistoryService } from '../history/rates-history.service';
 import { HistoricalRatesStatsService } from '../stats/historical-rates-stats.service';
 import { Rate } from '../entities/rate.entity';
 import { RateVoteEvent } from '../entities/rate-vote-event.entity';
+import { RatesRandomSelectionService } from '../random-selection/rates-random-selection.service';
 
 describe('RatesModule characterization', () => {
   let moduleRef: TestingModule;
@@ -48,6 +49,7 @@ describe('RatesModule characterization', () => {
     expect(moduleRef.get(UsersService)).toBeDefined();
     expect(moduleRef.get(RatesHistoryService)).toBeDefined();
     expect(moduleRef.get(HistoricalRatesStatsService)).toBeDefined();
+    expect(moduleRef.get(RatesRandomSelectionService)).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Rate))).toBe(rateRepository);
     expect(moduleRef.get(getRepositoryToken(RateVoteEvent))).toBe(
       rateVoteEventRepository,

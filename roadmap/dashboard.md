@@ -107,3 +107,31 @@ Mes, año e histórico son vistas distintas. `currentStreak` permanece como indi
 Las pruebas focalizadas cubren ceros sin actividad, deduplicación de días y discos, solo `set`, IDs de Rates actuales filtrados por `rate IS NOT NULL`, géneros duplicados/nulos, errores de SQL y composición, contrato HTTP con cinco campos nuevos, fechas de lanzamiento nulas, límites Madrid y ventanas de mes/año. Se comprueba que los resultados existentes de Rates y catálogo se conservan. Pasaron 4 suites focalizadas y 17 tests. `pnpm run verify` pasó con 215 suites aprobadas, 2.114 tests aprobados y 91 tests omitidos. Los gates estructural, de tipado seguro y ESLint no detectaron hallazgos nuevos; typecheck, build y `git diff --check` pasaron.
 
 La verificación de estas consultas se realiza mediante pruebas unitarias con mocks y aserciones de SQL. La suite PostgreSQL aislada no está disponible en este entorno, por lo que no se afirma una ejecución real de consultas contra PostgreSQL. `releaseDate` es de tipo SQL `date`; no representa un instante, así que su comparación es de calendario y las fronteras se calculan en Madrid. Los acumulados `totalActiveDays` y `totalExploredGenres` describen los datos actualmente registrados, no una reconstrucción de toda la vida del usuario.
+
+## D-4b.1 — Backend del widget Disco aleatorio
+
+**Estado:** completada el 2026-10-26; D-4b.2 sigue pendiente.
+
+### Contrato HTTP
+
+`GET /api/discs/random` conserva su DTO y respuesta actuales. `difficulty` es opcional y admite `easy`, `normal` o `hard`; `previousDiscId` es un UUID opcional. Ambos parámetros se aplican únicamente cuando se solicita una dificultad. El `limit` existente y los filtros `genre`, `country`/`countryId`, `year`, `ep` y `debut` siguen aplicándose. Los parámetros inválidos producen el `400` habitual de `ValidationPipe`.
+
+La ruta ya estaba protegida por `@Auth()` y recibía `@GetUser()`. Se mantiene esa protección para llamadas antiguas y personalizadas; la identidad se obtiene de la sesión/JWT y nunca de un `userId` de query. La ausencia de candidatos devuelve `[]` y se propagan los errores de Rates/Catalog.
+
+### Selección y ownership
+
+Catalog conserva la aplicación de filtros, el límite, el corte de lanzamiento (`releaseDate <= hoy`, que excluye también fechas nulas como antes), `ORDER BY RANDOM()`, la selección de IDs y la hidratación existente.
+
+`RatesRandomSelectionService` expone a Catalog un contrato interno tipado de predicados SQL acotados. Rates calcula desde `rate` actual, exclusivamente donde `rate IS NOT NULL`: excluye discos musicales ya valorados por el usuario; cuenta votos comunitarios con `COUNT(DISTINCT userId)`; y obtiene preferencias por `genreId` ordenadas por discos distintos valorados (`COUNT(DISTINCT disc.id) DESC`, desempate `genreId ASC`). No consulta ni utiliza `rate_vote_events`. Las filas duplicadas no multiplican votos ni discos; una nota `0` cuenta y una valoración solo de portada no cuenta.
+
+- **Easy:** al menos 5 usuarios musicales distintos; limita los géneros a los 3 preferidos. Si el usuario aún no tiene géneros valorados, no añade filtro personal de género.
+- **Normal:** de 2 a 4 usuarios musicales distintos; limita a los 7 géneros preferidos, con el mismo comportamiento cuando no hay preferencias.
+- **Hard:** entre 0 y 1 usuario musical distinto. Si existen candidatos en géneros nunca valorados, el `CASE` SQL les da prioridad sobre los géneros restantes. Si no hay candidatos de esos géneros, quedan disponibles los que están fuera del Top 7. Un usuario sin preferencias puede recibir cualquier género.
+
+Los predicados se aplican a la consulta de IDs antes de la selección aleatoria; no se descargan candidatos ni se hidrata el catálogo completo. Se conserva la hidratación/enriquecimiento posterior existente y no se añade consulta de conteo. `previousDiscId` se excluye en la primera consulta; si esta no produce candidatos, se repite sin esa exclusión para permitir repetir el único disco válido. No se guarda historial ni se escribe en base de datos. El modo difícil ordena primero por prioridad de género y luego por `RANDOM()`, sin ponderar por cantidad de votos dentro del nivel.
+
+### Verificación y límites
+
+Las pruebas focalizadas de Catalog y Rates pasaron: 38 suites y 354 tests. La suite unitaria completa pasó: 216 suites, 2.120 tests y 91 omitidos (14 suites opt-in); los snapshots también pasaron. Typecheck, build, runtime dependency gate, gates estructural y de tipado seguro, tests de gates, ESLint y `git diff --check` pasaron. El gate ESLint conserva 839 hallazgos existentes y no añade nuevos. El contrato de respuesta sigue pasando por el mismo mapeo e hidratación anteriores. No se midió el plan ni el rendimiento con datos representativos; no se añadieron índices ni se optimizó `ORDER BY RANDOM()`.
+
+La suite de PostgreSQL aislada no se ejecutó: no había destino de integración configurado. Las consultas se revisaron y probaron mediante aserciones unitarias, no contra un servidor PostgreSQL real. El wrapper `pnpm run verify` tampoco pudo iniciarse porque pnpm devolvió `ERR_SQLITE_ERROR: unable to open database file` al resolver la versión fijada; sus verificaciones se ejecutaron individualmente con los scripts locales y pasaron. La primera petición frontend puede solicitar directamente la dificultad; el frontend aún no se ha modificado ni integrado (D-4b.2 permanece pendiente).

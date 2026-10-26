@@ -7,6 +7,7 @@ import { Disc } from '../../entities/disc.entity';
 import { OptionsQueryDto } from '../../dto/options-query.dto';
 import { RandomQueryDto } from '../../dto/random-query.dto';
 import { DiscCatalogService } from '../disc-catalog.service';
+import { RatesRandomSelectionService } from 'src/community/rates/random-selection/rates-random-selection.service';
 
 type ChainMock<Args extends unknown[]> = jest.Mock<QueryBuilderMock, Args>;
 type SubQueryMock = {
@@ -17,7 +18,7 @@ type SubQueryMock = {
 type AggregateSelector = (subQuery: SubQueryMock) => SubQueryMock;
 type QueryBuilderMock = {
   addGroupBy: ChainMock<[column: string]>;
-  addOrderBy: ChainMock<[field: string, direction: 'ASC' | 'DESC']>;
+  addOrderBy: ChainMock<[field: string, direction?: 'ASC' | 'DESC']>;
   addSelect: ChainMock<[selection: string | AggregateSelector, alias?: string]>;
   andWhere: ChainMock<
     [condition: string, parameters?: Record<string, unknown>]
@@ -102,10 +103,14 @@ function createQueryBuilderMock(): QueryBuilderMock {
     addGroupBy: jest.fn<QueryBuilderMock, [column: string]>(() => builder),
     addOrderBy: jest.fn<
       QueryBuilderMock,
-      [field: string, direction: 'ASC' | 'DESC']
+      [field: string, direction?: 'ASC' | 'DESC']
     >((field, direction) => {
       void field;
-      if (direction !== 'ASC' && direction !== 'DESC') {
+      if (
+        direction !== undefined &&
+        direction !== 'ASC' &&
+        direction !== 'DESC'
+      ) {
         throw new Error(
           'SelectQueryBuilder.addOrderBy accepts only ASC and DESC',
         );
@@ -191,6 +196,7 @@ async function createCatalogService(repository: RepositoryMock): Promise<{
   const moduleRef = await Test.createTestingModule({
     providers: [
       DiscCatalogService,
+      RatesRandomSelectionService,
       { provide: getRepositoryToken(Disc), useValue: repository },
     ],
   }).compile();
@@ -1083,6 +1089,40 @@ describe('DiscCatalogService.findRandom candidate selection', () => {
     expect(queryBuilder.orderBy).toHaveBeenCalledWith('RANDOM()');
     expect(queryBuilder.limit).toHaveBeenCalledWith(5);
     expect(queryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds the difficulty criteria in SQL and excludes the previous disc when alternatives exist', async () => {
+    selectedIds = ['alternative-disc'];
+
+    await run({ difficulty: 'easy', previousDiscId: 'previous-disc' });
+
+    const predicates = queryBuilders[0].andWhere.mock.calls.map(
+      ([condition]) => condition,
+    );
+    expect(predicates).toContain('disc.id <> :previousDiscId');
+    expect(predicates.join('\n')).toContain(
+      'COUNT(DISTINCT community_rate."userId")',
+    );
+    expect(queryBuilders[0].orderBy).toHaveBeenCalledWith('RANDOM()');
+    expect(queryBuilders).toHaveLength(2);
+  });
+
+  it('allows the previous disc when it is the only candidate', async () => {
+    const result = await run({
+      difficulty: 'hard',
+      previousDiscId: 'only-disc',
+    });
+
+    expect(queryBuilders).toHaveLength(2);
+    expect(queryBuilders[0].andWhere).toHaveBeenCalledWith(
+      'disc.id <> :previousDiscId',
+      { previousDiscId: 'only-disc' },
+    );
+    expect(queryBuilders[0].orderBy).toHaveBeenCalledWith(
+      expect.stringContaining('CASE WHEN NOT EXISTS'),
+    );
+    expect(queryBuilders[0].addOrderBy).toHaveBeenCalledWith('RANDOM()');
+    expect(result.result).toEqual([]);
   });
 
   it('passes only the IDs returned by the candidate query to the following lookup', async () => {
