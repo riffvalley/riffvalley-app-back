@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { RequestsService } from '../../../../community/requests/requests.service';
 import { User } from '../../../../identity/auth/entities/user.entity';
 import { ValidRoles } from '../../../../identity/authorization/interfaces/valid-roles';
+import { UsersService } from '../../../../identity/users/users.service';
 import { SuggestionsService } from '../../../../product/suggestions/suggestions.service';
 import { VersionsService } from '../../../../product/versions/versions.service';
 import { SidebarSummaryService } from '../sidebar-summary.service';
@@ -10,6 +11,7 @@ import { SidebarSummaryResponse } from '../dto/sidebar-summary-response';
 describe('SidebarSummaryService', () => {
   let moduleRef: TestingModule;
   let service: SidebarSummaryService;
+  let usersService: jest.Mocked<Pick<UsersService, 'findIdentityById'>>;
   let versionsService: jest.Mocked<
     Pick<VersionsService, 'findLatestProductionVersion'>
   >;
@@ -21,6 +23,13 @@ describe('SidebarSummaryService', () => {
   >;
 
   beforeEach(async () => {
+    usersService = {
+      findIdentityById: jest.fn().mockResolvedValue({
+        id: 'user-id',
+        role: ValidRoles.user,
+        isActive: true,
+      }),
+    };
     versionsService = {
       findLatestProductionVersion: jest
         .fn<Promise<{ version: string } | null>, []>()
@@ -40,6 +49,7 @@ describe('SidebarSummaryService', () => {
     moduleRef = await Test.createTestingModule({
       providers: [
         SidebarSummaryService,
+        { provide: UsersService, useValue: usersService },
         { provide: VersionsService, useValue: versionsService },
         { provide: RequestsService, useValue: requestsService },
         { provide: SuggestionsService, useValue: suggestionsService },
@@ -52,8 +62,14 @@ describe('SidebarSummaryService', () => {
     await moduleRef.close();
   });
 
-  const userWithRole = (role: ValidRoles): User =>
-    Object.assign(new User(), { id: 'user-id', role });
+  const userWithRole = (role: ValidRoles): User => {
+    usersService.findIdentityById.mockResolvedValue({
+      id: 'user-id',
+      role,
+      isActive: true,
+    });
+    return Object.assign(new User(), { id: 'user-id' });
+  };
 
   const roleCases: [ValidRoles, SidebarSummaryResponse][] = [
     [ValidRoles.user, { version: { latest: '1.8.4' } }],
@@ -106,6 +122,38 @@ describe('SidebarSummaryService', () => {
     await expect(
       service.getSummary(userWithRole(ValidRoles.riffvalley)),
     ).resolves.toMatchObject({ petitions: { pending: 0 } });
+  });
+
+  it('uses the current database role when JwtStrategy user has no selected role', async () => {
+    const authenticatedUser = Object.assign(new User(), { id: 'user-id' });
+    usersService.findIdentityById.mockResolvedValue({
+      id: 'user-id',
+      role: ValidRoles.superadmin,
+      isActive: true,
+    });
+
+    await expect(service.getSummary(authenticatedUser)).resolves.toEqual({
+      version: { latest: '1.8.4' },
+      petitions: { pending: 12 },
+      suggestions: { inProgressIds: ['uuid-1', 'uuid-2'] },
+    });
+    expect(usersService.findIdentityById).toHaveBeenCalledWith('user-id');
+  });
+
+  it('rejects a user that is no longer active', async () => {
+    usersService.findIdentityById.mockResolvedValue({
+      id: 'user-id',
+      role: ValidRoles.superadmin,
+      isActive: false,
+    });
+
+    await expect(
+      service.getSummary(Object.assign(new User(), { id: 'user-id' })),
+    ).rejects.toThrow('User is inactive or no longer exists');
+    expect(requestsService.countPendingRequests).not.toHaveBeenCalled();
+    expect(
+      suggestionsService.listInProgressSuggestionIds,
+    ).not.toHaveBeenCalled();
   });
 
   const failureCases: [string, ValidRoles, () => void, string][] = [
