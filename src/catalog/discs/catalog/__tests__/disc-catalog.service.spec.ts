@@ -1042,7 +1042,7 @@ describe('DiscCatalogService.findRandom candidate selection', () => {
       createQueryBuilder: jest.fn(() => {
         const builder = createQueryBuilderMock();
         builder.getRawMany.mockImplementation(async () =>
-          selectedIds.map((id) => ({ id, communityVoteCount: '3' })),
+          selectedIds.map((id) => ({ id, communityvotecount: '3' })),
         );
         builder.getRawAndEntities.mockResolvedValue({ entities: [], raw: [] });
         queryBuilders.push(builder);
@@ -1480,7 +1480,7 @@ describe('DiscCatalogService.findRandom hydration', () => {
       createQueryBuilder: jest.fn(() => {
         const builder = createQueryBuilderMock();
         builder.getRawMany.mockImplementation(async () =>
-          selectedIds.map((id) => ({ id, communityVoteCount: '3' })),
+          selectedIds.map((id) => ({ id, communityvotecount: '3' })),
         );
         builder.getRawAndEntities.mockImplementation(async () => ({
           entities: hydratedDiscs,
@@ -1563,6 +1563,7 @@ describe('DiscCatalogService.findRandom hydration', () => {
       { favorites: [{ id: 'favorite-id' }], pendings: [{ id: 'pending-id' }] },
       [
         {
+          disc_id_for_mapping: 'disc-difficulty',
           rateCount: '0',
           averagerate: null,
           averageCover: null,
@@ -1570,6 +1571,7 @@ describe('DiscCatalogService.findRandom hydration', () => {
         },
       ],
     );
+    hydratedDiscs[0] = { ...hydratedDiscs[0], id: '' };
 
     const { result, builders } = await run({ difficulty: 'normal' });
     const serializedResult = JSON.parse(JSON.stringify(result)) as Array<{
@@ -1581,7 +1583,7 @@ describe('DiscCatalogService.findRandom hydration', () => {
 
     expect(builders[0].addSelect).toHaveBeenCalledWith(
       expect.stringContaining('COUNT(DISTINCT community_rate."userId")'),
-      'communityVoteCount',
+      'communityvotecount',
     );
     expect(serializedResult).toEqual([
       expect.objectContaining({
@@ -1678,7 +1680,10 @@ describe('DiscCatalogService.findRandom hydration', () => {
     const { result, builders } = await run();
 
     expect(result.map(({ id }) => id)).toEqual(['disc-a', 'disc-b', 'disc-c']);
-    expect(builders[1].addSelect).toHaveBeenCalledWith('disc.id', 'discId');
+    expect(builders[1].addSelect).toHaveBeenCalledWith(
+      'disc.id',
+      'disc_id_for_mapping',
+    );
     expect(result).toMatchObject([
       {
         id: 'disc-a',

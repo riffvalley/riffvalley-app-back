@@ -1,4 +1,5 @@
 export interface CatalogRawRow {
+  disc_id_for_mapping?: string;
   discId?: string;
   disc_id?: string;
   averagerate: string | null;
@@ -8,5 +9,10 @@ export interface CatalogRawRow {
 }
 
 export function indexCatalogRawRows(rawRows: CatalogRawRow[]) {
-  return new Map(rawRows.map((row) => [row.discId ?? row.disc_id!, row]));
+  return new Map(
+    rawRows.map((row) => [
+      row.disc_id_for_mapping ?? row.discId ?? row.disc_id!,
+      row,
+    ]),
+  );
 }
