@@ -15,6 +15,7 @@ import { DiscWriteService } from './write/disc-write.service';
 import { DiscSpotifyService } from './spotify/disc-spotify.service';
 import { DiscHomeService } from './home/disc-home.service';
 import { DiscLinkMaintenanceService } from './maintenance/disc-link-maintenance.service';
+import { RatesModule } from 'src/community/rates/rates.module';
 
 @Module({
   controllers: [DiscsController],
@@ -32,6 +33,7 @@ import { DiscLinkMaintenanceService } from './maintenance/disc-link-maintenance.
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
     AuthorizationModule,
     SpotifyIntegrationModule,
+    RatesModule,
   ],
   exports: [DiscsService, DiscLinkMaintenanceService, DiscCatalogService],
 })

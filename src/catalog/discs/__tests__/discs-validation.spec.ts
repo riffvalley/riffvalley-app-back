@@ -6,6 +6,7 @@ import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from '../dto/update-discs.dto';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
+import { RandomQueryDto } from '../dto/random-query.dto';
 
 describe('DiscsController write validation', () => {
   const validationPipe = new ValidationPipe({
@@ -112,5 +113,35 @@ describe('DiscsController write validation', () => {
         ))(),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(service.createWithArtist).not.toHaveBeenCalled();
+  });
+
+  it('accepts supported random difficulty parameters and rejects invalid values', async () => {
+    const valid = await validationPipe.transform(
+      {
+        difficulty: 'normal',
+        previousDiscId: 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783',
+      },
+      { type: 'query', metatype: RandomQueryDto },
+    );
+    expect(valid).toBeInstanceOf(RandomQueryDto);
+
+    await expect(
+      validationPipe.transform(
+        { difficulty: 'expert' },
+        { type: 'query', metatype: RandomQueryDto },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      validationPipe.transform(
+        { previousDiscId: 'not-a-uuid' },
+        { type: 'query', metatype: RandomQueryDto },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      validationPipe.transform(
+        { difficulty: 'easy', userId: 'other-user' },
+        { type: 'query', metatype: RandomQueryDto },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

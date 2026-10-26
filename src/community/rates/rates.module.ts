@@ -10,6 +10,7 @@ import { RatesHistoryService } from './history/rates-history.service';
 import { UsersModule } from 'src/identity/users/users.module';
 import { RateVoteEvent } from './entities/rate-vote-event.entity';
 import { HistoricalRatesStatsService } from './stats/historical-rates-stats.service';
+import { RatesRandomSelectionService } from './random-selection/rates-random-selection.service';
 
 @Module({
   controllers: [RatesController], // Controladores que gestionan las rutas
@@ -18,12 +19,17 @@ import { HistoricalRatesStatsService } from './stats/historical-rates-stats.serv
     RatesStatsService,
     RatesHistoryService,
     HistoricalRatesStatsService,
+    RatesRandomSelectionService,
   ],
   imports: [
     TypeOrmModule.forFeature([Rate, Disc, RateVoteEvent]),
     AuthorizationModule,
     UsersModule,
   ], // Registro de la entidad Rate en TypeORM
-  exports: [RatesStatsService, HistoricalRatesStatsService],
+  exports: [
+    RatesStatsService,
+    HistoricalRatesStatsService,
+    RatesRandomSelectionService,
+  ],
 })
 export class RatesModule {}

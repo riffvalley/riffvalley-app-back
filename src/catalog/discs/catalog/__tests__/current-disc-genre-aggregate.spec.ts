@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Disc } from '../../entities/disc.entity';
 import { DiscCatalogService } from '../disc-catalog.service';
+import { RatesRandomSelectionService } from 'src/community/rates/random-selection/rates-random-selection.service';
 
 describe('DiscCatalogService current genre aggregates', () => {
   let moduleRef: TestingModule;
@@ -13,6 +14,7 @@ describe('DiscCatalogService current genre aggregates', () => {
     moduleRef = await Test.createTestingModule({
       providers: [
         DiscCatalogService,
+        RatesRandomSelectionService,
         { provide: getRepositoryToken(Disc), useValue: { query } },
       ],
     }).compile();
