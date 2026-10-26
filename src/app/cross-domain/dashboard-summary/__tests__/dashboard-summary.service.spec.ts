@@ -16,7 +16,9 @@ describe('DashboardSummaryService', () => {
   let discCatalogService: jest.Mocked<
     Pick<
       DiscCatalogService,
-      'countCatalogDiscs' | 'countCurrentGenresForDiscSets'
+      | 'countCatalogDiscs'
+      | 'countCurrentGenresForDiscSets'
+      | 'countDiscsByReleasePeriod'
     >
   >;
 
@@ -25,13 +27,15 @@ describe('DashboardSummaryService', () => {
   ): HistoricalRatesStats => ({
     timezone: 'Europe/Madrid',
     totalRatedDiscs: 0,
+    totalRatedDiscIds: [],
+    totalActiveDays: 0,
     currentStreak: 0,
     month: {
       ratedDiscs: 0,
       ratedDiscIds: [],
       activeDays: 0,
     },
-    year: { ratedDiscs: 0, ratedDiscIds: [] },
+    year: { ratedDiscs: 0, ratedDiscIds: [], activeDays: 0 },
     history: {
       ratedDiscs: null,
       ratedDiscIds: null,
@@ -53,7 +57,10 @@ describe('DashboardSummaryService', () => {
       countCatalogDiscs: jest.fn().mockResolvedValue(7201),
       countCurrentGenresForDiscSets: jest
         .fn()
-        .mockResolvedValue({ month: 0, year: 0 }),
+        .mockResolvedValue({ month: 0, year: 0, totalRated: 0 }),
+      countDiscsByReleasePeriod: jest
+        .fn()
+        .mockResolvedValue({ thisMonth: 0, thisYear: 0 }),
     };
 
     moduleRef = await Test.createTestingModule({
@@ -79,11 +86,17 @@ describe('DashboardSummaryService', () => {
     ).resolves.toEqual({
       personal: {
         totalRatedDiscs: 0,
+        totalExploredGenres: 0,
+        totalActiveDays: 0,
         currentStreak: 0,
-        year: { ratedDiscs: 0, exploredGenres: 0 },
+        year: { ratedDiscs: 0, exploredGenres: 0, activeDays: 0 },
         month: { ratedDiscs: 0, exploredGenres: 0, activeDays: 0 },
       },
-      catalog: { totalDiscs: 7201 },
+      catalog: {
+        totalDiscs: 7201,
+        discsThisYear: 0,
+        discsThisMonth: 0,
+      },
     });
     expect(ratesStatsService.getUserHistoricalStats).toHaveBeenCalledWith(
       'session-user',
@@ -100,9 +113,12 @@ describe('DashboardSummaryService', () => {
       stats({
         totalRatedDiscs: 486,
         currentStreak: 6,
+        totalActiveDays: 214,
+        totalRatedDiscIds: ['disc-a', 'disc-b', 'disc-c', 'disc-d'],
         year: {
           ratedDiscs: 94,
           ratedDiscIds: ['disc-a', 'disc-b', 'disc-c'],
+          activeDays: 121,
         },
         month: {
           ratedDiscs: 12,
@@ -114,6 +130,11 @@ describe('DashboardSummaryService', () => {
     discCatalogService.countCurrentGenresForDiscSets.mockResolvedValue({
       month: 7,
       year: 13,
+      totalRated: 18,
+    });
+    discCatalogService.countDiscsByReleasePeriod.mockResolvedValue({
+      thisMonth: 42,
+      thisYear: 500,
     });
 
     await expect(
@@ -121,11 +142,13 @@ describe('DashboardSummaryService', () => {
     ).resolves.toEqual({
       personal: {
         totalRatedDiscs: 486,
+        totalExploredGenres: 18,
+        totalActiveDays: 214,
         currentStreak: 6,
-        year: { ratedDiscs: 94, exploredGenres: 13 },
+        year: { ratedDiscs: 94, exploredGenres: 13, activeDays: 121 },
         month: { ratedDiscs: 12, exploredGenres: 7, activeDays: 8 },
       },
-      catalog: { totalDiscs: 7201 },
+      catalog: { totalDiscs: 7201, discsThisYear: 500, discsThisMonth: 42 },
     });
     expect(
       discCatalogService.countCurrentGenresForDiscSets,
@@ -135,6 +158,7 @@ describe('DashboardSummaryService', () => {
     ).toHaveBeenCalledWith(
       ['disc-a', 'disc-b'],
       ['disc-a', 'disc-b', 'disc-c'],
+      ['disc-a', 'disc-b', 'disc-c', 'disc-d'],
     );
   });
 
@@ -142,6 +166,8 @@ describe('DashboardSummaryService', () => {
     ratesStatsService.getUserHistoricalStats.mockResolvedValue(
       stats({
         totalRatedDiscs: 2,
+        totalRatedDiscIds: ['disc-current-a', 'disc-current-b'],
+        totalActiveDays: 30,
         currentStreak: 3,
         month: {
           ratedDiscs: 2,
@@ -151,6 +177,7 @@ describe('DashboardSummaryService', () => {
         year: {
           ratedDiscs: 3,
           ratedDiscIds: ['disc-a', 'disc-b'],
+          activeDays: 22,
         },
         history: {
           ratedDiscs: null,
@@ -162,6 +189,7 @@ describe('DashboardSummaryService', () => {
     discCatalogService.countCurrentGenresForDiscSets.mockResolvedValue({
       month: 1,
       year: 2,
+      totalRated: 4,
     });
 
     await expect(
@@ -169,19 +197,25 @@ describe('DashboardSummaryService', () => {
     ).resolves.toEqual({
       personal: {
         totalRatedDiscs: 2,
+        totalExploredGenres: 4,
+        totalActiveDays: 30,
         currentStreak: 3,
-        year: { ratedDiscs: 3, exploredGenres: 2 },
+        year: { ratedDiscs: 3, exploredGenres: 2, activeDays: 22 },
         month: {
           ratedDiscs: 2,
           exploredGenres: 1,
           activeDays: 12,
         },
       },
-      catalog: { totalDiscs: 7201 },
+      catalog: { totalDiscs: 7201, discsThisYear: 0, discsThisMonth: 0 },
     });
     expect(
       discCatalogService.countCurrentGenresForDiscSets,
-    ).toHaveBeenCalledWith(['disc-a'], ['disc-a', 'disc-b']);
+    ).toHaveBeenCalledWith(
+      ['disc-a'],
+      ['disc-a', 'disc-b'],
+      ['disc-current-a', 'disc-current-b'],
+    );
   });
 
   it('propagates Rates and Catalog failures rather than returning zeroes', async () => {
@@ -201,6 +235,18 @@ describe('DashboardSummaryService', () => {
     ).rejects.toThrow('catalog read failed');
 
     discCatalogService.countCatalogDiscs.mockResolvedValue(7201);
+    discCatalogService.countDiscsByReleasePeriod.mockRejectedValue(
+      new Error('release period read failed'),
+    );
+    await expect(
+      service.getSummary(Object.assign(new User(), { id: 'user-id' })),
+    ).rejects.toThrow('release period read failed');
+    discCatalogService.countDiscsByReleasePeriod.mockResolvedValue({
+      thisMonth: 0,
+      thisYear: 0,
+    });
+
+    discCatalogService.countCatalogDiscs.mockResolvedValue(7201);
     ratesStatsService.getUserHistoricalStats.mockResolvedValue(
       stats({
         month: {
@@ -208,6 +254,7 @@ describe('DashboardSummaryService', () => {
           ratedDiscIds: ['disc-a'],
           activeDays: 1,
         },
+        totalRatedDiscIds: ['disc-a'],
       }),
     );
     discCatalogService.countCurrentGenresForDiscSets.mockRejectedValue(

@@ -39,14 +39,20 @@ export class DiscCatalogService {
   async countCurrentGenresForDiscSets(
     monthDiscIds: string[],
     yearDiscIds: string[],
-  ): Promise<{ month: number; year: number }> {
-    if (monthDiscIds.length === 0 && yearDiscIds.length === 0) {
-      return { month: 0, year: 0 };
+    totalRatedDiscIds: string[] = [],
+  ): Promise<{ month: number; year: number; totalRated: number }> {
+    if (
+      monthDiscIds.length === 0 &&
+      yearDiscIds.length === 0 &&
+      totalRatedDiscIds.length === 0
+    ) {
+      return { month: 0, year: 0, totalRated: 0 };
     }
 
     type GenreCountsRow = {
       monthCount: number | string;
       yearCount: number | string;
+      totalRatedCount: number | string;
     };
     const [row] = (await this.discRepository.query(
       `
@@ -54,6 +60,8 @@ export class DiscCatalogService {
         SELECT DISTINCT unnest($1::uuid[]) AS disc_id
       ), year_discs AS (
         SELECT DISTINCT unnest($2::uuid[]) AS disc_id
+      ), total_rated_discs AS (
+        SELECT DISTINCT unnest($3::uuid[]) AS disc_id
       )
       SELECT
         (SELECT COUNT(DISTINCT disc."genreId")::int
@@ -63,16 +71,64 @@ export class DiscCatalogService {
         (SELECT COUNT(DISTINCT disc."genreId")::int
           FROM year_discs
           INNER JOIN disc ON disc.id = year_discs.disc_id
-          WHERE disc."genreId" IS NOT NULL) AS "yearCount"
+          WHERE disc."genreId" IS NOT NULL) AS "yearCount",
+        (SELECT COUNT(DISTINCT disc."genreId")::int
+          FROM total_rated_discs
+          INNER JOIN disc ON disc.id = total_rated_discs.disc_id
+          WHERE disc."genreId" IS NOT NULL) AS "totalRatedCount"
       `,
-      [monthDiscIds, yearDiscIds],
+      [monthDiscIds, yearDiscIds, totalRatedDiscIds],
     )) as GenreCountsRow[];
 
     if (!row) {
       throw new Error('Current genre aggregate query returned no row');
     }
 
-    return { month: Number(row.monthCount), year: Number(row.yearCount) };
+    return {
+      month: Number(row.monthCount),
+      year: Number(row.yearCount),
+      totalRated: Number(row.totalRatedCount),
+    };
+  }
+
+  async countDiscsByReleasePeriod(): Promise<{
+    thisMonth: number;
+    thisYear: number;
+  }> {
+    type ReleaseCountsRow = {
+      monthCount: number | string;
+      yearCount: number | string;
+    };
+    const [row] = (await this.discRepository.query(
+      `
+      WITH madrid_calendar AS (
+        SELECT
+          date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date AS month_start,
+          date_trunc('year', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date AS year_start
+      )
+      SELECT
+        COUNT(DISTINCT disc.id) FILTER (
+          WHERE disc."releaseDate" IS NOT NULL
+            AND disc."releaseDate" >= madrid_calendar.month_start
+            AND disc."releaseDate" < (madrid_calendar.month_start + INTERVAL '1 month')::date
+        )::int AS "monthCount",
+        COUNT(DISTINCT disc.id) FILTER (
+          WHERE disc."releaseDate" IS NOT NULL
+            AND disc."releaseDate" >= madrid_calendar.year_start
+            AND disc."releaseDate" < (madrid_calendar.year_start + INTERVAL '1 year')::date
+        )::int AS "yearCount"
+      FROM disc CROSS JOIN madrid_calendar
+      `,
+    )) as ReleaseCountsRow[];
+
+    if (!row) {
+      throw new Error('Release period aggregate query returned no row');
+    }
+
+    return {
+      thisMonth: Number(row.monthCount),
+      thisYear: Number(row.yearCount),
+    };
   }
 
   async findOne(id: string): Promise<Disc> {

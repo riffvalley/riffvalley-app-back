@@ -79,3 +79,31 @@ Rates agrega eventos por usuario en una sola consulta PostgreSQL. La consulta ap
 Los períodos sin eventos devuelven cero. No se reconstruyen votos anteriores a la captura ni se infieren discos para eventos sin ID. Por eso los acumulados de 2026 son parciales y representarán mejor la actividad conforme avance la captura; no equivalen a un histórico musical completo. La consulta sigue propagando errores de Rates o Catalog.
 
 Las pruebas focalizadas cubren usuario sin actividad, conteos distintos de disco y día, filtro exclusivo `set`, límites Madrid, eventos sin `disc_id`, errores SQL/Catalog, composición con historia incompleta y el contrato HTTP autenticado. Pasaron 4 suites y 15 tests focalizados. `pnpm run verify` pasó con 215 suites y 2.112 tests aprobados; 91 tests opt-in omitidos. ESLint mantuvo 839 diagnósticos del baseline sin hallazgos nuevos; gates estructural, de tipado seguro, typecheck y build pasaron. `git diff --check` pasó. La suite PostgreSQL opt-in no se ejecutó porque el servidor configurado no acepta conexiones; no se afirma ejecución del SQL contra una base real. En frontend no hubo cambios de contrato ni de código; sus pruebas, typecheck y build ya pasaron con el estado local preexistente.
+
+## D-B2.4 — Completar estadísticas de DashboardSummary
+
+**Estado:** completada el 2026-10-26. `pnpm run verify` y las pruebas focalizadas pasaron; no se realizó backfill ni se modificó el frontend.
+
+### Contrato añadido
+
+Se agregan exactamente cinco campos al DTO existente, preservando los campos y tipos actuales:
+
+- `personal.totalExploredGenres`: géneros actuales distintos de todos los discos con Rate musical actual no nulo; `0` si no hay discos valorados.
+- `personal.totalActiveDays`: días locales distintos con evento musical `set` desde el inicio real del ledger; `0` si no hay eventos. Representa días registrados y no reconstruye actividad anterior al ledger.
+- `personal.year.activeDays`: días Madrid distintos con `set` durante el año local actual; `0` si no existen. No se bloquea por cobertura histórica.
+- `catalog.discsThisYear` y `catalog.discsThisMonth`: discos distintos cuya fecha musical de lanzamiento cae en el año/mes Madrid actual; `0` si no hay coincidencias.
+
+Mes, año e histórico son vistas distintas. `currentStreak` permanece como indicador independiente. Los acumulados de actividad musical de 2026 pueden ser parciales porque la captura del ledger comenzó después de la actividad inicial de la cuenta. No se reconstruye ni se hace backfill de los días anteriores al ledger.
+
+### Consultas y ownership
+
+- Rates amplía la consulta agregada ya existente. Una CTE con `SELECT DISTINCT (occurred_at AT TIME ZONE 'Europe/Madrid')::date` cuenta días sin cargar eventos completos; los períodos filtran `set`, por lo que `change` no cuenta. La consulta añade los días del año y el total de días registrados, conservando los límites actuales de mes, los ratedDiscIds y la racha. También devuelve los IDs distintos de los discos con `Rate.rate IS NOT NULL` para que CrossDomain resuelva los géneros actuales.
+- Catalog amplía la agregación de géneros para consultar en una llamada los conjuntos de mes, año y valoraciones actuales. Usa `COUNT(DISTINCT disc."genreId")`, joins por IDs y omite géneros nulos; no carga entidades ni crea N+1.
+- Catalog añade una agregación de dos conteos por `Disc.releaseDate`, confirmada en la entidad como SQL `date`. PostgreSQL obtiene la fecha de calendario local con `CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid'`, y los límites mensuales/anuales se comparan directamente con la fecha de lanzamiento. La query excluye fechas nulas y cuenta IDs distintos; no usa `createdAt`.
+- CrossDomain ejecuta en paralelo las lecturas independientes de Rates, total de catálogo y lanzamientos por período. Después llama a la operación pública de Catalog para los géneros de mes/año/histórico. Autenticación, endpoint y composición entre módulos se mantienen.
+
+### Tests y límites de verificación
+
+Las pruebas focalizadas cubren ceros sin actividad, deduplicación de días y discos, solo `set`, IDs de Rates actuales filtrados por `rate IS NOT NULL`, géneros duplicados/nulos, errores de SQL y composición, contrato HTTP con cinco campos nuevos, fechas de lanzamiento nulas, límites Madrid y ventanas de mes/año. Se comprueba que los resultados existentes de Rates y catálogo se conservan. Pasaron 4 suites focalizadas y 17 tests. `pnpm run verify` pasó con 215 suites aprobadas, 2.114 tests aprobados y 91 tests omitidos. Los gates estructural, de tipado seguro y ESLint no detectaron hallazgos nuevos; typecheck, build y `git diff --check` pasaron.
+
+La verificación de estas consultas se realiza mediante pruebas unitarias con mocks y aserciones de SQL. La suite PostgreSQL aislada no está disponible en este entorno, por lo que no se afirma una ejecución real de consultas contra PostgreSQL. `releaseDate` es de tipo SQL `date`; no representa un instante, así que su comparación es de calendario y las fronteras se calculan en Madrid. Los acumulados `totalActiveDays` y `totalExploredGenres` describen los datos actualmente registrados, no una reconstrucción de toda la vida del usuario.

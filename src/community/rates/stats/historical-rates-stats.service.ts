@@ -11,8 +11,10 @@ export interface HistoricalPeriodStats {
 export interface HistoricalRatesStats {
   timezone: 'Europe/Madrid';
   totalRatedDiscs: number;
+  totalRatedDiscIds: string[];
+  totalActiveDays: number;
   month: HistoricalPeriodStats & { activeDays: number };
-  year: HistoricalPeriodStats;
+  year: HistoricalPeriodStats & { activeDays: number };
   history: {
     ratedDiscs: null;
     ratedDiscIds: null;
@@ -36,12 +38,15 @@ export class HistoricalRatesStatsService {
   async getUserHistoricalStats(userId: string): Promise<HistoricalRatesStats> {
     type AggregateRow = {
       totalRatedDiscs: number | string;
+      totalRatedDiscIds: string[] | null;
       monthRatedDiscIds: string[] | null;
       yearRatedDiscIds: string[] | null;
       monthRatedDiscCount: number | string;
       yearRatedDiscCount: number | string;
       historyMissingDiscEvents: number | string;
       monthActiveDays: number | string;
+      yearActiveDays: number | string;
+      totalActiveDays: number | string;
       streakDays: number | string;
     };
 
@@ -73,13 +78,15 @@ export class HistoricalRatesStatsService {
       ), year_disc_ids AS (
         SELECT DISTINCT disc_id FROM year_sets WHERE disc_id IS NOT NULL
       ), activity_days AS (
-        SELECT DISTINCT activity_day FROM valid_sets CROSS JOIN context
-        WHERE activity_day <= context.today
+        SELECT DISTINCT activity_day FROM valid_sets
+      ), past_activity_days AS (
+        SELECT activity_days.activity_day FROM activity_days CROSS JOIN context
+        WHERE activity_days.activity_day <= context.today
       ), ordered_days AS (
         SELECT activity_day,
           ROW_NUMBER() OVER (ORDER BY activity_day DESC) AS day_position,
           MAX(activity_day) OVER () AS latest_day
-        FROM activity_days
+        FROM past_activity_days
       ), streak AS (
         SELECT
           COUNT(*) FILTER (
@@ -93,6 +100,11 @@ export class HistoricalRatesStatsService {
           FROM rate
           WHERE rate."userId" = context.user_id
             AND rate.rate IS NOT NULL) AS "totalRatedDiscs",
+        ARRAY(SELECT DISTINCT rate."discId"
+          FROM rate
+          WHERE rate."userId" = context.user_id
+            AND rate.rate IS NOT NULL
+            AND rate."discId" IS NOT NULL) AS "totalRatedDiscIds",
         ARRAY(SELECT disc_id FROM month_disc_ids) AS "monthRatedDiscIds",
         ARRAY(SELECT disc_id FROM year_disc_ids) AS "yearRatedDiscIds",
         (SELECT COUNT(*) FROM month_disc_ids)::int AS "monthRatedDiscCount",
@@ -100,6 +112,9 @@ export class HistoricalRatesStatsService {
         (SELECT COUNT(*) FROM valid_sets WHERE disc_id IS NULL)::int AS "historyMissingDiscEvents",
         (SELECT COUNT(*) FROM activity_days
           WHERE activity_day >= context.month_start AND activity_day <= context.today)::int AS "monthActiveDays",
+        (SELECT COUNT(*) FROM activity_days
+          WHERE activity_day >= context.year_start AND activity_day <= context.today)::int AS "yearActiveDays",
+        (SELECT COUNT(*) FROM activity_days)::int AS "totalActiveDays",
         CASE WHEN streak.latest_day < context.today - 1 THEN 0
           ELSE COALESCE(streak.days, 0)::int END AS "streakDays"
       FROM context CROSS JOIN streak
@@ -114,6 +129,8 @@ export class HistoricalRatesStatsService {
     return {
       timezone: 'Europe/Madrid',
       totalRatedDiscs: Number(row.totalRatedDiscs),
+      totalRatedDiscIds: row.totalRatedDiscIds ?? [],
+      totalActiveDays: Number(row.totalActiveDays),
       month: {
         ratedDiscs: Number(row.monthRatedDiscCount),
         ratedDiscIds: row.monthRatedDiscIds ?? [],
@@ -122,6 +139,7 @@ export class HistoricalRatesStatsService {
       year: {
         ratedDiscs: Number(row.yearRatedDiscCount),
         ratedDiscIds: row.yearRatedDiscIds ?? [],
+        activeDays: Number(row.yearActiveDays),
       },
       history: {
         ratedDiscs: null,

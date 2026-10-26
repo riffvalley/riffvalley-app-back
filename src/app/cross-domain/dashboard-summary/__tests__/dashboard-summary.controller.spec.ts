@@ -75,11 +75,17 @@ describe('DashboardSummaryController and module boundaries', () => {
     const response: DashboardSummaryResponse = {
       personal: {
         totalRatedDiscs: 0,
+        totalExploredGenres: 0,
+        totalActiveDays: 0,
         currentStreak: 0,
-        year: { ratedDiscs: 0, exploredGenres: 0 },
+        year: { ratedDiscs: 0, exploredGenres: 0, activeDays: 0 },
         month: { ratedDiscs: 0, exploredGenres: 0, activeDays: 0 },
       },
-      catalog: { totalDiscs: 7201 },
+      catalog: {
+        totalDiscs: 7201,
+        discsThisYear: 0,
+        discsThisMonth: 0,
+      },
     };
     dashboardSummaryService.getSummary.mockResolvedValue(response);
     const controller = new DashboardSummaryController(
