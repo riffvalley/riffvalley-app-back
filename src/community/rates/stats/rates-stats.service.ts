@@ -369,7 +369,7 @@ export class RatesStatsService {
         "ratingCount" DESC,
         name ASC,
         id ASC
-      LIMIT 5
+      LIMIT 7
       `,
       [userId, period, RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH],
     )) as TopArtistRow[];

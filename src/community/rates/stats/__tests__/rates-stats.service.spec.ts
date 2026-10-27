@@ -393,7 +393,7 @@ describe('RatesStatsService top artists', () => {
     expect(sql).toContain('"ratingCount" DESC');
     expect(sql).toContain('name ASC');
     expect(sql).toContain('id ASC');
-    expect(sql).toContain('LIMIT 5');
+    expect(sql).toContain('LIMIT 7');
     expect(sql).toContain("CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid'");
     expect(sql).toContain("AT TIME ZONE 'Europe/Madrid'");
     expect(sql).toContain("AT TIME ZONE 'UTC'");
