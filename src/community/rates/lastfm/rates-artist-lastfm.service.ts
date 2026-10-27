@@ -1,8 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import sanitizeHtml = require('sanitize-html');
-import { Repository } from 'typeorm';
-import { Artist } from 'src/catalog/artists/entities/artist.entity';
+import { ArtistCatalogService } from 'src/catalog/artists/catalog/artist-catalog.service';
 import { LastfmApiService } from 'src/integrations/lastfm-integration/lastfm-api.service';
 import { LastfmArtistProfileLookup } from 'src/integrations/lastfm-integration/types/lastfm-api.types';
 import { RatesArtistLastfmResponseDto } from '../dto/rates-artist-lastfm.dto';
@@ -17,16 +15,16 @@ const BIOGRAPHY_MAX_LENGTH = 1_200;
 @Injectable()
 export class RatesArtistLastfmService {
   constructor(
-    @InjectRepository(Artist)
-    private readonly artistRepository: Pick<Repository<Artist>, 'findOne'>,
+    @Inject(ArtistCatalogService)
+    private readonly artistCatalogService: Pick<
+      ArtistCatalogService,
+      'findIdentityById' | 'findExactNameMatches'
+    >,
     private readonly lastfmApiService: LastfmApiService,
   ) {}
 
   async getArtistInfo(artistId: string): Promise<RatesArtistLastfmResponseDto> {
-    const artist = await this.artistRepository.findOne({
-      where: { id: artistId },
-      select: { id: true, name: true },
-    });
+    const artist = await this.artistCatalogService.findIdentityById(artistId);
     if (!artist) {
       throw new NotFoundException(`Artist with id ${artistId} not found`);
     }
@@ -40,7 +38,14 @@ export class RatesArtistLastfmService {
       return emptyResponse(artist.id, 'not_found');
     }
 
-    return mapProfile(artist.id, lookup);
+    const similarArtists = uniqueLinks(lookup.profile.similarArtists);
+    const catalogMatches = similarArtists.length
+      ? await this.artistCatalogService.findExactNameMatches(
+          similarArtists.map(({ name }) => name),
+        )
+      : [];
+
+    return mapProfile(artist.id, lookup, similarArtists, catalogMatches);
   }
 }
 
@@ -63,6 +68,10 @@ function emptyResponse(
 function mapProfile(
   artistId: string,
   lookup: Extract<LastfmArtistProfileLookup, { status: 'found' }>,
+  similarArtists: Array<{ name: string; url: string | null }>,
+  catalogMatches: Awaited<
+    ReturnType<ArtistCatalogService['findExactNameMatches']>
+  >,
 ): RatesArtistLastfmResponseDto {
   const profile = lookup.profile;
   const summary = profile.biographySummary
@@ -81,7 +90,14 @@ function mapProfile(
         ? { summary, url: biographyUrl ?? lastfmUrl }
         : null,
     tags: uniqueLinks(profile.tags),
-    similarArtists: uniqueLinks(profile.similarArtists),
+    similarArtists: similarArtists.map((similarArtist, index) => ({
+      ...similarArtist,
+      ...(catalogMatches[index] ?? {
+        catalogArtistId: null,
+        catalogDiscCount: 0,
+        catalogDiscs: [],
+      }),
+    })),
     listeners: parseCount(profile.listeners),
     playCount: parseCount(profile.playCount),
     lastfmUrl,

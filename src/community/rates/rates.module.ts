@@ -13,7 +13,7 @@ import { HistoricalRatesStatsService } from './stats/historical-rates-stats.serv
 import { RatesRandomSelectionService } from './random-selection/rates-random-selection.service';
 import { CommunityDashboardRatesService } from './stats/community-dashboard-rates.service';
 import { RatesDashboardSummaryService } from './stats/rates-dashboard-summary.service';
-import { Artist } from 'src/catalog/artists/entities/artist.entity';
+import { ArtistsModule } from 'src/catalog/artists/artists.module';
 import { LastfmIntegrationModule } from 'src/integrations/lastfm-integration/lastfm-integration.module';
 import { RatesArtistLastfmController } from './lastfm/rates-artist-lastfm.controller';
 import { RatesArtistLastfmService } from './lastfm/rates-artist-lastfm.service';
@@ -31,7 +31,8 @@ import { RatesArtistLastfmService } from './lastfm/rates-artist-lastfm.service';
     RatesArtistLastfmService,
   ],
   imports: [
-    TypeOrmModule.forFeature([Rate, Disc, RateVoteEvent, Artist]),
+    TypeOrmModule.forFeature([Rate, Disc, RateVoteEvent]),
+    ArtistsModule,
     LastfmIntegrationModule,
     AuthorizationModule,
     UsersModule,

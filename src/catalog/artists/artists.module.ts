@@ -34,5 +34,6 @@ import { ArtistDetailsService } from './details/artist-details.service';
     ]),
     AuthorizationModule,
   ],
+  exports: [ArtistCatalogService],
 })
 export class ArtistsModule {}

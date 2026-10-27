@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Artist } from '../../entities/artist.entity';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { ArtistCatalogService } from '../artist-catalog.service';
 
@@ -9,7 +10,10 @@ describe('ArtistCatalogService', () => {
   const artistRepository = {
     findAndCount: jest.fn(),
     findOneByOrFail: jest.fn(),
+    findOne: jest.fn(),
+    createQueryBuilder: jest.fn(),
   };
+  const discRepository = { query: jest.fn() };
   let service: ArtistCatalogService;
   let moduleRef: TestingModule;
 
@@ -19,6 +23,7 @@ describe('ArtistCatalogService', () => {
       providers: [
         ArtistCatalogService,
         { provide: getRepositoryToken(Artist), useValue: artistRepository },
+        { provide: getRepositoryToken(Disc), useValue: discRepository },
       ],
     }).compile();
     service = moduleRef.get(ArtistCatalogService);
@@ -87,5 +92,76 @@ describe('ArtistCatalogService', () => {
       constructor: NotFoundException,
       message: 'Artist with id missing not found',
     });
+  });
+
+  it('matches names exactly after Unicode, case and whitespace normalization in one batch', async () => {
+    const candidates = [
+      Object.assign(new Artist(), {
+        id: 'artist-1',
+        name: '  ＴＨＯＲＮＨＩＬＬ ',
+      }),
+    ];
+    const queryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(candidates),
+    };
+    artistRepository.createQueryBuilder.mockReturnValue(queryBuilder);
+    discRepository.query.mockResolvedValue([
+      {
+        artistId: 'artist-1',
+        id: 'disc-1',
+        name: 'Heroine',
+        image: null,
+        releaseYear: null,
+      },
+      {
+        artistId: 'artist-1',
+        id: 'disc-1',
+        name: 'Heroine',
+        image: null,
+        releaseYear: null,
+      },
+    ]);
+
+    await expect(
+      service.findExactNameMatches([' thornhill  ', 'Unknown']),
+    ).resolves.toEqual([
+      {
+        catalogArtistId: 'artist-1',
+        catalogDiscCount: 1,
+        catalogDiscs: [
+          { id: 'disc-1', name: 'Heroine', image: null, releaseYear: null },
+        ],
+      },
+      { catalogArtistId: null, catalogDiscCount: 0, catalogDiscs: [] },
+    ]);
+    expect(artistRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'artist.nameNormalized IN (:...searchKeys)',
+      { searchKeys: ['thornhill', 'unknown'] },
+    );
+    expect(discRepository.query).toHaveBeenCalledTimes(1);
+    expect(discRepository.query.mock.calls[0][0]).toContain(
+      'disc."releaseDate" DESC NULLS LAST',
+    );
+  });
+
+  it('does not link ambiguous names or fuzzy matches', async () => {
+    const candidates = [
+      Object.assign(new Artist(), { id: 'a-1', name: 'Greyhaven' }),
+      Object.assign(new Artist(), { id: 'a-2', name: 'GREYHAVEN ' }),
+      Object.assign(new Artist(), { id: 'a-3', name: 'Grey Haven' }),
+    ];
+    artistRepository.createQueryBuilder.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(candidates),
+    });
+
+    await expect(service.findExactNameMatches(['Greyhaven'])).resolves.toEqual([
+      { catalogArtistId: null, catalogDiscCount: 0, catalogDiscs: [] },
+    ]);
+    expect(discRepository.query).not.toHaveBeenCalled();
   });
 });
