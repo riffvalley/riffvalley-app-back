@@ -16,6 +16,7 @@ import { RatesController } from '../rates.controller';
 import { RatesService } from '../rates.service';
 import { RatesStatsService } from '../stats/rates-stats.service';
 import { RatesHistoryService } from '../history/rates-history.service';
+import { RatesDashboardSummaryService } from '../stats/rates-dashboard-summary.service';
 import { RatesHistoryQueryDto } from '../dto/rates-history-query.dto';
 
 async function validateHistoryQuery(
@@ -52,6 +53,46 @@ function createUsersService(): UsersService {
 }
 
 describe('RatesController home insights route', () => {
+  it('registers an authenticated personal dashboard summary route', async () => {
+    const ratesService = new RatesService(createRateRepository());
+    const ratesStatsService = new RatesStatsService(
+      createRateRepository(),
+      createUsersService(),
+    );
+    const ratesHistoryService = new RatesHistoryService(createRateRepository());
+    const dashboardSummaryService = new RatesDashboardSummaryService(
+      createRateRepository(),
+    );
+    const getSummary = jest
+      .spyOn(dashboardSummaryService, 'getSummary')
+      .mockResolvedValue(
+        {} as Awaited<ReturnType<typeof dashboardSummaryService.getSummary>>,
+      );
+    const controller = new RatesController(
+      ratesService,
+      ratesStatsService,
+      ratesHistoryService,
+      dashboardSummaryService,
+    );
+    const handler = RatesController.prototype.getDashboardSummary;
+    const guards = Reflect.getMetadata(
+      GUARDS_METADATA,
+      handler,
+    ) as Type<unknown>[];
+    const user = Object.assign(new User(), { id: 'identity-from-session' });
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(
+      'dashboard-summary',
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+      RequestMethod.GET,
+    );
+    expect(guards).toContain(UserRoleGuard);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
+    await controller.getDashboardSummary(user);
+    expect(getSummary).toHaveBeenCalledWith('identity-from-session');
+  });
+
   it('registers authenticated GET /rates/home-insights before the generic GET /rates/:id route', async () => {
     const ratesService = new RatesService(createRateRepository());
     const ratesStatsService = new RatesStatsService(
@@ -66,6 +107,7 @@ describe('RatesController home insights route', () => {
       ratesService,
       ratesStatsService,
       ratesHistoryService,
+      new RatesDashboardSummaryService(createRateRepository()),
     );
     const handler = RatesController.prototype.getHomeInsights;
     const guards = Reflect.getMetadata(
@@ -151,6 +193,7 @@ describe('RatesController history route', () => {
       ratesService,
       ratesStatsService,
       ratesHistoryService,
+      new RatesDashboardSummaryService(createRateRepository()),
     );
 
     const query = await validateHistoryQuery({});
@@ -207,6 +250,7 @@ describe('RatesController history route', () => {
       ratesService,
       ratesStatsService,
       ratesHistoryService,
+      new RatesDashboardSummaryService(createRateRepository()),
     );
 
     const guards = Reflect.getMetadata(
@@ -252,6 +296,7 @@ describe('RatesController history route', () => {
       new RatesService(createRateRepository()),
       new RatesStatsService(createRateRepository(), createUsersService()),
       ratesHistoryService,
+      new RatesDashboardSummaryService(createRateRepository()),
     );
 
     expect(() =>
@@ -287,6 +332,7 @@ describe('RatesController history route', () => {
       new RatesService(createRateRepository()),
       new RatesStatsService(createRateRepository(), createUsersService()),
       ratesHistoryService,
+      new RatesDashboardSummaryService(createRateRepository()),
     );
     const query = await validateHistoryQuery({
       from: '2025-01-01',

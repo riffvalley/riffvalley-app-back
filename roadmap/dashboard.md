@@ -198,6 +198,139 @@ El consumidor frontend existente que requiere adaptación es `riffvalley-app-fro
 
 Las pruebas focalizadas pasan: 3 suites y 13 tests, incluyendo Top 5, subconjunto/array vacío, campos y conteos numéricos, SQL histórica y de eventos, deduplicación, cero musical, filtros de portada, desempate y límites Madrid; la cobertura existente mantiene el contrato del resto de estadísticas, rankings y autenticación. Typecheck directo, Nest build, runtime dependency gate, diff check y los siete tests de los gates pasan. Los gates estructural y de tipado seguro conservan 9 y 5 hallazgos preexistentes; ESLint conserva 839 y no añade nuevos. `pnpm run verify` no inicia por `unable to open database file`. La suite unitaria completa ejecutada directamente termina con 209 suites aprobadas, 11 fallidas y 14 opt-in omitidas (2.033 tests aprobados, 106 fallidos y 91 omitidos); los fallos HTTP observados son `listen EPERM` al enlazar `0.0.0.0` en este sandbox. No hay PostgreSQL aislado configurado: la SQL se revisó y se cubre con aserciones sobre la consulta, pero no se ejecutó contra PostgreSQL real.
 
+## D-8c — «Tu semana musical»
+
+El identificador técnico del widget sigue siendo `ultimosVotos`; el título será **Tu semana musical**. El resumen es solo del usuario autenticado. El árbol disponible no contiene D-8a, D-8b ni definición de `ultimosVotos`; este diseño usa las decisiones del brief aprobado.
+
+### D-8c.1 — Diseño backend
+
+**Estado:** completada el 2026-10-27. Investigación/documentación; no se modificaron código funcional, esquema, migraciones ni frontend.
+
+#### Evidencia y fechas
+
+- `1792000000000-CreateRateVoteEvents` crea `rate_vote_events` y el singleton `rate_vote_event_capture`; `started_at` se toma con `clock_timestamp()` al ejecutar la migración. `1792010000000-AddDiscAndValuesToRateVoteEvents` agrega `disc_id`, `previous_value` y `new_value` nullable, sin backfill. El timestamp del nombre de migración no demuestra cuándo se aplicó en cada entorno.
+- `RatesService.create/update` guarda Rate y evento en la misma transacción. Emite `set` al pasar la nota de ausente a no nula, y `change` entre dos notas no nulas distintas. No emite al cambiar solo portada, repetir la nota, retirar a `null` o borrar. El constraint acepta solo `set` y `change`; una Rate solo de portada no genera evento, pero añadir luego nota sí.
+- `DELETE /rates/:id` borra Rate sin evento. PATCH a `rate=null` tampoco emite; puede dejar el cover. Revalorar después genera otro `set`, así que puede haber varios `set` por pareja y el primero retenido no necesariamente es el primer voto real. `rate(userId, discId)` tiene índice no único `IDX_rate_user_disc_d46`; el advisory lock serializa la ruta de escritura, no garantiza unicidad histórica.
+- `Rate.createdAt` fecha la fila, que puede ser solo cover y no cambia al agregar nota. `editedAt` se actualiza por ediciones musicales y de portada y se sobrescribe. Ninguna es fecha de primera nota musical. `RatesHistoryService` usa ambas para un historial aproximado de creación/edición de filas; no es una fuente de fechas musicales verificadas.
+- `occurred_at` sí es fecha del instante de transición registrado. Un `set` fecha el paso de ausencia actual a nota; no demuestra primera valoración vitalicia: pudo existir Rate antes del ledger, borrarse o retirarse y restaurarse. `change` no es voto nuevo.
+- Eventos tienen FK de usuario `ON DELETE CASCADE` y de disco `ON DELETE SET NULL`. Al borrar disco, el evento queda con `disc_id=NULL` y no puede asignarse a género. Al borrar nota/Rate, el evento permanece; la lectura actual debe unir Rate con `rate IS NOT NULL`, excluyéndolo hasta que exista valoración vigente. Revalorar no borra eventos anteriores.
+- La migración no backfillea. Las pruebas PostgreSQL opt-in prueban rollback transaccional, campos nullable y `SET NULL` de disco, no datos de producción. El repo no acredita el despliegue efectivo del writer ni cuándo se aplicó el ledger; el marcador registra creación de infraestructura, no que el writer ya estuviera activo. Tampoco existe marcador para el inicio de IDs de disco poblados. No se consultó PostgreSQL: fecha real de cobertura por verificar.
+
+**Conclusión:** el modelo actual no permite identificar en general la primera valoración musical real por usuario/disco. Solo fecha `set` conservados, que no se deben presentar como primeras valoraciones de vida. `createdAt`/`editedAt` no son fechas musicales; no hay fuente pre-ledger.
+
+#### Política histórica y cobertura
+
+| Alternativa           | Evaluación                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Solo `set`         | No inventa fechas, pero acredita el primer `set` capturado, puede omitir legacy o contar una revaloración. Solo ofrecer con procedencia `first_captured_set` y cobertura parcial.                                                                                                                                                                                          |
+| B. Fechas aproximadas | `createdAt` puede ser cover-only y `editedAt` cualquier edición. No justifican ni siquiera una estimación del primer voto; se descarta.                                                                                                                                                                                                                                    |
+| C. Ledger durable     | Guardar transaccionalmente fecha de primera nota, inmutable y con unicidad por usuario/disco; borrar Rate no borra el hecho. Permite probar primeras valoraciones solo para parejas sin historia previa al corte. Pares actuales deben quedar marcados como legacy sin fecha; parejas votadas y borradas antes del corte son imposibles de identificar retrospectivamente. |
+
+Recomendación: C para garantizar primeras valoraciones futuras de parejas sin historia anterior al seguimiento (`verified_first_vote`), sin backfill desde fechas ambiguas. Los pares existentes al corte (incluidas valoraciones borradas cuyo rastro ya no está) siguen sin fecha vitalicia fiable. Hasta tener ledger durable y corte real de despliegue, no presentar `set` actuales como “votos nuevos” exactos. Se requiere aprobar para D-8c.2 si se acepta temporalmente A, claramente parcial, o se espera C. Ninguna alternativa reconstruye el pasado con exactitud.
+
+`rate_vote_event_capture.started_at` detecta que una semana empieza antes de crear el marcador, pero no confirma writer activo, IDs enriquecidos ni continuidad. Cero solo comprobado cuando el intervalo completo está cubierto. Semana anterior al corte: desconocida; cruce del corte: parcial; semana actual: semana a la fecha con `asOf`. Contrato: `coverage.status` `complete | partial | unavailable`; métricas `null` para parcial/no disponible y `0` solo con cobertura completa. Error SQL/HTTP se propaga como error, no se transforma en cero ni estado de cobertura.
+
+#### Géneros, métricas y HTTP
+
+Catalog tiene una relación singular `Disc.genre` vía `disc."genreId"`; no hay géneros secundarios ni vínculo del género al artista. Contar el género actual del disco, distinto por ID. Sin género: suma cero géneros, pero el disco sí cuenta en votos/media. No filtrar por lanzamiento. Reclasificar hoy afecta el histórico, como el agregado `countCurrentGenresForDiscSets`.
+
+Con cobertura verificada: votos nuevos = parejas cuya primera valoración real cae en semana Madrid; nota media = media actual de esas Rates (no `new_value`), excluir notas eliminadas y conservar `0`, devolver `null` si no hay nota vigente; géneros = géneros actuales distintos de discos con nota vigente. El evento de una nota borrada puede seguir contando en el total desde ledger, pero no en media ni lista.
+
+Propuesta: `GET /api/rates/weekly-summary`, Rates controller, `@Auth()` y usuario desde `@GetUser()`, sin parámetros ni `userId`. No reutilizar `GET /rates/user/:userId/history`: actualmente carece de `@Auth()` y acepta ID arbitrario.
+
+```json
+{
+  "timezone": "Europe/Madrid",
+  "period": {
+    "start": "2026-10-26T00:00:00+01:00",
+    "endExclusive": "2026-11-02T00:00:00+01:00",
+    "asOf": "2026-10-27T12:00:00+01:00"
+  },
+  "coverage": {
+    "status": "complete",
+    "source": "verified_first_vote_ledger",
+    "coveredFrom": "2026-10-20T09:30:00Z"
+  },
+  "week": { "newVotes": 2, "currentAverageRate": 8.25, "exploredGenres": 2 },
+  "recentVotes": [
+    {
+      "disc": {
+        "id": "disc-uuid",
+        "name": "Album",
+        "image": "https://example.test/cover.jpg",
+        "releaseDate": "2024-06-14",
+        "artist": { "id": "artist-uuid", "name": "Artist" }
+      },
+      "currentRate": 8.5,
+      "firstVoteAt": "2026-10-26T17:24:00Z",
+      "dateProvenance": "verified_first_vote"
+    }
+  ]
+}
+```
+
+Con cobertura parcial/no disponible, las métricas son `null`. Lista de máximo cinco, una por disco, valoración actual y fecha con procedencia; A usaría `first_captured_set`, nunca `verified_first_vote`. Incluir solo ID/nombre/imagen de disco, fecha de lanzamiento si la navegación la necesita, ID/nombre de artista, nota, instante y procedencia. No incluir usuario/email, cover, comentarios, favoritos, pendientes, medias comunitarias ni eventos crudos. Reutilizar proyección de Catalog solo mediante interfaz pública mínima.
+
+#### Consulta, índices y riesgos
+
+Derivar lunes y lunes siguiente con `date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')`; convertir medianoches a `timestamptz` y filtrar `[start,end)`. Maneja semanas DST de 167/169 horas y evita conversiones fila a fila antes del filtro.
+
+Con fuente futura: CTE de contexto (usuario, límites, corte), primera fila durable por pareja, aplicar período antes de agregar; agregar total; unir Rate vigente, Disc y género para media/géneros; recientes con joins a Rate (`rate IS NOT NULL`), Disc y Artist, ordenar por fecha descendente y desempatar `disc.id ASC`, `rate.id ASC`, y luego `LIMIT 5`. Agregar en PostgreSQL y devolver a lo sumo una fila de resumen y cinco proyecciones. Nada de descargar historia a Node, N+1 o consultas por disco. Si se usa A, `MIN(occurred_at)` por usuario/disco para `set` identificables antes del rango, con la semántica limitada ya descrita.
+
+Índices observados: `rate_vote_events(user_id, occurred_at)`, `(occurred_at)`, `rate(userId, discId)`, `rate(discId)`. No hay unicidad de pareja. No proponer índice nuevo sin `EXPLAIN (ANALYZE, BUFFERS)` con datos/params representativos aislados. No se midieron planes ni tiempos.
+
+Nota de vigencia: el contrato, SQL y política histórica de esta investigación describen el diseño anterior con primeras valoraciones. La decisión de producto posterior lo sustituye: el widget se basará en Rates actuales y en su última actividad; no se implementará endpoint de primeras valoraciones ni se consultará `rate_vote_events` para el widget.
+
+### D-8c.2a — Seguimiento durable de primeras valoraciones
+
+**Estado:** revertida por decisión de simplificación el 2026-10-27.
+
+Se retiró exclusivamente la infraestructura de esta subtarea: entidad y tabla `rate_first_musical_votes`, entidad y marcador `rate_first_musical_vote_capture`, writer idempotente, migración `1792020000000-CreateRateFirstMusicalVotes` y pruebas específicas. Al revisar el estado local, la migración seguía como archivo sin seguimiento de Git y no apareció evidencia nueva de aplicación. La ejecución anterior también dejó constancia de que no se ejecutó en ninguna base. No se consultó producción, no se ejecutaron migraciones ni se borraron tablas/datos.
+
+Las escrituras de Rates vuelven a su estado anterior: `create`, `update` y `remove` conservan las transacciones existentes y la escritura de eventos musicales `set`/`change`. El sistema previo `rate_vote_events` y `rate_vote_event_capture.started_at` permanece intacto. No se añadió migración de reversión porque la nueva migración no se aplicó.
+
+### D-8c.2b — Endpoint semanal de primeras valoraciones
+
+**Estado:** cancelado en su diseño original por la nueva decisión de producto. No se implementó ni se añadirá un endpoint basado en fecha de primera valoración o en `rate_vote_events`.
+
+### Nuevo diseño: rates por última actividad
+
+El widget conserva el identificador técnico `ultimosVotos` y se titulará «Tu semana musical». El cálculo futuro utilizará exclusivamente filas actuales de `rate` y relaciones Catalog. No usará `rate_vote_events` ni añadirá historial. Describe la última actividad visible de cada Rate, no una lista completa de acciones.
+
+- Actividad de una Rate: `GREATEST(rate."createdAt", COALESCE(rate."editedAt", rate."createdAt"))`, expresión ya utilizada por `ActivityService`. Como alternativa equivalente para valores normales, Catalog/Rates ya ordenan portadas con `COALESCE(editedAt, createdAt)`. Desempate estable por `rate.id`.
+- `createdAt` fecha la fila; puede representar una valoración solo de portada. `editedAt` es una única fecha sobrescrita por cualquier modificación de Rate, musical o de portada; no conserva ediciones previas ni su tipo. Filas borradas ya no están disponibles. Por tanto, actividad semanal y últimos cinco son una proyección de estado actual, no auditoría completa. No inferir primera nota musical ni fecha de cada acción.
+- La entidad no declara explícitamente tipo con zona horaria para estos campos y la conexión TypeORM no configura zona. El futuro SQL debe verificar el tipo real de las columnas y la zona de almacenamiento de datos antes de convertir a `Europe/Madrid`; no asumir que son instantes UTC solo por el tipo JS `Date`.
+- Semana natural semiabierta `[lunes 00:00 Madrid, lunes siguiente 00:00 Madrid)`. Una Rate cuenta una sola vez cuando su última actividad actual cae en el período.
+- Indicadores: (1) total de Rates activas, incluyendo cover-only; (2) media de `rate` actual no nulo de esas Rates; (3) géneros actuales distintos para Rates musicales; (4) disco mejor valorado entre ellas, con desempate estable; (5) género dominante por cantidad de Rates musicales; (6) comparación con la semana anterior solo si puede computarse en una agregación acotada. Si se compara la semana en curso, comparar el mismo tramo local transcurrido de la semana previa o exponer que el período actual está incompleto; no comparar sin aviso semana parcial con una completa.
+- `Tus últimos 5 Rates` incluye Rates de portada y musicales, ordenadas por su última actividad descendente y `rate.id` como desempate. No aplicar límite antes de restringir al usuario actual.
+- Las métricas que requieren nota excluyen `rate IS NULL`; una Rate cover-only sí cuenta para actividad y últimos cinco. `0` es una nota musical válida. Géneros vienen de `Disc.genre` actual y se deduplican por género; sin género no agrega un género.
+
+No hay nuevo agregado ni endpoint en esta reversión. D-8c debe verificar el tipo y semántica temporal desplegados, caracterizar consumidores/payload y diseñar una consulta única PostgreSQL que aplique usuario y ventana antes de agregar/limitar, sin N+1 ni descarga de Rates a Node. Revisará si el índice existente `rate(userId, discId)` basta; no se propondrán índices sin plan representativo. La implementación futura deberá preservar auth y contratos hasta acordar el endpoint en su propio alcance.
+
+### D-8c — Backend simplificado
+
+**Estado:** completada en backend; D-8d y D-8e siguen pendientes.
+
+Se añadió `GET /api/rates/dashboard-summary`, autenticado con `@Auth()` y ligado exclusivamente al ID obtenido con `@GetUser()`. No acepta `userId`, no devuelve entidades y no consulta `rate_vote_events`. El DTO contiene el intervalo semiabierto `[start, endExclusive)` ISO UTC, `timezone: Europe/Madrid`, seis métricas y hasta cinco Rates recientes con disco, artista, portada, notas actuales y última actividad.
+
+La actividad se calcula con `GREATEST(rate."createdAt", COALESCE(rate."editedAt", rate."createdAt"))`. La inspección del writer confirmó que `RatesService.create` actualiza una Rate existente y `RatesService.update` establecen `editedAt = new Date()`; ambos caminos permiten cambios musicales y de portada. Una Rate nueva recibe `createdAt`. `remove` elimina la fila y no deja actividad consultable. Así, `editedAt` es la modificación más reciente conocida, no un historial ni una fecha del tipo de cambio. Se conserva el alcance de estado actual: al cambiar una Rate de semana, deja de contar en la semana anterior.
+
+La semana y la anterior se delimitan en Node resolviendo los lunes a medianoche de `Europe/Madrid`, convertidos a instantes UTC. La consulta compara fechas como límites semiabiertos; cubre cambios de mes/año y semanas de 167/169 horas por DST. En PostgreSQL una sola consulta filtrada por usuario produce conteos, media, géneros distintos, mejor disco, género dominante y `LIMIT 5` reciente. La media y el mejor disco consideran solo notas musicales no nulas (0 es válida); el total semanal y género dominante incluyen Rates solo de portada; los géneros se deduplican por ID y los nulos se ignoran. Empates: disco por nota DESC, nombre ASC, disco ID ASC y Rate ID ASC; género por cantidad DESC, nombre ASC e ID ASC; recientes por actividad DESC e ID ASC. Si no hay notas, media/mejor disco son `null`; sin Rates o géneros, los conteos son 0 y la lista vacía. La diferencia es `actual - anterior`; el porcentaje es `null` si la semana anterior vale cero.
+
+**Limitación temporal pendiente de confirmación ambiental:** la entidad no declara `timestamptz` ni zona, no se encontró una migración de creación de `rate` que pruebe el DDL desplegado y no se consultó una base. La consulta interpreta los valores `timestamp` de Rate como reloj UTC (`AT TIME ZONE 'UTC'`) y serializa la actividad con sufijo `Z`; esto coincide con el flujo habitual de `Date` del writer, pero no prueba cómo se almacenaron todas las filas ni la zona de sesión histórica. Antes de usar la semana como dato financiero/forense debe verificarse el tipo real y muestrearse el comportamiento en un entorno aislado. No se inventan fechas ni se consulta el ledger de eventos.
+
+Pruebas locales nuevas cubren límites Madrid, cruce de año, DST, estados vacíos, nota cero, cover-only, porcentaje, aislamiento por parámetro, SQL de una consulta y contrato/auth del endpoint. Los dobles comprueban construcción del contrato y SQL, no la ejecución del SQL ni sus agregaciones en PostgreSQL. No se encontró/configuró una base PostgreSQL aislada para esta tarea; las restricciones y resultados SQL quedan pendientes de integración PostgreSQL. No se añadieron índices porque no se midió un plan representativo con `EXPLAIN (ANALYZE, BUFFERS)`.
+
+### D-8d — Frontend «Tu semana musical» (pendiente)
+
+Consumir `GET /api/rates/dashboard-summary` y presentar las métricas con las limitaciones de última actividad actual.
+
+### D-8e — Smoke tests manuales (pendiente)
+
+Validación manual del usuario sobre la integración completa.
+
+D-8a y D-8b no están presentes en esta rama; no se crean ni sobrescriben identificadores para ellas.
+
 ## D-9 — Cementerio
 
 ### D-9b — Decisión funcional
