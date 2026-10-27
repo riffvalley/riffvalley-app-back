@@ -384,6 +384,20 @@ Paginación: `page` base 1, default 1 y máximo 10.000; `limit` default 10 y má
 
 Las pruebas con dobles cubren respuesta completa/vacía, 404, estadísticas independientes de página, parámetros y orden SQL, deduplicación, UUID, auth de sesión, validación de paginación y no inclusión de eventos/geografía/escrituras. Hay suite PostgreSQL opt-in para duplicados temporales y por ID, conteo/media/extremos, ceros y cover-only, aislamiento, fechas, metadatos opcionales, página/orden y artista inexistente. No había variables ni una base aislada configuradas, así que la suite PostgreSQL no se ejecutó: los mocks y aserciones SQL no se presentan como validación real de PostgreSQL. Tests focalizados, typecheck, build, ESLint, gates estructural/tipos, runtime dependency gate y `git diff --check` pasaron.
 
+### D-ART-6 — Filtros del widget
+
+El alcance de D-ART-6 es el widget «Tus artistas favoritos» del Dashboard; no incluye filtros en el modal. D-ART-6a corresponde al ranking backend por período y D-ART-6b al selector frontend. D-ART-6b sigue pendiente.
+
+#### D-ART-6a — Ranking bayesiano por período
+
+**Estado:** completada en backend el 2026-10-27. D-ART-6b (selector frontend), D-ART-7 (Last.fm) y D-ART-8 (smoke tests) siguen pendientes.
+
+`GET /api/rates/artists/top` acepta `period=month|year|all`; si se omite, usa `all`. Devuelve hasta cinco artistas con el DTO existente, sin exponer el score. `month` y `year` usan los períodos naturales actuales de `Europe/Madrid`; `all` no restringe fechas. Los límites son semiabiertos `[inicio, fin)`. La fecha es la última actividad disponible de la Rate actual, `GREATEST(createdAt, COALESCE(editedAt, createdAt))`: una edición puede mover una Rate antigua al período actual. No se reconstruye historial.
+
+La consulta existente conserva la deduplicación por usuario/disco (actividad descendente e ID de Rate descendente) antes del filtro temporal. Después calcula sobre el mismo conjunto filtrado la media global `C`, las medias y conteos personales por artista, y el score `(n × R + 2 × C) / (n + 2)`. Se mantienen los desempates por score, media real, cantidad, nombre e ID; el límite se aplica en PostgreSQL. No consulta Geography.
+
+**Convención temporal y limitación:** `Rate` declara `createdAt`/`editedAt` sin tipo explícito; los defaults del driver TypeORM son `timestamp` sin zona. Para permanecer coherente con `RatesDashboardSummaryService`, el ranking trata esos valores como reloj UTC y compara contra medianoches Madrid convertidas a timestamps UTC sin zona. El CTE deriva ambos límites desde una única hora de PostgreSQL con `Europe/Madrid`, por lo que los intervalos respetan los cambios DST y no dependen de la zona de sesión. No se inspeccionó el esquema ni datos históricos de una base PostgreSQL aislada: la convención UTC es la del código existente, no una verificación del almacenamiento desplegado. No se cambió el esquema. Pasaron las suites focalizadas de Stats y Controller (41 tests), typecheck, build, ESLint focalizado, gates estructural y de tipado, runtime dependency gate y `git diff --check`. No había PostgreSQL aislado disponible; las aserciones unitarias inspeccionan la consulta pero no validan su ejecución, límites DST ni resultados reales de PostgreSQL.
+
 ## D-9 — Cementerio
 
 ### D-9b — Decisión funcional

@@ -24,6 +24,7 @@ import { RatesHistoryService } from '../history/rates-history.service';
 import { RatesDashboardSummaryService } from '../stats/rates-dashboard-summary.service';
 import { RatesHistoryQueryDto } from '../dto/rates-history-query.dto';
 import { RatesArtistSummaryQueryDto } from '../dto/rates-artist-summary-query.dto';
+import { RatesArtistsTopQueryDto } from '../dto/rates-artists-top-query.dto';
 
 async function validateHistoryQuery(
   query: Record<string, unknown>,
@@ -59,6 +60,24 @@ async function validateArtistSummaryQuery(
 
   if (!(result instanceof RatesArtistSummaryQueryDto)) {
     throw new Error('ValidationPipe did not return artist summary query DTO');
+  }
+  return result;
+}
+
+async function validateArtistsTopQuery(
+  query: Record<string, unknown>,
+): Promise<RatesArtistsTopQueryDto> {
+  const result: unknown = await new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }).transform(query, {
+    type: 'query',
+    metatype: RatesArtistsTopQueryDto,
+  });
+
+  if (!(result instanceof RatesArtistsTopQueryDto)) {
+    throw new Error('ValidationPipe did not return artists top query DTO');
   }
   return result;
 }
@@ -257,7 +276,26 @@ describe('RatesController home insights route', () => {
       expect.objectContaining({ index: 0, data: undefined }),
     );
     await controller.getTopArtists(user);
-    expect(getTopArtists).toHaveBeenCalledWith('session-user-id');
+    await controller.getTopArtists(user, { period: 'month' });
+    expect(getTopArtists).toHaveBeenCalledWith('session-user-id', 'all');
+    expect(getTopArtists).toHaveBeenLastCalledWith('session-user-id', 'month');
+  });
+
+  it('validates only supported artist ranking periods and defaults to all', async () => {
+    await expect(validateArtistsTopQuery({})).resolves.toMatchObject({
+      period: 'all',
+    });
+    for (const period of ['month', 'year', 'all']) {
+      await expect(validateArtistsTopQuery({ period })).resolves.toMatchObject({
+        period,
+      });
+    }
+    await expect(
+      validateArtistsTopQuery({ period: 'week' }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      validateArtistsTopQuery({ period: 'all', userId: 'another-user' }),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it('registers authenticated artist summary with validated UUID and session identity', async () => {
