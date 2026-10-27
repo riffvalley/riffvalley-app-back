@@ -370,7 +370,7 @@ Las pruebas unitarias inspeccionan la fórmula SQL, parámetro constante `m`, pr
 
 ### D-ART-5a — Resumen personal y discos valorados del artista
 
-**Estado:** completada en backend el 2026-10-27. D-ART-5b (evolución del modal frontend), D-ART-6 (filtros), D-ART-7 (Last.fm) y D-ART-8 (smoke tests) siguen pendientes.
+**Estado:** completada en backend el 2026-10-27. D-ART-5b (evolución del modal frontend), D-ART-6 (filtros), D-ART-7c (consumo frontend del endpoint) y D-ART-8 (smoke tests) siguen pendientes; D-ART-7a conserva su seguimiento paralelo.
 
 Ruta autenticada `GET /api/rates/artists/:artistId/summary`. `artistId` es UUID validado con `ParseUUIDPipe`; la identidad proviene de `@GetUser()` y no se acepta `userId`. Responde 404 si no existe el artista. No altera `/artists/:id/details`, `/rates/artists/top`, `home-insights` ni Geography.
 
@@ -390,13 +390,31 @@ El alcance de D-ART-6 es el widget «Tus artistas favoritos» del Dashboard; no 
 
 #### D-ART-6a — Ranking bayesiano por período
 
-**Estado:** completada en backend el 2026-10-27. D-ART-6b (selector frontend), D-ART-7 (Last.fm) y D-ART-8 (smoke tests) siguen pendientes.
+**Estado:** completada en backend el 2026-10-27. D-ART-6b (selector frontend), D-ART-7c (consumo frontend del endpoint) y D-ART-8 (smoke tests) siguen pendientes; D-ART-7a conserva su seguimiento paralelo.
 
 `GET /api/rates/artists/top` acepta `period=month|year|all`; si se omite, usa `all`. Devuelve hasta siete artistas con el DTO existente, sin exponer el score. `month` y `year` usan los períodos naturales actuales de `Europe/Madrid`; `all` no restringe fechas. Los límites son semiabiertos `[inicio, fin)`. La fecha es la última actividad disponible de la Rate actual, `GREATEST(createdAt, COALESCE(editedAt, createdAt))`: una edición puede mover una Rate antigua al período actual. No se reconstruye historial.
 
 La consulta existente conserva la deduplicación por usuario/disco (actividad descendente e ID de Rate descendente) antes del filtro temporal. Después calcula sobre el mismo conjunto filtrado la media global `C`, las medias y conteos personales por artista, y el score `(n × R + 2 × C) / (n + 2)`. Se mantienen los desempates por score, media real, cantidad, nombre e ID; el límite se aplica en PostgreSQL. No consulta Geography.
 
 **Convención temporal y limitación:** `Rate` declara `createdAt`/`editedAt` sin tipo explícito; los defaults del driver TypeORM son `timestamp` sin zona. Para permanecer coherente con `RatesDashboardSummaryService`, el ranking trata esos valores como reloj UTC y compara contra medianoches Madrid convertidas a timestamps UTC sin zona. El CTE deriva ambos límites desde una única hora de PostgreSQL con `Europe/Madrid`, por lo que los intervalos respetan los cambios DST y no dependen de la zona de sesión. No se inspeccionó el esquema ni datos históricos de una base PostgreSQL aislada: la convención UTC es la del código existente, no una verificación del almacenamiento desplegado. No se cambió el esquema. Pasaron las suites focalizadas de Stats y Controller (41 tests), typecheck, build, ESLint focalizado, gates estructural y de tipado, runtime dependency gate y `git diff --check`. No había PostgreSQL aislado disponible; las aserciones unitarias inspeccionan la consulta pero no validan su ejecución, límites DST ni resultados reales de PostgreSQL.
+
+### D-ART-7 — Información externa de Last.fm en el modal
+
+D-ART-7a es la presentación frontend del modal y conserva su estado paralelo. D-ART-7b añade el endpoint backend descrito abajo. D-ART-7c (carga y presentación desde frontend) y D-ART-8 (smoke tests) siguen pendientes.
+
+#### D-ART-7b — Integración backend Last.fm
+
+**Estado:** completada en backend el 2026-10-27.
+
+La auditoría encontró el cliente `LastfmApiService` (`src/integrations/lastfm-integration/`), que ya llama `artist.getinfo` por nombre y `album.getinfo` para portadas; el módulo de Integrations lo exporta a `Catalog/LastfmService`. `GET /api/lastfm/artist?artist=...` devuelve el objeto de artista crudo y no se modifica para conservar sus consumidores. `LastfmApiService.getArtistInfo` mantiene su contrato; la ruta nueva utiliza `lookupArtistProfile`, un método tipado del mismo cliente. La configuración existente es `LASTFM_API_KEY`; no había timeout, caché ni métodos existentes para etiquetas/similares normalizados.
+
+Endpoint autenticado: `GET /api/rates/artists/:artistId/lastfm`; `artistId` es UUID interno validado y el artista se carga de Catalog. La respuesta `RatesArtistLastfmResponseDto` expone `artistId`, `status` (`available`, `not_found`, `unavailable`, `not_configured`, `invalid_response`), `biography` nullable (`summary`, `url`), `tags` y `similarArtists` (hasta cinco `{name,url}` cada uno), `listeners`, `playCount` y `lastfmUrl`. Las métricas son enteros no negativos o `null`; el DTO no expone el objeto de Last.fm ni IDs externos.
+
+`Artist` no contiene MBID ni otro identificador Last.fm; por ello se consulta con el nombre actual de Catalog. Se acepta únicamente una coincidencia de nombre exacta tras normalización Unicode de compatibilidad, trim y minúsculas. No se hace búsqueda aproximada ni se mapea el resultado a otro Artist. Una colisión o nombre distinto produce `status: not_found` con campos complementarios vacíos; un Artist interno inexistente produce 404. No se modificó la entidad ni el catálogo.
+
+La biografía se sanea a texto plano con `sanitize-html`, se limita a 1.200 caracteres y no se devuelve HTML. Se preserva la atribución si existe. URLs solo se aceptan desde los hosts `last.fm`/`www.last.fm` y se normalizan a HTTPS. Etiquetas y similares mantienen su orden, eliminan nombres duplicados y quedan limitados a cinco. Last.fm no devolvió imágenes adicionales ni se inventan géneros internos. Un timeout de cinco segundos evita espera indefinida; fallo de red/HTTP o error de proveedor se representa como `unavailable`, `error=6` como `not_found`, cuerpo JSON/forma inválida como `invalid_response`, y falta de clave como `not_configured`. Ningún detalle técnico ni clave se devuelve; no hay reintentos, caché ni escritura.
+
+Las pruebas focalizadas pasan: seis suites y 39 tests. Cubren endpoint/auth/UUID, consulta por nombre de Catalog, ausencia de coincidencia, artista inexistente, sanitización/truncado, URLs, límites/duplicados, métricas parciales, errores, timeout, configuración, no escrituras e integración del módulo. Las pruebas existentes del cliente/servicio/controller Catalog Last.fm pasan y conservan los consumidores previos. Typecheck, build, gates estructural/de tipado y runtime dependency gate pasan; el ESLint quality gate conserva sus 839 hallazgos históricos con cero nuevos, y `git diff --check` pasa. La revisión ESLint directa de los nuevos archivos de Rates pasa; archivos preexistentes del cliente Last.fm conservan hallazgos de formato, sin autocorrecciones ajenas. Las llamadas externas se simulan; no se ejecutaron peticiones reales a Last.fm.
 
 ## D-9 — Cementerio
 

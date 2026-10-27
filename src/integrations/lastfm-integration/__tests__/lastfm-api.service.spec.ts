@@ -46,6 +46,93 @@ describe('LastfmApiService', () => {
     );
   });
 
+  it('parses typed artist metadata from one timed artist.getinfo request', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        artist: {
+          name: 'Artist',
+          url: 'https://www.last.fm/music/Artist',
+          bio: {
+            summary: 'Description',
+            links: { link: { href: 'https://www.last.fm/music/Artist/+wiki' } },
+          },
+          tags: {
+            tag: [{ name: 'Metal', url: 'https://www.last.fm/tag/Metal' }],
+          },
+          similar: {
+            artist: [
+              { name: 'Similar', url: 'https://www.last.fm/music/Similar' },
+            ],
+          },
+          stats: { listeners: '10', playcount: '25' },
+        },
+      }),
+    });
+
+    await expect(service.lookupArtistProfile('Artist')).resolves.toEqual({
+      status: 'found',
+      profile: {
+        name: 'Artist',
+        url: 'https://www.last.fm/music/Artist',
+        biographySummary: 'Description',
+        biographyUrl: 'https://www.last.fm/music/Artist/+wiki',
+        tags: [{ name: 'Metal', url: 'https://www.last.fm/tag/Metal' }],
+        similarArtists: [
+          { name: 'Similar', url: 'https://www.last.fm/music/Similar' },
+        ],
+        listeners: '10',
+        playCount: '25',
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('method=artist.getinfo&artist=Artist'),
+      { signal: expect.any(AbortSignal) },
+    );
+  });
+
+  it.each([
+    ['missing artist', { error: 6 }, 'not_found'],
+    ['provider error', { error: 29 }, 'unavailable'],
+    ['malformed artist', { artist: { stats: {} } }, 'invalid_response'],
+  ] as const)(
+    'classifies %s without exposing provider details',
+    async (_label, body, status) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue(body),
+      });
+      await expect(
+        service.lookupArtistProfile('Artist'),
+      ).resolves.toMatchObject({ status });
+    },
+  );
+
+  it('handles timeout and missing API configuration', async () => {
+    fetchMock.mockRejectedValue(new Error('provider timed out'));
+    await expect(service.lookupArtistProfile('Artist')).resolves.toEqual({
+      status: 'unavailable',
+    });
+
+    delete process.env.LASTFM_API_KEY;
+    const unconfiguredService = new LastfmApiService();
+    await expect(
+      unconfiguredService.lookupArtistProfile('Artist'),
+    ).resolves.toEqual({ status: 'not_configured' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('classifies an unreadable provider body as an invalid response', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockRejectedValue(new Error('invalid JSON')),
+    });
+
+    await expect(service.lookupArtistProfile('Artist')).resolves.toEqual({
+      status: 'invalid_response',
+    });
+  });
+
   it('selects the best available album image and builds album.getinfo requests', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
