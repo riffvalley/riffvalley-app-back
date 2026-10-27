@@ -1113,6 +1113,8 @@ describe('DiscCatalogService.findRandom candidate selection', () => {
     ).toBe(true);
     expect(predicates.join('\n')).toContain('FROM rate community_rate');
     expect(predicates.join('\n')).toContain('community_rate.rate IS NOT NULL');
+    expect(predicates).toContain("NULLIF(BTRIM(disc.link), '') IS NOT NULL");
+    expect(predicates).toContain("NULLIF(BTRIM(disc.image), '') IS NOT NULL");
     expect(predicates.join('\n')).not.toContain('rate_vote_events');
     expect(predicates.join('\n')).not.toContain('previousDiscId');
     expect(queryBuilders[0].where).toHaveBeenCalledWith(
