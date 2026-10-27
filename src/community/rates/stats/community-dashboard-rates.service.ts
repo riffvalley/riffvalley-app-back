@@ -87,10 +87,10 @@ export class CommunityDashboardRatesService {
   }
 
   async getStats(year: number): Promise<CommunityDashboardRatesStatsResponse> {
-    const [summary, distribution, genre, currentStreaks] = await Promise.all([
+    const [summary, distribution, genres, currentStreaks] = await Promise.all([
       this.getYearSummary(year),
       this.getYearDistribution(year),
-      this.getTopGenre(year),
+      this.getTopGenres(year),
       this.getCurrentStreaks(),
     ]);
     return {
@@ -98,7 +98,7 @@ export class CommunityDashboardRatesService {
       summary,
       ratingDistribution: distribution,
       currentStreaks,
-      topGenre: genre,
+      topGenres: genres,
     };
   }
 
@@ -259,25 +259,23 @@ export class CommunityDashboardRatesService {
     }));
   }
 
-  private async getTopGenre(
+  private async getTopGenres(
     year: number,
-  ): Promise<CommunityDashboardRatesStatsResponse['topGenre']> {
+  ): Promise<CommunityDashboardRatesStatsResponse['topGenres']> {
     const cte = year < 2027 ? VOTES_CTE : EVENTS_CTE;
-    const [row] = (await this.rateRepository.query(
+    const rows = (await this.rateRepository.query(
       `${cte}
       SELECT genre.id, genre.name, COUNT(DISTINCT votes.disc_id)::int AS "ratedDiscs"
       FROM votes JOIN genre ON genre.id = votes.genre_id
       GROUP BY genre.id, genre.name
-      ORDER BY "ratedDiscs" DESC, genre.name ASC, genre.id ASC LIMIT 1`,
+      ORDER BY "ratedDiscs" DESC, genre.name ASC, genre.id ASC LIMIT 5`,
       [year],
     )) as GenreRow[];
-    return row
-      ? {
-          id: String(row.id),
-          name: String(row.name),
-          ratedDiscs: Number(row.ratedDiscs),
-        }
-      : null;
+    return rows.map((row) => ({
+      id: String(row.id),
+      name: String(row.name),
+      ratedDiscs: Number(row.ratedDiscs),
+    }));
   }
 
   private async getCurrentStreaks(): Promise<

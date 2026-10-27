@@ -40,7 +40,7 @@ describe('CommunityDashboardService', () => {
         summary: { ratedDiscs: 1, participatingUsers: 1, averageRating: null },
         ratingDistribution: [],
         currentStreaks: [],
-        topGenre: null,
+        topGenres: [],
       }),
     };
     const catalog: Pick<DiscCatalogService, 'countDiscsReleasedInYear'> = {
