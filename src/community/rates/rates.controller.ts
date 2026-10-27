@@ -17,6 +17,7 @@ import { RatesDashboardSummaryService } from './stats/rates-dashboard-summary.se
 import { CreateRateDto } from './dto/create-rates.dto';
 import { UpdateRateDto } from './dto/update-rates.dto';
 import { RatesHistoryQueryDto } from './dto/rates-history-query.dto';
+import { RatesArtistSummaryQueryDto } from './dto/rates-artist-summary-query.dto';
 import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
@@ -51,6 +52,16 @@ export class RatesController {
   @Auth()
   getTopArtists(@GetUser() user: User) {
     return this.ratesStatsService.getTopArtists(user.id);
+  }
+
+  @Get('artists/:artistId/summary')
+  @Auth()
+  getArtistSummary(
+    @Param('artistId', ParseUUIDPipe) artistId: string,
+    @Query() query: RatesArtistSummaryQueryDto,
+    @GetUser() user: User,
+  ) {
+    return this.ratesStatsService.getArtistSummary(user.id, artistId, query);
   }
 
   @Get('geography/top')
