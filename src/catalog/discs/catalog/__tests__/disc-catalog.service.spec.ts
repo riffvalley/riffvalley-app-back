@@ -1104,7 +1104,7 @@ describe('DiscCatalogService.findRandom candidate selection', () => {
       previousDiscId: 'previous-disc',
     });
 
-    expect(queryBuilders).toHaveLength(2);
+    expect(queryBuilders).toHaveLength(3);
     const predicates = queryBuilders[0].andWhere.mock.calls.map(
       ([condition]) => condition,
     );
@@ -1124,6 +1124,10 @@ describe('DiscCatalogService.findRandom candidate selection', () => {
     expect(queryBuilders[1].where).toHaveBeenCalledWith(
       'disc.id IN (:...randomIds)',
       { randomIds: ['forgotten-1', 'forgotten-2'] },
+    );
+    expect(queryBuilders[2].andWhere).toHaveBeenCalledWith(
+      'disc.id NOT IN (:...excludedIds)',
+      { excludedIds: ['forgotten-1', 'forgotten-2'] },
     );
   });
 
@@ -1545,22 +1549,34 @@ describe('DiscCatalogService.findRandom hydration', () => {
   let selectedIds: string[];
   let hydratedDiscs: Disc[];
   let hydrationRaw: Record<string, unknown>[];
+  let selectionBatches: string[][];
+  let hydrationBatches: Array<{
+    entities: Disc[];
+    raw: Record<string, unknown>[];
+  }>;
 
   beforeEach(async () => {
     queryBuilders = [];
     selectedIds = [];
     hydratedDiscs = [];
     hydrationRaw = [];
+    selectionBatches = [];
+    hydrationBatches = [];
     const repository: RepositoryMock = {
       createQueryBuilder: jest.fn(() => {
         const builder = createQueryBuilderMock();
-        builder.getRawMany.mockImplementation(async () =>
-          selectedIds.map((id) => ({ id, communityvotecount: '3' })),
-        );
-        builder.getRawAndEntities.mockImplementation(async () => ({
-          entities: hydratedDiscs,
-          raw: hydrationRaw,
-        }));
+        builder.getRawMany.mockImplementation(async () => {
+          const batch = selectionBatches.shift() ?? selectedIds;
+          return batch.map((id) => ({ id, communityvotecount: '3' }));
+        });
+        builder.getRawAndEntities.mockImplementation(async () => {
+          return (
+            hydrationBatches.shift() ?? {
+              entities: hydratedDiscs,
+              raw: hydrationRaw,
+            }
+          );
+        });
         queryBuilders.push(builder);
         return builder;
       }),
@@ -1695,6 +1711,55 @@ describe('DiscCatalogService.findRandom hydration', () => {
         averageCover: 8,
       }),
     ]);
+  });
+
+  it('refills a short community selection until it reaches the requested limit', async () => {
+    const createRawRow = (id: string) => ({
+      discId: id,
+      averagerate: null,
+      averageCover: null,
+      rateCount: '0',
+      commentCount: '0',
+    });
+    selectionBatches = [['disc-1'], ['disc-2']];
+    hydrationBatches = [
+      { entities: [createDisc('disc-1')], raw: [createRawRow('disc-1')] },
+      { entities: [createDisc('disc-2')], raw: [createRawRow('disc-2')] },
+    ];
+
+    const { result, builders } = await run({
+      unratedByCommunity: true,
+      limit: 2,
+    });
+
+    expect(result.map(({ id }) => id)).toEqual(['disc-1', 'disc-2']);
+    expect(builders).toHaveLength(4);
+    expect(builders[2].andWhere).toHaveBeenCalledWith(
+      'disc.id NOT IN (:...excludedIds)',
+      { excludedIds: ['disc-1'] },
+    );
+  });
+
+  it('returns the only available community-unrated disc when the refill is empty', async () => {
+    selectionBatches = [['disc-1'], []];
+    hydrationBatches = [
+      {
+        entities: [createDisc('disc-1')],
+        raw: [
+          {
+            discId: 'disc-1',
+            averagerate: null,
+            averageCover: null,
+            rateCount: '0',
+            commentCount: '0',
+          },
+        ],
+      },
+    ];
+
+    const { result } = await run({ unratedByCommunity: true, limit: 2 });
+
+    expect(result.map(({ id }) => id)).toEqual(['disc-1']);
   });
 
   it('serializes the real disc ID and returns the same distinct vote count used for difficulty selection', async () => {
