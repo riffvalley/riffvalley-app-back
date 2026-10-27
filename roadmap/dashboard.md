@@ -339,13 +339,30 @@ D-8a y D-8b no están presentes en esta rama; no se crean ni sobrescriben identi
 
 La decisión aprobada es añadir `GET /api/rates/artists/top`, autenticado, de solo lectura y vinculado exclusivamente al ID de `@GetUser()`. No acepta `userId`, parámetros ni ejecuta consultas geográficas. El DTO explícito es `{ artists: RatesTopArtistDto[] }`; cada elemento expone `id`, `name`, `image` nullable, `ratingCount` y `averageRate`. `ratingCount` significa discos distintos del usuario con una nota musical no nula; una nota `0` sí cuenta.
 
-PostgreSQL filtra primero por usuario y `rate IS NOT NULL`. Para duplicados de `(user, disc)`, una CTE de `ROW_NUMBER()` selecciona una fila: la marca temporal más reciente entre `createdAt` y `editedAt` (si es nula, se usa `createdAt`) y, si empatan, `rate.id` descendente. Esta es una regla determinista para el estado actual; no modifica ni elimina filas existentes. Tras deduplicar, la consulta agrupa por artista, cuenta discos distintos, calcula la media musical personal y ordena por conteo DESC, media DESC, nombre ASC e ID ASC; aplica `LIMIT 7` después de agrupar. No usa score ponderado ni filtro temporal, y mantiene la política existente sobre discos futuros al no introducir ningún filtro de fecha. La media da el mismo peso a cada disco, incluso si existen filas duplicadas.
+PostgreSQL filtra primero por usuario y `rate IS NOT NULL`. Para duplicados de `(user, disc)`, una CTE de `ROW_NUMBER()` selecciona una fila: la marca temporal más reciente entre `createdAt` y `editedAt` (si es nula, se usa `createdAt`) y, si empatan, `rate.id` descendente. Esta es una regla determinista para el estado actual; no modifica ni elimina filas existentes. La consulta agrupa por artista y cuenta discos distintos. **D-ART-3b sustituye el ranking inicial** por la puntuación bayesiana documentada más abajo; la media expuesta continúa siendo la media musical personal real. No hay filtro temporal, se conserva la política existente sobre discos futuros y la consulta aplica `LIMIT 7` después de calcular y ordenar el score.
 
 La lectura es independiente de Geography y no carga Rates en Node ni realiza N+1. Se preserva `GET /api/rates/home-insights`, su DTO y su consulta histórica (`topArtists` y `countries` incluidos); el ranking nuevo no cambia retroactivamente. Retirar `home-insights` se considerará cuando todos sus consumidores hayan sido migrados y auditados, sin adelantar esa limpieza.
 
 Las pruebas unitarias con dobles cubren la ruta autenticada, identidad de sesión, DTO sin países, filtros, deduplicación, fecha/desempate de Rates duplicadas, conteo/orden/límite SQL, query única sin escrituras ni geografía y conservación de `home-insights` y Geography. Hay una suite opt-in PostgreSQL con un destino vacío `bc_id_3f_3_*` para comprobar conteos, medias, empates, nota cero, null/cover-only, duplicados, aislamiento y límite con el SQL real. No se configuró una base aislada en esta ejecución; esa suite queda sin ejecutar y las agregaciones reales de PostgreSQL no se afirman como verificadas.
 
 La tarea no modifica frontend, Rates de escritura, Geography, esquemas, migraciones ni dependencias. D-ART-4 corresponde al Top 7 frontend; D-ART-5a a los datos personales del artista; D-ART-5b al modal; D-ART-6 a filtros; D-ART-7 a Last.fm; y D-ART-8 a smoke tests.
+
+### D-ART-3b — Revisión bayesiana del ranking
+
+**Estado:** completada en backend el 2026-10-27. D-ART-4, D-ART-5a, D-ART-5b, D-ART-6, D-ART-7 y D-ART-8 siguen pendientes.
+
+El ranking calcula en PostgreSQL `score = (n × R + m × C) / (n + m)`. `n` es la cantidad de discos distintos del artista del usuario; `R` su media personal; `C` la media musical global de ese usuario, con una sola Rate vigente por disco; `m = 2`, declarada como `RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH`. La media global se calcula directamente sobre el conjunto personal deduplicado, no promediando artistas. Solo entran Rates del usuario autenticado con `rate IS NOT NULL`; cero cuenta, votos de portada no. Si el usuario no tiene valoraciones musicales, devuelve `artists: []`.
+
+Se conserva la deduplicación de D-ART-3: partición por disco después del filtro usuario/nota, mayor marca temporal entre `createdAt` y `editedAt` (con fallback a `createdAt`) y `rate.id DESC` para desempatar. No se modifica ninguna fila. CTEs SQL calculan la media global, `n`, `R` y score; el endpoint no carga Rates en Node, no usa Geography y no ejecuta N+1. El score no se añade al DTO: permanece interno, mientras `averageRate` sigue siendo `R` sin ajuste. Orden final: score DESC sin redondeo previo, media real DESC, cantidad de discos DESC, nombre ASC e ID ASC; luego `LIMIT 7`. El contrato HTTP, `home-insights` y Geography permanecen intactos.
+
+#### Escenarios revisados con `m = 2`
+
+- Dos discos a `9,85` frente a uno a `10`: con `C = 8`, los scores son `8,6375` y `8,2833`; lideran los dos discos. Con `C = 9,9` (media de esas tres valoraciones), son `9,875` y `9,9333`; lidera la nota 10. Por tanto, superar al 10 depende de la media global, como prescribe la fórmula; no se añaden excepciones.
+- Dos discos a `7` frente a uno a `10`, con `C = 8`: `7,5` frente a `8,6667`; las notas 7 no desplazan automáticamente al 10.
+- Cinco discos a `9,9` frente a uno a `10`, con `C = 5,95` (incluyendo cuatro discos a cero): `8,7714` frente a `7,3`; varias notas excelentes aportan confianza y pueden liderar.
+- Diez discos a `6` frente a uno a `10`, con `C = 70/11`: `6,0606` frente a `7,5758`; el volumen mediocre no domina.
+
+Las pruebas unitarias inspeccionan la fórmula SQL, parámetro constante `m`, promedio global, orden sin `ROUND`, DTO, aislamiento por usuario y ausencia de consulta geográfica; no se consideran ejecución real de SQL. La suite opt-in PostgreSQL comprueba fórmula/ranking para esos escenarios, media/desempates, ceros, null/cover-only, duplicados, aislamiento y límite. No había una base aislada configurada en esta ejecución, así que PostgreSQL real no se ejecutó y la semántica de agregación queda pendiente de esa validación. `home-insights` conserva su prueba existente y no se toca. Typecheck, build, ESLint focalizado, gates arquitectónicos, runtime dependency gate y `git diff --check` forman parte de la verificación de esta tarea.
 
 ## D-9 — Cementerio
 

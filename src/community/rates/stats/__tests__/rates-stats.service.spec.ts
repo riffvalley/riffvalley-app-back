@@ -3,6 +3,7 @@ import { User } from '../../../../identity/auth/entities/user.entity';
 import { UsersService } from '../../../../identity/users/users.service';
 import { Rate } from '../../entities/rate.entity';
 import { RatesStatsService } from '../rates-stats.service';
+import { RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH } from '../rates-artists.constants';
 
 type RawRow = Record<string, string | number | null>;
 
@@ -367,7 +368,12 @@ describe('RatesStatsService top artists', () => {
 
     expect(query).toHaveBeenCalledTimes(1);
     const [sql, parameters] = query.mock.calls[0];
-    expect(parameters).toEqual(['session-user', 7]);
+    expect(RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH).toBe(2);
+    expect(parameters).toEqual([
+      'session-user',
+      7,
+      RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH,
+    ]);
     expect(sql).toContain('rate."userId" = $1');
     expect(sql).toContain('rate.rate IS NOT NULL');
     expect(sql).toContain('PARTITION BY rate."discId"');
@@ -375,14 +381,20 @@ describe('RatesStatsService top artists', () => {
       'GREATEST( rate."createdAt", COALESCE(rate."editedAt", rate."createdAt") ) DESC',
     );
     expect(sql).toContain('rate.id DESC');
+    expect(sql).toContain('user_average AS');
+    expect(sql).toContain('AVG(rate) AS "globalAverageRate"');
     expect(sql).toContain('COUNT(DISTINCT disc.id)::int');
     expect(sql).toContain('AVG(latest_disc_ratings.rate)');
-    expect(sql).toContain('ORDER BY');
-    expect(sql).toContain('"ratingCount" DESC');
+    expect(sql).toContain('"ratingCount" * artist_averages."averageRate"');
+    expect(sql).toContain('$3::numeric * user_average."globalAverageRate"');
+    expect(sql).toContain('(artist_averages."ratingCount" + $3::numeric)');
+    expect(sql).toContain('"bayesianScore" DESC');
     expect(sql).toContain('"averageRate" DESC');
-    expect(sql).toContain('artist.name ASC');
-    expect(sql).toContain('artist.id ASC');
+    expect(sql).toContain('"ratingCount" DESC');
+    expect(sql).toContain('name ASC');
+    expect(sql).toContain('id ASC');
     expect(sql).toContain('LIMIT $2');
+    expect(sql).not.toContain('ROUND(');
     expect(sql).not.toContain('country');
     expect(sql).not.toContain('rate.cover');
   });
