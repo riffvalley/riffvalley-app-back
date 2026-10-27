@@ -123,7 +123,7 @@ describe('CommunityDashboardRatesService', () => {
         },
       ],
       currentStreaks: [],
-      topGenre: { id: 'g1', name: 'Rock', ratedDiscs: 2 },
+      topGenres: [{ id: 'g1', name: 'Rock', ratedDiscs: 2 }],
     });
     expect(rates.query).toHaveBeenCalledTimes(3);
     expect(events.query.mock.calls[0][0]).toContain("event_type = 'set'");
@@ -131,6 +131,82 @@ describe('CommunityDashboardRatesService', () => {
     expect(String(rates.query.mock.calls[1][0])).toContain(
       'DISTINCT ON (r."userId", r."discId")',
     );
+    const genreSql = String(rates.query.mock.calls[2][0]);
+    expect(genreSql).toContain('COUNT(DISTINCT votes.disc_id)');
+    expect(genreSql).toContain('LIMIT 5');
+    expect(genreSql).toContain(
+      'ORDER BY "ratedDiscs" DESC, genre.name ASC, genre.id ASC',
+    );
+    expect(genreSql).toContain('r.rate IS NOT NULL');
+    expect(genreSql).not.toContain('r.rate > 0');
+    expect(genreSql).not.toContain('r.cover');
+    expect(genreSql).toContain('DISTINCT ON (r."userId", r."discId")');
+    expect(genreSql).toContain('d."releaseDate" >= bounds.year_start');
+  });
+
+  it('returns at most five historically ranked genres with IDs and numeric counts', async () => {
+    rates.query
+      .mockResolvedValueOnce([
+        { ratedDiscs: '0', participatingUsers: '0', averageRating: null },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 'g1', name: 'A', ratedDiscs: '10' },
+        { id: 'g2', name: 'B', ratedDiscs: '9' },
+        { id: 'g3', name: 'C', ratedDiscs: '8' },
+        { id: 'g4', name: 'D', ratedDiscs: '7' },
+        { id: 'g5', name: 'E', ratedDiscs: '6' },
+      ]);
+    events.query.mockResolvedValueOnce([]);
+
+    const result = await service.getStats(2025);
+
+    expect(result.topGenres).toEqual([
+      { id: 'g1', name: 'A', ratedDiscs: 10 },
+      { id: 'g2', name: 'B', ratedDiscs: 9 },
+      { id: 'g3', name: 'C', ratedDiscs: 8 },
+      { id: 'g4', name: 'D', ratedDiscs: 7 },
+      { id: 'g5', name: 'E', ratedDiscs: 6 },
+    ]);
+    expect(result).not.toHaveProperty('topGenre');
+  });
+
+  it.each([2026, 2027])(
+    'returns an empty genre array when no results exist for year %s',
+    async (year) => {
+      rates.query
+        .mockResolvedValueOnce([
+          { ratedDiscs: '0', participatingUsers: '0', averageRating: null },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      events.query.mockResolvedValueOnce([]);
+
+      await expect(service.getStats(year)).resolves.toMatchObject({
+        year,
+        topGenres: [],
+      });
+    },
+  );
+
+  it('returns fewer than five genres without padding the result', async () => {
+    rates.query
+      .mockResolvedValueOnce([
+        { ratedDiscs: '2', participatingUsers: '1', averageRating: '4' },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 'g1', name: 'Rock', ratedDiscs: '2' },
+        { id: 'g2', name: 'Jazz', ratedDiscs: '1' },
+      ]);
+    events.query.mockResolvedValueOnce([]);
+
+    const result = await service.getStats(2026);
+
+    expect(result.topGenres).toEqual([
+      { id: 'g1', name: 'Rock', ratedDiscs: 2 },
+      { id: 'g2', name: 'Jazz', ratedDiscs: 1 },
+    ]);
   });
 
   it('uses event new_value for post-2026 aggregates and computes active Madrid day streaks', async () => {
@@ -139,7 +215,7 @@ describe('CommunityDashboardRatesService', () => {
         { ratedDiscs: '1', participatingUsers: '1', averageRating: '0' },
       ])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce([{ id: 'g2', name: 'Prog', ratedDiscs: '1' }]);
     events.query.mockResolvedValueOnce([
       { userId: 'u1', username: 'A', days: '2' },
     ]);
@@ -150,11 +226,25 @@ describe('CommunityDashboardRatesService', () => {
     expect(result.currentStreaks).toEqual([
       { user: { id: 'u1', username: 'A' }, days: 2 },
     ]);
+    expect(result.topGenres).toEqual([
+      { id: 'g2', name: 'Prog', ratedDiscs: 1 },
+    ]);
     const summarySql = String(rates.query.mock.calls[0][0]);
     expect(summarySql).toContain('event.new_value::numeric AS value');
     expect(summarySql).toContain("event.event_type = 'set'");
     expect(summarySql).not.toContain('FROM rate r');
     expect(summarySql).not.toContain('event.disc_id IS NOT NULL');
+    const genreSql = String(rates.query.mock.calls[2][0]);
+    expect(genreSql).toContain("event.event_type = 'set'");
+    expect(genreSql).toContain('event.new_value IS NOT NULL');
+    expect(genreSql).not.toContain("event.event_type = 'change'");
+    expect(genreSql).toContain('COUNT(DISTINCT votes.disc_id)');
+    expect(genreSql).toContain("AT TIME ZONE 'Europe/Madrid'");
+    expect(genreSql).toContain('LIMIT 5');
+    expect(genreSql).toContain(
+      'ORDER BY "ratedDiscs" DESC, genre.name ASC, genre.id ASC',
+    );
+    expect(genreSql).not.toContain('d."releaseDate"');
     const streakSql = String(events.query.mock.calls[0][0]);
     expect(streakSql).toContain("AT TIME ZONE 'Europe/Madrid'");
     expect(streakSql).toContain(

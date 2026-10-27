@@ -26,5 +26,5 @@ export interface CommunityDashboardRatesStatsResponse {
     count: number;
   }[];
   currentStreaks: { user: { id: string; username: string }; days: number }[];
-  topGenre: { id: string; name: string; ratedDiscs: number } | null;
+  topGenres: { id: string; name: string; ratedDiscs: number }[];
 }
