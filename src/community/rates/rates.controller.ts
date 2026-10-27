@@ -13,6 +13,7 @@ import {
 import { RatesService } from './rates.service';
 import { RatesStatsService } from './stats/rates-stats.service';
 import { RatesHistoryService } from './history/rates-history.service';
+import { RatesDashboardSummaryService } from './stats/rates-dashboard-summary.service';
 import { CreateRateDto } from './dto/create-rates.dto';
 import { UpdateRateDto } from './dto/update-rates.dto';
 import { RatesHistoryQueryDto } from './dto/rates-history-query.dto';
@@ -27,6 +28,7 @@ export class RatesController {
     private readonly ratesService: RatesService,
     private readonly ratesStatsService: RatesStatsService,
     private readonly ratesHistoryService: RatesHistoryService,
+    private readonly ratesDashboardSummaryService: RatesDashboardSummaryService,
   ) {}
 
   // ==========================================
@@ -43,6 +45,12 @@ export class RatesController {
   @Auth()
   getHomeInsights(@GetUser() user: User) {
     return this.ratesStatsService.getHomeInsights(user);
+  }
+
+  @Get('dashboard-summary')
+  @Auth()
+  getDashboardSummary(@GetUser() user: User) {
+    return this.ratesDashboardSummaryService.getSummary(user.id);
   }
 
   // Esta estaba abajo y fallaba porque chocaba con :id
