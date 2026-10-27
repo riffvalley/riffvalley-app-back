@@ -331,6 +331,22 @@ Validación manual del usuario sobre la integración completa.
 
 D-8a y D-8b no están presentes en esta rama; no se crean ni sobrescriben identificadores para ellas.
 
+## D-ART — «Tus artistas favoritos»
+
+### D-ART-3 — Endpoint backend independiente
+
+**Estado:** completada en backend el 2026-10-27. D-ART-4, D-ART-5a, D-ART-5b, D-ART-6, D-ART-7 y D-ART-8 siguen pendientes.
+
+La decisión aprobada es añadir `GET /api/rates/artists/top`, autenticado, de solo lectura y vinculado exclusivamente al ID de `@GetUser()`. No acepta `userId`, parámetros ni ejecuta consultas geográficas. El DTO explícito es `{ artists: RatesTopArtistDto[] }`; cada elemento expone `id`, `name`, `image` nullable, `ratingCount` y `averageRate`. `ratingCount` significa discos distintos del usuario con una nota musical no nula; una nota `0` sí cuenta.
+
+PostgreSQL filtra primero por usuario y `rate IS NOT NULL`. Para duplicados de `(user, disc)`, una CTE de `ROW_NUMBER()` selecciona una fila: la marca temporal más reciente entre `createdAt` y `editedAt` (si es nula, se usa `createdAt`) y, si empatan, `rate.id` descendente. Esta es una regla determinista para el estado actual; no modifica ni elimina filas existentes. Tras deduplicar, la consulta agrupa por artista, cuenta discos distintos, calcula la media musical personal y ordena por conteo DESC, media DESC, nombre ASC e ID ASC; aplica `LIMIT 7` después de agrupar. No usa score ponderado ni filtro temporal, y mantiene la política existente sobre discos futuros al no introducir ningún filtro de fecha. La media da el mismo peso a cada disco, incluso si existen filas duplicadas.
+
+La lectura es independiente de Geography y no carga Rates en Node ni realiza N+1. Se preserva `GET /api/rates/home-insights`, su DTO y su consulta histórica (`topArtists` y `countries` incluidos); el ranking nuevo no cambia retroactivamente. Retirar `home-insights` se considerará cuando todos sus consumidores hayan sido migrados y auditados, sin adelantar esa limpieza.
+
+Las pruebas unitarias con dobles cubren la ruta autenticada, identidad de sesión, DTO sin países, filtros, deduplicación, fecha/desempate de Rates duplicadas, conteo/orden/límite SQL, query única sin escrituras ni geografía y conservación de `home-insights` y Geography. Hay una suite opt-in PostgreSQL con un destino vacío `bc_id_3f_3_*` para comprobar conteos, medias, empates, nota cero, null/cover-only, duplicados, aislamiento y límite con el SQL real. No se configuró una base aislada en esta ejecución; esa suite queda sin ejecutar y las agregaciones reales de PostgreSQL no se afirman como verificadas.
+
+La tarea no modifica frontend, Rates de escritura, Geography, esquemas, migraciones ni dependencias. D-ART-4 corresponde al Top 7 frontend; D-ART-5a a los datos personales del artista; D-ART-5b al modal; D-ART-6 a filtros; D-ART-7 a Last.fm; y D-ART-8 a smoke tests.
+
 ## D-9 — Cementerio
 
 ### D-9b — Decisión funcional

@@ -47,6 +47,12 @@ export class RatesController {
     return this.ratesStatsService.getHomeInsights(user);
   }
 
+  @Get('artists/top')
+  @Auth()
+  getTopArtists(@GetUser() user: User) {
+    return this.ratesStatsService.getTopArtists(user.id);
+  }
+
   @Get('geography/top')
   @Auth()
   getGeographyTop(@GetUser() user: User) {

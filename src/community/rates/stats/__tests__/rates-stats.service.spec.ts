@@ -318,3 +318,96 @@ describe('RatesStatsService geography and home insights', () => {
     expect(sql).toContain('COUNT(DISTINCT "discId")');
   });
 });
+
+describe('RatesStatsService top artists', () => {
+  it('returns the explicit artist DTO from one user-scoped, ranked PostgreSQL query', async () => {
+    type ArtistRow = {
+      id: string;
+      name: string;
+      image: string | null;
+      ratingCount: number | string;
+      averageRate: number | string;
+    };
+    const rows: ArtistRow[] = [
+      {
+        id: 'artist-1',
+        name: 'Artist',
+        image: null,
+        ratingCount: '2',
+        averageRate: '8.25',
+      },
+    ];
+    const dataSource = new DataSource({
+      type: 'postgres',
+      database: 'rates-top-artists-test',
+    });
+    const query = jest
+      .fn<Promise<ArtistRow[]>, [string, unknown[]]>()
+      .mockResolvedValue(rows);
+    const repository = Object.assign(
+      new Repository<Rate>(Rate, new EntityManager(dataSource)),
+      { query },
+    );
+    const usersService = {
+      countUsers: jest.fn<Promise<number>, []>().mockResolvedValue(0),
+    } satisfies Pick<UsersService, 'countUsers'>;
+    const service = new RatesStatsService(repository, usersService as never);
+
+    await expect(service.getTopArtists('session-user')).resolves.toEqual({
+      artists: [
+        {
+          id: 'artist-1',
+          name: 'Artist',
+          image: null,
+          ratingCount: 2,
+          averageRate: 8.25,
+        },
+      ],
+    });
+
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql, parameters] = query.mock.calls[0];
+    expect(parameters).toEqual(['session-user', 7]);
+    expect(sql).toContain('rate."userId" = $1');
+    expect(sql).toContain('rate.rate IS NOT NULL');
+    expect(sql).toContain('PARTITION BY rate."discId"');
+    expect(sql.replace(/\s+/g, ' ')).toContain(
+      'GREATEST( rate."createdAt", COALESCE(rate."editedAt", rate."createdAt") ) DESC',
+    );
+    expect(sql).toContain('rate.id DESC');
+    expect(sql).toContain('COUNT(DISTINCT disc.id)::int');
+    expect(sql).toContain('AVG(latest_disc_ratings.rate)');
+    expect(sql).toContain('ORDER BY');
+    expect(sql).toContain('"ratingCount" DESC');
+    expect(sql).toContain('"averageRate" DESC');
+    expect(sql).toContain('artist.name ASC');
+    expect(sql).toContain('artist.id ASC');
+    expect(sql).toContain('LIMIT $2');
+    expect(sql).not.toContain('country');
+    expect(sql).not.toContain('rate.cover');
+  });
+
+  it('returns an empty artist list when PostgreSQL finds no musical ratings', async () => {
+    const dataSource = new DataSource({
+      type: 'postgres',
+      database: 'rates-top-artists-empty-test',
+    });
+    const repository = Object.assign(
+      new Repository<Rate>(Rate, new EntityManager(dataSource)),
+      {
+        query: jest
+          .fn<Promise<RawRow[]>, [string, unknown[]]>()
+          .mockResolvedValue([]),
+      },
+    );
+    const usersService = {
+      countUsers: jest.fn<Promise<number>, []>().mockResolvedValue(0),
+    } satisfies Pick<UsersService, 'countUsers'>;
+    const service = new RatesStatsService(repository, usersService as never);
+
+    await expect(service.getTopArtists('empty-user')).resolves.toEqual({
+      artists: [],
+    });
+    expect(repository.query).toHaveBeenCalledTimes(1);
+  });
+});

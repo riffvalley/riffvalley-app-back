@@ -10,6 +10,7 @@ import {
   RatesGeographyWorldResponseDto,
   RatesHomeInsightsResponse,
 } from '../dto/rates-geography.dto';
+import { RatesTopArtistsResponseDto } from '../dto/rates-artists.dto';
 
 type GeographyQueryRow = {
   totalRatedDiscs: number | string;
@@ -177,6 +178,71 @@ export class RatesStatsService {
       countries: geography.countries.map((country) =>
         this.toCountryDto(country, geography.mappedDiscs, 0),
       ),
+    };
+  }
+
+  async getTopArtists(userId: string): Promise<RatesTopArtistsResponseDto> {
+    type TopArtistRow = {
+      id: string;
+      name: string;
+      image: string | null;
+      ratingCount: number | string;
+      averageRate: number | string;
+    };
+
+    // Keep one current musical Rate per user/disc. Use its latest known timestamp;
+    // the UUID makes timestamp ties deterministic.
+    const rows = (await this.rateRepository.query(
+      `
+      WITH ranked_musical_rates AS (
+        SELECT
+          rate.id,
+          rate."discId",
+          rate.rate,
+          ROW_NUMBER() OVER (
+            PARTITION BY rate."discId"
+            ORDER BY GREATEST(
+                       rate."createdAt",
+                       COALESCE(rate."editedAt", rate."createdAt")
+                     ) DESC,
+                     rate.id DESC
+          ) AS duplicate_position
+        FROM rate
+        WHERE rate."userId" = $1
+          AND rate.rate IS NOT NULL
+      ), latest_disc_ratings AS (
+        SELECT "discId", rate
+        FROM ranked_musical_rates
+        WHERE duplicate_position = 1
+      )
+      SELECT
+        artist.id AS id,
+        artist.name AS name,
+        artist.image AS image,
+        COUNT(DISTINCT disc.id)::int AS "ratingCount",
+        AVG(latest_disc_ratings.rate) AS "averageRate"
+      FROM latest_disc_ratings
+      INNER JOIN disc ON disc.id = latest_disc_ratings."discId"
+      INNER JOIN artist ON artist.id = disc."artistId"
+      GROUP BY artist.id, artist.name, artist.image
+      ORDER BY
+        "ratingCount" DESC,
+        "averageRate" DESC,
+        artist.name ASC,
+        artist.id ASC
+      LIMIT $2
+      `,
+      [userId, 7],
+    )) as TopArtistRow[];
+
+    return {
+      artists: rows.map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        image: artist.image,
+        ratingCount: Number(artist.ratingCount),
+        averageRate: Number(artist.averageRate),
+      })),
     };
   }
 
