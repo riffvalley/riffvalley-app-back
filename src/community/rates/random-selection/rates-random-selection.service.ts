@@ -6,6 +6,14 @@ import {
 
 @Injectable()
 export class RatesRandomSelectionService {
+  getUnratedByCommunityPredicate(): string {
+    return `NOT EXISTS (
+      SELECT 1 FROM rate community_rate
+      WHERE community_rate."discId" = disc.id
+        AND community_rate.rate IS NOT NULL
+    )`;
+  }
+
   getCoverFeaturedCriteria(userId: string): {
     voteCountExpression: string;
     averageExpression: string;

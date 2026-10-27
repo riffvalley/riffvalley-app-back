@@ -493,7 +493,15 @@ export class DiscCatalogService {
   }
 
   async findRandom(dto: RandomQueryDto, user: User) {
-    const { genre, year, ep, debut, limit = 5, difficulty } = dto;
+    const {
+      genre,
+      year,
+      ep,
+      debut,
+      limit = 5,
+      difficulty,
+      unratedByCommunity,
+    } = dto;
     const countryFilter = dto.country || dto.countryId;
     const userId = user.id;
     const today = new Date();
@@ -540,6 +548,12 @@ export class DiscCatalogService {
 
       if (debut !== undefined) {
         idsQueryBuilder.andWhere('disc.debut = :debut', { debut });
+      }
+
+      if (unratedByCommunity === true) {
+        idsQueryBuilder.andWhere(
+          this.ratesRandomSelectionService.getUnratedByCommunityPredicate(),
+        );
       }
 
       if (difficulty) {

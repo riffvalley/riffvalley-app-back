@@ -8,10 +8,29 @@ import {
   IsString,
   IsUUID,
   Max,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { toBoolean } from './options-query.dto';
 import { RANDOM_DISC_DIFFICULTIES } from '../../../community/rates/random-selection/random-disc-difficulty';
 import type { RandomDiscDifficulty } from '../../../community/rates/random-selection/random-disc-difficulty';
+
+@ValidatorConstraint({ name: 'unratedCommunityWithoutDifficulty' })
+class UnratedCommunityWithoutDifficultyConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(value: unknown, args: ValidationArguments): boolean {
+    if (value !== true) return true;
+    const query = args.object as { difficulty?: unknown };
+    return query.difficulty === undefined;
+  }
+
+  defaultMessage(): string {
+    return 'unratedByCommunity=true cannot be combined with difficulty';
+  }
+}
 
 export class RandomQueryDto {
   @IsOptional()
@@ -21,6 +40,12 @@ export class RandomQueryDto {
   @IsOptional()
   @IsUUID()
   previousDiscId?: string;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  @Validate(UnratedCommunityWithoutDifficultyConstraint)
+  unratedByCommunity?: boolean;
 
   @IsOptional()
   @IsString()
