@@ -197,6 +197,44 @@ describe('RatesController home insights route', () => {
     expect(getWorld).toHaveBeenCalledWith(user);
   });
 
+  it('registers authenticated GET /rates/artists/top using only the session user ID', async () => {
+    const stats = new RatesStatsService(
+      createRateRepository(),
+      createUsersService(),
+    );
+    const getTopArtists = jest
+      .spyOn(stats, 'getTopArtists')
+      .mockResolvedValue({ artists: [] });
+    const controller = new RatesController(
+      new RatesService(createRateRepository()),
+      stats,
+      new RatesHistoryService(createRateRepository()),
+      new RatesDashboardSummaryService(createRateRepository()),
+    );
+    const handler = RatesController.prototype.getTopArtists;
+    const user = Object.assign(new User(), { id: 'session-user-id' });
+    const guards = Reflect.getMetadata(
+      GUARDS_METADATA,
+      handler,
+    ) as Type<unknown>[];
+    const args = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      RatesController,
+      'getTopArtists',
+    ) as Record<string, unknown>;
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('artists/top');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+      RequestMethod.GET,
+    );
+    expect(guards).toContain(UserRoleGuard);
+    expect(Object.values(args)).toContainEqual(
+      expect.objectContaining({ index: 0, data: undefined }),
+    );
+    await controller.getTopArtists(user);
+    expect(getTopArtists).toHaveBeenCalledWith('session-user-id');
+  });
+
   it('preserves the methods, paths and current authentication decorators on the remaining routes', () => {
     const routes = [
       ['getUserStats', RequestMethod.GET, 'stats', true],
