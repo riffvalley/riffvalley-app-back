@@ -13,6 +13,7 @@ import {
 import { RatesTopArtistsResponseDto } from '../dto/rates-artists.dto';
 import { RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH } from './rates-artists.constants';
 import { RatesArtistSummaryQueryDto } from '../dto/rates-artist-summary-query.dto';
+import { RatesArtistsTopPeriod } from '../dto/rates-artists-top-query.dto';
 import {
   RatesArtistSummaryDiscDto,
   RatesArtistSummaryGenreDto,
@@ -261,7 +262,10 @@ export class RatesStatsService {
     };
   }
 
-  async getTopArtists(userId: string): Promise<RatesTopArtistsResponseDto> {
+  async getTopArtists(
+    userId: string,
+    period: RatesArtistsTopPeriod = 'all',
+  ): Promise<RatesTopArtistsResponseDto> {
     type TopArtistRow = {
       id: string;
       name: string;
@@ -279,6 +283,10 @@ export class RatesStatsService {
           rate.id,
           rate."discId",
           rate.rate,
+          GREATEST(
+            rate."createdAt",
+            COALESCE(rate."editedAt", rate."createdAt")
+          ) AS "lastActivityAt",
           ROW_NUMBER() OVER (
             PARTITION BY rate."discId"
             ORDER BY GREATEST(
@@ -291,12 +299,43 @@ export class RatesStatsService {
         WHERE rate."userId" = $1
           AND rate.rate IS NOT NULL
       ), latest_disc_ratings AS (
-        SELECT "discId", rate
+        SELECT "discId", rate, "lastActivityAt"
         FROM ranked_musical_rates
         WHERE duplicate_position = 1
+      ), madrid_clock AS (
+        SELECT
+          $2::text AS period,
+          CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid' AS madrid_now
+      ), period_bounds AS (
+        SELECT
+          period,
+          CASE period
+            WHEN 'month' THEN
+              (date_trunc('month', madrid_now) AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'UTC'
+            WHEN 'year' THEN
+              (date_trunc('year', madrid_now) AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'UTC'
+            ELSE NULL
+          END AS start_at,
+          CASE period
+            WHEN 'month' THEN
+              ((date_trunc('month', madrid_now) + INTERVAL '1 month') AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'UTC'
+            WHEN 'year' THEN
+              ((date_trunc('year', madrid_now) + INTERVAL '1 year') AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'UTC'
+            ELSE NULL
+          END AS end_at
+        FROM madrid_clock
+      ), period_ratings AS (
+        SELECT latest_disc_ratings."discId", latest_disc_ratings.rate
+        FROM latest_disc_ratings
+        CROSS JOIN period_bounds
+        WHERE period_bounds.period = 'all'
+          OR (
+            latest_disc_ratings."lastActivityAt" >= period_bounds.start_at
+            AND latest_disc_ratings."lastActivityAt" < period_bounds.end_at
+          )
       ), user_average AS (
         SELECT AVG(rate) AS "globalAverageRate"
-        FROM latest_disc_ratings
+        FROM period_ratings
       ), artist_averages AS (
       SELECT
         artist.id AS id,
@@ -304,7 +343,7 @@ export class RatesStatsService {
         artist.image AS image,
         COUNT(DISTINCT disc.id)::int AS "ratingCount",
         AVG(latest_disc_ratings.rate) AS "averageRate"
-      FROM latest_disc_ratings
+      FROM period_ratings AS latest_disc_ratings
       INNER JOIN disc ON disc.id = latest_disc_ratings."discId"
       INNER JOIN artist ON artist.id = disc."artistId"
       GROUP BY artist.id, artist.name, artist.image
@@ -330,9 +369,9 @@ export class RatesStatsService {
         "ratingCount" DESC,
         name ASC,
         id ASC
-      LIMIT $2
+      LIMIT 5
       `,
-      [userId, 7, RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH],
+      [userId, period, RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH],
     )) as TopArtistRow[];
 
     return {

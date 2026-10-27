@@ -371,7 +371,7 @@ describe('RatesStatsService top artists', () => {
     expect(RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH).toBe(2);
     expect(parameters).toEqual([
       'session-user',
-      7,
+      'all',
       RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH,
     ]);
     expect(sql).toContain('rate."userId" = $1');
@@ -393,11 +393,58 @@ describe('RatesStatsService top artists', () => {
     expect(sql).toContain('"ratingCount" DESC');
     expect(sql).toContain('name ASC');
     expect(sql).toContain('id ASC');
-    expect(sql).toContain('LIMIT $2');
+    expect(sql).toContain('LIMIT 5');
+    expect(sql).toContain("CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid'");
+    expect(sql).toContain("AT TIME ZONE 'Europe/Madrid'");
+    expect(sql).toContain("AT TIME ZONE 'UTC'");
+    expect(sql).toContain("date_trunc('month', madrid_now)");
+    expect(sql).toContain("date_trunc('year', madrid_now)");
+    expect(sql).toContain("INTERVAL '1 month'");
+    expect(sql).toContain("INTERVAL '1 year'");
+    expect(sql).toContain("period_bounds.period = 'all'");
+    expect(sql).toContain(
+      'latest_disc_ratings."lastActivityAt" >= period_bounds.start_at',
+    );
+    expect(sql).toContain(
+      'latest_disc_ratings."lastActivityAt" < period_bounds.end_at',
+    );
+    expect(sql).toContain('WHERE duplicate_position = 1');
     expect(sql).not.toContain('ROUND(');
     expect(sql).not.toContain('country');
     expect(sql).not.toContain('rate.cover');
   });
+
+  it.each(['month', 'year'] as const)(
+    'passes %s to the single parameterized ranking query',
+    async (period) => {
+      const dataSource = new DataSource({
+        type: 'postgres',
+        database: 'rates-top-artists-period-test',
+      });
+      const query = jest
+        .fn<Promise<RawRow[]>, [string, unknown[]]>()
+        .mockResolvedValue([]);
+      const repository = Object.assign(
+        new Repository<Rate>(Rate, new EntityManager(dataSource)),
+        { query },
+      );
+      const usersService = {
+        countUsers: jest.fn<Promise<number>, []>().mockResolvedValue(0),
+      } satisfies Pick<UsersService, 'countUsers'>;
+      const service = new RatesStatsService(repository, usersService as never);
+
+      await expect(
+        service.getTopArtists('session-user', period),
+      ).resolves.toEqual({ artists: [] });
+
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(query.mock.calls[0][1]).toEqual([
+        'session-user',
+        period,
+        RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH,
+      ]);
+    },
+  );
 
   it('returns an empty artist list when PostgreSQL finds no musical ratings', async () => {
     const dataSource = new DataSource({

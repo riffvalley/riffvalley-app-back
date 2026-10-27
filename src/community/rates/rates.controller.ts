@@ -18,6 +18,7 @@ import { CreateRateDto } from './dto/create-rates.dto';
 import { UpdateRateDto } from './dto/update-rates.dto';
 import { RatesHistoryQueryDto } from './dto/rates-history-query.dto';
 import { RatesArtistSummaryQueryDto } from './dto/rates-artist-summary-query.dto';
+import { RatesArtistsTopQueryDto } from './dto/rates-artists-top-query.dto';
 import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
@@ -50,8 +51,11 @@ export class RatesController {
 
   @Get('artists/top')
   @Auth()
-  getTopArtists(@GetUser() user: User) {
-    return this.ratesStatsService.getTopArtists(user.id);
+  getTopArtists(
+    @GetUser() user: User,
+    @Query() query: RatesArtistsTopQueryDto = new RatesArtistsTopQueryDto(),
+  ) {
+    return this.ratesStatsService.getTopArtists(user.id, query.period);
   }
 
   @Get('artists/:artistId/summary')
