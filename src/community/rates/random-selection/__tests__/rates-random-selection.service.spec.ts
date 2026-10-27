@@ -70,4 +70,25 @@ describe('RatesRandomSelectionService', () => {
     expect(sql).toContain('disc."genreId" NOT IN');
     expect(criteria.priorityOrder).toContain('THEN 0 ELSE 1 END');
   });
+
+  it('builds deduplicated cover aggregates and excludes only the user cover vote', () => {
+    const criteria = service.getCoverFeaturedCriteria('user-id');
+    expect(criteria.parameters).toEqual({ coverFeaturedUserId: 'user-id' });
+    expect(criteria.voteCountExpression).toContain('COUNT(*)');
+    expect(criteria.voteCountExpression).toContain(
+      'DISTINCT ON (cover_rate."userId")',
+    );
+    expect(criteria.averageExpression).toContain('AVG(cover_votes.cover)');
+    expect(criteria.voteCountExpression).toContain(
+      'cover_rate.cover IS NOT NULL',
+    );
+    expect(criteria.voteCountExpression).toContain(
+      'COALESCE(cover_rate."editedAt", cover_rate."createdAt") DESC',
+    );
+    expect(criteria.voteCountExpression).toContain('cover_rate.id DESC');
+    expect(criteria.notRatedPredicate).toContain(
+      'user_cover_rate.cover IS NOT NULL',
+    );
+    expect(criteria.notRatedPredicate).not.toContain('user_cover_rate.rate');
+  });
 });

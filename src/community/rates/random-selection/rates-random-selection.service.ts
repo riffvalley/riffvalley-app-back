@@ -6,6 +6,34 @@ import {
 
 @Injectable()
 export class RatesRandomSelectionService {
+  getCoverFeaturedCriteria(userId: string): {
+    voteCountExpression: string;
+    averageExpression: string;
+    notRatedPredicate: string;
+    parameters: Record<string, string>;
+  } {
+    const latestCoverVotes = `SELECT DISTINCT ON (cover_rate."userId")
+        cover_rate."userId", cover_rate.cover
+      FROM rate cover_rate
+      WHERE cover_rate."discId" = disc.id
+        AND cover_rate.cover IS NOT NULL
+      ORDER BY cover_rate."userId",
+        COALESCE(cover_rate."editedAt", cover_rate."createdAt") DESC,
+        cover_rate.id DESC`;
+
+    return {
+      voteCountExpression: `(SELECT COUNT(*) FROM (${latestCoverVotes}) cover_votes)`,
+      averageExpression: `(SELECT AVG(cover_votes.cover) FROM (${latestCoverVotes}) cover_votes)`,
+      notRatedPredicate: `NOT EXISTS (
+        SELECT 1 FROM rate user_cover_rate
+        WHERE user_cover_rate."discId" = disc.id
+          AND user_cover_rate."userId" = :coverFeaturedUserId
+          AND user_cover_rate.cover IS NOT NULL
+      )`,
+      parameters: { coverFeaturedUserId: userId },
+    };
+  }
+
   getDiscCriteria(
     userId: string,
     difficulty: RandomDiscDifficulty,

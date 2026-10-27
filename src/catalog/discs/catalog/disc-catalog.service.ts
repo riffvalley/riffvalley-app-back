@@ -38,6 +38,108 @@ export class DiscCatalogService {
     return this.discRepository.count();
   }
 
+  async findDailyCoverFeatured(user: User) {
+    const criteria = this.ratesRandomSelectionService.getCoverFeaturedCriteria(
+      user.id,
+    );
+    const [selected] = await this.discRepository
+      .createQueryBuilder('disc')
+      .select('disc.id', 'id')
+      .addSelect(criteria.voteCountExpression, 'coverVoteCount')
+      .addSelect(criteria.averageExpression, 'averageCover')
+      .where(
+        'disc."releaseDate" <= (CURRENT_TIMESTAMP AT TIME ZONE \'Europe/Madrid\')::date',
+      )
+      .andWhere('disc.image IS NOT NULL')
+      .andWhere("disc.image <> ''")
+      .andWhere(criteria.notRatedPredicate, criteria.parameters)
+      .andWhere(`${criteria.voteCountExpression} >= 4`)
+      .andWhere(`${criteria.averageExpression} > 7`)
+      .orderBy(
+        "md5(:coverFeaturedUserId || ':' || (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Madrid')::date::text || ':' || disc.id)",
+      )
+      .addOrderBy('disc.id', 'ASC')
+      .setParameter('coverFeaturedUserId', user.id)
+      .limit(1)
+      .getRawMany<{
+        id: string;
+        coverVoteCount: number | string;
+        averageCover: number | string;
+      }>();
+
+    if (!selected?.id) return null;
+
+    const queryBuilder = this.discRepository
+      .createQueryBuilder('disc')
+      .leftJoinAndSelect('disc.artist', 'artist')
+      .leftJoinAndSelect('artist.country', 'country')
+      .leftJoinAndSelect('disc.genre', 'genre')
+      .leftJoinAndSelect('disc.rates', 'rate', 'rate.userId = :userId', {
+        userId: user.id,
+      })
+      .leftJoinAndSelect(
+        'disc.favorites',
+        'favorite',
+        'favorite.userId = :userId',
+        {
+          userId: user.id,
+        },
+      )
+      .leftJoinAndSelect(
+        'disc.pendings',
+        'pending',
+        'pending.userId = :userId',
+        {
+          userId: user.id,
+        },
+      )
+      .addSelect('disc.id', 'disc_id_for_mapping')
+      .addSelect(
+        (subQuery) =>
+          subQuery
+            .select('AVG(rate.rate)')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id'),
+        'averagerate',
+      )
+      .addSelect(criteria.averageExpression, 'averageCover')
+      .addSelect(
+        (subQuery) =>
+          subQuery
+            .select('COUNT(rate.id)')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id AND rate.rate IS NOT NULL'),
+        'rateCount',
+      )
+      .addSelect(
+        (subQuery) =>
+          subQuery
+            .select('COUNT(comment.id)')
+            .from('comment', 'comment')
+            .where('comment.discId = disc.id'),
+        'commentCount',
+      )
+      .where('disc.id = :selectedDiscId', { selectedDiscId: selected.id });
+    const { entities, raw } = await queryBuilder.getRawAndEntities();
+    const disc = entities[0];
+    if (!disc) return null;
+    const mapped = mapCatalogDisc(
+      disc,
+      indexCatalogRawRows(raw).get(disc.id) ?? {
+        discId: disc.id,
+        averagerate: null,
+        averageCover: String(selected.averageCover),
+        rateCount: null,
+        commentCount: null,
+      },
+    );
+    return {
+      ...mapped,
+      id: disc.id,
+      coverVoteCount: Number(selected.coverVoteCount),
+    };
+  }
+
   async countCurrentGenresForDiscSets(
     monthDiscIds: string[],
     yearDiscIds: string[],

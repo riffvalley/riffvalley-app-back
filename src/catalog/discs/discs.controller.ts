@@ -53,6 +53,12 @@ export class DiscsController {
     return this.discsServices.findRandom(dto, user);
   }
 
+  @Get('daily-cover-featured')
+  @Auth()
+  findDailyCoverFeatured(@GetUser() user: User) {
+    return this.discsServices.findDailyCoverFeatured(user);
+  }
+
   @Get('options')
   @Auth()
   findOptions(@Query() dto: OptionsQueryDto) {
