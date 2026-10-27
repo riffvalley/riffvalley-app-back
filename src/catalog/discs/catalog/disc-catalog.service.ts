@@ -123,10 +123,13 @@ export class DiscCatalogService {
     const { entities, raw } = await queryBuilder.getRawAndEntities();
     const disc = entities[0];
     if (!disc) return null;
+    // TypeORM can omit the primary key on this joined hydration query. The SQL
+    // selection already gives us the exact ID, so use it as the mapping key.
+    const identifiedDisc = { ...disc, id: selected.id };
     const mapped = mapCatalogDisc(
-      disc,
-      indexCatalogRawRows(raw).get(disc.id) ?? {
-        discId: disc.id,
+      identifiedDisc,
+      indexCatalogRawRows(raw).get(selected.id) ?? {
+        discId: selected.id,
         averagerate: null,
         averageCover: String(selected.averageCover),
         rateCount: null,
@@ -135,7 +138,7 @@ export class DiscCatalogService {
     );
     return {
       ...mapped,
-      id: disc.id,
+      id: selected.id,
       coverVoteCount: Number(selected.coverVoteCount),
     };
   }
