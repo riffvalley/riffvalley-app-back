@@ -148,7 +148,7 @@ Un candidato debe tener al menos cuatro votos de portada de usuarios distintos, 
 
 Rates ofrece a Catalog los agregados/predicados de portada. Solo se usan filas con `cover IS NOT NULL` (incluido `cover = 0`); se ignoran votos solo musicales. Ante duplicados de un mismo usuario y disco, se usa su fila más reciente según `COALESCE(editedAt, createdAt) DESC`, con `id DESC` como desempate determinista. Tanto el conteo como la media utilizan esa misma fila por usuario, y la exclusión personal comprueba la existencia de cualquier portada no nula.
 
-Catalog selecciona en PostgreSQL un único ID ordenando por `md5(userId || fechaMadrid || discId)`; después hidrata solo ese disco con las relaciones y campos actuales de Catalog. Para un conjunto estable de candidatos, usuario y fecha, la elección es reproducible y no depende del orden ni tamaño del catálogo. Cambiar el conjunto de candidatos puede cambiar la portada dentro del mismo día; no hay persistencia ni garantía de estabilidad absoluta. Al cambiar el día Madrid cambia la entrada del hash.
+Catalog selecciona en PostgreSQL un único ID ordenando por `md5(userId || fechaMadrid || discId)`; después hidrata solo ese disco con las relaciones y campos actuales de Catalog. La respuesta recupera el ID seleccionado de SQL si TypeORM no lo incluye en la entidad hidratada. Para un conjunto estable de candidatos, usuario y fecha, la elección es reproducible y no depende del orden ni tamaño del catálogo. Cambiar el conjunto de candidatos puede cambiar la portada dentro del mismo día; no hay persistencia ni garantía de estabilidad absoluta. Al cambiar el día Madrid cambia la entrada del hash.
 
 ### Verificación y pendiente
 

@@ -2213,7 +2213,6 @@ describe('DiscCatalogService.findDailyCoverFeatured', () => {
           builder.getRawAndEntities.mockResolvedValue({
             entities: [
               createDiscFixture({
-                id: 'disc-id',
                 name: 'Featured album',
                 image: 'cover.jpg',
                 artist: { name: 'Artist', country: { name: 'Spain' } },
