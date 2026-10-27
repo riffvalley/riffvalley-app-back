@@ -3,6 +3,19 @@ import { RatesRandomSelectionService } from '../rates-random-selection.service';
 describe('RatesRandomSelectionService', () => {
   const service = new RatesRandomSelectionService();
 
+  it('defines community-unrated discs by the absence of any non-null musical rate', () => {
+    const predicate = service.getUnratedByCommunityPredicate();
+
+    expect(predicate).toContain('NOT EXISTS');
+    expect(predicate).toContain('FROM rate community_rate');
+    expect(predicate).toContain('community_rate.rate IS NOT NULL');
+    expect(predicate).not.toContain('cover');
+    expect(predicate).not.toContain('rate_vote_events');
+    expect(predicate).not.toContain('randomUserId');
+    expect(predicate).not.toContain('>=');
+    expect(predicate).not.toContain('> 0');
+  });
+
   it.each([
     ['easy', 3, 5, undefined],
     ['normal', 7, 2, 4],

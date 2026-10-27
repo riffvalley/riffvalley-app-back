@@ -144,4 +144,48 @@ describe('DiscsController write validation', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('transforms community-unrated booleans strictly and rejects incompatible filters', async () => {
+    const trueDto = await validationPipe.transform(
+      { unratedByCommunity: 'true' },
+      { type: 'query', metatype: RandomQueryDto },
+    );
+    expect(trueDto.unratedByCommunity).toBe(true);
+
+    const falseDto = await validationPipe.transform(
+      { unratedByCommunity: 'false', difficulty: 'easy' },
+      { type: 'query', metatype: RandomQueryDto },
+    );
+    expect(falseDto.unratedByCommunity).toBe(false);
+    expect(falseDto.difficulty).toBe('easy');
+
+    await expect(
+      validationPipe.transform(
+        { unratedByCommunity: 'yes' },
+        { type: 'query', metatype: RandomQueryDto },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    let error: unknown;
+    try {
+      await validationPipe.transform(
+        { unratedByCommunity: 'true', difficulty: 'hard' },
+        { type: 'query', metatype: RandomQueryDto },
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(BadRequestException);
+    if (!(error instanceof BadRequestException)) {
+      throw new Error('Expected an incompatible-filter validation error');
+    }
+    expect(error.getResponse()).toEqual(
+      expect.objectContaining({
+        message: expect.arrayContaining([
+          expect.stringContaining(
+            'unratedByCommunity=true cannot be combined with difficulty',
+          ),
+        ]),
+      }),
+    );
+  });
 });

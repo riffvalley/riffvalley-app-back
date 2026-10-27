@@ -1095,6 +1095,77 @@ describe('DiscCatalogService.findRandom candidate selection', () => {
     expect(queryBuilder.getRawMany).toHaveBeenCalledTimes(1);
   });
 
+  it('filters community-unrated candidates in SQL before random ordering and hydration', async () => {
+    selectedIds = ['forgotten-1', 'forgotten-2'];
+
+    await run({
+      unratedByCommunity: true,
+      limit: 2,
+      previousDiscId: 'previous-disc',
+    });
+
+    expect(queryBuilders).toHaveLength(2);
+    const predicates = queryBuilders[0].andWhere.mock.calls.map(
+      ([condition]) => condition,
+    );
+    expect(
+      predicates.some((condition) => condition.includes('NOT EXISTS')),
+    ).toBe(true);
+    expect(predicates.join('\n')).toContain('FROM rate community_rate');
+    expect(predicates.join('\n')).toContain('community_rate.rate IS NOT NULL');
+    expect(predicates.join('\n')).not.toContain('rate_vote_events');
+    expect(predicates.join('\n')).not.toContain('previousDiscId');
+    expect(queryBuilders[0].where).toHaveBeenCalledWith(
+      'disc.releaseDate <= :today',
+      { today: expect.any(Date) },
+    );
+    expect(queryBuilders[0].orderBy).toHaveBeenCalledWith('RANDOM()');
+    expect(queryBuilders[0].limit).toHaveBeenCalledWith(2);
+    expect(queryBuilders[1].where).toHaveBeenCalledWith(
+      'disc.id IN (:...randomIds)',
+      { randomIds: ['forgotten-1', 'forgotten-2'] },
+    );
+  });
+
+  it('does not filter community-unrated candidates when the boolean is false', async () => {
+    await run({ unratedByCommunity: false });
+
+    expect(queryBuilders[0].andWhere).not.toHaveBeenCalled();
+    expect(queryBuilders[0].orderBy).toHaveBeenCalledWith('RANDOM()');
+    expect(queryBuilders[0].limit).toHaveBeenCalledWith(5);
+  });
+
+  it('preserves other catalog filters alongside the community-unrated filter', async () => {
+    await run({
+      unratedByCommunity: true,
+      genre: 'genre-id',
+      countryId: '3b2d0188-69f0-4ff5-97fc-8feab1532a54',
+      year: 1998,
+      ep: false,
+      debut: true,
+    });
+
+    const predicates = queryBuilders[0].andWhere.mock.calls.map(
+      ([condition]) => condition,
+    );
+    expect(predicates).toContain('disc.genreId = :genre');
+    expect(predicates).toContain('country.id = :countryFilter');
+    expect(predicates).toContain('EXTRACT(YEAR FROM disc.releaseDate) = :year');
+    expect(predicates).toContain('disc.ep = :ep');
+    expect(predicates).toContain('disc.debut = :debut');
+    expect(
+      predicates.some((condition) => condition.includes('NOT EXISTS')),
+    ).toBe(true);
+  });
+
+  it('returns an empty list when no community-unrated candidate exists', async () => {
+    const { result } = await run({ unratedByCommunity: true, limit: 2 });
+
+    expect(result).toEqual([]);
+    expect(queryBuilders).toHaveLength(1);
+    expect(queryBuilders[0].getRawMany).toHaveBeenCalledTimes(1);
+  });
+
   it('adds the difficulty criteria in SQL and excludes the previous disc when alternatives exist', async () => {
     selectedIds = ['alternative-disc'];
 
@@ -1546,7 +1617,7 @@ describe('DiscCatalogService.findRandom hydration', () => {
   it('hydrates a single selected ID with one entity result', async () => {
     setHydration(['disc-1']);
 
-    const { result, builders } = await run();
+    const { result, builders } = await run({ limit: 2 });
 
     expect(builders).toHaveLength(2);
     expect(builders[0].getRawMany).toHaveBeenCalledTimes(1);
@@ -1559,6 +1630,71 @@ describe('DiscCatalogService.findRandom hydration', () => {
     expect(builders[1].getRawAndEntities).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(1);
     expect(result.map(({ id }) => id)).toEqual(['disc-1']);
+    expect(builders[0].limit).toHaveBeenCalledWith(2);
+  });
+
+  it('returns enriched community-unrated discs with zero musical votes and cover data intact', async () => {
+    setHydration(
+      ['forgotten-1', 'forgotten-2'],
+      {
+        rates: [{ id: 'cover-only-rate', rate: null, cover: 8 }],
+        favorites: [{ id: 'favorite-id' }],
+        pendings: [{ id: 'pending-id' }],
+      },
+      [
+        {
+          averagerate: null,
+          averageCover: '8',
+          rateCount: '0',
+          commentCount: '0',
+        },
+        {
+          averagerate: null,
+          averageCover: '8',
+          rateCount: '0',
+          commentCount: '0',
+        },
+      ],
+    );
+    hydratedDiscs.forEach((disc) => {
+      Object.assign(disc, {
+        image: 'cover.jpg',
+        releaseDate: new Date('1998-05-01T00:00:00.000Z'),
+      });
+    });
+
+    const { result, builders } = await run({
+      unratedByCommunity: true,
+      limit: 2,
+    });
+
+    expect(builders).toHaveLength(2);
+    expect(result).toHaveLength(2);
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'forgotten-1',
+        name: 'Album forgotten-1',
+        image: 'cover.jpg',
+        releaseDate: new Date('1998-05-01T00:00:00.000Z'),
+        artist: expect.objectContaining({
+          id: 'artist-forgotten-1',
+          country: expect.objectContaining({ id: 'country-forgotten-1' }),
+        }),
+        genre: { id: 'genre-forgotten-1', name: 'Genre forgotten-1' },
+        averageRate: null,
+        averageCover: 8,
+        voteCount: 0,
+        commentCount: 0,
+        userRate: { id: 'cover-only-rate', rate: null, cover: 8 },
+        favoriteId: 'favorite-id',
+        pendingId: 'pending-id',
+      }),
+      expect.objectContaining({
+        id: 'forgotten-2',
+        voteCount: 0,
+        averageCover: 8,
+      }),
+    ]);
   });
 
   it('serializes the real disc ID and returns the same distinct vote count used for difficulty selection', async () => {
