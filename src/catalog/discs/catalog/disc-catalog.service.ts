@@ -38,6 +38,17 @@ export class DiscCatalogService {
     return this.discRepository.count();
   }
 
+  async countDiscsReleasedInYear(year: number): Promise<number> {
+    const [row] = (await this.discRepository.query(
+      `SELECT COUNT(DISTINCT disc.id)::int AS count
+      FROM disc
+      WHERE disc."releaseDate" >= make_date($1::int, 1, 1)
+        AND disc."releaseDate" < make_date($1::int + 1, 1, 1)`,
+      [year],
+    )) as { count: number | string }[];
+    return Number(row?.count ?? 0);
+  }
+
   async findDailyCoverFeatured(user: User) {
     const criteria = this.ratesRandomSelectionService.getCoverFeaturedCriteria(
       user.id,

@@ -11,6 +11,7 @@ import { UsersModule } from 'src/identity/users/users.module';
 import { RateVoteEvent } from './entities/rate-vote-event.entity';
 import { HistoricalRatesStatsService } from './stats/historical-rates-stats.service';
 import { RatesRandomSelectionService } from './random-selection/rates-random-selection.service';
+import { CommunityDashboardRatesService } from './stats/community-dashboard-rates.service';
 
 @Module({
   controllers: [RatesController], // Controladores que gestionan las rutas
@@ -20,6 +21,7 @@ import { RatesRandomSelectionService } from './random-selection/rates-random-sel
     RatesHistoryService,
     HistoricalRatesStatsService,
     RatesRandomSelectionService,
+    CommunityDashboardRatesService,
   ],
   imports: [
     TypeOrmModule.forFeature([Rate, Disc, RateVoteEvent]),
@@ -30,6 +32,7 @@ import { RatesRandomSelectionService } from './random-selection/rates-random-sel
     RatesStatsService,
     HistoricalRatesStatsService,
     RatesRandomSelectionService,
+    CommunityDashboardRatesService,
   ],
 })
 export class RatesModule {}
