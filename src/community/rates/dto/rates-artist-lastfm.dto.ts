@@ -15,6 +15,18 @@ export interface RatesArtistLastfmCatalogDiscDto {
   name: string;
   image: string | null;
   releaseYear: number | null;
+  releaseDate: string | null;
+  link: string | null;
+  ep: boolean;
+  debut: boolean;
+  genre: { name: string; color: string | null } | null;
+  averageRate: number | null;
+  averageCover: number | null;
+  voteCount: number;
+  commentCount: number;
+  userRate: { id: string; rate: number | null; cover: number | null } | null;
+  favoriteId: string | null;
+  pendingId: string | null;
 }
 
 export interface RatesArtistLastfmSimilarArtistDto

@@ -35,6 +35,7 @@ function createService(
       releaseYear: number | null;
     }>;
   }> = [],
+  cardRows: Array<Record<string, unknown>> = [],
 ) {
   const artistCatalogService = {
     findIdentityById: jest.fn().mockResolvedValue(catalogArtist),
@@ -43,13 +44,18 @@ function createService(
   const lastfmApiService = {
     lookupArtistProfile: jest.fn().mockResolvedValue(lookup),
   };
+  const discRepository = {
+    query: jest.fn().mockResolvedValue(cardRows),
+  };
   return {
     service: new RatesArtistLastfmService(
       artistCatalogService,
       lastfmApiService as never,
+      discRepository,
     ),
     artistCatalogService,
     lastfmApiService,
+    discRepository,
   };
 }
 
@@ -57,7 +63,9 @@ describe('RatesArtistLastfmService', () => {
   it('resolves identity from Catalog and maps only explicit Last.fm fields', async () => {
     const { service, artistCatalogService, lastfmApiService } = createService();
 
-    await expect(service.getArtistInfo('artist-id')).resolves.toEqual({
+    await expect(
+      service.getArtistInfo('artist-id', 'session-user-id'),
+    ).resolves.toEqual({
       artistId: 'artist-id',
       status: 'available',
       biography: {
@@ -86,9 +94,9 @@ describe('RatesArtistLastfmService', () => {
       null,
     );
 
-    await expect(service.getArtistInfo('missing')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.getArtistInfo('missing', 'session-user-id'),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(lastfmApiService.lookupArtistProfile).not.toHaveBeenCalled();
   });
 
@@ -98,7 +106,9 @@ describe('RatesArtistLastfmService', () => {
       profile: { ...baseProfile, name: 'Example Artist Tribute' },
     });
 
-    await expect(service.getArtistInfo('artist-id')).resolves.toMatchObject({
+    await expect(
+      service.getArtistInfo('artist-id', 'session-user-id'),
+    ).resolves.toMatchObject({
       status: 'not_found',
       biography: null,
       tags: [],
@@ -131,7 +141,7 @@ describe('RatesArtistLastfmService', () => {
       },
     });
 
-    const result = await service.getArtistInfo('artist-id');
+    const result = await service.getArtistInfo('artist-id', 'session-user-id');
 
     expect(result.biography?.summary).toContain('Hello band');
     expect(result.biography?.summary).not.toContain('<script>');
@@ -159,7 +169,9 @@ describe('RatesArtistLastfmService', () => {
     async (status) => {
       const { service } = createService({ status });
 
-      await expect(service.getArtistInfo('artist-id')).resolves.toMatchObject({
+      await expect(
+        service.getArtistInfo('artist-id', 'session-user-id'),
+      ).resolves.toMatchObject({
         artistId: 'artist-id',
         status,
         biography: null,
@@ -187,7 +199,9 @@ describe('RatesArtistLastfmService', () => {
       },
     });
 
-    await expect(service.getArtistInfo('artist-id')).resolves.toMatchObject({
+    await expect(
+      service.getArtistInfo('artist-id', 'session-user-id'),
+    ).resolves.toMatchObject({
       status: 'available',
       biography: null,
       tags: [{ name: 'Rock', url: null }],
@@ -215,7 +229,7 @@ describe('RatesArtistLastfmService', () => {
         { name: 'Unknown Band', url: 'https://www.last.fm/music/Unknown+Band' },
       ],
     };
-    const { service, artistCatalogService } = createService(
+    const { service, artistCatalogService, discRepository } = createService(
       { status: 'found', profile },
       undefined,
       [
@@ -233,9 +247,34 @@ describe('RatesArtistLastfmService', () => {
         },
         { catalogArtistId: null, catalogDiscCount: 0, catalogDiscs: [] },
       ],
+      [
+        {
+          id: 'disc-id',
+          name: 'Catalog Album',
+          image: null,
+          releaseYear: '2020',
+          releaseDate: '2020-06-01',
+          link: 'https://riffvalley.test/disc-id',
+          ep: false,
+          debut: true,
+          genreName: 'Metal',
+          genreColor: '#123456',
+          averageRate: '8.5',
+          averageCover: '7.5',
+          voteCount: 4,
+          commentCount: 2,
+          userRateId: 'rate-id',
+          userRate: '9.25',
+          userCover: null,
+          favoriteId: 'favorite-id',
+          pendingId: null,
+        },
+      ],
     );
 
-    await expect(service.getArtistInfo('artist-id')).resolves.toMatchObject({
+    await expect(
+      service.getArtistInfo('artist-id', 'session-user-id'),
+    ).resolves.toMatchObject({
       biography: {
         summary: 'A band biography.',
         url: 'https://www.last.fm/music/Example+Artist/+wiki',
@@ -253,6 +292,18 @@ describe('RatesArtistLastfmService', () => {
               name: 'Catalog Album',
               image: null,
               releaseYear: 2020,
+              releaseDate: '2020-06-01',
+              link: 'https://riffvalley.test/disc-id',
+              ep: false,
+              debut: true,
+              genre: { name: 'Metal', color: '#123456' },
+              averageRate: 8.5,
+              averageCover: 7.5,
+              voteCount: 4,
+              commentCount: 2,
+              userRate: { id: 'rate-id', rate: 9.25, cover: null },
+              favoriteId: 'favorite-id',
+              pendingId: null,
             },
           ],
         },
@@ -272,6 +323,14 @@ describe('RatesArtistLastfmService', () => {
       'Catalog Band',
       'Unknown Band',
     ]);
+    expect(discRepository.query).toHaveBeenCalledTimes(1);
+    expect(discRepository.query.mock.calls[0][1]).toEqual([
+      ['disc-id'],
+      'session-user-id',
+    ]);
+    expect(discRepository.query.mock.calls[0][0]).toContain(
+      'GREATEST(rate."createdAt", COALESCE(rate."editedAt", rate."createdAt")) DESC',
+    );
   });
 
   it('propagates Catalog failures instead of reporting false unmatched artists', async () => {
@@ -286,8 +345,8 @@ describe('RatesArtistLastfmService', () => {
       new Error('catalog query failed'),
     );
 
-    await expect(service.getArtistInfo('artist-id')).rejects.toThrow(
-      'catalog query failed',
-    );
+    await expect(
+      service.getArtistInfo('artist-id', 'session-user-id'),
+    ).rejects.toThrow('catalog query failed');
   });
 });
