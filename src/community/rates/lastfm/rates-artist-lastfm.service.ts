@@ -1,9 +1,14 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import sanitizeHtml = require('sanitize-html');
+import { Repository } from 'typeorm';
 import { ArtistCatalogService } from 'src/catalog/artists/catalog/artist-catalog.service';
+import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { LastfmApiService } from 'src/integrations/lastfm-integration/lastfm-api.service';
 import { LastfmArtistProfileLookup } from 'src/integrations/lastfm-integration/types/lastfm-api.types';
 import { RatesArtistLastfmResponseDto } from '../dto/rates-artist-lastfm.dto';
+import { ArtistCatalogNameMatch } from 'src/catalog/artists/catalog/artist-catalog.types';
+import { RatesArtistLastfmCatalogDiscDto } from '../dto/rates-artist-lastfm.dto';
 
 const PLAIN_TEXT_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [],
@@ -11,6 +16,35 @@ const PLAIN_TEXT_OPTIONS: sanitizeHtml.IOptions = {
 };
 const LASTFM_LIST_LIMIT = 5;
 const BIOGRAPHY_MAX_LENGTH = 1_200;
+
+type ArtistDiscCardRow = {
+  id: string;
+  name: string;
+  image: string | null;
+  releaseYear: number | string | null;
+  releaseDate: string | null;
+  link: string | null;
+  ep: boolean;
+  debut: boolean;
+  genreName: string | null;
+  genreColor: string | null;
+  averageRate: number | string | null;
+  averageCover: number | string | null;
+  voteCount: number | string;
+  commentCount: number | string;
+  userRateId: string | null;
+  userRate: number | string | null;
+  userCover: number | string | null;
+  favoriteId: string | null;
+  pendingId: string | null;
+};
+
+type ArtistCatalogDiscCardMatch = Omit<
+  ArtistCatalogNameMatch,
+  'catalogDiscs'
+> & {
+  catalogDiscs: RatesArtistLastfmCatalogDiscDto[];
+};
 
 @Injectable()
 export class RatesArtistLastfmService {
@@ -21,9 +55,14 @@ export class RatesArtistLastfmService {
       'findIdentityById' | 'findExactNameMatches'
     >,
     private readonly lastfmApiService: LastfmApiService,
+    @InjectRepository(Disc)
+    private readonly discRepository: Pick<Repository<Disc>, 'query'>,
   ) {}
 
-  async getArtistInfo(artistId: string): Promise<RatesArtistLastfmResponseDto> {
+  async getArtistInfo(
+    artistId: string,
+    userId: string,
+  ): Promise<RatesArtistLastfmResponseDto> {
     const artist = await this.artistCatalogService.findIdentityById(artistId);
     if (!artist) {
       throw new NotFoundException(`Artist with id ${artistId} not found`);
@@ -44,9 +83,164 @@ export class RatesArtistLastfmService {
           similarArtists.map(({ name }) => name),
         )
       : [];
+    const discCardMatches = await this.enrichCatalogDiscs(
+      catalogMatches,
+      userId,
+    );
 
-    return mapProfile(artist.id, lookup, similarArtists, catalogMatches);
+    return mapProfile(artist.id, lookup, similarArtists, discCardMatches);
   }
+
+  private async enrichCatalogDiscs(
+    matches: ArtistCatalogNameMatch[],
+    userId: string,
+  ): Promise<ArtistCatalogDiscCardMatch[]> {
+    const discIds = [
+      ...new Set(
+        matches.flatMap(({ catalogDiscs }) => catalogDiscs.map(({ id }) => id)),
+      ),
+    ];
+    if (!discIds.length) {
+      return matches.map((match) => ({ ...match, catalogDiscs: [] }));
+    }
+
+    const rows = (await this.discRepository.query(
+      `
+      WITH requested_discs AS (
+        SELECT unnest($1::uuid[]) AS id
+      ),
+      rate_stats AS (
+        SELECT
+          rate."discId" AS "discId",
+          AVG(rate.rate) FILTER (WHERE rate.rate IS NOT NULL) AS "averageRate",
+          AVG(rate.cover) FILTER (WHERE rate.cover IS NOT NULL) AS "averageCover",
+          (COUNT(rate.id) FILTER (WHERE rate.rate IS NOT NULL))::int AS "voteCount"
+        FROM rate
+        INNER JOIN requested_discs ON requested_discs.id = rate."discId"
+        GROUP BY rate."discId"
+      ),
+      comment_stats AS (
+        SELECT comment."discId" AS "discId", COUNT(comment.id)::int AS "commentCount"
+        FROM comment
+        INNER JOIN requested_discs ON requested_discs.id = comment."discId"
+        GROUP BY comment."discId"
+      ),
+      user_rates AS (
+        SELECT DISTINCT ON (rate."discId")
+          rate."discId" AS "discId",
+          rate.id,
+          rate.rate,
+          rate.cover
+        FROM rate
+        INNER JOIN requested_discs ON requested_discs.id = rate."discId"
+        WHERE rate."userId" = $2
+        ORDER BY
+          rate."discId",
+          GREATEST(rate."createdAt", COALESCE(rate."editedAt", rate."createdAt")) DESC,
+          rate.id DESC
+      ),
+      user_favorites AS (
+        SELECT DISTINCT ON (favorite."discId")
+          favorite."discId" AS "discId",
+          favorite.id
+        FROM favorite
+        INNER JOIN requested_discs ON requested_discs.id = favorite."discId"
+        WHERE favorite."userId" = $2
+        ORDER BY favorite."discId", favorite.id
+      ),
+      user_pendings AS (
+        SELECT DISTINCT ON (pending."discId")
+          pending."discId" AS "discId",
+          pending.id
+        FROM pending
+        INNER JOIN requested_discs ON requested_discs.id = pending."discId"
+        WHERE pending."userId" = $2
+        ORDER BY pending."discId", pending.id
+      )
+      SELECT
+        disc.id AS id,
+        disc.name AS name,
+        disc.image AS image,
+        CASE
+          WHEN disc."releaseDate" IS NULL THEN NULL
+          ELSE EXTRACT(YEAR FROM disc."releaseDate")::int
+        END AS "releaseYear",
+        disc."releaseDate"::text AS "releaseDate",
+        disc.link AS link,
+        COALESCE(disc.ep, false) AS ep,
+        COALESCE(disc.debut, false) AS debut,
+        genre.name AS "genreName",
+        genre.color AS "genreColor",
+        rate_stats."averageRate" AS "averageRate",
+        rate_stats."averageCover" AS "averageCover",
+        COALESCE(rate_stats."voteCount", 0)::int AS "voteCount",
+        COALESCE(comment_stats."commentCount", 0)::int AS "commentCount",
+        user_rates.id AS "userRateId",
+        user_rates.rate AS "userRate",
+        user_rates.cover AS "userCover",
+        user_favorites.id AS "favoriteId",
+        user_pendings.id AS "pendingId"
+      FROM requested_discs
+      INNER JOIN disc ON disc.id = requested_discs.id
+      LEFT JOIN genre ON genre.id = disc."genreId"
+      LEFT JOIN rate_stats ON rate_stats."discId" = disc.id
+      LEFT JOIN comment_stats ON comment_stats."discId" = disc.id
+      LEFT JOIN user_rates ON user_rates."discId" = disc.id
+      LEFT JOIN user_favorites ON user_favorites."discId" = disc.id
+      LEFT JOIN user_pendings ON user_pendings."discId" = disc.id
+      `,
+      [discIds, userId],
+    )) as ArtistDiscCardRow[];
+
+    const cardsById = new Map(rows.map((row) => [row.id, mapDiscCard(row)]));
+
+    return matches.map((match) => {
+      const catalogDiscs = match.catalogDiscs.flatMap((disc) => {
+        const card = cardsById.get(disc.id);
+        return card ? [card] : [];
+      });
+      return {
+        ...match,
+        catalogDiscCount: catalogDiscs.length,
+        catalogDiscs,
+      };
+    });
+  }
+}
+
+function mapDiscCard(row: ArtistDiscCardRow): RatesArtistLastfmCatalogDiscDto {
+  return {
+    id: row.id,
+    name: row.name,
+    image: row.image,
+    releaseYear: row.releaseYear === null ? null : Number(row.releaseYear),
+    releaseDate: row.releaseDate,
+    link: row.link,
+    ep: row.ep,
+    debut: row.debut,
+    genre:
+      row.genreName === null
+        ? null
+        : { name: row.genreName, color: row.genreColor },
+    averageRate: toNullableNumber(row.averageRate),
+    averageCover: toNullableNumber(row.averageCover),
+    voteCount: Number(row.voteCount),
+    commentCount: Number(row.commentCount),
+    userRate:
+      row.userRateId === null
+        ? null
+        : {
+            id: row.userRateId,
+            rate: toNullableNumber(row.userRate),
+            cover: toNullableNumber(row.userCover),
+          },
+    favoriteId: row.favoriteId,
+    pendingId: row.pendingId,
+  };
+}
+
+function toNullableNumber(value: number | string | null): number | null {
+  return value === null ? null : Number(value);
 }
 
 function emptyResponse(
@@ -69,9 +263,7 @@ function mapProfile(
   artistId: string,
   lookup: Extract<LastfmArtistProfileLookup, { status: 'found' }>,
   similarArtists: Array<{ name: string; url: string | null }>,
-  catalogMatches: Awaited<
-    ReturnType<ArtistCatalogService['findExactNameMatches']>
-  >,
+  catalogMatches: ArtistCatalogDiscCardMatch[],
 ): RatesArtistLastfmResponseDto {
   const profile = lookup.profile;
   const summary = profile.biographySummary

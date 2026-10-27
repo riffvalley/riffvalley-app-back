@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import { User } from 'src/identity/auth/entities/user.entity';
 import { RatesArtistLastfmController } from '../rates-artist-lastfm.controller';
 
 describe('RatesArtistLastfmController', () => {
@@ -14,6 +15,7 @@ describe('RatesArtistLastfmController', () => {
       getArtistInfo: jest.fn().mockResolvedValue({ artistId: 'artist-id' }),
     };
     const controller = new RatesArtistLastfmController(service as never);
+    const user = Object.assign(new User(), { id: 'session-user-id' });
     const handler = RatesArtistLastfmController.prototype.getArtistInfo;
     const guards = Reflect.getMetadata(
       GUARDS_METADATA,
@@ -31,10 +33,11 @@ describe('RatesArtistLastfmController', () => {
     );
     expect(guards).toContain(UserRoleGuard);
     await expect(
-      controller.getArtistInfo('123e4567-e89b-42d3-a456-426614174000'),
+      controller.getArtistInfo('123e4567-e89b-42d3-a456-426614174000', user),
     ).resolves.toEqual({ artistId: 'artist-id' });
     expect(service.getArtistInfo).toHaveBeenCalledWith(
       '123e4567-e89b-42d3-a456-426614174000',
+      'session-user-id',
     );
     await expect(
       new ParseUUIDPipe().transform('not-a-uuid', {
