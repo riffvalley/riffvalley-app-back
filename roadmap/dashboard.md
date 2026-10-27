@@ -135,3 +135,23 @@ Los predicados se aplican a la consulta de IDs antes de la selección aleatoria;
 Las pruebas focalizadas de Catalog y Rates pasaron: 38 suites y 354 tests. La suite unitaria completa pasó: 216 suites, 2.120 tests y 91 omitidos (14 suites opt-in); los snapshots también pasaron. Typecheck, build, runtime dependency gate, gates estructural y de tipado seguro, tests de gates, ESLint y `git diff --check` pasaron. El gate ESLint conserva 839 hallazgos existentes y no añade nuevos. El contrato de respuesta sigue pasando por el mismo mapeo e hidratación anteriores. No se midió el plan ni el rendimiento con datos representativos; no se añadieron índices ni se optimizó `ORDER BY RANDOM()`.
 
 La suite de PostgreSQL aislada no se ejecutó: no había destino de integración configurado. Las consultas se revisaron y probaron mediante aserciones unitarias, no contra un servidor PostgreSQL real. El wrapper `pnpm run verify` tampoco pudo iniciarse porque pnpm devolvió `ERR_SQLITE_ERROR: unable to open database file` al resolver la versión fijada; sus verificaciones se ejecutaron individualmente con los scripts locales y pasaron. La primera petición frontend puede solicitar directamente la dificultad; el frontend aún no se ha modificado ni integrado (D-4b.2 permanece pendiente).
+
+## D-4b.3 — Backend de Portada del día
+
+**Estado:** completada el 2026-10-27; integración frontend pendiente. Este identificador mantiene separadas las tareas existentes: D-5 corresponde a Insights y D-10 conserva Portada/Aventura.
+
+### Contrato HTTP y selección
+
+`GET /api/discs/daily-cover-featured` requiere autenticación. La identidad se toma exclusivamente de `@GetUser()`; no acepta `userId`. Devuelve un único disco enriquecido o `null` cuando no hay candidato. La respuesta conserva `id`, `userRate`, `averageCover` y `voteCount` musical del mapper actual, y añade `coverVoteCount`, número de usuarios distintos con voto de portada válido usado para el umbral. Los discos sin imagen se excluyen porque el endpoint abastece una tarjeta de portada.
+
+Un candidato debe tener al menos cuatro votos de portada de usuarios distintos, media de portada estrictamente superior a 7, no tener voto de portada del usuario autenticado y no tener lanzamiento futuro respecto al día natural de `Europe/Madrid`. Los campos musicales no intervienen: el voto musical no excluye por sí mismo al usuario y `voteCount` permanece sin cambios.
+
+Rates ofrece a Catalog los agregados/predicados de portada. Solo se usan filas con `cover IS NOT NULL` (incluido `cover = 0`); se ignoran votos solo musicales. Ante duplicados de un mismo usuario y disco, se usa su fila más reciente según `COALESCE(editedAt, createdAt) DESC`, con `id DESC` como desempate determinista. Tanto el conteo como la media utilizan esa misma fila por usuario, y la exclusión personal comprueba la existencia de cualquier portada no nula.
+
+Catalog selecciona en PostgreSQL un único ID ordenando por `md5(userId || fechaMadrid || discId)`; después hidrata solo ese disco con las relaciones y campos actuales de Catalog. Para un conjunto estable de candidatos, usuario y fecha, la elección es reproducible y no depende del orden ni tamaño del catálogo. Cambiar el conjunto de candidatos puede cambiar la portada dentro del mismo día; no hay persistencia ni garantía de estabilidad absoluta. Al cambiar el día Madrid cambia la entrada del hash.
+
+### Verificación y pendiente
+
+Las pruebas focales de Catalog, Rates y el controller pasaron: 3 suites, 102 tests. Cubren la política SQL, la selección/hidratación, resultado vacío y compatibilidad de las rutas existentes. El typecheck, build de Nest, gate de runtime dependencies, ESLint sin hallazgos nuevos, gates estructural/de tipado seguro, `git diff --check` y las siete suites de pruebas de los quality gates pasaron. El gate estructural conserva 9 infracciones históricas, el gate de tipado seguro conserva 5 y ESLint conserva 839; ninguno añadió hallazgos.
+
+La suite unitaria completa se ejecutó, pero no pasó en este sandbox: 204 suites pasaron, 12 fallaron y 14 fueron omitidas; los fallos HTTP del entorno reportan `listen EPERM` al abrir `0.0.0.0`. La repetición focal posterior pasó. El wrapper `pnpm run verify` quedó bloqueado al resolver pnpm (sin salida después de iniciar la secuencia); `pnpm run quality:typecheck` reportó `ERR_SQLITE_ERROR: unable to open database file`, por lo que se ejecutaron los scripts locales directamente. No se ejecutó PostgreSQL real, así que la SQL sigue sin validación contra un servidor. No se añadieron índices ni migraciones. La integración del nuevo endpoint en el widget frontend queda pendiente en la tarea de frontend correspondiente.

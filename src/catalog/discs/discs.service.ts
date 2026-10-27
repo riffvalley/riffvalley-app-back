@@ -63,6 +63,10 @@ export class DiscsService {
     return this.discCatalogService.findRandom(dto, user);
   }
 
+  findDailyCoverFeatured(user: User) {
+    return this.discCatalogService.findDailyCoverFeatured(user);
+  }
+
   findOptions(dto: OptionsQueryDto) {
     return this.discCatalogService.findOptions(dto);
   }

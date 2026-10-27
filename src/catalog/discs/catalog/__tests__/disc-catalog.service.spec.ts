@@ -58,6 +58,7 @@ type QueryBuilderMock = {
   limit: ChainMock<[limit: number]>;
   orderBy: ChainMock<[field: string, direction?: 'ASC' | 'DESC']>;
   select: ChainMock<[selection: string, alias?: string]>;
+  setParameter: ChainMock<[name: string, value: unknown]>;
   skip: ChainMock<[offset: number]>;
   take: ChainMock<[limit: number]>;
   where: ChainMock<[condition: string, parameters?: Record<string, unknown>]>;
@@ -165,6 +166,9 @@ function createQueryBuilderMock(): QueryBuilderMock {
       [field: string, direction?: 'ASC' | 'DESC']
     >(() => builder),
     select: jest.fn<QueryBuilderMock, [selection: string, alias?: string]>(
+      () => builder,
+    ),
+    setParameter: jest.fn<QueryBuilderMock, [name: string, value: unknown]>(
       () => builder,
     ),
     skip: jest.fn<QueryBuilderMock, [offset: number]>(() => builder),
@@ -2192,5 +2196,97 @@ describe('DiscCatalogService.findOne', () => {
         statusCode: 404,
       },
     });
+  });
+});
+
+describe('DiscCatalogService.findDailyCoverFeatured', () => {
+  it('filters and deterministically selects one Madrid-day cover candidate, then enriches its response', async () => {
+    const builders: QueryBuilderMock[] = [];
+    const repository: RepositoryMock = {
+      createQueryBuilder: jest.fn(() => {
+        const builder = createQueryBuilderMock();
+        if (builders.length === 0) {
+          builder.getRawMany.mockResolvedValue([
+            { id: 'disc-id', coverVoteCount: '4', averageCover: '7.5' },
+          ]);
+        } else {
+          builder.getRawAndEntities.mockResolvedValue({
+            entities: [
+              createDiscFixture({
+                id: 'disc-id',
+                name: 'Featured album',
+                image: 'cover.jpg',
+                artist: { name: 'Artist', country: { name: 'Spain' } },
+                genre: null,
+                rates: [],
+                favorites: [],
+                pendings: [],
+              }),
+            ],
+            raw: [
+              {
+                disc_id_for_mapping: 'disc-id',
+                averagerate: '8',
+                averageCover: '7.5',
+                rateCount: '2',
+                commentCount: '0',
+              },
+            ],
+          });
+        }
+        builders.push(builder);
+        return builder;
+      }),
+      findOneOrFail: jest.fn(),
+    };
+    const { service, moduleRef } = await createCatalogService(repository);
+    try {
+      const result = await service.findDailyCoverFeatured(
+        createUserFixture('user-id'),
+      );
+
+      expect(result).toMatchObject({
+        id: 'disc-id',
+        userRate: null,
+        averageCover: 7.5,
+        voteCount: 2,
+        coverVoteCount: 4,
+      });
+      expect(builders).toHaveLength(2);
+      expect(builders[0].where).toHaveBeenCalledWith(
+        expect.stringContaining("'Europe/Madrid'"),
+      );
+      expect(builders[0].andWhere).toHaveBeenCalledWith(
+        'disc.image IS NOT NULL',
+      );
+      expect(builders[0].orderBy).toHaveBeenCalledWith(
+        expect.stringContaining('md5('),
+      );
+      expect(builders[0].addOrderBy).toHaveBeenCalledWith('disc.id', 'ASC');
+      expect(builders[1].where).toHaveBeenCalledWith(
+        'disc.id = :selectedDiscId',
+        { selectedDiscId: 'disc-id' },
+      );
+    } finally {
+      await moduleRef.close();
+    }
+  });
+
+  it('returns null when no cover reaches the rate thresholds', async () => {
+    const builder = createQueryBuilderMock();
+    builder.getRawMany.mockResolvedValue([]);
+    const repository: RepositoryMock = {
+      createQueryBuilder: jest.fn(() => builder),
+      findOneOrFail: jest.fn(),
+    };
+    const { service, moduleRef } = await createCatalogService(repository);
+    try {
+      await expect(
+        service.findDailyCoverFeatured(createUserFixture('user-id')),
+      ).resolves.toBeNull();
+      expect(repository.createQueryBuilder).toHaveBeenCalledTimes(1);
+    } finally {
+      await moduleRef.close();
+    }
   });
 });
