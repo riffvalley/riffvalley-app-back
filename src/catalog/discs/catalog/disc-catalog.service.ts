@@ -506,7 +506,11 @@ export class DiscCatalogService {
     const userId = user.id;
     const today = new Date();
 
-    const selectRandomIds = async (excludePreviousDisc: boolean) => {
+    const selectRandomIds = async (
+      excludePreviousDisc: boolean,
+      excludedIds: string[] = [],
+      requestedLimit = limit,
+    ) => {
       const idsQueryBuilder = this.discRepository
         .createQueryBuilder('disc')
         .select('disc.id', 'id')
@@ -556,6 +560,12 @@ export class DiscCatalogService {
         );
       }
 
+      if (excludedIds.length > 0) {
+        idsQueryBuilder.andWhere('disc.id NOT IN (:...excludedIds)', {
+          excludedIds,
+        });
+      }
+
       if (difficulty) {
         const criteria = this.ratesRandomSelectionService.getDiscCriteria(
           userId,
@@ -591,7 +601,7 @@ export class DiscCatalogService {
         idsQueryBuilder.orderBy('RANDOM()');
       }
 
-      const rows = await idsQueryBuilder.limit(limit).getRawMany();
+      const rows = await idsQueryBuilder.limit(requestedLimit).getRawMany();
       const ids: string[] = [];
       const communityVoteCounts = new Map<string, number>();
       for (const row of rows) {
@@ -615,100 +625,134 @@ export class DiscCatalogService {
       // Si no queda alternativa, se permite repetir el único candidato.
       selection = await selectRandomIds(false);
     }
-    const { ids: randomIds, communityVoteCounts } = selection;
+    const hydrateSelection = async (selected: typeof selection) => {
+      const { ids, communityVoteCounts } = selected;
+      if (ids.length === 0) return [];
 
-    if (randomIds.length === 0) return [];
+      const queryBuilder = this.discRepository
+        .createQueryBuilder('disc')
+        .leftJoinAndSelect('disc.artist', 'artist')
+        .leftJoinAndSelect('artist.country', 'country')
+        .leftJoinAndSelect('disc.genre', 'genre')
+        .leftJoinAndSelect('disc.rates', 'rate', 'rate.userId = :userId', {
+          userId,
+        })
+        .leftJoinAndSelect(
+          'disc.favorites',
+          'favorite',
+          'favorite.userId = :userId',
+          { userId },
+        )
+        .leftJoinAndSelect(
+          'disc.pendings',
+          'pending',
+          'pending.userId = :userId',
+          { userId },
+        )
+        .addSelect('disc.id', 'disc_id_for_mapping')
+        .addSelect((subQuery) => {
+          return subQuery
+            .select('AVG(rate.rate)', 'averageRate')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id');
+        }, 'averagerate')
+        .addSelect((subQuery) => {
+          return subQuery
+            .select('AVG(rate.cover)', 'averageCover')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id');
+        }, 'averageCover')
+        .addSelect((subQuery) => {
+          return subQuery
+            .select('COUNT(rate.id)', 'rateCount')
+            .from('rate', 'rate')
+            .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
+        }, 'rateCount')
+        .addSelect((subQuery) => {
+          return subQuery
+            .select('COUNT(comment.id)', 'commentCount')
+            .from('comment', 'comment')
+            .where('comment.discId = disc.id');
+        }, 'commentCount')
+        .where('disc.id IN (:...randomIds)', { randomIds: ids });
 
-    const queryBuilder = this.discRepository
-      .createQueryBuilder('disc')
-      .leftJoinAndSelect('disc.artist', 'artist')
-      .leftJoinAndSelect('artist.country', 'country')
-      .leftJoinAndSelect('disc.genre', 'genre')
-      .leftJoinAndSelect('disc.rates', 'rate', 'rate.userId = :userId', {
-        userId,
-      })
-      .leftJoinAndSelect(
-        'disc.favorites',
-        'favorite',
-        'favorite.userId = :userId',
-        { userId },
-      )
-      .leftJoinAndSelect(
-        'disc.pendings',
-        'pending',
-        'pending.userId = :userId',
-        { userId },
-      )
-      .addSelect('disc.id', 'disc_id_for_mapping')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('AVG(rate.rate)', 'averageRate')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id');
-      }, 'averagerate')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('AVG(rate.cover)', 'averageCover')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id');
-      }, 'averageCover')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('COUNT(rate.id)', 'rateCount')
-          .from('rate', 'rate')
-          .where('rate.discId = disc.id AND rate.rate IS NOT NULL');
-      }, 'rateCount')
-      .addSelect((subQuery) => {
-        return subQuery
-          .select('COUNT(comment.id)', 'commentCount')
-          .from('comment', 'comment')
-          .where('comment.discId = disc.id');
-      }, 'commentCount')
-      .where('disc.id IN (:...randomIds)', { randomIds });
+      const { entities: discs, raw } = await queryBuilder.getRawAndEntities();
+      const hydratedDiscIds = [
+        ...new Set(
+          raw
+            .map((row) => row.disc_id_for_mapping ?? row.discId ?? row.disc_id)
+            .filter(
+              (id): id is string => typeof id === 'string' && id.length > 0,
+            ),
+        ),
+      ];
+      const discsWithIds = discs.map((disc, index) => {
+        const id =
+          typeof disc.id === 'string' && disc.id.length > 0
+            ? disc.id
+            : hydratedDiscIds[index];
+        if (!id) {
+          throw new Error('Hydrated random disc is missing its database ID');
+        }
+        return { ...disc, id };
+      });
+      const orderedDiscs = restoreRandomDiscOrder(discsWithIds, ids);
+      const rawById = indexCatalogRawRows(raw);
 
-    const { entities: discs, raw } = await queryBuilder.getRawAndEntities();
+      return orderedDiscs.map((disc) => {
+        const mappedDisc = mapCatalogDisc(
+          disc,
+          rawById.get(disc.id) ?? {
+            discId: disc.id,
+            averagerate: null,
+            averageCover: null,
+            rateCount: null,
+            commentCount: null,
+          },
+        );
+        if (!difficulty) return mappedDisc;
+        return {
+          ...mappedDisc,
+          id: disc.id,
+          voteCount: communityVoteCounts.get(disc.id) ?? mappedDisc.voteCount,
+        };
+      });
+    };
 
-    // Preserve the random order decided by the IDs query above.
-    const hydratedDiscIds = [
-      ...new Set(
-        raw
-          .map((row) => row.disc_id_for_mapping ?? row.discId ?? row.disc_id)
-          .filter(
-            (id): id is string => typeof id === 'string' && id.length > 0,
-          ),
-      ),
-    ];
-    const discsWithIds = discs.map((disc, index) => {
-      const id =
-        typeof disc.id === 'string' && disc.id.length > 0
-          ? disc.id
-          : hydratedDiscIds[index];
-      if (!id) {
-        throw new Error('Hydrated random disc is missing its database ID');
-      }
-      return { ...disc, id };
-    });
-    const orderedDiscs = restoreRandomDiscOrder(discsWithIds, randomIds);
-    const rawById = indexCatalogRawRows(raw);
+    const selectedDiscs: Awaited<ReturnType<typeof hydrateSelection>> = [];
+    const attemptedIds = new Set<string>();
+    let selectionToHydrate = selection;
+    let refillAttempts = 0;
 
-    return orderedDiscs.map((disc) => {
-      const mappedDisc = mapCatalogDisc(
-        disc,
-        rawById.get(disc.id) ?? {
-          discId: disc.id,
-          averagerate: null,
-          averageCover: null,
-          rateCount: null,
-          commentCount: null,
-        },
+    while (selectedDiscs.length < limit) {
+      if (selectionToHydrate.ids.length === 0) break;
+      for (const id of selectionToHydrate.ids) attemptedIds.add(id);
+      const hydrated = await hydrateSelection(selectionToHydrate);
+      const selectedIds = new Set(selectedDiscs.map(({ id }) => id));
+      selectedDiscs.push(
+        ...hydrated.filter((disc) => !selectedIds.has(disc.id)),
       );
-      if (!difficulty) return mappedDisc;
-      return {
-        ...mappedDisc,
-        id: disc.id,
-        voteCount: communityVoteCounts.get(disc.id) ?? mappedDisc.voteCount,
+
+      if (unratedByCommunity !== true || selectedDiscs.length >= limit) break;
+      if (refillAttempts >= 2) break;
+      refillAttempts += 1;
+
+      const refillSelection = await selectRandomIds(
+        false,
+        [...attemptedIds],
+        limit - selectedDiscs.length,
+      );
+      const freshIds = refillSelection.ids.filter(
+        (id) => !attemptedIds.has(id),
+      );
+      if (freshIds.length === 0) break;
+      selectionToHydrate = {
+        ...refillSelection,
+        ids: freshIds,
       };
-    });
+    }
+
+    return selectedDiscs;
   }
 
   async findOptions(dto: OptionsQueryDto) {
