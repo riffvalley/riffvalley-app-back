@@ -11,6 +11,7 @@ import {
   RatesHomeInsightsResponse,
 } from '../dto/rates-geography.dto';
 import { RatesTopArtistsResponseDto } from '../dto/rates-artists.dto';
+import { RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH } from './rates-artists.constants';
 
 type GeographyQueryRow = {
   totalRatedDiscs: number | string;
@@ -214,7 +215,10 @@ export class RatesStatsService {
         SELECT "discId", rate
         FROM ranked_musical_rates
         WHERE duplicate_position = 1
-      )
+      ), user_average AS (
+        SELECT AVG(rate) AS "globalAverageRate"
+        FROM latest_disc_ratings
+      ), artist_averages AS (
       SELECT
         artist.id AS id,
         artist.name AS name,
@@ -225,14 +229,31 @@ export class RatesStatsService {
       INNER JOIN disc ON disc.id = latest_disc_ratings."discId"
       INNER JOIN artist ON artist.id = disc."artistId"
       GROUP BY artist.id, artist.name, artist.image
+      ), scored_artists AS (
+        SELECT
+          artist_averages.id,
+          artist_averages.name,
+          artist_averages.image,
+          artist_averages."ratingCount",
+          artist_averages."averageRate",
+          (
+            artist_averages."ratingCount" * artist_averages."averageRate"
+            + $3::numeric * user_average."globalAverageRate"
+          ) / (artist_averages."ratingCount" + $3::numeric) AS "bayesianScore"
+        FROM artist_averages
+        CROSS JOIN user_average
+      )
+      SELECT id, name, image, "ratingCount", "averageRate"
+      FROM scored_artists
       ORDER BY
-        "ratingCount" DESC,
+        "bayesianScore" DESC,
         "averageRate" DESC,
-        artist.name ASC,
-        artist.id ASC
+        "ratingCount" DESC,
+        name ASC,
+        id ASC
       LIMIT $2
       `,
-      [userId, 7],
+      [userId, 7, RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH],
     )) as TopArtistRow[];
 
     return {
