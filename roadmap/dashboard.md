@@ -416,6 +416,16 @@ La biografía se sanea a texto plano con `sanitize-html`, se limita a 1.200 cara
 
 Las pruebas focalizadas pasan: seis suites y 39 tests. Cubren endpoint/auth/UUID, consulta por nombre de Catalog, ausencia de coincidencia, artista inexistente, sanitización/truncado, URLs, límites/duplicados, métricas parciales, errores, timeout, configuración, no escrituras e integración del módulo. Las pruebas existentes del cliente/servicio/controller Catalog Last.fm pasan y conservan los consumidores previos. Typecheck, build, gates estructural/de tipado y runtime dependency gate pasan; el ESLint quality gate conserva sus 839 hallazgos históricos con cero nuevos, y `git diff --check` pasa. La revisión ESLint directa de los nuevos archivos de Rates pasa; archivos preexistentes del cliente Last.fm conservan hallazgos de formato, sin autocorrecciones ajenas. Las llamadas externas se simulan; no se ejecutaron peticiones reales a Last.fm.
 
+#### D-ART-7d.1 — Vincular similares con Catalog
+
+**Estado:** completada en backend el 2026-10-27.
+
+`GET /api/rates/artists/:artistId/lastfm` conserva su respuesta y añade a cada `similarArtists` los campos `catalogArtistId` (UUID o `null`), `catalogDiscCount` y `catalogDiscs` (`id`, `name`, `image`, `releaseYear`). La identidad y los discos se resuelven desde `ArtistCatalogService`, sin crear una relación nueva ni modificar datos de Catalog.
+
+La comparación es exacta tras NFKC, eliminación de diacríticos, normalización de espacios y minúsculas, usando `nameNormalized` solo para reducir candidatos. No hay similitud difusa. Si varios Artists tienen el mismo nombre normalizado, se informa ausencia de vínculo (`null`, cero y lista vacía) y se conserva el enlace Last.fm. Los cinco nombres únicos como máximo se consultan en bloque; los discos se recuperan mediante una única consulta agrupada, se deduplican por ID y se ordenan por fecha de publicación descendente (nulos al final), nombre e ID. Se devuelven todos los discos; no se encontró en el detalle público por ID un filtro de visibilidad que hubiera que reproducir. Artistas existentes sin discos conservan su UUID y devuelven cero.
+
+La respuesta externa de Last.fm solo se enriquece si contiene similares. Un error de Catalog se propaga como error del endpoint y no se transforma en falsos artistas ausentes. Biografía saneada, etiquetas, métricas, URLs, estado y comportamiento sin similares permanecen intactos. Los tests focalizados pasan: 11 suites y 94 tests, incluidos regresión de `/summary`, `/top`, Catalog Last.fm y el cliente compartido. Build y typecheck pasan; gates estructural/de tipado tienen cero hallazgos nuevos; el runtime dependency gate valida 478 archivos compilados y 26 módulos externos; ESLint mantiene 839 hallazgos históricos y cero nuevos; `git diff --check` pasa. La consulta SQL se probó mediante dobles, no contra una instancia PostgreSQL aislada. D-ART-7d.2 (navegación desde frontend), D-ART-7c y D-ART-8 siguen pendientes.
+
 ## D-9 — Cementerio
 
 ### D-9b — Decisión funcional

@@ -1,5 +1,4 @@
 import { NotFoundException } from '@nestjs/common';
-import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import {
   LastfmArtistProfile,
   LastfmArtistProfileLookup,
@@ -22,30 +21,41 @@ function createService(
     status: 'found',
     profile: baseProfile,
   },
-  catalogArtist: Artist | null = Object.assign(new Artist(), {
+  catalogArtist: { id: string; name: string } | null = {
     id: 'artist-id',
     name: 'Example Artist',
-  }),
+  },
+  catalogMatches: Array<{
+    catalogArtistId: string | null;
+    catalogDiscCount: number;
+    catalogDiscs: Array<{
+      id: string;
+      name: string;
+      image: string | null;
+      releaseYear: number | null;
+    }>;
+  }> = [],
 ) {
-  const artistRepository = {
-    findOne: jest.fn().mockResolvedValue(catalogArtist),
+  const artistCatalogService = {
+    findIdentityById: jest.fn().mockResolvedValue(catalogArtist),
+    findExactNameMatches: jest.fn().mockResolvedValue(catalogMatches),
   };
   const lastfmApiService = {
     lookupArtistProfile: jest.fn().mockResolvedValue(lookup),
   };
   return {
     service: new RatesArtistLastfmService(
-      artistRepository as never,
+      artistCatalogService,
       lastfmApiService as never,
     ),
-    artistRepository,
+    artistCatalogService,
     lastfmApiService,
   };
 }
 
 describe('RatesArtistLastfmService', () => {
   it('resolves identity from Catalog and maps only explicit Last.fm fields', async () => {
-    const { service, artistRepository, lastfmApiService } = createService();
+    const { service, artistCatalogService, lastfmApiService } = createService();
 
     await expect(service.getArtistInfo('artist-id')).resolves.toEqual({
       artistId: 'artist-id',
@@ -61,14 +71,13 @@ describe('RatesArtistLastfmService', () => {
       lastfmUrl: 'https://www.last.fm/music/Example+Artist',
     });
 
-    expect(artistRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 'artist-id' },
-      select: { id: true, name: true },
-    });
+    expect(artistCatalogService.findIdentityById).toHaveBeenCalledWith(
+      'artist-id',
+    );
     expect(lastfmApiService.lookupArtistProfile).toHaveBeenCalledWith(
       'Example Artist',
     );
-    expect(Object.keys(artistRepository)).toEqual(['findOne']);
+    expect(artistCatalogService.findExactNameMatches).not.toHaveBeenCalled();
   });
 
   it('returns the controlled not-found result for an unknown Catalog artist', async () => {
@@ -182,10 +191,103 @@ describe('RatesArtistLastfmService', () => {
       status: 'available',
       biography: null,
       tags: [{ name: 'Rock', url: null }],
-      similarArtists: [{ name: 'Similar', url: null }],
+      similarArtists: [
+        {
+          name: 'Similar',
+          url: null,
+          catalogArtistId: null,
+          catalogDiscCount: 0,
+          catalogDiscs: [],
+        },
+      ],
       listeners: null,
       playCount: null,
       lastfmUrl: null,
     });
+  });
+
+  it('enriches similar artists in one Catalog batch while preserving Last.fm metadata', async () => {
+    const profile: LastfmArtistProfile = {
+      ...baseProfile,
+      tags: [{ name: 'Metal', url: 'https://www.last.fm/tag/metal' }],
+      similarArtists: [
+        { name: 'Catalog Band', url: 'https://www.last.fm/music/Catalog+Band' },
+        { name: 'Unknown Band', url: 'https://www.last.fm/music/Unknown+Band' },
+      ],
+    };
+    const { service, artistCatalogService } = createService(
+      { status: 'found', profile },
+      undefined,
+      [
+        {
+          catalogArtistId: 'catalog-artist-id',
+          catalogDiscCount: 1,
+          catalogDiscs: [
+            {
+              id: 'disc-id',
+              name: 'Catalog Album',
+              image: null,
+              releaseYear: 2020,
+            },
+          ],
+        },
+        { catalogArtistId: null, catalogDiscCount: 0, catalogDiscs: [] },
+      ],
+    );
+
+    await expect(service.getArtistInfo('artist-id')).resolves.toMatchObject({
+      biography: {
+        summary: 'A band biography.',
+        url: 'https://www.last.fm/music/Example+Artist/+wiki',
+      },
+      tags: [{ name: 'Metal', url: 'https://www.last.fm/tag/metal' }],
+      similarArtists: [
+        {
+          name: 'Catalog Band',
+          url: 'https://www.last.fm/music/Catalog+Band',
+          catalogArtistId: 'catalog-artist-id',
+          catalogDiscCount: 1,
+          catalogDiscs: [
+            {
+              id: 'disc-id',
+              name: 'Catalog Album',
+              image: null,
+              releaseYear: 2020,
+            },
+          ],
+        },
+        {
+          name: 'Unknown Band',
+          url: 'https://www.last.fm/music/Unknown+Band',
+          catalogArtistId: null,
+          catalogDiscCount: 0,
+          catalogDiscs: [],
+        },
+      ],
+      listeners: 12000,
+      playCount: 85000,
+    });
+    expect(artistCatalogService.findExactNameMatches).toHaveBeenCalledTimes(1);
+    expect(artistCatalogService.findExactNameMatches).toHaveBeenCalledWith([
+      'Catalog Band',
+      'Unknown Band',
+    ]);
+  });
+
+  it('propagates Catalog failures instead of reporting false unmatched artists', async () => {
+    const { service, artistCatalogService } = createService({
+      status: 'found',
+      profile: {
+        ...baseProfile,
+        similarArtists: [{ name: 'Similar', url: null }],
+      },
+    });
+    artistCatalogService.findExactNameMatches.mockRejectedValue(
+      new Error('catalog query failed'),
+    );
+
+    await expect(service.getArtistInfo('artist-id')).rejects.toThrow(
+      'catalog query failed',
+    );
   });
 });

@@ -8,6 +8,9 @@ import { AuthorizationModule } from 'src/identity/authorization/authorization.mo
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { Artist } from 'src/catalog/artists/entities/artist.entity';
+import { NationalRelease } from 'src/editorial/national-releases/entities/national-release.entity';
+import { RiffValleyPlaylistArtist } from 'src/editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
+import { ArtistsModule } from 'src/catalog/artists/artists.module';
 import { LastfmIntegrationModule } from 'src/integrations/lastfm-integration/lastfm-integration.module';
 import { UsersModule } from 'src/identity/users/users.module';
 import { UsersService } from 'src/identity/users/users.service';
@@ -41,6 +44,10 @@ describe('RatesModule characterization', () => {
       .useValue(discRepository)
       .overrideProvider(getRepositoryToken(Artist))
       .useValue(artistRepository)
+      .overrideProvider(getRepositoryToken(NationalRelease))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(RiffValleyPlaylistArtist))
+      .useValue({})
       .overrideProvider(getRepositoryToken(User))
       .useValue({})
       .overrideProvider(ConfigService)
@@ -86,6 +93,7 @@ describe('RatesModule characterization', () => {
         AuthorizationModule,
         UsersModule,
         LastfmIntegrationModule,
+        ArtistsModule,
       ]),
     );
   });
