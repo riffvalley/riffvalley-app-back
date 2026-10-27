@@ -188,6 +188,45 @@ describe('RatesController home insights route', () => {
     ).toBe(':id');
   });
 
+  it('registers GET /rates/stats/discs with authentication and session identity', async () => {
+    const stats = new RatesStatsService(
+      createRateRepository(),
+      createUsersService(),
+    );
+    const getRatedDiscs = jest
+      .spyOn(stats, 'getUserRatedDiscs')
+      .mockResolvedValue([]);
+    const controller = new RatesController(
+      new RatesService(createRateRepository()),
+      stats,
+      new RatesHistoryService(createRateRepository()),
+      new RatesDashboardSummaryService(createRateRepository()),
+    );
+    const user = Object.assign(new User(), { id: 'identity-from-session' });
+    const handler = RatesController.prototype.getUserRatedDiscs;
+    const guards = Reflect.getMetadata(
+      GUARDS_METADATA,
+      handler,
+    ) as Type<unknown>[];
+    const args = Reflect.getMetadata(
+      ROUTE_ARGS_METADATA,
+      RatesController,
+      'getUserRatedDiscs',
+    ) as Record<string, unknown>;
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('stats/discs');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+      RequestMethod.GET,
+    );
+    expect(guards).toContain(UserRoleGuard);
+    expect(Object.values(args)).toContainEqual(
+      expect.objectContaining({ index: 0, data: undefined }),
+    );
+
+    await controller.getUserRatedDiscs(user, '2024');
+    expect(getRatedDiscs).toHaveBeenCalledWith(user, '2024');
+  });
+
   it('registers both authenticated geography routes with session identity only', async () => {
     const stats = new RatesStatsService(
       createRateRepository(),
@@ -352,6 +391,7 @@ describe('RatesController home insights route', () => {
   it('preserves the methods, paths and current authentication decorators on the remaining routes', () => {
     const routes = [
       ['getUserStats', RequestMethod.GET, 'stats', true],
+      ['getUserRatedDiscs', RequestMethod.GET, 'stats/discs', true],
       ['getUserHistoryQB', RequestMethod.GET, 'user/:userId/history', false],
       ['findRatesByDisc', RequestMethod.GET, 'disc/:discId', false],
       ['create', RequestMethod.POST, '/', true],
