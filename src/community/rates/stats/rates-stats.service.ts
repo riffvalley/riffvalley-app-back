@@ -19,6 +19,15 @@ import {
   RatesArtistSummaryGenreDto,
   RatesArtistSummaryResponseDto,
 } from '../dto/rates-artist-summary.dto';
+import {
+  RatesStatsDiscDto,
+  RatesStatsRatedDiscDto,
+  RatesUserStatsResponseDto,
+} from '../dto/rates-user-stats.dto';
+import {
+  loadRatesUserStatsDetails,
+  loadUserRatedDiscs,
+} from './loaders/rates-user-stats-details.loader';
 
 const ELIGIBLE_USER_ARTIST_RATES_CTES = `
   ranked_artist_rates AS (
@@ -685,7 +694,10 @@ export class RatesStatsService {
     };
   }
 
-  async getUserStats(user: User, year?: string) {
+  async getUserStats(
+    user: User,
+    year?: string,
+  ): Promise<RatesUserStatsResponseDto> {
     const userId = user.id;
     // Sin año concreto => discos de todos los años (coherente con el leaderboard del dashboard).
     // Con año => discos publicados ese año, igual que el leaderboard (por fecha de lanzamiento
@@ -728,6 +740,7 @@ export class RatesStatsService {
     const formattedVotesByGenre = votesByGenre.map((item) => ({
       genre: item.genre,
       count: parseInt(item.count, 10),
+      topDisc: null as RatesStatsDiscDto | null,
     }));
 
     // 3. Votos por mes y semana (en la fecha en la que se emitió el voto), sobre discos del año filtrado
@@ -757,7 +770,12 @@ export class RatesStatsService {
     // Agrupar por mes y luego por semana
     const votesByMonthMap = new Map<
       string,
-      { month: string; count: number; weeks: { week: string; count: number }[] }
+      {
+        month: string;
+        count: number;
+        weeks: { week: string; count: number }[];
+        topDisc: RatesStatsDiscDto | null;
+      }
     >();
 
     votesByMonthRaw.forEach((item) => {
@@ -770,6 +788,7 @@ export class RatesStatsService {
           month,
           count: 0,
           weeks: [],
+          topDisc: null,
         });
       }
 
@@ -860,6 +879,26 @@ export class RatesStatsService {
       .getRawMany();
 
     const rank = usersWithMoreVotesRaw.length + 1;
+    const statisticsAsOf = new Date();
+    const statsDetails = await loadRatesUserStatsDetails(
+      this.rateRepository,
+      userId,
+      filterYear,
+      statisticsAsOf,
+    );
+
+    const topDiscsByGenreMap = new Map(
+      statsDetails.topDiscsByGenre.map(({ genre, disc }) => [genre, disc]),
+    );
+    const topDiscsByMonthMap = new Map(
+      statsDetails.topDiscsByMonth.map(({ month, disc }) => [month, disc]),
+    );
+    for (const entry of formattedVotesByGenre) {
+      entry.topDisc = topDiscsByGenreMap.get(entry.genre) ?? null;
+    }
+    for (const entry of formattedVotesByMonth) {
+      entry.topDisc = topDiscsByMonthMap.get(entry.month) ?? null;
+    }
 
     return {
       totalVotes,
@@ -870,6 +909,17 @@ export class RatesStatsService {
       votesByScore,
       totalUsers,
       rank,
+      topDiscOverall: statsDetails.topDiscOverall,
+      mostControversial: statsDetails.mostControversial,
+      votesByDay: statsDetails.votesByDay,
+      yearOverYear: statsDetails.yearOverYear,
     };
+  }
+
+  async getUserRatedDiscs(
+    user: User,
+    year?: string,
+  ): Promise<RatesStatsRatedDiscDto[]> {
+    return loadUserRatedDiscs(this.rateRepository, user.id, year);
   }
 }

@@ -162,6 +162,14 @@ src/community/
 - **Tamaño estimado:** S.
 - [x] **Completada (2026-10-05).** Rates, Auth → Rate y los consumers focalizados de Home, Calendar y Artists pasan; Auth resuelve el repositorio y conserva las proyecciones de actividad. RatesModule se registra una vez en AppModule; no hay dependencia inversa ni imports legacy. El typecheck y `git diff --check` pasan. `DiscCatalogService` conserva el fallo preexistente de `addSelect('disc.id', 'discId')`; no se modificó. Dos suites PostgreSQL se omitieron por no estar habilitadas en este entorno. F.1 permanece pendiente.
 
+##### E.3 — Restaurar contratos ampliados de estadísticas Rates
+
+- **Objetivo:** recuperar de forma compatible las ampliaciones de estadísticas de la rama `feat/rates-stats-top-discs`, conservando todos los campos ya servidos por `main`.
+- **Alcance:** añadir `topDisc` a cada elemento de `votesByGenre` y `votesByMonth`, `topDiscOverall`, `mostControversial`, `votesByDay`, `yearOverYear` y `GET /api/rates/stats/discs`; tipar explícitamente las respuestas y aislar las consultas adicionales en el loader de estadísticas.
+- **Compatibilidad:** no se elimina ni renombra ningún campo existente de `GET /api/rates/stats`; las estadísticas previas mantienen sus cálculos. La ruta nueva requiere autenticación y toma el usuario de `@GetUser()`, con filtro anual opcional por año de publicación del disco.
+- **Verificación:** suites focalizadas de RatesStats y controlador; typecheck, build, ESLint y gates de calidad disponibles. Las pruebas de consultas usan dobles, no una instancia PostgreSQL aislada.
+- [x] **Completada (2026-10-28).** Recuperadas las proyecciones y la ruta de discos valorados sin retirar campos del contrato actual. Las consultas adicionales se agrupan en `stats/loaders/rates-user-stats-details.loader.ts`; la serie histórica nueva no consulta Geography. Se aprobaron 44 tests focalizados. La validación SQL contra PostgreSQL queda pendiente por no disponer de una base aislada autorizada.
+
 #### F — Composición y regresión final
 
 ##### F.1 — Normalizar imports y composición futura

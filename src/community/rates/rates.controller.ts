@@ -43,6 +43,12 @@ export class RatesController {
     return this.ratesStatsService.getUserStats(user, year);
   }
 
+  @Get('stats/discs')
+  @Auth()
+  getUserRatedDiscs(@GetUser() user: User, @Query('year') year?: string) {
+    return this.ratesStatsService.getUserRatedDiscs(user, year);
+  }
+
   @Get('home-insights')
   @Auth()
   getHomeInsights(@GetUser() user: User) {
