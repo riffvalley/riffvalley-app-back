@@ -101,7 +101,10 @@ describe('RatesController home insights route', () => {
     );
     const getHomeInsights = jest
       .spyOn(ratesStatsService, 'getHomeInsights')
-      .mockResolvedValue({ topArtists: [], countries: [] });
+      .mockResolvedValue({
+        topArtists: [],
+        countries: [],
+      });
     const ratesHistoryService = new RatesHistoryService(createRateRepository());
     const controller = new RatesController(
       ratesService,
@@ -139,6 +142,59 @@ describe('RatesController home insights route', () => {
     expect(
       Reflect.getMetadata(PATH_METADATA, RatesController.prototype.findOne),
     ).toBe(':id');
+  });
+
+  it('registers both authenticated geography routes with session identity only', async () => {
+    const stats = new RatesStatsService(
+      createRateRepository(),
+      createUsersService(),
+    );
+    const getTop = jest
+      .spyOn(stats, 'getGeographyTop')
+      .mockResolvedValue({ countries: [] });
+    const getWorld = jest.spyOn(stats, 'getGeographyWorld').mockResolvedValue({
+      totalRatedDiscs: 0,
+      mappedDiscs: 0,
+      unmappedDiscs: 0,
+      countryCount: 0,
+      countries: [],
+    });
+    const controller = new RatesController(
+      new RatesService(createRateRepository()),
+      stats,
+      new RatesHistoryService(createRateRepository()),
+      new RatesDashboardSummaryService(createRateRepository()),
+    );
+    const user = Object.assign(new User(), { id: 'identity-from-session' });
+
+    for (const [method, path] of [
+      ['getGeographyTop', 'geography/top'],
+      ['getGeographyWorld', 'geography/world'],
+    ] as const) {
+      const handler = RatesController.prototype[method];
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        handler,
+      ) as Type<unknown>[];
+      const args = Reflect.getMetadata(
+        ROUTE_ARGS_METADATA,
+        RatesController,
+        method,
+      ) as Record<string, unknown>;
+      expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
+      expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+        RequestMethod.GET,
+      );
+      expect(guards).toContain(UserRoleGuard);
+      expect(Object.values(args)).toContainEqual(
+        expect.objectContaining({ index: 0, data: undefined }),
+      );
+    }
+
+    await controller.getGeographyTop(user);
+    await controller.getGeographyWorld(user);
+    expect(getTop).toHaveBeenCalledWith(user);
+    expect(getWorld).toHaveBeenCalledWith(user);
   });
 
   it('preserves the methods, paths and current authentication decorators on the remaining routes', () => {

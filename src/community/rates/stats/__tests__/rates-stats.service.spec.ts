@@ -51,27 +51,43 @@ const makeQueryBuilder = (rows: RawRow[]): StatsQueryBuilderMock => {
   return builder;
 };
 
-describe('RatesStatsService.getHomeInsights', () => {
+type HomeInsightsGeographyRow = {
+  totalRatedDiscs: number | string;
+  mappedDiscs: number | string;
+  countryCount: number | string;
+  isoCode: string | null;
+  countryName: string | null;
+  discCount: number | string | null;
+};
+
+describe('RatesStatsService geography and home insights', () => {
   const user = Object.assign(new User(), { id: 'user-1' });
   let queryBuilders: StatsQueryBuilderMock[];
   let service: RatesStatsService;
+  let geographyQuery: jest.Mock<
+    Promise<HomeInsightsGeographyRow[]>,
+    [string, unknown[]]
+  >;
 
-  const createService = (artistRows: RawRow[], countryRows: RawRow[]) => {
-    queryBuilders = [
-      makeQueryBuilder(artistRows),
-      makeQueryBuilder(countryRows),
-    ];
+  const createService = (
+    artistRows: RawRow[],
+    geographyRows: HomeInsightsGeographyRow[],
+  ) => {
+    queryBuilders = [makeQueryBuilder(artistRows)];
     const dataSource = new DataSource({
       type: 'postgres',
       database: 'rates-stats-test',
     });
+    geographyQuery = jest
+      .fn<Promise<HomeInsightsGeographyRow[]>, [string, unknown[]]>()
+      .mockResolvedValue(geographyRows);
     const rateRepository = Object.assign(
       new Repository<Rate>(Rate, new EntityManager(dataSource)),
       {
         createQueryBuilder: jest
           .fn<StatsQueryBuilderMock, [string]>()
-          .mockReturnValueOnce(queryBuilders[0])
-          .mockReturnValueOnce(queryBuilders[1]),
+          .mockReturnValue(queryBuilders[0]),
+        query: geographyQuery,
       },
     );
     const usersService = {
@@ -84,22 +100,63 @@ describe('RatesStatsService.getHomeInsights', () => {
     jest.clearAllMocks();
   });
 
-  it('returns empty arrays when the user has no numeric ratings', async () => {
-    createService([], []);
+  const row = (
+    isoCode: string | null,
+    countryName: string | null,
+    discCount: number | string | null,
+    totals = { totalRatedDiscs: 78, mappedDiscs: 78, countryCount: 12 },
+  ): HomeInsightsGeographyRow => ({
+    ...totals,
+    isoCode,
+    countryName,
+    discCount,
+  });
+
+  const twelveCountries = (): HomeInsightsGeographyRow[] =>
+    [
+      ['US', 'United States', 12],
+      ['GB', 'United Kingdom', 11],
+      ['ES', 'Spain', 10],
+      ['FR', 'France', 9],
+      ['DE', 'Germany', 8],
+      ['JP', 'Japan', 7],
+      ['SE', 'Sweden', 6],
+      ['CA', 'Canada', 5],
+      ['BR', 'Brazil', 4],
+      ['AU', 'Australia', 3],
+      ['IT', 'Italy', 2],
+      ['NO', 'Norway', 1],
+    ].map(([isoCode, name, count]) =>
+      row(String(isoCode), String(name), Number(count)),
+    );
+
+  it('returns the original empty home-insights shape and zero artist insights', async () => {
+    createService(
+      [],
+      [
+        row(null, null, null, {
+          totalRatedDiscs: 0,
+          mappedDiscs: 0,
+          countryCount: 0,
+        }),
+      ],
+    );
 
     await expect(service.getHomeInsights(user)).resolves.toEqual({
       topArtists: [],
       countries: [],
     });
-    for (const query of queryBuilders) {
-      expect(query.where).toHaveBeenCalledWith('rate.userId = :userId', {
-        userId: user.id,
-      });
-      expect(query.andWhere).toHaveBeenCalledWith('rate.rate IS NOT NULL');
-    }
+    expect(queryBuilders[0].where).toHaveBeenCalledWith(
+      'rate.userId = :userId',
+      { userId: user.id },
+    );
+    expect(queryBuilders[0].andWhere).toHaveBeenCalledWith(
+      'rate.rate IS NOT NULL',
+    );
+    expect(geographyQuery.mock.calls[0][1]).toEqual([user.id, 10]);
   });
 
-  it('calculates, orders, limits and normalizes top artists', async () => {
+  it('preserves the existing topArtists payload and ranking limit', async () => {
     const artistRows = [
       {
         id: 'a',
@@ -109,17 +166,31 @@ describe('RatesStatsService.getHomeInsights', () => {
         ratingCount: '2',
       },
       ...Array.from({ length: 6 }, (_, index) => ({
-        id: `artist-${index}`,
-        name: `Artist ${index}`,
-        image: `image-${index}`,
+        id: 'artist-' + index,
+        name: 'Artist ' + index,
+        image: 'image-' + index,
         averageRate: '8.5',
         ratingCount: String(1),
       })),
     ];
-    createService(artistRows, []);
+    createService(artistRows, [
+      row('DE', 'Germany', 3, {
+        totalRatedDiscs: 3,
+        mappedDiscs: 3,
+        countryCount: 1,
+      }),
+    ]);
 
     const result = await service.getHomeInsights(user);
 
+    expect(result.countries).toEqual([
+      {
+        isoCode: 'DE',
+        name: 'Germany',
+        count: 3,
+        percentage: 100,
+      },
+    ]);
     expect(result.topArtists).toHaveLength(7);
     expect(result.topArtists[0]).toEqual({
       id: 'a',
@@ -128,64 +199,122 @@ describe('RatesStatsService.getHomeInsights', () => {
       averageRate: 9.25,
       ratingCount: 2,
     });
-    const query = queryBuilders[0];
-    expect(query.orderBy).toHaveBeenCalledWith('AVG(rate.rate)', 'DESC');
-    expect(query.addOrderBy).toHaveBeenNthCalledWith(
-      1,
-      'COUNT(rate.id)',
-      'DESC',
-    );
-    expect(query.addOrderBy).toHaveBeenNthCalledWith(2, 'artist.name', 'ASC');
-    expect(query.limit).toHaveBeenCalledWith(7);
+    expect(queryBuilders[0].limit).toHaveBeenCalledWith(7);
   });
 
-  it('calculates country counts and percentages over all countries before returning the top ten', async () => {
-    const countries = Array.from({ length: 12 }, (_, index) => ({
-      isoCode: `C${index}`,
-      name: `Country ${index}`,
-      count: String(12 - index),
-    }));
-    createService([], countries);
+  it('returns only ten aggregated countries for Top 10 with SQL limit and precise percentages', async () => {
+    createService([], twelveCountries().slice(0, 10));
 
-    const result = await service.getHomeInsights(user);
+    const result = await service.getGeographyTop(user);
 
     expect(result.countries).toHaveLength(10);
     expect(result.countries[0]).toEqual({
-      isoCode: 'C0',
-      name: 'Country 0',
+      isoCode: 'US',
+      name: 'United States',
       count: 12,
-      percentage: Math.round((12 / 78) * 100),
+      percentage: 15.38,
     });
-    expect(result.countries[9]).toMatchObject({ isoCode: 'C9', count: 3 });
-    expect(queryBuilders[1].orderBy).toHaveBeenCalledWith(
-      'COUNT(rate.id)',
-      'DESC',
-    );
-    expect(queryBuilders[1].andWhere).toHaveBeenCalledWith(
-      'country.isoCode IS NOT NULL',
-    );
-    expect(queryBuilders[1].limit).not.toHaveBeenCalled();
+    const [sql, parameters] = geographyQuery.mock.calls[0];
+    expect(parameters).toEqual([user.id, 10]);
+    expect(sql).toContain('GROUP BY "isoCode"');
+    expect(sql).toContain('ORDER BY "discCount" DESC, "isoCode" ASC');
+    expect(sql).toContain('LIMIT $2');
+    expect(sql).toContain('COUNT(DISTINCT "discId")');
+    expect(sql).toContain('rate."userId" = $1');
+    expect(sql).toContain('rate.rate IS NOT NULL');
+    expect(sql).toContain('UPPER(country."isoCode")');
+    expect(sql).not.toContain('rate.rate > 0');
+    expect(sql).not.toContain('rate_vote_events');
   });
 
-  it('aggregates all of a user’s ratings without applying a 1000 row pagination cap', async () => {
+  it('returns the complete world distribution and aggregate totals', async () => {
+    createService([], twelveCountries());
+
+    const result = await service.getGeographyWorld(user);
+
+    expect(result).toEqual({
+      totalRatedDiscs: 78,
+      mappedDiscs: 78,
+      unmappedDiscs: 0,
+      countryCount: 12,
+      countries: expect.arrayContaining([
+        expect.objectContaining({
+          isoCode: 'US',
+          name: 'United States',
+          count: 12,
+        }),
+        expect.objectContaining({ isoCode: 'NO', count: 1 }),
+      ]),
+    });
+    expect(result.countries).toHaveLength(12);
+    const [sql, parameters] = geographyQuery.mock.calls[0];
+    expect(parameters).toEqual([user.id]);
+    expect(sql).not.toContain('LIMIT $2');
+  });
+
+  it('reports null and invalid country codes as unmapped without name-based matching', async () => {
+    const totals = { totalRatedDiscs: 5, mappedDiscs: 3, countryCount: 2 };
     createService(
+      [],
       [
-        {
-          id: 'artist',
-          name: 'Artist',
-          image: 'image',
-          averageRate: '7.5',
-          ratingCount: '1205',
-        },
+        row('SE', 'Sweden', 2, totals),
+        row('JP', 'Japan', 1, totals),
+        row(null, null, null, totals),
       ],
-      [{ isoCode: 'ES', name: 'España', count: '1205' }],
     );
 
-    const result = await service.getHomeInsights(user);
+    const result = await service.getGeographyWorld(user);
 
-    expect(result.topArtists[0].ratingCount).toBe(1205);
-    expect(result.countries[0].count).toBe(1205);
-    expect(queryBuilders[0].limit).toHaveBeenCalledWith(7); // limits grouped artists, not rating rows
-    expect(queryBuilders[1].limit).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      totalRatedDiscs: 5,
+      mappedDiscs: 3,
+      unmappedDiscs: 2,
+      countryCount: 2,
+    });
+    expect(result.countries.map(({ isoCode }) => isoCode)).toEqual([
+      'SE',
+      'JP',
+    ]);
+  });
+
+  it('uses the same SQL aggregation for Top 10 and World', async () => {
+    createService([], twelveCountries().slice(0, 10));
+    const top = await service.getGeographyTop(user);
+    const topSql = geographyQuery.mock.calls[0][0];
+
+    geographyQuery.mockResolvedValueOnce(twelveCountries());
+    const world = await service.getGeographyWorld(user);
+    const worldSql = geographyQuery.mock.calls[1][0];
+
+    expect(top.countries.slice(0, 10).map(({ isoCode }) => isoCode)).toEqual(
+      world.countries.slice(0, 10).map(({ isoCode }) => isoCode),
+    );
+    expect(topSql).toContain('WITH rated_discs AS');
+    expect(worldSql).toContain('WITH rated_discs AS');
+    expect(topSql).toContain('LIMIT $2');
+    expect(worldSql).not.toContain('LIMIT $2');
+  });
+
+  it('keeps unmapped discs in total counts and guards optional artist/country joins', async () => {
+    const totals = { totalRatedDiscs: 5, mappedDiscs: 3, countryCount: 2 };
+    createService(
+      [],
+      [
+        row('SE', 'Sweden', 2, totals),
+        row('JP', 'Japan', 1, totals),
+        row(null, null, null, totals),
+      ],
+    );
+
+    const result = await service.getGeographyWorld(user);
+    const sql = geographyQuery.mock.calls[0][0];
+
+    expect(result.totalRatedDiscs).toBe(5);
+    expect(result.mappedDiscs + result.unmappedDiscs).toBe(
+      result.totalRatedDiscs,
+    );
+    expect(sql).toContain('LEFT JOIN artist');
+    expect(sql).toContain('LEFT JOIN country');
+    expect(sql).toContain('COUNT(DISTINCT "discId")');
   });
 });
