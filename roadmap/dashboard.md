@@ -392,7 +392,7 @@ El alcance de D-ART-6 es el widget «Tus artistas favoritos» del Dashboard; no 
 
 **Estado:** completada en backend el 2026-10-27. D-ART-6b (selector frontend), D-ART-7 (Last.fm) y D-ART-8 (smoke tests) siguen pendientes.
 
-`GET /api/rates/artists/top` acepta `period=month|year|all`; si se omite, usa `all`. Devuelve hasta cinco artistas con el DTO existente, sin exponer el score. `month` y `year` usan los períodos naturales actuales de `Europe/Madrid`; `all` no restringe fechas. Los límites son semiabiertos `[inicio, fin)`. La fecha es la última actividad disponible de la Rate actual, `GREATEST(createdAt, COALESCE(editedAt, createdAt))`: una edición puede mover una Rate antigua al período actual. No se reconstruye historial.
+`GET /api/rates/artists/top` acepta `period=month|year|all`; si se omite, usa `all`. Devuelve hasta siete artistas con el DTO existente, sin exponer el score. `month` y `year` usan los períodos naturales actuales de `Europe/Madrid`; `all` no restringe fechas. Los límites son semiabiertos `[inicio, fin)`. La fecha es la última actividad disponible de la Rate actual, `GREATEST(createdAt, COALESCE(editedAt, createdAt))`: una edición puede mover una Rate antigua al período actual. No se reconstruye historial.
 
 La consulta existente conserva la deduplicación por usuario/disco (actividad descendente e ID de Rate descendente) antes del filtro temporal. Después calcula sobre el mismo conjunto filtrado la media global `C`, las medias y conteos personales por artista, y el score `(n × R + 2 × C) / (n + 2)`. Se mantienen los desempates por score, media real, cantidad, nombre e ID; el límite se aplica en PostgreSQL. No consulta Geography.
 
