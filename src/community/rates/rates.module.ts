@@ -13,9 +13,13 @@ import { HistoricalRatesStatsService } from './stats/historical-rates-stats.serv
 import { RatesRandomSelectionService } from './random-selection/rates-random-selection.service';
 import { CommunityDashboardRatesService } from './stats/community-dashboard-rates.service';
 import { RatesDashboardSummaryService } from './stats/rates-dashboard-summary.service';
+import { Artist } from 'src/catalog/artists/entities/artist.entity';
+import { LastfmIntegrationModule } from 'src/integrations/lastfm-integration/lastfm-integration.module';
+import { RatesArtistLastfmController } from './lastfm/rates-artist-lastfm.controller';
+import { RatesArtistLastfmService } from './lastfm/rates-artist-lastfm.service';
 
 @Module({
-  controllers: [RatesController], // Controladores que gestionan las rutas
+  controllers: [RatesController, RatesArtistLastfmController], // Controladores que gestionan las rutas
   providers: [
     RatesService,
     RatesStatsService,
@@ -24,9 +28,11 @@ import { RatesDashboardSummaryService } from './stats/rates-dashboard-summary.se
     RatesRandomSelectionService,
     CommunityDashboardRatesService,
     RatesDashboardSummaryService,
+    RatesArtistLastfmService,
   ],
   imports: [
-    TypeOrmModule.forFeature([Rate, Disc, RateVoteEvent]),
+    TypeOrmModule.forFeature([Rate, Disc, RateVoteEvent, Artist]),
+    LastfmIntegrationModule,
     AuthorizationModule,
     UsersModule,
   ], // Registro de la entidad Rate en TypeORM

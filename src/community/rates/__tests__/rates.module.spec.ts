@@ -7,6 +7,8 @@ import { getMetadataArgsStorage } from 'typeorm';
 import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { Artist } from 'src/catalog/artists/entities/artist.entity';
+import { LastfmIntegrationModule } from 'src/integrations/lastfm-integration/lastfm-integration.module';
 import { UsersModule } from 'src/identity/users/users.module';
 import { UsersService } from 'src/identity/users/users.service';
 import { RatesController } from '../rates.controller';
@@ -19,12 +21,15 @@ import { Rate } from '../entities/rate.entity';
 import { RateVoteEvent } from '../entities/rate-vote-event.entity';
 import { RatesRandomSelectionService } from '../random-selection/rates-random-selection.service';
 import { RatesDashboardSummaryService } from '../stats/rates-dashboard-summary.service';
+import { RatesArtistLastfmController } from '../lastfm/rates-artist-lastfm.controller';
+import { RatesArtistLastfmService } from '../lastfm/rates-artist-lastfm.service';
 
 describe('RatesModule characterization', () => {
   let moduleRef: TestingModule;
   const rateRepository = {};
   const rateVoteEventRepository = {};
   const discRepository = {};
+  const artistRepository = {};
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({ imports: [RatesModule] })
@@ -34,6 +39,8 @@ describe('RatesModule characterization', () => {
       .useValue(rateVoteEventRepository)
       .overrideProvider(getRepositoryToken(Disc))
       .useValue(discRepository)
+      .overrideProvider(getRepositoryToken(Artist))
+      .useValue(artistRepository)
       .overrideProvider(getRepositoryToken(User))
       .useValue({})
       .overrideProvider(ConfigService)
@@ -45,6 +52,8 @@ describe('RatesModule characterization', () => {
 
   it('resolves the controller, services and repositories through RatesModule', () => {
     expect(moduleRef.get(RatesController)).toBeDefined();
+    expect(moduleRef.get(RatesArtistLastfmController)).toBeDefined();
+    expect(moduleRef.get(RatesArtistLastfmService)).toBeDefined();
     expect(moduleRef.get(RatesService)).toBeDefined();
     expect(moduleRef.get(RatesStatsService)).toBeDefined();
     expect(moduleRef.get(UsersService)).toBeDefined();
@@ -69,9 +78,16 @@ describe('RatesModule characterization', () => {
       rateRepository,
     );
     expect(moduleRef.get(getRepositoryToken(Disc))).toBe(discRepository);
+    expect(moduleRef.get(getRepositoryToken(Artist))).toBe(artistRepository);
     expect(
       Reflect.getMetadata(MODULE_METADATA.IMPORTS, RatesModule) as unknown[],
-    ).toEqual(expect.arrayContaining([AuthorizationModule, UsersModule]));
+    ).toEqual(
+      expect.arrayContaining([
+        AuthorizationModule,
+        UsersModule,
+        LastfmIntegrationModule,
+      ]),
+    );
   });
 
   it('preserves Rate relation metadata and inverse sides', () => {
