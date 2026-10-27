@@ -1,4 +1,9 @@
-import { BadRequestException, Type, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  ParseUUIDPipe,
+  Type,
+  ValidationPipe,
+} from '@nestjs/common';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
   GUARDS_METADATA,
@@ -18,6 +23,7 @@ import { RatesStatsService } from '../stats/rates-stats.service';
 import { RatesHistoryService } from '../history/rates-history.service';
 import { RatesDashboardSummaryService } from '../stats/rates-dashboard-summary.service';
 import { RatesHistoryQueryDto } from '../dto/rates-history-query.dto';
+import { RatesArtistSummaryQueryDto } from '../dto/rates-artist-summary-query.dto';
 
 async function validateHistoryQuery(
   query: Record<string, unknown>,
@@ -34,6 +40,25 @@ async function validateHistoryQuery(
 
   if (!(result instanceof RatesHistoryQueryDto)) {
     throw new Error('ValidationPipe did not return the history query DTO');
+  }
+  return result;
+}
+
+async function validateArtistSummaryQuery(
+  query: Record<string, unknown>,
+): Promise<RatesArtistSummaryQueryDto> {
+  const result: unknown = await new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    transformOptions: { enableImplicitConversion: true },
+  }).transform(query, {
+    type: 'query',
+    metatype: RatesArtistSummaryQueryDto,
+  });
+
+  if (!(result instanceof RatesArtistSummaryQueryDto)) {
+    throw new Error('ValidationPipe did not return artist summary query DTO');
   }
   return result;
 }
@@ -233,6 +258,57 @@ describe('RatesController home insights route', () => {
     );
     await controller.getTopArtists(user);
     expect(getTopArtists).toHaveBeenCalledWith('session-user-id');
+  });
+
+  it('registers authenticated artist summary with validated UUID and session identity', async () => {
+    const stats = new RatesStatsService(
+      createRateRepository(),
+      createUsersService(),
+    );
+    const getArtistSummary = jest
+      .spyOn(stats, 'getArtistSummary')
+      .mockResolvedValue(
+        {} as Awaited<ReturnType<typeof stats.getArtistSummary>>,
+      );
+    const controller = new RatesController(
+      new RatesService(createRateRepository()),
+      stats,
+      new RatesHistoryService(createRateRepository()),
+      new RatesDashboardSummaryService(createRateRepository()),
+    );
+    const handler = RatesController.prototype.getArtistSummary;
+    const user = Object.assign(new User(), { id: 'session-user-id' });
+    const guards = Reflect.getMetadata(
+      GUARDS_METADATA,
+      handler,
+    ) as Type<unknown>[];
+    const validArtistId = '20bfa46f-e695-4b93-8736-0faac555f3df';
+    const query = await validateArtistSummaryQuery({ page: '2', limit: '5' });
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(
+      'artists/:artistId/summary',
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+      RequestMethod.GET,
+    );
+    expect(guards).toContain(UserRoleGuard);
+    await controller.getArtistSummary(validArtistId, query, user);
+    expect(getArtistSummary).toHaveBeenCalledWith(
+      'session-user-id',
+      validArtistId,
+      query,
+    );
+
+    await expect(
+      new ParseUUIDPipe().transform('not-a-uuid', {
+        type: 'param',
+        data: 'artistId',
+        metatype: String,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      validateArtistSummaryQuery({ limit: '101' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('preserves the methods, paths and current authentication decorators on the remaining routes', () => {
@@ -444,5 +520,30 @@ describe('RatesController history route', () => {
       offset: 0,
       dateRange: [new Date('2025-01-01'), new Date('2025-01-31')],
     });
+  });
+});
+
+describe('RatesArtistSummaryQueryDto validation', () => {
+  it('uses page 1 and limit 10 by default and transforms supplied integers', async () => {
+    await expect(validateArtistSummaryQuery({})).resolves.toMatchObject({
+      page: 1,
+      limit: 10,
+    });
+    await expect(
+      validateArtistSummaryQuery({ page: '3', limit: '25' }),
+    ).resolves.toMatchObject({ page: 3, limit: 25 });
+  });
+
+  it.each([
+    { page: '0' },
+    { page: '1.5' },
+    { page: '10001' },
+    { limit: '0' },
+    { limit: '101' },
+    { userId: 'somebody-else' },
+  ])('rejects invalid or unsupported query parameters: %j', async (query) => {
+    await expect(validateArtistSummaryQuery(query)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 });

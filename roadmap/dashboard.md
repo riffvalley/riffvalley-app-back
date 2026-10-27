@@ -335,7 +335,7 @@ D-8a y D-8b no están presentes en esta rama; no se crean ni sobrescriben identi
 
 ### D-ART-3 — Endpoint backend independiente
 
-**Estado:** completada en backend el 2026-10-27. D-ART-4, D-ART-5a, D-ART-5b, D-ART-6, D-ART-7 y D-ART-8 siguen pendientes.
+**Estado:** completada en backend el 2026-10-27. D-ART-4 y D-ART-5a se completaron después; las tareas posteriores conservan sus estados indicados abajo.
 
 La decisión aprobada es añadir `GET /api/rates/artists/top`, autenticado, de solo lectura y vinculado exclusivamente al ID de `@GetUser()`. No acepta `userId`, parámetros ni ejecuta consultas geográficas. El DTO explícito es `{ artists: RatesTopArtistDto[] }`; cada elemento expone `id`, `name`, `image` nullable, `ratingCount` y `averageRate`. `ratingCount` significa discos distintos del usuario con una nota musical no nula; una nota `0` sí cuenta.
 
@@ -345,11 +345,11 @@ La lectura es independiente de Geography y no carga Rates en Node ni realiza N+1
 
 Las pruebas unitarias con dobles cubren la ruta autenticada, identidad de sesión, DTO sin países, filtros, deduplicación, fecha/desempate de Rates duplicadas, conteo/orden/límite SQL, query única sin escrituras ni geografía y conservación de `home-insights` y Geography. Hay una suite opt-in PostgreSQL con un destino vacío `bc_id_3f_3_*` para comprobar conteos, medias, empates, nota cero, null/cover-only, duplicados, aislamiento y límite con el SQL real. No se configuró una base aislada en esta ejecución; esa suite queda sin ejecutar y las agregaciones reales de PostgreSQL no se afirman como verificadas.
 
-La tarea no modifica frontend, Rates de escritura, Geography, esquemas, migraciones ni dependencias. D-ART-4 corresponde al Top 7 frontend; D-ART-5a a los datos personales del artista; D-ART-5b al modal; D-ART-6 a filtros; D-ART-7 a Last.fm; y D-ART-8 a smoke tests.
+La tarea no modifica frontend, Rates de escritura, Geography, esquemas, migraciones ni dependencias. D-ART-4 cubre el Top 7 frontend; D-ART-5a implementa el resumen personal; D-ART-5b evoluciona el modal; D-ART-6 añade filtros; D-ART-7 integra Last.fm; y D-ART-8 cubre smoke tests.
 
 ### D-ART-3b — Revisión bayesiana del ranking
 
-**Estado:** completada en backend el 2026-10-27. D-ART-4, D-ART-5a, D-ART-5b, D-ART-6, D-ART-7 y D-ART-8 siguen pendientes.
+**Estado:** completada en backend el 2026-10-27. D-ART-4 se completó después y el estado de D-ART-5a se registra más abajo; las tareas posteriores conservan sus estados indicados allí.
 
 El ranking calcula en PostgreSQL `score = (n × R + m × C) / (n + m)`. `n` es la cantidad de discos distintos del artista del usuario; `R` su media personal; `C` la media musical global de ese usuario, con una sola Rate vigente por disco; `m = 2`, declarada como `RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH`. La media global se calcula directamente sobre el conjunto personal deduplicado, no promediando artistas. Solo entran Rates del usuario autenticado con `rate IS NOT NULL`; cero cuenta, votos de portada no. Si el usuario no tiene valoraciones musicales, devuelve `artists: []`.
 
@@ -363,6 +363,26 @@ Se conserva la deduplicación de D-ART-3: partición por disco después del filt
 - Diez discos a `6` frente a uno a `10`, con `C = 70/11`: `6,0606` frente a `7,5758`; el volumen mediocre no domina.
 
 Las pruebas unitarias inspeccionan la fórmula SQL, parámetro constante `m`, promedio global, orden sin `ROUND`, DTO, aislamiento por usuario y ausencia de consulta geográfica; no se consideran ejecución real de SQL. La suite opt-in PostgreSQL comprueba fórmula/ranking para esos escenarios, media/desempates, ceros, null/cover-only, duplicados, aislamiento y límite. No había una base aislada configurada en esta ejecución, así que PostgreSQL real no se ejecutó y la semántica de agregación queda pendiente de esa validación. `home-insights` conserva su prueba existente y no se toca. Typecheck, build, ESLint focalizado, gates arquitectónicos, runtime dependency gate y `git diff --check` forman parte de la verificación de esta tarea.
+
+### D-ART-4 — Top 7 frontend y modal inicial
+
+**Estado:** completada en frontend, según la integración posterior a D-ART-3b. No se modifica frontend en las tareas backend siguientes.
+
+### D-ART-5a — Resumen personal y discos valorados del artista
+
+**Estado:** completada en backend el 2026-10-27. D-ART-5b (evolución del modal frontend), D-ART-6 (filtros), D-ART-7 (Last.fm) y D-ART-8 (smoke tests) siguen pendientes.
+
+Ruta autenticada `GET /api/rates/artists/:artistId/summary`. `artistId` es UUID validado con `ParseUUIDPipe`; la identidad proviene de `@GetUser()` y no se acepta `userId`. Responde 404 si no existe el artista. No altera `/artists/:id/details`, `/rates/artists/top`, `home-insights` ni Geography.
+
+El DTO contiene `artist` (`id`, `name`, `image`, `country` con `id/name/isoCode`, y `genres` como IDs/nombres distintos del catálogo actual), `stats` (`ratedDiscCount`, `averageRate`, `highestRatedDisc`, `lowestRatedDisc`, `firstAvailableActivityAt`, `lastAvailableActivityAt`) y `discs` (`data`, `total`, `page`, `limit`, `totalPages`). Cada disco incluye ID, nombre, imagen, fecha de lanzamiento, nota musical actual, nota de portada nullable, Rate ID y `lastActivityAt`. Los highlights llevan ID/nombre/nota; empates de mejor/peor se resuelven por ID de disco ascendente. `averageRate` es la media personal real, no el score bayesiano.
+
+Dos consultas de solo lectura comparten la misma CTE de elegibilidad. La primera devuelve metadata de Catalog y calcula estadísticas sobre el conjunto completo; la segunda selecciona una página en PostgreSQL. Ambas filtran primero por usuario, artista y `rate IS NOT NULL`, incluyen cero y usan `ROW_NUMBER()` por disco para conservar la Rate de actividad más reciente (`GREATEST(createdAt, COALESCE(editedAt, createdAt))`), con `rate.id DESC` como desempate. No consultan otros usuarios, `rate_vote_events`, Geography ni agregados comunitarios, y no descargan el historial para paginar. Los géneros son `DISTINCT` sobre los discos actuales del catálogo del artista; no existe relación de género directamente en Artist. País, imagen, lanzamiento, portada y géneros ausentes se serializan como `null` o lista vacía según el campo.
+
+Paginación: `page` base 1, default 1 y máximo 10.000; `limit` default 10 y máximo 100. Ambos son enteros positivos validados y `userId` u otros parámetros desconocidos se rechazan. La respuesta informa total de discos deduplicados y páginas; totalPages es cero para un conjunto vacío. El orden fijo inicial es última actividad descendente e ID de disco ascendente. Filtros futuros deben añadirse al mismo CTE elegible antes de stats y paginación, sin implementarlos en 5a.
+
+`firstAvailableActivityAt` es el menor `createdAt` conservado entre las Rates actuales deduplicadas; `lastAvailableActivityAt` es el mayor `GREATEST(createdAt, COALESCE(editedAt, createdAt))`. La lista usa esa última actividad. Son fechas disponibles en las filas actuales, no el primer/último voto musical histórico: `editedAt` puede reflejar una modificación de portada y no existe historial reconstruible. Se serializan como timestamp de base sin offset de zona (`YYYY-MM-DDTHH:mm:ss.ffffff`); la entidad no declara zona horaria y no se consultó una base para verificar el tipo/semántica desplegados. `releaseDate` se serializa como fecha de calendario `YYYY-MM-DD`.
+
+Las pruebas con dobles cubren respuesta completa/vacía, 404, estadísticas independientes de página, parámetros y orden SQL, deduplicación, UUID, auth de sesión, validación de paginación y no inclusión de eventos/geografía/escrituras. Hay suite PostgreSQL opt-in para duplicados temporales y por ID, conteo/media/extremos, ceros y cover-only, aislamiento, fechas, metadatos opcionales, página/orden y artista inexistente. No había variables ni una base aislada configuradas, así que la suite PostgreSQL no se ejecutó: los mocks y aserciones SQL no se presentan como validación real de PostgreSQL. Tests focalizados, typecheck, build, ESLint, gates estructural/tipos, runtime dependency gate y `git diff --check` pasaron.
 
 ## D-9 — Cementerio
 

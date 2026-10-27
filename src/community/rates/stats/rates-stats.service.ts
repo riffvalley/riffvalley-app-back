@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Rate } from '../entities/rate.entity';
@@ -12,6 +12,85 @@ import {
 } from '../dto/rates-geography.dto';
 import { RatesTopArtistsResponseDto } from '../dto/rates-artists.dto';
 import { RATES_ARTISTS_BAYESIAN_PRIOR_STRENGTH } from './rates-artists.constants';
+import { RatesArtistSummaryQueryDto } from '../dto/rates-artist-summary-query.dto';
+import {
+  RatesArtistSummaryDiscDto,
+  RatesArtistSummaryGenreDto,
+  RatesArtistSummaryResponseDto,
+} from '../dto/rates-artist-summary.dto';
+
+const ELIGIBLE_USER_ARTIST_RATES_CTES = `
+  ranked_artist_rates AS (
+    SELECT
+      rate.id AS "rateId",
+      rate."discId",
+      disc.name AS "discName",
+      disc.image AS "discImage",
+      TO_CHAR(disc."releaseDate", 'YYYY-MM-DD') AS "releaseDate",
+      rate.rate AS "rateValue",
+      rate.cover,
+      rate."createdAt",
+      GREATEST(
+        rate."createdAt",
+        COALESCE(rate."editedAt", rate."createdAt")
+      ) AS "lastActivityAt",
+      ROW_NUMBER() OVER (
+        PARTITION BY rate."discId"
+        ORDER BY GREATEST(
+          rate."createdAt",
+          COALESCE(rate."editedAt", rate."createdAt")
+        ) DESC, rate.id DESC
+      ) AS duplicate_position
+    FROM rate
+    INNER JOIN disc ON disc.id = rate."discId"
+    WHERE rate."userId" = $1
+      AND disc."artistId" = $2
+      AND rate.rate IS NOT NULL
+  ), eligible_artist_rates AS (
+    SELECT
+      "rateId",
+      "discId",
+      "discName",
+      "discImage",
+      "releaseDate",
+      "rateValue",
+      cover,
+      "createdAt",
+      "lastActivityAt"
+    FROM ranked_artist_rates
+    WHERE duplicate_position = 1
+  )`;
+
+type ArtistSummaryRow = {
+  artistId: string;
+  artistName: string;
+  artistImage: string | null;
+  countryId: string | null;
+  countryName: string | null;
+  countryIsoCode: string | null;
+  genres: RatesArtistSummaryGenreDto[];
+  ratedDiscCount: number | string;
+  averageRate: number | string | null;
+  highestRatedDiscId: string | null;
+  highestRatedDiscName: string | null;
+  highestRatedDiscRate: number | string | null;
+  lowestRatedDiscId: string | null;
+  lowestRatedDiscName: string | null;
+  lowestRatedDiscRate: number | string | null;
+  firstAvailableActivityAt: string | null;
+  lastAvailableActivityAt: string | null;
+};
+
+type ArtistSummaryDiscRow = {
+  rateId: string;
+  discId: string;
+  discName: string;
+  discImage: string | null;
+  releaseDate: string | null;
+  rateValue: number | string;
+  cover: number | string | null;
+  lastActivityAt: string;
+};
 
 type GeographyQueryRow = {
   totalRatedDiscs: number | string;
@@ -264,6 +343,176 @@ export class RatesStatsService {
         ratingCount: Number(artist.ratingCount),
         averageRate: Number(artist.averageRate),
       })),
+    };
+  }
+
+  async getArtistSummary(
+    userId: string,
+    artistId: string,
+    pagination: RatesArtistSummaryQueryDto,
+  ): Promise<RatesArtistSummaryResponseDto> {
+    // Rate timestamps have no explicit timezone type in the entity; format stored
+    // values without adding a UTC offset that the backend cannot verify.
+    const [summary] = await this.rateRepository.query<ArtistSummaryRow[]>(
+      `
+      WITH artist_info AS (
+        SELECT
+          artist.id AS "artistId",
+          artist.name AS "artistName",
+          artist.image AS "artistImage",
+          country.id AS "countryId",
+          country.name AS "countryName",
+          country."isoCode" AS "countryIsoCode",
+          COALESCE((
+            SELECT json_agg(
+              json_build_object('id', genre_rows.id, 'name', genre_rows.name)
+              ORDER BY genre_rows.name ASC, genre_rows.id ASC
+            )
+            FROM (
+              SELECT DISTINCT genre.id, genre.name
+              FROM disc
+              INNER JOIN genre ON genre.id = disc."genreId"
+              WHERE disc."artistId" = artist.id
+            ) genre_rows
+          ), '[]'::json) AS genres
+        FROM artist
+        LEFT JOIN country ON country.id = artist."countryId"
+        WHERE artist.id = $2
+      ),
+      ${ELIGIBLE_USER_ARTIST_RATES_CTES}, activity_stats AS (
+        SELECT
+          COUNT(DISTINCT "discId")::int AS "ratedDiscCount",
+          AVG("rateValue") AS "averageRate",
+          TO_CHAR(MIN("createdAt"), 'YYYY-MM-DD"T"HH24:MI:SS.US')
+            AS "firstAvailableActivityAt",
+          TO_CHAR(MAX("lastActivityAt"), 'YYYY-MM-DD"T"HH24:MI:SS.US')
+            AS "lastAvailableActivityAt"
+        FROM eligible_artist_rates
+      ), highest_rated_disc AS (
+        SELECT "discId", "discName", "rateValue"
+        FROM eligible_artist_rates
+        ORDER BY "rateValue" DESC, "discId" ASC
+        LIMIT 1
+      ), lowest_rated_disc AS (
+        SELECT "discId", "discName", "rateValue"
+        FROM eligible_artist_rates
+        ORDER BY "rateValue" ASC, "discId" ASC
+        LIMIT 1
+      )
+      SELECT
+        artist_info."artistId",
+        artist_info."artistName",
+        artist_info."artistImage",
+        artist_info."countryId",
+        artist_info."countryName",
+        artist_info."countryIsoCode",
+        artist_info.genres,
+        activity_stats."ratedDiscCount",
+        activity_stats."averageRate",
+        highest_rated_disc."discId" AS "highestRatedDiscId",
+        highest_rated_disc."discName" AS "highestRatedDiscName",
+        highest_rated_disc."rateValue" AS "highestRatedDiscRate",
+        lowest_rated_disc."discId" AS "lowestRatedDiscId",
+        lowest_rated_disc."discName" AS "lowestRatedDiscName",
+        lowest_rated_disc."rateValue" AS "lowestRatedDiscRate",
+        activity_stats."firstAvailableActivityAt",
+        activity_stats."lastAvailableActivityAt"
+      FROM artist_info
+      CROSS JOIN activity_stats
+      LEFT JOIN highest_rated_disc ON TRUE
+      LEFT JOIN lowest_rated_disc ON TRUE
+      `,
+      [userId, artistId],
+    );
+
+    if (!summary) {
+      throw new NotFoundException(`Artist with id ${artistId} not found`);
+    }
+
+    const { page, limit } = pagination;
+    const offset = (page - 1) * limit;
+    const discRows = await this.rateRepository.query<ArtistSummaryDiscRow[]>(
+      `
+      WITH ${ELIGIBLE_USER_ARTIST_RATES_CTES}
+      SELECT
+        "rateId",
+        "discId",
+        "discName",
+        "discImage",
+        "releaseDate",
+        "rateValue",
+        cover,
+        TO_CHAR("lastActivityAt", 'YYYY-MM-DD"T"HH24:MI:SS.US')
+          AS "lastActivityAt"
+      FROM eligible_artist_rates
+      ORDER BY "lastActivityAt" DESC, "discId" ASC
+      LIMIT $3
+      OFFSET $4
+      `,
+      [userId, artistId, limit, offset],
+    );
+
+    const ratedDiscCount = Number(summary.ratedDiscCount);
+    return {
+      artist: {
+        id: summary.artistId,
+        name: summary.artistName,
+        image: summary.artistImage,
+        country:
+          summary.countryId === null || summary.countryName === null
+            ? null
+            : {
+                id: summary.countryId,
+                name: summary.countryName,
+                isoCode: summary.countryIsoCode,
+              },
+        genres: summary.genres,
+      },
+      stats: {
+        ratedDiscCount,
+        averageRate:
+          summary.averageRate === null ? null : Number(summary.averageRate),
+        highestRatedDisc:
+          summary.highestRatedDiscId === null ||
+          summary.highestRatedDiscName === null ||
+          summary.highestRatedDiscRate === null
+            ? null
+            : {
+                id: summary.highestRatedDiscId,
+                name: summary.highestRatedDiscName,
+                rate: Number(summary.highestRatedDiscRate),
+              },
+        lowestRatedDisc:
+          summary.lowestRatedDiscId === null ||
+          summary.lowestRatedDiscName === null ||
+          summary.lowestRatedDiscRate === null
+            ? null
+            : {
+                id: summary.lowestRatedDiscId,
+                name: summary.lowestRatedDiscName,
+                rate: Number(summary.lowestRatedDiscRate),
+              },
+        firstAvailableActivityAt: summary.firstAvailableActivityAt,
+        lastAvailableActivityAt: summary.lastAvailableActivityAt,
+      },
+      discs: {
+        data: discRows.map(
+          (disc): RatesArtistSummaryDiscDto => ({
+            id: disc.discId,
+            name: disc.discName,
+            image: disc.discImage,
+            releaseDate: disc.releaseDate,
+            rate: Number(disc.rateValue),
+            cover: disc.cover === null ? null : Number(disc.cover),
+            rateId: disc.rateId,
+            lastActivityAt: disc.lastActivityAt,
+          }),
+        ),
+        total: ratedDiscCount,
+        page,
+        limit,
+        totalPages: Math.ceil(ratedDiscCount / limit),
+      },
     };
   }
 
