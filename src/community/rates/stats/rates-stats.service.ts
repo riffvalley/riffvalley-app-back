@@ -4,6 +4,35 @@ import { Repository } from 'typeorm';
 import { Rate } from '../entities/rate.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { UsersService } from 'src/identity/users/users.service';
+import {
+  RatesGeographyCountryDto,
+  RatesGeographyTopResponseDto,
+  RatesGeographyWorldResponseDto,
+  RatesHomeInsightsResponse,
+} from '../dto/rates-geography.dto';
+
+type GeographyQueryRow = {
+  totalRatedDiscs: number | string;
+  mappedDiscs: number | string;
+  countryCount: number | string;
+  isoCode: string | null;
+  countryName: string | null;
+  discCount: number | string | null;
+};
+
+type GeographyCountryRow = GeographyQueryRow & {
+  isoCode: string;
+  countryName: string;
+  discCount: number | string;
+};
+
+type GeographyQueryResult = {
+  totalRatedDiscs: number;
+  mappedDiscs: number;
+  unmappedDiscs: number;
+  countryCount: number;
+  countries: GeographyCountryRow[];
+};
 
 @Injectable()
 export class RatesStatsService {
@@ -112,10 +141,8 @@ export class RatesStatsService {
     };
   }
 
-  async getHomeInsights(user: User) {
-    const userId = user.id;
-
-    const topArtistsRaw = await this.rateRepository
+  async getHomeInsights(user: User): Promise<RatesHomeInsightsResponse> {
+    const topArtistsQuery = this.rateRepository
       .createQueryBuilder('rate')
       .innerJoin('rate.disc', 'disc')
       .innerJoin('disc.artist', 'artist')
@@ -124,7 +151,7 @@ export class RatesStatsService {
       .addSelect('artist.image', 'image')
       .addSelect('AVG(rate.rate)', 'averageRate')
       .addSelect('COUNT(rate.id)', 'ratingCount')
-      .where('rate.userId = :userId', { userId })
+      .where('rate.userId = :userId', { userId: user.id })
       .andWhere('rate.rate IS NOT NULL')
       .groupBy('artist.id')
       .addGroupBy('artist.name')
@@ -132,30 +159,12 @@ export class RatesStatsService {
       .orderBy('AVG(rate.rate)', 'DESC')
       .addOrderBy('COUNT(rate.id)', 'DESC')
       .addOrderBy('artist.name', 'ASC')
-      .limit(7)
-      .getRawMany();
+      .limit(7);
 
-    const countriesRaw = await this.rateRepository
-      .createQueryBuilder('rate')
-      .innerJoin('rate.disc', 'disc')
-      .innerJoin('disc.artist', 'artist')
-      .innerJoin('artist.country', 'country')
-      .select('country.isoCode', 'isoCode')
-      .addSelect('country.name', 'name')
-      .addSelect('COUNT(rate.id)', 'count')
-      .where('rate.userId = :userId', { userId })
-      .andWhere('rate.rate IS NOT NULL')
-      .andWhere('country.id IS NOT NULL')
-      .andWhere('country.isoCode IS NOT NULL')
-      .groupBy('country.isoCode')
-      .addGroupBy('country.name')
-      .orderBy('COUNT(rate.id)', 'DESC')
-      .getRawMany();
-
-    const totalWithCountry = countriesRaw.reduce(
-      (total, country) => total + Number(country.count),
-      0,
-    );
+    const [topArtistsRaw, geography] = await Promise.all([
+      topArtistsQuery.getRawMany(),
+      this.queryGeography(user.id, 10),
+    ]);
 
     return {
       topArtists: topArtistsRaw.map((artist) => ({
@@ -165,17 +174,139 @@ export class RatesStatsService {
         averageRate: Number(artist.averageRate),
         ratingCount: Number(artist.ratingCount),
       })),
-      countries: countriesRaw.slice(0, 10).map((country) => {
-        const count = Number(country.count);
-        return {
-          isoCode: country.isoCode,
-          name: country.name,
-          count,
-          percentage: totalWithCountry
-            ? Math.round((count / totalWithCountry) * 100)
-            : 0,
-        };
-      }),
+      countries: geography.countries.map((country) =>
+        this.toCountryDto(country, geography.mappedDiscs, 0),
+      ),
+    };
+  }
+
+  async getGeographyTop(user: User): Promise<RatesGeographyTopResponseDto> {
+    const geography = await this.queryGeography(user.id, 10);
+    return {
+      countries: geography.countries.map((country) =>
+        this.toCountryDto(country, geography.mappedDiscs, 2),
+      ),
+    };
+  }
+
+  async getGeographyWorld(user: User): Promise<RatesGeographyWorldResponseDto> {
+    const geography = await this.queryGeography(user.id);
+    return {
+      totalRatedDiscs: geography.totalRatedDiscs,
+      mappedDiscs: geography.mappedDiscs,
+      unmappedDiscs: geography.unmappedDiscs,
+      countryCount: geography.countryCount,
+      countries: geography.countries.map((country) =>
+        this.toCountryDto(country, geography.mappedDiscs, 2),
+      ),
+    };
+  }
+
+  private async queryGeography(
+    userId: string,
+    limit?: number,
+  ): Promise<GeographyQueryResult> {
+    const limitSql = limit === undefined ? '' : 'LIMIT $2';
+    const parameters: (string | number)[] =
+      limit === undefined ? [userId] : [userId, limit];
+    const query = [
+      'WITH rated_discs AS (',
+      '  SELECT DISTINCT',
+      '    disc.id AS "discId",',
+      '    CASE',
+      '      WHEN country."isoCode" ~* \'^[A-Z]{2}$\'',
+      '        THEN UPPER(country."isoCode")',
+      '      ELSE NULL',
+      '    END AS "isoCode",',
+      '    country.name AS "countryName"',
+      '  FROM rate',
+      '  INNER JOIN disc ON disc.id = rate."discId"',
+      '  LEFT JOIN artist ON artist.id = disc."artistId"',
+      '  LEFT JOIN country ON country.id = artist."countryId"',
+      '  WHERE rate."userId" = $1',
+      '    AND rate.rate IS NOT NULL',
+      '),',
+      'totals AS (',
+      '  SELECT',
+      '    COUNT(DISTINCT "discId")::int AS "totalRatedDiscs",',
+      '    COUNT(DISTINCT "discId") FILTER (WHERE "isoCode" IS NOT NULL)::int',
+      '      AS "mappedDiscs"',
+      '  FROM rated_discs',
+      '),',
+      'country_counts AS (',
+      '  SELECT',
+      '    "isoCode",',
+      '    MIN("countryName") AS "countryName",',
+      '    COUNT(DISTINCT "discId")::int AS "discCount"',
+      '  FROM rated_discs',
+      '  WHERE "isoCode" IS NOT NULL',
+      '  GROUP BY "isoCode"',
+      '),',
+      'country_total AS (',
+      '  SELECT COUNT(*)::int AS "countryCount"',
+      '  FROM country_counts',
+      '),',
+      'visible_countries AS (',
+      '  SELECT "isoCode", "countryName", "discCount"',
+      '  FROM country_counts',
+      '  ORDER BY "discCount" DESC, "isoCode" ASC',
+      '  ' + limitSql,
+      ')',
+      'SELECT',
+      '  totals."totalRatedDiscs",',
+      '  totals."mappedDiscs",',
+      '  country_total."countryCount",',
+      '  visible_countries."isoCode",',
+      '  visible_countries."countryName",',
+      '  visible_countries."discCount"',
+      'FROM totals',
+      'CROSS JOIN country_total',
+      'LEFT JOIN visible_countries ON TRUE',
+      'ORDER BY',
+      '  visible_countries."discCount" DESC NULLS LAST,',
+      '  visible_countries."isoCode" ASC NULLS LAST',
+    ].join('\n');
+    const rows = (await this.rateRepository.query(
+      query,
+      parameters,
+    )) as GeographyQueryRow[];
+
+    const firstRow = rows[0];
+    if (!firstRow) {
+      throw new Error('Geography query returned no totals row');
+    }
+
+    const totalRatedDiscs = Number(firstRow.totalRatedDiscs);
+    const mappedDiscs = Number(firstRow.mappedDiscs);
+    const countries = rows.filter(
+      (row): row is GeographyCountryRow =>
+        row.isoCode !== null &&
+        row.countryName !== null &&
+        row.discCount !== null,
+    );
+
+    return {
+      totalRatedDiscs,
+      mappedDiscs,
+      unmappedDiscs: totalRatedDiscs - mappedDiscs,
+      countryCount: Number(firstRow.countryCount),
+      countries,
+    };
+  }
+
+  private toCountryDto(
+    country: GeographyCountryRow,
+    mappedDiscs: number,
+    decimalPlaces: 0 | 2,
+  ): RatesGeographyCountryDto {
+    const count = Number(country.discCount);
+    const percentage = mappedDiscs ? (count / mappedDiscs) * 100 : 0;
+    const factor = decimalPlaces === 0 ? 1 : 100;
+    return {
+      isoCode: country.isoCode,
+      name: country.countryName,
+      count,
+      percentage: Math.round(percentage * factor) / factor,
     };
   }
 

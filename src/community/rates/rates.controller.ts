@@ -47,6 +47,18 @@ export class RatesController {
     return this.ratesStatsService.getHomeInsights(user);
   }
 
+  @Get('geography/top')
+  @Auth()
+  getGeographyTop(@GetUser() user: User) {
+    return this.ratesStatsService.getGeographyTop(user);
+  }
+
+  @Get('geography/world')
+  @Auth()
+  getGeographyWorld(@GetUser() user: User) {
+    return this.ratesStatsService.getGeographyWorld(user);
+  }
+
   @Get('dashboard-summary')
   @Auth()
   getDashboardSummary(@GetUser() user: User) {
