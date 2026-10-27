@@ -3,13 +3,24 @@ import { validate } from 'class-validator';
 import {
   GUARDS_METADATA,
   METHOD_METADATA,
+  MODULE_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
 import { UserRoleGuard } from '../../../identity/authorization/guards/user-role/user-role.guard';
+import { AuthorizationModule } from '../../../identity/authorization/authorization.module';
 import { CommunityDashboardController } from '../dashboard.controller';
+import { CommunityDashboardModule } from '../dashboard.module';
 import { CommunityDashboardYearQueryDto } from '../dto/community-dashboard-year-query.dto';
 
 describe('CommunityDashboardController', () => {
+  it('imports the module that provides dependencies for the authentication guard', () => {
+    const imports: unknown[] = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      CommunityDashboardModule,
+    );
+    expect(imports).toContain(AuthorizationModule);
+  });
+
   it('exposes both routes behind the standard authenticated guards', () => {
     const controller = CommunityDashboardController;
     expect(Reflect.getMetadata(PATH_METADATA, controller)).toBe(
