@@ -558,6 +558,9 @@ export class DiscCatalogService {
         idsQueryBuilder.andWhere(
           this.ratesRandomSelectionService.getUnratedByCommunityPredicate(),
         );
+        idsQueryBuilder
+          .andWhere("NULLIF(BTRIM(disc.link), '') IS NOT NULL")
+          .andWhere("NULLIF(BTRIM(disc.image), '') IS NOT NULL");
       }
 
       if (excludedIds.length > 0) {
