@@ -15,6 +15,11 @@ import { Comment } from './entities/comment.entity';
 import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { DiscListReaderSort } from '../common/types/disc-list-reader-criteria';
 import { User } from 'src/identity/auth/entities/user.entity';
+import { applyDiscListFilters } from 'src/community/common/helpers/apply-disc-list-filters';
+import {
+  DiscListOptionsCriteria,
+  DiscListOptionsResult,
+} from 'src/community/common/types/disc-list-options';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { CommentResponseDto } from './dto/comment-response.dto';
 
@@ -28,6 +33,50 @@ export class CommentsService {
     // Si es necesario, se puede inyectar también el repositorio de Disc
     // private readonly discRepository: Repository<Disc>,
   ) {}
+
+  async findDiscListOptions(
+    criteria: DiscListOptionsCriteria,
+    user: User,
+  ): Promise<DiscListOptionsResult> {
+    const createQuery = (omitCountry: boolean, omitGenre: boolean) => {
+      const query = this.commentRepository
+        .createQueryBuilder('comment')
+        .innerJoin('comment.disc', 'disc')
+        .leftJoin('disc.artist', 'artist')
+        .leftJoin('artist.country', 'country')
+        .leftJoin('disc.genre', 'genre')
+        .where('comment.userId = :userId', { userId: user.id })
+        .andWhere('comment.comment IS NOT NULL');
+      applyDiscListFilters(query, criteria, {
+        omitCountry,
+        omitGenre,
+        countryColumn: 'artist.countryId',
+      });
+      return query;
+    };
+
+    const [countries, genres] = await Promise.all([
+      createQuery(true, false)
+        .select('country.id', 'id')
+        .addSelect('country.name', 'name')
+        .addSelect('country.isoCode', 'isoCode')
+        .andWhere('country.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('country.name', 'ASC')
+        .addOrderBy('country.id', 'ASC')
+        .getRawMany<DiscListOptionsResult['countries'][number]>(),
+      createQuery(false, true)
+        .select('genre.id', 'id')
+        .addSelect('genre.name', 'name')
+        .addSelect('genre.color', 'color')
+        .andWhere('genre.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('genre.name', 'ASC')
+        .addOrderBy('genre.id', 'ASC')
+        .getRawMany<DiscListOptionsResult['genres'][number]>(),
+    ]);
+    return { countries, genres };
+  }
 
   async create(createCommentDto: CreateCommentDto, user: User) {
     try {
@@ -89,12 +138,6 @@ export class CommentsService {
     } = paginationDto;
     const userId = user.id;
 
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    if (dateRange && dateRange.length === 2) {
-      [startDate, endDate] = dateRange;
-    }
-
     const queryBuilder = this.commentRepository
       .createQueryBuilder('comment')
       .leftJoinAndSelect('comment.disc', 'disc')
@@ -118,43 +161,18 @@ export class CommentsService {
       totalItemsQueryBuilder.andWhere('comment.comment IS NOT NULL');
     }
 
-    // Filtro por fecha de lanzamiento del disco
-    if (startDate && endDate) {
-      queryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-      totalItemsQueryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-    }
-
-    // Filtro por query (nombre del disco o del artista)
-    if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name ILIKE :search)',
-        { search },
-      );
-      totalItemsQueryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name ILIKE :search)',
-        { search },
-      );
-    }
-
-    // Filtro por género
-    if (genre) {
-      queryBuilder.andWhere('disc.genreId = :genre', { genre });
-      totalItemsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (country) {
-      queryBuilder.andWhere('artist.countryId = :country', { country });
-      totalItemsQueryBuilder.andWhere('artist.countryId = :country', {
-        country,
-      });
-    }
+    const discListFilters = {
+      query,
+      dateRange,
+      countryId: country,
+      genreId: genre,
+    };
+    applyDiscListFilters(queryBuilder, discListFilters, {
+      countryColumn: 'artist.countryId',
+    });
+    applyDiscListFilters(totalItemsQueryBuilder, discListFilters, {
+      countryColumn: 'artist.countryId',
+    });
 
     queryBuilder.take(limit).skip(offset);
 

@@ -38,7 +38,7 @@ La inspección de los controles actuales de `/disc-list` confirmó los sorts usa
 
 El grafo de imports es unidireccional: `DiscModule` importa módulos propietarios; los módulos Community no importan `DiscModule`. Las pruebas de módulos comprueban la disponibilidad de los readers y el build de Nest resuelve los providers. No se introdujo `forwardRef`.
 
-Las opciones de filtro cruzado siguen sin endpoint; se implementarán en CAT-DISC-3d sobre el conjunto completo elegible. No se computan desde la página actual.
+Las opciones de filtro cruzado se implementaron en CAT-DISC-3d sobre el conjunto completo elegible, con consultas por owner y sin derivarlas de la página actual. Su contrato, pruebas y límite de validación SQL del listado están en [CAT-DISC-3d](cat-disc-3d-opciones-disc-list.md).
 
 ## Contrato y compatibilidad
 
@@ -78,6 +78,6 @@ Docker local está disponible, pero el repositorio no aporta fixture/esquema de 
 
 ## Pendiente
 
-- **CAT-DISC-3d:** endpoint `GET /api/discs/list/options`, basado en universo completo por modo y usuario y filtros cruzados.
+- **CAT-DISC-3d:** completada; endpoint `GET /api/discs/list/options`, basado en universo completo por modo y usuario y filtros cruzados.
 - **CAT-DISC-3e:** corregir identidad de solicitud `all` en frontend si procede y migrar solo `/disc-list`, adaptando los items discriminados.
 - Preparar integración SQL con PostgreSQL efímero/aislado para validar las consultas nuevas antes de release; no conectar tests con instancias de desarrollo o producción.

@@ -15,6 +15,11 @@ import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { DiscListReaderSort } from '../common/types/disc-list-reader-criteria';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { applyDiscListFilters } from 'src/community/common/helpers/apply-disc-list-filters';
+import {
+  DiscListOptionsCriteria,
+  DiscListOptionsResult,
+} from 'src/community/common/types/disc-list-options';
 
 @Injectable()
 export class PendingsService {
@@ -24,6 +29,45 @@ export class PendingsService {
     @InjectRepository(Pending)
     private readonly pendingRepository: Repository<Pending>,
   ) {}
+
+  async findDiscListOptions(
+    criteria: DiscListOptionsCriteria,
+    user: User,
+  ): Promise<DiscListOptionsResult> {
+    const createQuery = (omitCountry: boolean, omitGenre: boolean) => {
+      const query = this.pendingRepository
+        .createQueryBuilder('pending')
+        .innerJoin('pending.disc', 'disc')
+        .leftJoin('disc.artist', 'artist')
+        .leftJoin('artist.country', 'country')
+        .leftJoin('disc.genre', 'genre')
+        .where('pending.userId = :userId', { userId: user.id });
+      applyDiscListFilters(query, criteria, { omitCountry, omitGenre });
+      return query;
+    };
+
+    const [countries, genres] = await Promise.all([
+      createQuery(true, false)
+        .select('country.id', 'id')
+        .addSelect('country.name', 'name')
+        .addSelect('country.isoCode', 'isoCode')
+        .andWhere('country.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('country.name', 'ASC')
+        .addOrderBy('country.id', 'ASC')
+        .getRawMany<DiscListOptionsResult['countries'][number]>(),
+      createQuery(false, true)
+        .select('genre.id', 'id')
+        .addSelect('genre.name', 'name')
+        .addSelect('genre.color', 'color')
+        .andWhere('genre.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('genre.name', 'ASC')
+        .addOrderBy('genre.id', 'ASC')
+        .getRawMany<DiscListOptionsResult['genres'][number]>(),
+    ]);
+    return { countries, genres };
+  }
 
   async create(createPendingDto: CreatePendingDto, user: User) {
     try {
@@ -63,13 +107,6 @@ export class PendingsService {
       country,
     } = paginationDto;
     const userId = user.id;
-
-    // Manejo del rango de fechas
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    if (dateRange && dateRange.length === 2) {
-      [startDate, endDate] = dateRange;
-    }
 
     // Construimos el query para los pendings y añadimos los joins similares a FavoritesService
     const queryBuilder = this.pendingRepository
@@ -124,37 +161,13 @@ export class PendingsService {
           .where('rate.discId = disc.id AND rate.cover IS NOT NULL');
       }, 'averageCover');
 
-    // Filtros según fecha, búsqueda y género
-    if (startDate && endDate) {
-      queryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-    }
-
-    if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name ILIKE :search)',
-        { search },
-      );
-    }
-
-    if (genre) {
-      queryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (country) {
-      const isUUID =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          country,
-        );
-      if (isUUID) {
-        queryBuilder.andWhere('country.id = :country', { country });
-      } else {
-        queryBuilder.andWhere('country.name = :country', { country });
-      }
-    }
+    const discListFilters = {
+      query,
+      dateRange,
+      countryId: country,
+      genreId: genre,
+    };
+    applyDiscListFilters(queryBuilder, discListFilters);
 
     queryBuilder.take(limit).skip(offset);
 
@@ -215,36 +228,7 @@ export class PendingsService {
       .leftJoin('disc.genre', 'genre')
       .where('pending.userId = :userId', { userId });
 
-    if (startDate && endDate) {
-      totalItemsQueryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-    }
-
-    if (query) {
-      const search = `%${query}%`;
-      totalItemsQueryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name ILIKE :search)',
-        { search },
-      );
-    }
-
-    if (genre) {
-      totalItemsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (country) {
-      const isUUID =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          country,
-        );
-      if (isUUID) {
-        totalItemsQueryBuilder.andWhere('country.id = :country', { country });
-      } else {
-        totalItemsQueryBuilder.andWhere('country.name = :country', { country });
-      }
-    }
+    applyDiscListFilters(totalItemsQueryBuilder, discListFilters);
 
     const totalItems = await totalItemsQueryBuilder.getCount();
     const totalPages = Math.ceil(totalItems / limit);

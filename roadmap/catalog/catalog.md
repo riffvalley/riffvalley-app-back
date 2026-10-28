@@ -12,7 +12,7 @@
 
 **Auditoría técnica relacionada:** las revisiones por módulo están en [Backend Cleanup — Catalog](../backend-cleanup/catalog.md); el índice global está en [Backend Cleanup](../backend-cleanup/README.md).
 
-**Evolución DiscList:** CAT-DISC-3b define los contratos y CAT-DISC-3c implementa la fachada de lectura autenticada sin alterar los endpoints legacy. El estado y las verificaciones están registrados en [CAT-DISC-3c](cat-disc-3c-implementacion-disc-list.md). CAT-DISC-3d y posteriores siguen pendientes.
+**Evolución DiscList:** CAT-DISC-3b define los contratos, CAT-DISC-3c implementa el listado y CAT-DISC-3d implementa opciones dinámicas autenticadas sin alterar contratos legacy. El estado y las verificaciones están en [CAT-DISC-3c](cat-disc-3c-implementacion-disc-list.md) y [CAT-DISC-3d](cat-disc-3d-opciones-disc-list.md). CAT-DISC-3e (integración frontend) sigue pendiente; antes requiere validación PostgreSQL aislada específica del SQL de listado de CAT-DISC-3c.
 
 Este documento conserva el detalle de la planificación con ownership de Catalog, incluidos Discs y la fase de ownership de Catalog. Se preservan numeración, estados y notas históricas.
 

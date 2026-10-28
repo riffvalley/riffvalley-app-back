@@ -21,34 +21,69 @@ import { RatesDiscListReader } from 'src/community/rates/disc-list/rates-disc-li
 import { User } from 'src/identity/auth/entities/user.entity';
 
 type CatalogPage = Awaited<ReturnType<DiscCatalogService['findDiscList']>>;
-type CatalogReaderMock = Pick<DiscCatalogService, 'findDiscList'> & {
+type CatalogReaderMock = Pick<
+  DiscCatalogService,
+  'findDiscList' | 'findDiscListOptions'
+> & {
   findDiscList: jest.Mock<
     ReturnType<DiscCatalogService['findDiscList']>,
     Parameters<DiscCatalogService['findDiscList']>
   >;
+  findDiscListOptions: jest.Mock<
+    ReturnType<DiscCatalogService['findDiscListOptions']>,
+    Parameters<DiscCatalogService['findDiscListOptions']>
+  >;
 };
-type RatesReaderMock = Pick<RatesDiscListReader, 'findByUser'> & {
+type RatesReaderMock = Pick<
+  RatesDiscListReader,
+  'findByUser' | 'findOptions'
+> & {
   findByUser: jest.Mock<
     Promise<DiscListReaderPage<DiscListReaderRateRecord>>,
     Parameters<RatesDiscListReader['findByUser']>
   >;
+  findOptions: jest.Mock<
+    ReturnType<RatesDiscListReader['findOptions']>,
+    Parameters<RatesDiscListReader['findOptions']>
+  >;
 };
-type CommentsReaderMock = Pick<CommentsDiscListReader, 'findByUser'> & {
+type CommentsReaderMock = Pick<
+  CommentsDiscListReader,
+  'findByUser' | 'findOptions'
+> & {
   findByUser: jest.Mock<
     Promise<DiscListReaderPage<DiscListReaderCommentRecord>>,
     Parameters<CommentsDiscListReader['findByUser']>
   >;
+  findOptions: jest.Mock<
+    ReturnType<CommentsDiscListReader['findOptions']>,
+    Parameters<CommentsDiscListReader['findOptions']>
+  >;
 };
-type FavoritesReaderMock = Pick<FavoritesDiscListReader, 'findByUser'> & {
+type FavoritesReaderMock = Pick<
+  FavoritesDiscListReader,
+  'findByUser' | 'findOptions'
+> & {
   findByUser: jest.Mock<
     Promise<DiscListReaderPage<DiscListReaderFavoriteRecord>>,
     Parameters<FavoritesDiscListReader['findByUser']>
   >;
+  findOptions: jest.Mock<
+    ReturnType<FavoritesDiscListReader['findOptions']>,
+    Parameters<FavoritesDiscListReader['findOptions']>
+  >;
 };
-type PendingsReaderMock = Pick<PendingsDiscListReader, 'findByUser'> & {
+type PendingsReaderMock = Pick<
+  PendingsDiscListReader,
+  'findByUser' | 'findOptions'
+> & {
   findByUser: jest.Mock<
     Promise<DiscListReaderPage<DiscListReaderPendingRecord>>,
     Parameters<PendingsDiscListReader['findByUser']>
+  >;
+  findOptions: jest.Mock<
+    ReturnType<PendingsDiscListReader['findOptions']>,
+    Parameters<PendingsDiscListReader['findOptions']>
   >;
 };
 
@@ -99,11 +134,14 @@ describe('DiscListService', () => {
   let user: User;
 
   beforeEach(() => {
-    catalog = { findDiscList: jest.fn() };
-    rates = { findByUser: jest.fn() };
-    comments = { findByUser: jest.fn() };
-    favorites = { findByUser: jest.fn() };
-    pendings = { findByUser: jest.fn() };
+    catalog = {
+      findDiscList: jest.fn(),
+      findDiscListOptions: jest.fn(),
+    };
+    rates = { findByUser: jest.fn(), findOptions: jest.fn() };
+    comments = { findByUser: jest.fn(), findOptions: jest.fn() };
+    favorites = { findByUser: jest.fn(), findOptions: jest.fn() };
+    pendings = { findByUser: jest.fn(), findOptions: jest.fn() };
     user = Object.assign(new User(), { id: 'session-user' });
     service = new DiscListService(
       catalog,
@@ -348,4 +386,58 @@ describe('DiscListService', () => {
     rates.findByUser.mockRejectedValue(failure);
     await expect(service.findAll(query, user)).rejects.toBe(failure);
   });
+
+  it.each([
+    [DiscListMode.ALL, 'all'],
+    [DiscListMode.RATES, 'rates'],
+    [DiscListMode.COVERS, 'covers'],
+    [DiscListMode.COMMENTS, 'comments'],
+    [DiscListMode.FAVORITES, 'favorites'],
+    [DiscListMode.PENDIENTES, 'pendientes'],
+  ] as const)(
+    'delegates options for mode %s to its owner',
+    async (mode, owner) => {
+      const query = {
+        mode,
+        query: 'black metal',
+        dateRange: [new Date('2026-01-01'), new Date('2026-12-31')] as [
+          Date,
+          Date,
+        ],
+        countryId: 'country-id',
+        genreId: 'genre-id',
+      };
+      const result = { countries: [], genres: [] };
+      if (owner === 'all') {
+        catalog.findDiscListOptions.mockResolvedValue(result);
+      } else if (owner === 'rates' || owner === 'covers') {
+        rates.findOptions.mockResolvedValue(result);
+      } else if (owner === 'comments') {
+        comments.findOptions.mockResolvedValue(result);
+      } else if (owner === 'favorites') {
+        favorites.findOptions.mockResolvedValue(result);
+      } else {
+        pendings.findOptions.mockResolvedValue(result);
+      }
+
+      await expect(service.findOptions(query, user)).resolves.toBe(result);
+      const criteria = {
+        query: query.query,
+        dateRange: query.dateRange,
+        countryId: query.countryId,
+        genreId: query.genreId,
+      };
+      if (owner === 'all') {
+        expect(catalog.findDiscListOptions).toHaveBeenCalledWith(query, user);
+      } else if (owner === 'rates' || owner === 'covers') {
+        expect(rates.findOptions).toHaveBeenCalledWith(owner, criteria, user);
+      } else if (owner === 'comments') {
+        expect(comments.findOptions).toHaveBeenCalledWith(criteria, user);
+      } else if (owner === 'favorites') {
+        expect(favorites.findOptions).toHaveBeenCalledWith(criteria, user);
+      } else {
+        expect(pendings.findOptions).toHaveBeenCalledWith(criteria, user);
+      }
+    },
+  );
 });

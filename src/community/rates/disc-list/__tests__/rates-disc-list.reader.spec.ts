@@ -22,7 +22,10 @@ describe('RatesDiscListReader', () => {
         limit: 20,
         data: [],
       });
-      const reader = new RatesDiscListReader({ findAllByUser });
+      const reader = new RatesDiscListReader({
+        findAllByUser,
+        findDiscListOptions: jest.fn(),
+      });
       const criteria: DiscListReaderCriteria = {
         limit: 20,
         offset: 40,
@@ -71,7 +74,10 @@ describe('RatesDiscListReader', () => {
       limit: 20,
       data: [],
     });
-    const reader = new RatesDiscListReader({ findAllByUser });
+    const reader = new RatesDiscListReader({
+      findAllByUser,
+      findDiscListOptions: jest.fn(),
+    });
     const user = Object.assign(new User(), { id: 'user-1' });
 
     await reader.findByUser('rates', { limit: 20, offset: 0 }, user);

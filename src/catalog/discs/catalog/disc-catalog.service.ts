@@ -13,9 +13,11 @@ import { restoreRandomDiscOrder } from './helpers/restore-random-disc-order';
 import { RatesRandomSelectionService } from 'src/community/rates/random-selection/rates-random-selection.service';
 import {
   DiscListEligibility,
+  DiscListOptionsQueryDto,
   DiscListQueryDto,
   DiscListSort,
 } from '../list/dto/disc-list-contracts.dto';
+import { DiscListOptionsResponse } from '../list/disc-list.types';
 
 const FIND_ALL_ORDER_FIELDS: Record<string, string> = {
   'disc.releaseDate': 'disc.releaseDate',
@@ -297,6 +299,69 @@ export class DiscCatalogService {
     });
 
     return this.findAll(legacyQuery, user, { stableTieBreak: true });
+  }
+
+  async findDiscListOptions(
+    criteria: DiscListOptionsQueryDto,
+    user: User,
+  ): Promise<DiscListOptionsResponse> {
+    const createQuery = (omitCountry: boolean, omitGenre: boolean) => {
+      const query = this.discRepository
+        .createQueryBuilder('disc')
+        .innerJoin('disc.artist', 'artist')
+        .leftJoin('artist.country', 'country')
+        .leftJoin('disc.genre', 'genre')
+        .where('disc.releaseDate <= :today', { today: new Date() });
+
+      if (
+        criteria.eligibility === DiscListEligibility.UNVOTED_RATE ||
+        criteria.eligibility === DiscListEligibility.UNVOTED_COVER
+      ) {
+        query.leftJoin('disc.rates', 'rate', 'rate.userId = :userId', {
+          userId: user.id,
+        });
+      }
+
+      this.applyFindAllFilters(query, {
+        genre: omitGenre ? undefined : criteria.genreId,
+        countryFilter: omitCountry ? undefined : criteria.countryId,
+        query: criteria.query,
+        startDate: criteria.dateRange?.[0],
+        endDate: criteria.dateRange?.[1],
+        voted:
+          criteria.eligibility === DiscListEligibility.UNVOTED_RATE ||
+          criteria.eligibility === DiscListEligibility.UNVOTED_COVER
+            ? false
+            : undefined,
+        votedType:
+          criteria.eligibility === DiscListEligibility.UNVOTED_COVER
+            ? 'cover'
+            : 'rate',
+      });
+      return query;
+    };
+
+    const [countries, genres] = await Promise.all([
+      createQuery(true, false)
+        .select('country.id', 'id')
+        .addSelect('country.name', 'name')
+        .addSelect('country.isoCode', 'isoCode')
+        .andWhere('country.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('country.name', 'ASC')
+        .addOrderBy('country.id', 'ASC')
+        .getRawMany<DiscListOptionsResponse['countries'][number]>(),
+      createQuery(false, true)
+        .select('genre.id', 'id')
+        .addSelect('genre.name', 'name')
+        .addSelect('genre.color', 'color')
+        .andWhere('genre.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('genre.name', 'ASC')
+        .addOrderBy('genre.id', 'ASC')
+        .getRawMany<DiscListOptionsResponse['genres'][number]>(),
+    ]);
+    return { countries, genres };
   }
 
   private getDiscListOrderBy(

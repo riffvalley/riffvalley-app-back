@@ -14,6 +14,11 @@ import { Favorite } from './entities/favorite.entity';
 import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { applyDiscListFilters } from 'src/community/common/helpers/apply-disc-list-filters';
+import {
+  DiscListOptionsCriteria,
+  DiscListOptionsResult,
+} from 'src/community/common/types/disc-list-options';
 // Importamos la entidad Pending para poder hacer el join
 import { Pending } from 'src/community/pendings/entities/pending.entity';
 import {
@@ -29,6 +34,45 @@ export class FavoritesService {
     @InjectRepository(Favorite)
     private readonly favoriteRepository: Repository<Favorite>,
   ) {}
+
+  async findDiscListOptions(
+    criteria: DiscListOptionsCriteria,
+    user: User,
+  ): Promise<DiscListOptionsResult> {
+    const createQuery = (omitCountry: boolean, omitGenre: boolean) => {
+      const query = this.favoriteRepository
+        .createQueryBuilder('favorite')
+        .innerJoin('favorite.disc', 'disc')
+        .leftJoin('disc.artist', 'artist')
+        .leftJoin('artist.country', 'country')
+        .leftJoin('disc.genre', 'genre')
+        .where('favorite.userId = :userId', { userId: user.id });
+      applyDiscListFilters(query, criteria, { omitCountry, omitGenre });
+      return query;
+    };
+
+    const [countries, genres] = await Promise.all([
+      createQuery(true, false)
+        .select('country.id', 'id')
+        .addSelect('country.name', 'name')
+        .addSelect('country.isoCode', 'isoCode')
+        .andWhere('country.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('country.name', 'ASC')
+        .addOrderBy('country.id', 'ASC')
+        .getRawMany<DiscListOptionsResult['countries'][number]>(),
+      createQuery(false, true)
+        .select('genre.id', 'id')
+        .addSelect('genre.name', 'name')
+        .addSelect('genre.color', 'color')
+        .andWhere('genre.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('genre.name', 'ASC')
+        .addOrderBy('genre.id', 'ASC')
+        .getRawMany<DiscListOptionsResult['genres'][number]>(),
+    ]);
+    return { countries, genres };
+  }
 
   async create(createFavoriteDto: CreateFavoriteDto, user: User) {
     try {
@@ -68,13 +112,6 @@ export class FavoritesService {
       country,
     } = paginationDto;
     const userId = user.id;
-
-    // Manejo del rango de fechas
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    if (dateRange && dateRange.length === 2) {
-      [startDate, endDate] = dateRange;
-    }
 
     // Construimos el query para los favorites y añadimos el join con pending
     const queryBuilder = this.favoriteRepository
@@ -133,37 +170,13 @@ export class FavoritesService {
           .where('rate.discId = disc.id AND rate.cover IS NOT NULL');
       }, 'averageCover');
 
-    // Filtros según el rango de fechas, búsqueda y género
-    if (startDate && endDate) {
-      queryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-    }
-
-    if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name ILIKE :search)',
-        { search },
-      );
-    }
-
-    if (genre) {
-      queryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (country) {
-      const isUUID =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          country,
-        );
-      if (isUUID) {
-        queryBuilder.andWhere('country.id = :country', { country });
-      } else {
-        queryBuilder.andWhere('country.name = :country', { country });
-      }
-    }
+    const discListFilters = {
+      query,
+      dateRange,
+      countryId: country,
+      genreId: genre,
+    };
+    applyDiscListFilters(queryBuilder, discListFilters);
     const ALLOWED_ORDER_FIELDS = new Set<string>([
       // columnas reales/relaciones
       'disc.releaseDate',
@@ -240,36 +253,7 @@ export class FavoritesService {
       .leftJoin('disc.genre', 'genre')
       .where('favorite.userId = :userId', { userId });
 
-    if (startDate && endDate) {
-      totalItemsQueryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-    }
-
-    if (query) {
-      const search = `%${query}%`;
-      totalItemsQueryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name ILIKE :search)',
-        { search },
-      );
-    }
-
-    if (genre) {
-      totalItemsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (country) {
-      const isUUID =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          country,
-        );
-      if (isUUID) {
-        totalItemsQueryBuilder.andWhere('country.id = :country', { country });
-      } else {
-        totalItemsQueryBuilder.andWhere('country.name = :country', { country });
-      }
-    }
+    applyDiscListFilters(totalItemsQueryBuilder, discListFilters);
 
     const totalItems = await totalItemsQueryBuilder.getCount();
     const totalPages = Math.ceil(totalItems / limit);

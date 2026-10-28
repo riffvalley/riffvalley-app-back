@@ -6,7 +6,11 @@ import { PendingsDiscListReader } from 'src/community/pendings/disc-list/pending
 import { RatesDiscListReader } from 'src/community/rates/disc-list/rates-disc-list.reader';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { DiscCatalogService } from '../catalog/disc-catalog.service';
-import { DiscListMode, DiscListQueryDto } from './dto/disc-list-contracts.dto';
+import {
+  DiscListMode,
+  DiscListOptionsQueryDto,
+  DiscListQueryDto,
+} from './dto/disc-list-contracts.dto';
 import {
   mapDiscListComment,
   mapDiscListDisc,
@@ -14,7 +18,7 @@ import {
   mapDiscListPending,
   mapDiscListRate,
 } from './helpers/map-disc-list-items';
-import { DiscListResponse } from './disc-list.types';
+import { DiscListOptionsResponse, DiscListResponse } from './disc-list.types';
 
 @Injectable()
 export class DiscListService {
@@ -22,20 +26,58 @@ export class DiscListService {
     @Inject(DiscCatalogService)
     private readonly discCatalogService: Pick<
       DiscCatalogService,
-      'findDiscList'
+      'findDiscList' | 'findDiscListOptions'
     >,
     @Inject(RatesDiscListReader)
-    private readonly ratesReader: Pick<RatesDiscListReader, 'findByUser'>,
+    private readonly ratesReader: Pick<
+      RatesDiscListReader,
+      'findByUser' | 'findOptions'
+    >,
     @Inject(CommentsDiscListReader)
-    private readonly commentsReader: Pick<CommentsDiscListReader, 'findByUser'>,
+    private readonly commentsReader: Pick<
+      CommentsDiscListReader,
+      'findByUser' | 'findOptions'
+    >,
     @Inject(FavoritesDiscListReader)
     private readonly favoritesReader: Pick<
       FavoritesDiscListReader,
-      'findByUser'
+      'findByUser' | 'findOptions'
     >,
     @Inject(PendingsDiscListReader)
-    private readonly pendingsReader: Pick<PendingsDiscListReader, 'findByUser'>,
+    private readonly pendingsReader: Pick<
+      PendingsDiscListReader,
+      'findByUser' | 'findOptions'
+    >,
   ) {}
+
+  findOptions(
+    query: DiscListOptionsQueryDto,
+    user: User,
+  ): Promise<DiscListOptionsResponse> {
+    const criteria = {
+      query: query.query,
+      dateRange: query.dateRange,
+      countryId: query.countryId,
+      genreId: query.genreId,
+    };
+
+    switch (query.mode) {
+      case DiscListMode.ALL:
+        return this.discCatalogService.findDiscListOptions(query, user);
+      case DiscListMode.RATES:
+        return this.ratesReader.findOptions('rates', criteria, user);
+      case DiscListMode.COVERS:
+        return this.ratesReader.findOptions('covers', criteria, user);
+      case DiscListMode.COMMENTS:
+        return this.commentsReader.findOptions(criteria, user);
+      case DiscListMode.FAVORITES:
+        return this.favoritesReader.findOptions(criteria, user);
+      case DiscListMode.PENDIENTES:
+        return this.pendingsReader.findOptions(criteria, user);
+      default:
+        throw new BadRequestException('Unsupported DiscList mode');
+    }
+  }
 
   async findAll(
     query: DiscListQueryDto,

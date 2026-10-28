@@ -7,13 +7,27 @@ import {
 } from 'src/community/common/types/disc-list-reader-criteria';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { FavoritesService } from '../favorites.service';
+import {
+  DiscListOptionsCriteria,
+  DiscListOptionsResult,
+} from 'src/community/common/types/disc-list-options';
 
 @Injectable()
 export class FavoritesDiscListReader {
   constructor(
     @Inject(FavoritesService)
-    private readonly favoritesService: Pick<FavoritesService, 'findAllByUser'>,
+    private readonly favoritesService: Pick<
+      FavoritesService,
+      'findAllByUser' | 'findDiscListOptions'
+    >,
   ) {}
+
+  findOptions(
+    criteria: DiscListOptionsCriteria,
+    user: User,
+  ): Promise<DiscListOptionsResult> {
+    return this.favoritesService.findDiscListOptions(criteria, user);
+  }
 
   findByUser(
     criteria: DiscListReaderCriteria,

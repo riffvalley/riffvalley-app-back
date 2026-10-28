@@ -6,14 +6,28 @@ import {
   DiscListReaderPage,
 } from 'src/community/common/types/disc-list-reader-criteria';
 import { User } from 'src/identity/auth/entities/user.entity';
+import {
+  DiscListOptionsCriteria,
+  DiscListOptionsResult,
+} from 'src/community/common/types/disc-list-options';
 import { CommentsService } from '../comments.service';
 
 @Injectable()
 export class CommentsDiscListReader {
   constructor(
     @Inject(CommentsService)
-    private readonly commentsService: Pick<CommentsService, 'findAllByUser'>,
+    private readonly commentsService: Pick<
+      CommentsService,
+      'findAllByUser' | 'findDiscListOptions'
+    >,
   ) {}
+
+  findOptions(
+    criteria: DiscListOptionsCriteria,
+    user: User,
+  ): Promise<DiscListOptionsResult> {
+    return this.commentsService.findDiscListOptions(criteria, user);
+  }
 
   findByUser(
     criteria: DiscListReaderCriteria,

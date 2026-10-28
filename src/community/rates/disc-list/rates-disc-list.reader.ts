@@ -6,6 +6,10 @@ import {
   DiscListReaderRateRecord,
 } from 'src/community/common/types/disc-list-reader-criteria';
 import { User } from 'src/identity/auth/entities/user.entity';
+import {
+  DiscListOptionsCriteria,
+  DiscListOptionsResult,
+} from 'src/community/common/types/disc-list-options';
 import { RatesService } from '../rates.service';
 
 type RatesMode = 'rates' | 'covers';
@@ -14,8 +18,23 @@ type RatesMode = 'rates' | 'covers';
 export class RatesDiscListReader {
   constructor(
     @Inject(RatesService)
-    private readonly ratesService: Pick<RatesService, 'findAllByUser'>,
+    private readonly ratesService: Pick<
+      RatesService,
+      'findAllByUser' | 'findDiscListOptions'
+    >,
   ) {}
+
+  findOptions(
+    mode: RatesMode,
+    criteria: DiscListOptionsCriteria,
+    user: User,
+  ): Promise<DiscListOptionsResult> {
+    return this.ratesService.findDiscListOptions(
+      criteria,
+      user,
+      mode === 'rates' ? 'rate' : 'cover',
+    );
+  }
 
   findByUser(
     mode: RatesMode,

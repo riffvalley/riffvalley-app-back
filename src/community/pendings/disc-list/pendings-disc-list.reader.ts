@@ -7,13 +7,27 @@ import {
 } from 'src/community/common/types/disc-list-reader-criteria';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { PendingsService } from '../pendings.service';
+import {
+  DiscListOptionsCriteria,
+  DiscListOptionsResult,
+} from 'src/community/common/types/disc-list-options';
 
 @Injectable()
 export class PendingsDiscListReader {
   constructor(
     @Inject(PendingsService)
-    private readonly pendingsService: Pick<PendingsService, 'findAllByUser'>,
+    private readonly pendingsService: Pick<
+      PendingsService,
+      'findAllByUser' | 'findDiscListOptions'
+    >,
   ) {}
+
+  findOptions(
+    criteria: DiscListOptionsCriteria,
+    user: User,
+  ): Promise<DiscListOptionsResult> {
+    return this.pendingsService.findDiscListOptions(criteria, user);
+  }
 
   findByUser(
     criteria: DiscListReaderCriteria,

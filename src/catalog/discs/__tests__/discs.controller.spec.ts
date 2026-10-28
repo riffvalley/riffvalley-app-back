@@ -23,7 +23,10 @@ import { TopDiscOptionsQueryDto } from '../dto/top-disc-options-query.dto';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
 import { DiscListService } from '../list/disc-list.service';
-import { DiscListQueryDto } from '../list/dto/disc-list-contracts.dto';
+import {
+  DiscListOptionsQueryDto,
+  DiscListQueryDto,
+} from '../list/dto/disc-list-contracts.dto';
 
 type ServiceMock = {
   create: jest.Mock<Promise<unknown>, Parameters<DiscsService['create']>>;
@@ -63,6 +66,10 @@ type ServiceMock = {
 
 type DiscListServiceMock = {
   findAll: jest.Mock<Promise<unknown>, Parameters<DiscListService['findAll']>>;
+  findOptions: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscListService['findOptions']>
+  >;
 };
 
 describe('DiscsController baseline', () => {
@@ -86,7 +93,7 @@ describe('DiscsController baseline', () => {
       update: jest.fn(),
       remove: jest.fn(),
     };
-    discListService = { findAll: jest.fn() };
+    discListService = { findAll: jest.fn(), findOptions: jest.fn() };
     moduleRef = await Test.createTestingModule({
       controllers: [DiscsController],
       providers: [
@@ -127,6 +134,30 @@ describe('DiscsController baseline', () => {
     await expect(controller.findDiscList(dto, user)).resolves.toBe(response);
     expect(discListService.findAll).toHaveBeenCalledWith(dto, user);
     expect(discListService.findAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers authenticated DiscList options before the dynamic ID route and derives identity from the session', async () => {
+    const handler = DiscsController.prototype.findDiscListOptions;
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('list/options');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(0);
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toHaveLength(2);
+
+    const methods = Object.getOwnPropertyNames(DiscsController.prototype);
+    expect(methods.indexOf('findDiscListOptions')).toBeLessThan(
+      methods.indexOf('findOne'),
+    );
+
+    const query = Object.assign(new DiscListOptionsQueryDto(), {
+      mode: 'favorites',
+    });
+    const user = Object.assign(new User(), { id: 'authenticated-user' });
+    const response = { countries: [], genres: [] };
+    discListService.findOptions.mockResolvedValue(response);
+
+    await expect(controller.findDiscListOptions(query, user)).resolves.toBe(
+      response,
+    );
+    expect(discListService.findOptions).toHaveBeenCalledWith(query, user);
   });
 
   it('exposes authenticated GET routes for official TopDiscs and the legacy alias', () => {

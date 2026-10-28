@@ -21,6 +21,11 @@ import {
   applyOrder,
   parseOrdersRaw,
 } from 'src/community/common/helpers/apply-order.helper';
+import { applyDiscListFilters } from 'src/community/common/helpers/apply-disc-list-filters';
+import {
+  DiscListOptionsCriteria,
+  DiscListOptionsResult,
+} from 'src/community/common/types/disc-list-options';
 
 @Injectable()
 export class RatesService {
@@ -31,6 +36,49 @@ export class RatesService {
     private readonly rateRepository: Repository<Rate>,
     // private readonly discRespository: Repository<Disc>,
   ) {}
+
+  async findDiscListOptions(
+    criteria: DiscListOptionsCriteria,
+    user: User,
+    type: 'rate' | 'cover',
+  ): Promise<DiscListOptionsResult> {
+    const createQuery = (omitCountry: boolean, omitGenre: boolean) => {
+      const query = this.rateRepository
+        .createQueryBuilder('rate')
+        .innerJoin('rate.disc', 'disc')
+        .leftJoin('disc.artist', 'artist')
+        .leftJoin('artist.country', 'country')
+        .leftJoin('disc.genre', 'genre')
+        .where('rate.userId = :userId', { userId: user.id })
+        .andWhere(
+          type === 'rate' ? 'rate.rate IS NOT NULL' : 'rate.cover IS NOT NULL',
+        );
+      applyDiscListFilters(query, criteria, { omitCountry, omitGenre });
+      return query;
+    };
+
+    const [countries, genres] = await Promise.all([
+      createQuery(true, false)
+        .select('country.id', 'id')
+        .addSelect('country.name', 'name')
+        .addSelect('country.isoCode', 'isoCode')
+        .andWhere('country.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('country.name', 'ASC')
+        .addOrderBy('country.id', 'ASC')
+        .getRawMany<DiscListOptionsResult['countries'][number]>(),
+      createQuery(false, true)
+        .select('genre.id', 'id')
+        .addSelect('genre.name', 'name')
+        .addSelect('genre.color', 'color')
+        .andWhere('genre.id IS NOT NULL')
+        .distinct(true)
+        .orderBy('genre.name', 'ASC')
+        .addOrderBy('genre.id', 'ASC')
+        .getRawMany<DiscListOptionsResult['genres'][number]>(),
+    ]);
+    return { countries, genres };
+  }
 
   async create(createRateDto: CreateRateDto, user: User) {
     try {
@@ -113,12 +161,6 @@ export class RatesService {
     } = paginationDto;
     const userId = user.id;
 
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    if (dateRange && dateRange.length === 2) {
-      [startDate, endDate] = dateRange;
-    }
-
     const queryBuilder = this.rateRepository
       .createQueryBuilder('rate')
       .leftJoinAndSelect('rate.disc', 'disc') // Relación con los discos
@@ -186,47 +228,14 @@ export class RatesService {
       totalItemsQueryBuilder.andWhere('rate.cover IS NOT NULL');
     }
 
-    if (startDate && endDate) {
-      queryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-      totalItemsQueryBuilder.andWhere(
-        'disc.releaseDate BETWEEN :startDate AND :endDate',
-        { startDate, endDate },
-      );
-    }
-
-    if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name ILIKE :search)',
-        { search },
-      );
-      totalItemsQueryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name ILIKE :search)',
-        { search },
-      );
-    }
-
-    if (genre) {
-      queryBuilder.andWhere('disc.genreId = :genre', { genre });
-      totalItemsQueryBuilder.andWhere('disc.genreId = :genre', { genre });
-    }
-
-    if (country) {
-      const isUUID =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          country,
-        );
-      if (isUUID) {
-        queryBuilder.andWhere('country.id = :country', { country });
-        totalItemsQueryBuilder.andWhere('country.id = :country', { country });
-      } else {
-        queryBuilder.andWhere('country.name = :country', { country });
-        totalItemsQueryBuilder.andWhere('country.name = :country', { country });
-      }
-    }
+    const discListFilters = {
+      query,
+      dateRange,
+      countryId: country,
+      genreId: genre,
+    };
+    applyDiscListFilters(queryBuilder, discListFilters);
+    applyDiscListFilters(totalItemsQueryBuilder, discListFilters);
 
     const ALLOWED_ORDER_FIELDS = new Set<string>([
       // columnas reales
