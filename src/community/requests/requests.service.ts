@@ -15,6 +15,7 @@ import { Disc } from '../../catalog/discs/entities/disc.entity';
 import { Genre } from '../../catalog/genres/entities/genre.entity';
 import { Country } from '../../catalog/countries/entities/country.entity';
 import { normalizeForSearch } from '../../catalog/artists/helpers/normalize-for-search';
+import { normalizeMusicName } from '../../catalog/shared/music-name/normalize-music-name';
 
 @Injectable()
 export class RequestsService {
@@ -126,15 +127,18 @@ export class RequestsService {
         artist = artistRepo.create({
           name: request.artistName,
           nameNormalized: normalizedArtistName,
+          searchNameNormalized: normalizeMusicName(request.artistName),
           ...(request.country ? { countryId: request.country.id } : {}),
         });
-        await artistRepo.save(artist);
+        artist = await artistRepo.save(artist);
+        delete (artist as Partial<Artist>).searchNameNormalized;
         this.logger.log(`Artista creado: "${request.artistName}"`);
       }
 
       // Crear disco
       const disc = discRepo.create({
         name: request.discName,
+        searchNameNormalized: normalizeMusicName(request.discName),
         releaseDate: request.releaseDate,
         ep: request.ep,
         debut: request.debut,
@@ -145,6 +149,7 @@ export class RequestsService {
         ...(request.genre ? { genre: request.genre } : {}),
       });
       await discRepo.save(disc);
+      delete (disc as Partial<Disc>).searchNameNormalized;
       this.logger.log(`Disco creado desde petición: "${request.discName}"`);
 
       request.status = RequestStatus.APPROVED;

@@ -12,6 +12,7 @@ import { hasExactlyOneLinkDiscOption, LinkDiscDto } from './dto/link-disc.dto';
 import { CreateNationalReleaseFromDiscDto } from './dto/create-national-release-from-disc.dto';
 import { MailService } from '../../communications/mail/mail.service';
 import { Disc } from '../../catalog/discs/entities/disc.entity';
+import { normalizeMusicName } from '../../catalog/shared/music-name/normalize-music-name';
 
 interface SuggestedDiscCandidate {
   releaseId: string;
@@ -337,6 +338,7 @@ export class NationalReleasesService {
         const releaseRepository = manager.getRepository(NationalRelease);
         const newDisc = discRepository.create({
           name: dto.name,
+          searchNameNormalized: normalizeMusicName(dto.name),
           ...(dto.artistId && { artist: { id: dto.artistId } }),
           ...(dto.genreId && { genre: { id: dto.genreId } }),
           ...(dto.releaseDate && { releaseDate: new Date(dto.releaseDate) }),
@@ -346,6 +348,7 @@ export class NationalReleasesService {
           image: dto.image,
         });
         const disc = await discRepository.save(newDisc);
+        delete (disc as Partial<Disc>).searchNameNormalized;
 
         release.disc = disc;
         return releaseRepository.save(release);

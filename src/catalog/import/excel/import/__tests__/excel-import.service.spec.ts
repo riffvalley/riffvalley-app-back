@@ -490,6 +490,7 @@ describe('ExcelImportService', () => {
         expect.objectContaining({
           name: 'Árbol  Del Mar',
           nameNormalized: 'arbol del mar',
+          searchNameNormalized: 'arbol del mar',
           countryId: 'country-es',
         }),
       );
@@ -524,10 +525,13 @@ describe('ExcelImportService', () => {
           expect.objectContaining({
             name: visibleArtist,
             nameNormalized: normalizedKey,
+            searchNameNormalized: normalizedKey,
           }),
         );
         expect(discRepo.create).toHaveBeenCalledWith(
           expect.objectContaining({
+            name: 'Album',
+            searchNameNormalized: 'album',
             artist: expect.objectContaining({
               name: visibleArtist,
               nameNormalized: normalizedKey,
@@ -695,6 +699,7 @@ describe('ExcelImportService', () => {
       );
       expect(discRepo.create).toHaveBeenCalledWith({
         name: 'Album',
+        searchNameNormalized: 'album',
         releaseDate: new Date(Date.UTC(2023, 5, 3)),
         debut: true,
         ep: true,

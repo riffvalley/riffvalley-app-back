@@ -37,12 +37,17 @@ describe('ArtistWriteService', () => {
 
   it('creates with normalized name and needsReview=true and returns the saved entity', async () => {
     const dto = {
-      name: '  Björk + Co  ',
+      name: 'MØL',
       description: 'Description',
       image: 'image.png',
       countryId: 'country-id',
     };
-    const entity = { ...dto, nameNormalized: 'bjork co', needsReview: true };
+    const entity = {
+      ...dto,
+      nameNormalized: 'møl',
+      searchNameNormalized: 'mol',
+      needsReview: true,
+    };
     const saved = { ...entity, country: { id: 'country-id', name: 'Iceland' } };
     artistRepository.create.mockReturnValue(entity);
     artistRepository.save.mockResolvedValue(saved);
@@ -52,10 +57,12 @@ describe('ArtistWriteService', () => {
     ).resolves.toBe(saved);
     expect(artistRepository.create).toHaveBeenCalledWith({
       ...dto,
-      nameNormalized: 'bjork co',
+      nameNormalized: 'møl',
+      searchNameNormalized: 'mol',
       needsReview: true,
     });
     expect(artistRepository.save).toHaveBeenCalledWith(entity);
+    expect(saved).not.toHaveProperty('searchNameNormalized');
   });
 
   it('maps create 23505 to BadRequestException with the database detail', async () => {
@@ -110,6 +117,7 @@ describe('ArtistWriteService', () => {
       description: 'Bio',
       name: 'Björk',
       nameNormalized: 'bjork',
+      searchNameNormalized: 'bjork',
       country: { id: 'country-id' },
       needsReview: false,
     });
@@ -123,7 +131,11 @@ describe('ArtistWriteService', () => {
       country: { id: 'old-country' },
     };
     artistRepository.preload.mockResolvedValue(artist);
-    artistRepository.save.mockResolvedValue(artist);
+    let savedSearchNameNormalized: string | null | undefined;
+    artistRepository.save.mockImplementation(async (savedArtist: Artist) => {
+      savedSearchNameNormalized = savedArtist.searchNameNormalized;
+      return savedArtist;
+    });
 
     await service.update(
       'artist-id',
@@ -134,6 +146,8 @@ describe('ArtistWriteService', () => {
       country: undefined,
       needsReview: false,
     });
+    expect(savedSearchNameNormalized).toBe('original');
+    expect(artist).not.toHaveProperty('searchNameNormalized');
   });
 
   it('throws 404 when update preload misses and maps save 23505 failures', async () => {
@@ -145,7 +159,10 @@ describe('ArtistWriteService', () => {
       message: 'Artist with id missing not found',
     });
 
-    artistRepository.preload.mockResolvedValue({ id: 'artist-id' });
+    artistRepository.preload.mockResolvedValue({
+      id: 'artist-id',
+      name: 'Artist',
+    });
     artistRepository.save.mockRejectedValue({
       code: '23505',
       detail: 'conflict',

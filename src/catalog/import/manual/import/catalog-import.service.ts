@@ -11,6 +11,7 @@ import { ProcessManualDataDto } from '../dto/process-manual-data.dto';
 import { parseManualAlbumLine } from '../parser/parse-manual-album-line';
 import { parseManualDate } from '../parser/parse-manual-date';
 import { normalizeForSearch } from '../../../artists/helpers/normalize-for-search';
+import { normalizeMusicName } from '../../../shared/music-name/normalize-music-name';
 import { ManualImportLogger } from '../logging/manual-import-logger';
 import { Artist } from '../../../artists/entities/artist.entity';
 import { Disc } from '../../../discs/entities/disc.entity';
@@ -232,6 +233,7 @@ export class CatalogImportService {
               artist = artistRepository.create({
                 name: artistName,
                 nameNormalized: normalizedArtistName,
+                searchNameNormalized: normalizeMusicName(artistName),
                 description: '',
                 image: '',
                 country: country ?? defaultCountry ?? undefined,
@@ -253,6 +255,7 @@ export class CatalogImportService {
 
             const disc = discRepository.create({
               name: discName,
+              searchNameNormalized: normalizeMusicName(discName),
               description: '',
               image: '',
               verified: false,

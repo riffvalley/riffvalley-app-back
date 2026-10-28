@@ -11,6 +11,7 @@ import { CreateArtistDto } from '../dto/create-artist.dto';
 import { UpdateArtistDto } from '../dto/update-artist.dto';
 import { Artist } from '../entities/artist.entity';
 import { normalizeForSearch } from '../helpers/normalize-for-search';
+import { normalizeMusicName } from 'src/catalog/shared/music-name/normalize-music-name';
 
 function isDuplicateKeyError(
   error: unknown,
@@ -39,9 +40,12 @@ export class ArtistWriteService {
       const artist = this.artistRepository.create({
         ...dto,
         nameNormalized: normalizeForSearch(dto.name),
+        searchNameNormalized: normalizeMusicName(dto.name),
         needsReview: true,
       });
-      return await this.artistRepository.save(artist);
+      const savedArtist = await this.artistRepository.save(artist);
+      delete (savedArtist as Partial<Artist>).searchNameNormalized;
+      return savedArtist;
     } catch (error) {
       this.handleDbExceptions(error);
     }
@@ -57,14 +61,20 @@ export class ArtistWriteService {
       ...(name !== undefined
         ? { nameNormalized: normalizeForSearch(name) }
         : {}),
+      ...(name !== undefined
+        ? { searchNameNormalized: normalizeMusicName(name) }
+        : {}),
       country: countryId ? { id: countryId } : undefined,
       needsReview: false,
     });
 
     if (!artist) throw new NotFoundException(`Artist with id ${id} not found`);
 
+    artist.searchNameNormalized = normalizeMusicName(artist.name);
+
     try {
       await this.artistRepository.save(artist);
+      delete (artist as Partial<Artist>).searchNameNormalized;
       return artist;
     } catch (error) {
       this.handleDbExceptions(error);

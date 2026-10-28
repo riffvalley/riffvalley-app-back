@@ -10,6 +10,7 @@ import { Country } from '../../../countries/entities/country.entity';
 import { Disc } from '../../../discs/entities/disc.entity';
 import { Artist } from '../../../artists/entities/artist.entity';
 import { normalizeForSearch } from '../../../artists/helpers/normalize-for-search';
+import { normalizeMusicName } from '../../../shared/music-name/normalize-music-name';
 import {
   CatalogImportTransactionError,
   runCatalogImportTransaction,
@@ -215,6 +216,7 @@ export class ExcelImportService {
               artist = artistRepo.create({
                 name: artistName,
                 nameNormalized: normalizedArtistName,
+                searchNameNormalized: normalizeMusicName(artistName),
                 ...(country ? { countryId: country.id } : {}),
               });
               artist = await artistRepo.save(artist);
@@ -243,6 +245,7 @@ export class ExcelImportService {
 
             const disc = discRepo.create({
               name: discName,
+              searchNameNormalized: normalizeMusicName(discName),
               releaseDate,
               debut,
               ep,

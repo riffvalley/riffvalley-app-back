@@ -21,6 +21,14 @@ export class Artist {
   @Column({ name: 'name_normalized', type: 'text' })
   nameNormalized: string;
 
+  @Column({
+    name: 'search_name_normalized',
+    type: 'text',
+    nullable: true,
+    select: false,
+  })
+  searchNameNormalized: string | null;
+
   @Column('text', { nullable: true })
   description: string;
 

@@ -14,6 +14,10 @@
 
 **Evolución DiscList:** CAT-DISC-3b define los contratos, CAT-DISC-3c implementa el listado, CAT-DISC-3d las opciones dinámicas y CAT-DISC-3h habilita la selección OR de varios géneros en ambos endpoints nuevos. Véanse [CAT-DISC-3c](cat-disc-3c-implementacion-disc-list.md), [CAT-DISC-3d](cat-disc-3d-opciones-disc-list.md) y [CAT-DISC-3h](cat-disc-3h-multiseleccion-generos.md). La validación PostgreSQL aislada del SQL del listado ya está realizada. CAT-DISC-3e (integración frontend) sigue pendiente; no se ha iniciado en esta tarea.
 
+**CAT-DISC-4c.1a — Auditoría backend de portadas, enlaces y elegibilidad:** completada como investigación documental en [el informe de medios y elegibilidad](catalog-discs-media-eligibility-audit.md). No modifica código ni contratos. CAT-DISC-4c.1b queda como posible implementación posterior, pendiente de revisar/aprobar la definición de `hasMusicLink`, los centinelas y el alcance coordinado backend/frontend.
+
+**Búsqueda y matching musical:** MEDIA-1, MEDIA-2, MEDIA-3a y MEDIA-3b.1–3b.3 están completadas. MEDIA-3b.3 implementa `dry-run/apply/verify` por lotes y pasó validación PostgreSQL 17 aislada con fixtures sintéticos, incluyendo migración up/down, idempotencia, concurrencia y reanudación. No se aplicó la migración ni se ejecutó el backfill en bases persistentes o registros históricos reales. MEDIA-3b.4–3b.8 siguen pendientes. El [diseño SQL](music-search-sql-design.md) registra el procedimiento y despliegue. MEDIA-4–MEDIA-6 y MEDIA-8 siguen pendientes; MEDIA-7 fue descartada por decisión del usuario. Véanse la [auditoría](music-search-audit.md), la [política de normalización aislada](music-search-normalization.md) y [el roadmap](music-search-matching.md). No se cambió CAT-DISC-4c ni su elegibilidad `hasCover || hasMusicLink`.
+
 Este documento conserva el detalle de la planificación con ownership de Catalog, incluidos Discs y la fase de ownership de Catalog. Se preservan numeración, estados y notas históricas.
 
 ## Objetivos

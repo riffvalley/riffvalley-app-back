@@ -14,6 +14,7 @@ import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from '../dto/update-discs.dto';
 import { Disc } from '../entities/disc.entity';
 import { normalizeArtistName } from './helpers/normalize-artist-name';
+import { normalizeMusicName } from 'src/catalog/shared/music-name/normalize-music-name';
 
 @Injectable()
 export class DiscWriteService {
@@ -29,10 +30,12 @@ export class DiscWriteService {
       const { artistId, genreId, ...discFields } = createDiscDto;
       const disc = this.discRepository.create({
         ...discFields,
+        searchNameNormalized: normalizeMusicName(discFields.name),
         ...(artistId && { artist: { id: artistId } as Artist }),
         ...(genreId && { genre: { id: genreId } as Genre }),
       });
       await this.discRepository.save(disc);
+      delete (disc as Partial<Disc>).searchNameNormalized;
       // Keep the POST response shape unchanged while persisting the relations.
       delete (disc as Partial<Disc>).artist;
       delete (disc as Partial<Disc>).genre;
@@ -54,6 +57,7 @@ export class DiscWriteService {
 
       const disc = discRepository.create({
         name: dto.discName,
+        searchNameNormalized: normalizeMusicName(dto.discName),
         artist,
         ...(dto.genreId && { genre: { id: dto.genreId } as Genre }),
         ...(dto.releaseDate && { releaseDate: new Date(dto.releaseDate) }),
@@ -64,7 +68,9 @@ export class DiscWriteService {
         description: dto.description,
       });
 
-      return discRepository.save(disc);
+      const savedDisc = await discRepository.save(disc);
+      delete (savedDisc as Partial<Disc>).searchNameNormalized;
+      return savedDisc;
     });
   }
 
@@ -76,9 +82,14 @@ export class DiscWriteService {
     const disc = await this.discRepository.preload({
       id,
       ...restDto,
+      ...(restDto.name !== undefined
+        ? { searchNameNormalized: normalizeMusicName(restDto.name) }
+        : {}),
     });
 
     if (!disc) throw new NotFoundException(`Disc with id ${id} not found`);
+
+    disc.searchNameNormalized = normalizeMusicName(disc.name);
 
     try {
       if (genreId) {
@@ -90,6 +101,7 @@ export class DiscWriteService {
       }
 
       await this.discRepository.save(disc);
+      delete (disc as Partial<Disc>).searchNameNormalized;
       return disc;
     } catch (error) {
       this.handleDbExceptions(error);
@@ -114,13 +126,16 @@ export class DiscWriteService {
     });
 
     if (matches.length === 0) {
-      return artistRepository.save(
+      const createdArtist = await artistRepository.save(
         artistRepository.create({
           name: artistName,
           nameNormalized: normalizeArtistName(artistName),
+          searchNameNormalized: normalizeMusicName(artistName),
           ...(countryId && { countryId }),
         }),
       );
+      delete (createdArtist as Partial<Artist>).searchNameNormalized;
+      return createdArtist;
     }
 
     if (matches.length === 1) {
@@ -138,13 +153,16 @@ export class DiscWriteService {
     if (match) return match;
 
     // No hay ninguno con ese país → es un artista distinto, se crea
-    return artistRepository.save(
+    const createdArtist = await artistRepository.save(
       artistRepository.create({
         name: artistName,
         nameNormalized: normalizeArtistName(artistName),
+        searchNameNormalized: normalizeMusicName(artistName),
         countryId,
       }),
     );
+    delete (createdArtist as Partial<Artist>).searchNameNormalized;
+    return createdArtist;
   }
 
   private handleDbExceptions(error: unknown) {

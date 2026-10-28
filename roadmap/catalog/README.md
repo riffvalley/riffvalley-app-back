@@ -11,9 +11,11 @@ C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDisc
 ## Documentos actuales
 
 - [Roadmap de Catalog](catalog.md) — ownership, planificación de Artists, Countries, Genres, Import, Last.fm Catalog, Overview y Discs. Conserva decisiones, tareas e historial.
+- [MEDIA — Búsqueda y matching musical](music-search-matching.md) — MEDIA-1, MEDIA-2, MEDIA-3a y MEDIA-3b.1–3b.3 completadas; migración/backfill validados con fixtures sintéticos en PostgreSQL temporal aislado; ninguna base persistente modificada; [auditoría](music-search-audit.md), [política de normalización](music-search-normalization.md), [diseño SQL](music-search-sql-design.md); MEDIA-3b.4–3b.8, MEDIA-4–MEDIA-6 y MEDIA-8 pendientes, MEDIA-7 descartada por decisión del usuario.
 - [CAT-DISC-3b — Contratos de DiscList](cat-disc-3b-contratos-disc-list.md) — arquitectura de fachada, DTOs, tipos, ownership y seguridad.
 - [CAT-DISC-3c — Implementación backend de DiscList](cat-disc-3c-implementacion-disc-list.md) — fachada, endpoint autenticado, lectores propietarios y verificaciones.
 - [CAT-DISC-3d — Opciones dinámicas de DiscList](cat-disc-3d-opciones-disc-list.md) — endpoint autenticado, opciones por modo y usuario, filtros cruzados y validación PostgreSQL aislada.
+- [CAT-DISC-4c.1a — Auditoría de medios y elegibilidad](catalog-discs-media-eligibility-audit.md) — investigación documental de Spotify, Bandcamp, persistencia de portadas/enlaces y la regla OR; CAT-DISC-4c.1b queda como implementación posible posterior.
 - [Regresión de Catalog del 2026-10-15](regression-2026-10-15.md) — registro histórico de pruebas de integración y recomendaciones pre-merge.
 - [Evidencia: selector de archivo bloqueado](regression-evidence/excel-selector-blocked.jpg) — captura asociada al informe de regresión.
 - [C-TOP-8 — Auditoría estadística de TopDiscs](c-top-8-auditoria-estadistica-topdiscs.md) — fórmula, universo estadístico, simulaciones reproducibles y recomendación; sin cambios de producción. Su estado de C-TOP-7 refleja la fecha histórica del informe; la tarea quedó completada después.

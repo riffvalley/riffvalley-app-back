@@ -52,10 +52,12 @@ describe('DiscWriteService characterization', () => {
   });
 
   it('creates a minimal disc, preserves entity defaults and returns it after save', async () => {
-    const dto: CreateDiscDto = { name: 'Album' };
+    const dto: CreateDiscDto = { name: 'MØL' };
     const entity = new Disc();
     entity.name = dto.name;
-    discRepository.create.mockReturnValue(entity);
+    discRepository.create.mockImplementation((values: Partial<Disc>) =>
+      Object.assign(entity, values),
+    );
     discRepository.save.mockImplementation(async (savedDisc: Disc) => {
       savedDisc.id = 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783';
       return savedDisc;
@@ -63,13 +65,16 @@ describe('DiscWriteService characterization', () => {
 
     await expect(service.create(dto)).resolves.toBe(entity);
 
-    expect(discRepository.create).toHaveBeenCalledWith(dto);
+    expect(discRepository.create).toHaveBeenCalledWith({
+      ...dto,
+      searchNameNormalized: 'mol',
+    });
     expect(discRepository.create).toHaveBeenCalledTimes(1);
     expect(discRepository.save).toHaveBeenCalledWith(entity);
     expect(discRepository.save).toHaveBeenCalledTimes(1);
     expect(entity).toMatchObject({
       id: 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783',
-      name: 'Album',
+      name: 'MØL',
       verified: false,
       ep: false,
       debut: false,
@@ -80,6 +85,7 @@ describe('DiscWriteService characterization', () => {
     expect(entity.image).toBeUndefined();
     expect(entity.link).toBeUndefined();
     expect(entity.releaseDate).toBeUndefined();
+    expect(entity).not.toHaveProperty('searchNameNormalized');
   });
 
   it('maps relation IDs and passes only entity fields to TypeORM create', async () => {
@@ -119,6 +125,7 @@ describe('DiscWriteService characterization', () => {
 
     expect(discRepository.create).toHaveBeenCalledWith({
       name: dto.name,
+      searchNameNormalized: 'album',
       description: dto.description,
       image: dto.image,
       verified: dto.verified,
@@ -230,6 +237,7 @@ describe('DiscWriteService characterization', () => {
 
     expect(discRepository.create).toHaveBeenCalledWith({
       name: 'Album',
+      searchNameNormalized: 'album',
       artist: { id: dto.artistId },
       genre: { id: dto.genreId },
     });
@@ -275,6 +283,7 @@ describe('DiscWriteService characterization', () => {
       expect(discRepository.preload).toHaveBeenCalledWith({
         id: discId,
         name: 'New name',
+        searchNameNormalized: 'new name',
       });
       expect(discRepository.preload).toHaveBeenCalledTimes(1);
       expect(discRepository.save).toHaveBeenCalledWith(disc);
@@ -288,6 +297,7 @@ describe('DiscWriteService characterization', () => {
         genre,
         ...eagerRelations,
       });
+      expect(disc).not.toHaveProperty('searchNameNormalized');
       expect(disc.releaseDate).toEqual(new Date('2020-01-02T00:00:00.000Z'));
     });
 
@@ -315,6 +325,7 @@ describe('DiscWriteService characterization', () => {
       expect(discRepository.preload).toHaveBeenCalledWith({
         id: discId,
         name: dto.name,
+        searchNameNormalized: 'new name',
         description: dto.description,
         image: dto.image,
         verified: dto.verified,
@@ -345,7 +356,11 @@ describe('DiscWriteService characterization', () => {
       discRepository.preload.mockImplementation(async (patch: Partial<Disc>) =>
         Object.assign(disc, patch),
       );
-      discRepository.save.mockResolvedValue(disc);
+      let persistedSearchNameNormalized: string | null | undefined;
+      discRepository.save.mockImplementation(async (savedDisc: Disc) => {
+        persistedSearchNameNormalized = savedDisc.searchNameNormalized;
+        return savedDisc;
+      });
 
       await expect(service.update(discId, dto)).resolves.toBe(disc);
 
@@ -363,12 +378,19 @@ describe('DiscWriteService characterization', () => {
       });
       expect(discRepository.save).toHaveBeenCalledWith(disc);
       expect(discRepository.save).toHaveBeenCalledTimes(1);
+      expect(persistedSearchNameNormalized).toBe('album');
+      expect(disc).not.toHaveProperty('searchNameNormalized');
     });
 
     it('retains existing Artist and Genre when their IDs are omitted', async () => {
       const artist = { id: 'existing-artist' };
       const genre = { id: 'existing-genre' };
-      const disc = Object.assign(new Disc(), { id: discId, artist, genre });
+      const disc = Object.assign(new Disc(), {
+        id: discId,
+        name: 'Existing album',
+        artist,
+        genre,
+      });
       discRepository.preload.mockResolvedValue(disc);
       discRepository.save.mockResolvedValue(disc);
 
@@ -384,7 +406,12 @@ describe('DiscWriteService characterization', () => {
     it('does not clear Artist or Genre when nullable relation IDs are null', async () => {
       const artist = { id: 'existing-artist' };
       const genre = { id: 'existing-genre' };
-      const disc = Object.assign(new Disc(), { id: discId, artist, genre });
+      const disc = Object.assign(new Disc(), {
+        id: discId,
+        name: 'Existing album',
+        artist,
+        genre,
+      });
       discRepository.preload.mockResolvedValue(disc);
       discRepository.save.mockResolvedValue(disc);
 
@@ -412,6 +439,7 @@ describe('DiscWriteService characterization', () => {
       expect(discRepository.preload).toHaveBeenCalledWith({
         id: discId,
         name: 'New name',
+        searchNameNormalized: 'new name',
       });
       expect(discRepository.save).not.toHaveBeenCalled();
     });
@@ -552,6 +580,7 @@ describe('DiscWriteService characterization', () => {
       expect(artistRepository.create).toHaveBeenCalledWith({
         name: artistName,
         nameNormalized: 'arbol de nandu',
+        searchNameNormalized: 'arbol de nandu',
       });
       expect(artistRepository.create).toHaveBeenCalledTimes(1);
       expect(artistRepository.save).toHaveBeenCalledWith(createdArtist);
@@ -648,6 +677,7 @@ describe('DiscWriteService characterization', () => {
       expect(artistRepository.create).toHaveBeenCalledWith({
         name: artistName,
         nameNormalized: 'muneca',
+        searchNameNormalized: 'muneca',
         countryId,
       });
       expect(artistRepository.create).toHaveBeenCalledTimes(1);
@@ -709,6 +739,7 @@ describe('DiscWriteService characterization', () => {
       expect(artistRepository.save).not.toHaveBeenCalled();
       expect(discRepository.create).toHaveBeenCalledWith({
         name: 'Album',
+        searchNameNormalized: 'album',
         artist: existingArtist,
         ep: false,
         debut: false,
@@ -781,12 +812,14 @@ describe('DiscWriteService characterization', () => {
       expect(artistRepository.create).toHaveBeenCalledWith({
         name: 'New Band',
         nameNormalized: 'new band',
+        searchNameNormalized: 'new band',
         countryId: 'country-new',
       });
       expect(createArtist).toHaveBeenCalledTimes(1);
       expect(artistRepository.save).toHaveBeenCalledTimes(1);
       expect(discRepository.create).toHaveBeenCalledWith({
         name: 'Second Album',
+        searchNameNormalized: 'second album',
         artist: expect.objectContaining({ id: 'new-artist-id' }),
         genre: { id: dto.genreId },
         releaseDate: new Date('2002-03-04T00:00:00.000Z'),

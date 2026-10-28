@@ -704,11 +704,13 @@ describe('RequestsService characterization', () => {
     expect(artistRepo.create).toHaveBeenCalledWith({
       name: request.artistName,
       nameNormalized: 'the band',
+      searchNameNormalized: 'the band',
       countryId: request.country.id,
     });
     expect(artistRepo.save).toHaveBeenCalledWith(artist);
     expect(discRepo.create).toHaveBeenCalledWith({
       name: request.discName,
+      searchNameNormalized: 'first record',
       releaseDate: request.releaseDate,
       ep: request.ep,
       debut: request.debut,
@@ -721,6 +723,7 @@ describe('RequestsService characterization', () => {
     expect(discRepo.save).toHaveBeenCalledWith(disc);
     expect(request.status).toBe(RequestStatus.APPROVED);
     expect(requestRepo.save).toHaveBeenCalledWith(request);
+    expect(disc).not.toHaveProperty('searchNameNormalized');
 
     await expect(service.approve(request.id)).rejects.toThrow(
       'Esta petición ya fue procesada',
@@ -831,6 +834,7 @@ describe('RequestsService characterization', () => {
     expect(artistRepo.create).toHaveBeenCalledWith({
       name: artistName,
       nameNormalized: 'bjork co',
+      searchNameNormalized: 'bjork co',
       countryId: request.country.id,
     });
     expect(artistRepo.save).toHaveBeenCalledWith(artist);

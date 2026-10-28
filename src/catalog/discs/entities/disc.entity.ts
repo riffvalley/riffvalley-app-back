@@ -21,6 +21,14 @@ export class Disc {
   @Column('varchar', { length: 100 })
   name: string;
 
+  @Column({
+    name: 'search_name_normalized',
+    type: 'text',
+    nullable: true,
+    select: false,
+  })
+  searchNameNormalized: string | null;
+
   @Column('text', { nullable: true })
   description: string;
 

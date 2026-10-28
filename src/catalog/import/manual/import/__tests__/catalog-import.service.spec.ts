@@ -134,6 +134,7 @@ describe('CatalogImportService characterization', () => {
     expect(artistRepository.create).toHaveBeenCalledWith({
       name: 'Arbol',
       nameNormalized: 'arbol',
+      searchNameNormalized: 'arbol',
       description: '',
       image: '',
       country: undefined,
@@ -145,6 +146,7 @@ describe('CatalogImportService characterization', () => {
     expect(discRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Album',
+        searchNameNormalized: 'album',
         description: '',
         image: '',
         verified: false,
@@ -219,6 +221,7 @@ describe('CatalogImportService characterization', () => {
     expect(artistRepository.create).toHaveBeenCalledWith({
       name: 'Árbol  del  Mar',
       nameNormalized: 'arbol del mar',
+      searchNameNormalized: 'arbol del mar',
       description: '',
       image: '',
       country: selectedCountry,

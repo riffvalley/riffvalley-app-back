@@ -148,6 +148,7 @@ describe('NationalReleasesService linkDisc transaction', () => {
     expect(transactionManager.getRepository).toHaveBeenCalledTimes(2);
     expect(transactionDiscRepository.create).toHaveBeenCalledWith({
       name: 'New album',
+      searchNameNormalized: 'new album',
       artist: { id: newDisc.artist.id },
       genre: { id: newDisc.genre.id },
       ep: false,
@@ -163,6 +164,7 @@ describe('NationalReleasesService linkDisc transaction', () => {
     expect(releaseRepository.save).not.toHaveBeenCalled();
     expect(discRepository.save).not.toHaveBeenCalled();
     expect(stagedDiscs).toHaveLength(1);
+    expect(newDisc).not.toHaveProperty('searchNameNormalized');
   });
 
   it('rolls back the newly created Disc when saving the release fails', async () => {
