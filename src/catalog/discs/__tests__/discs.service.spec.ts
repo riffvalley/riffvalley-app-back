@@ -60,6 +60,7 @@ type ServiceMocks = {
   };
   discTopService: {
     getTopDiscs: AsyncMethod<DiscTopService['getTopDiscs']>;
+    getLegacyTopDiscs: AsyncMethod<DiscTopService['getLegacyTopDiscs']>;
     getTopDiscOptions: AsyncMethod<DiscTopService['getTopDiscOptions']>;
   };
 };
@@ -95,6 +96,7 @@ function createServiceMocks(): ServiceMocks {
     discSpotifyService: { getSpotifyTracks: jest.fn() },
     discTopService: {
       getTopDiscs: jest.fn(),
+      getLegacyTopDiscs: jest.fn(),
       getTopDiscOptions: jest.fn(),
     },
   };
@@ -227,6 +229,30 @@ describe('DiscsService facade', () => {
 
     await expect(service.getTopDiscOptions(query)).resolves.toBe(payload);
     expect(mocks.discTopService.getTopDiscOptions).toHaveBeenCalledWith(query);
+  });
+
+  it('delegates the legacy TopDiscs ranking independently', async () => {
+    const payload = {
+      discs: [],
+      totalDiscs: 2,
+      totalVotes: 4,
+      topUsersByRates: [],
+      topUsersByCover: [],
+      ratingDistribution: [],
+    };
+    mocks.discTopService.getLegacyTopDiscs.mockResolvedValue(payload);
+    const pagination = new TopStatsQueryDto();
+    const user = Object.assign(new User(), { id: 'user-id' });
+
+    await expect(
+      service.getLegacyTopDiscs(pagination, user, 'genre-id'),
+    ).resolves.toBe(payload);
+    expect(mocks.discTopService.getLegacyTopDiscs).toHaveBeenCalledWith(
+      pagination,
+      user,
+      'genre-id',
+    );
+    expect(mocks.discTopService.getTopDiscs).not.toHaveBeenCalled();
   });
 
   it('delegates all public write operations and returns their results unchanged', async () => {

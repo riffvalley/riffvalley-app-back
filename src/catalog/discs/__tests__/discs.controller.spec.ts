@@ -47,6 +47,10 @@ type ServiceMock = {
     Promise<unknown>,
     Parameters<DiscsService['getTopDiscs']>
   >;
+  getLegacyTopDiscs: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscsService['getLegacyTopDiscs']>
+  >;
   getTopDiscOptions: jest.Mock<
     Promise<unknown>,
     Parameters<DiscsService['getTopDiscOptions']>
@@ -70,6 +74,7 @@ describe('DiscsController baseline', () => {
       findOne: jest.fn(),
       getSpotifyTracks: jest.fn(),
       getTopDiscs: jest.fn(),
+      getLegacyTopDiscs: jest.fn(),
       getTopDiscOptions: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
@@ -155,7 +160,7 @@ describe('DiscsController baseline', () => {
     expect(discsService.getTopDiscs).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps GET /discs/homeDiscs as a response-identical alias of TopDiscs', async () => {
+  it('delegates GET /discs/homeDiscs independently from official TopDiscs', async () => {
     const dto = Object.assign(new TopStatsQueryDto(), {
       dateRange: [new Date('2024-01-01'), new Date('2024-12-31')],
       genreId: 'genre-id',
@@ -170,17 +175,18 @@ describe('DiscsController baseline', () => {
       topUsersByCover: [],
       ratingDistribution: [],
     };
-    discsService.getTopDiscs.mockResolvedValue(response);
+    discsService.getLegacyTopDiscs.mockResolvedValue(response);
 
     await expect(controller.findLegacyTopDiscs(dto, user)).resolves.toBe(
       response,
     );
-    expect(discsService.getTopDiscs).toHaveBeenCalledWith(
+    expect(discsService.getLegacyTopDiscs).toHaveBeenCalledWith(
       dto,
       user,
       'genre-id',
     );
-    expect(discsService.getTopDiscs).toHaveBeenCalledTimes(1);
+    expect(discsService.getLegacyTopDiscs).toHaveBeenCalledTimes(1);
+    expect(discsService.getTopDiscs).not.toHaveBeenCalled();
   });
 
   it('delegates relation IDs on POST /discs and returns its response unchanged', async () => {

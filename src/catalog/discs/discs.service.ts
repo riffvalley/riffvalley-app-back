@@ -105,6 +105,14 @@ export class DiscsService {
     return this.discTopService.getTopDiscs(query, user, genreId);
   }
 
+  getLegacyTopDiscs(
+    query: TopStatsQueryDto,
+    user: User,
+    genreId?: string,
+  ): Promise<DiscTopResult> {
+    return this.discTopService.getLegacyTopDiscs(query, user, genreId);
+  }
+
   getTopDiscOptions(
     query: TopDiscOptionsQueryDto,
   ): Promise<DiscTopOptionsResult> {

@@ -3,7 +3,7 @@
 **Estado:** auditoría completada; no se cambió producción.
 **Fecha:** 2026-10-28.
 **Alcance:** `GET /api/discs/topDiscs`, la puntuación SQL de `DiscTopService` y sus parámetros estadísticos. El servicio devuelve hasta 20 filas; la vista actual presenta 11.
-**Separación de tareas:** C-TOP-7 (regresión visual de TopDiscs) sigue pendiente y no forma parte de este cierre. C-TOP-8 es una auditoría estadística independiente.
+**Separación de tareas en la fecha del informe:** C-TOP-7 (regresión visual de TopDiscs) seguía pendiente y no formó parte de este cierre. C-TOP-8 es una auditoría estadística independiente.
 
 ## Resumen ejecutivo
 
@@ -91,7 +91,7 @@ Para un ranking filtrado que pretende representar preferencias dentro de ese fil
 - **Redondeo:** no hay redondeo temprano de score ni redondeo de media por disco. Sí hay conversión de prior `numeric → JS number` y truncamiento/fallback de mediana antes de construir la query principal.
 - **Empates:** desempate estable por `d.id ASC` en el SQL vigente.
 - **Discrepancia histórica:** la documentación D32 antigua registra `ORDER BY weightedScore DESC` sin desempate y joins de Favorite/Pending. El código consultado ahora ordena por score e ID y no contiene esos joins. Este documento prioriza la inspección vigente; no actualiza ni reinterpreta resultados históricos de sus pruebas.
-- **Frontend:** sin acceso a la aplicación frontend en esta auditoría no se pudo verificar la representación de `weightedScore`, los decimales visibles ni que la lista de 11 coincida con el límite API 20. Queda como verificación pendiente si se modifica el formato/semántica.
+- **Frontend en la fecha de C-TOP-8:** no se pudo verificar la representación de `weightedScore`, los decimales visibles ni la lista de 11 frente al límite API de 20 vigente entonces. C-TOP-7 realizó después la regresión; el backend redujo intencionadamente el límite a 11, confirmado como definitivo por el usuario.
 
 ### Hallazgos confirmados frente a decisiones discutibles
 
@@ -193,3 +193,5 @@ No se ejecutó `EXPLAIN ANALYZE`, ya que requiere un PostgreSQL aislado y datos 
 - Verificación ejecutada: `node roadmap/catalog/simulate-topdiscs-c-top-8.mjs`; salida reproducible inspeccionada.
 - No se ejecutaron suites de test, build, consultas a PostgreSQL ni migraciones.
 - `git diff --check` aprobado.
+
+**Actualización posterior — C-TOP-7 (2026-10-28):** completada; el usuario confirmó que el límite actual de 11 discos es intencionado y definitivo. Las referencias a 20 de este informe describen la API al momento de la auditoría y quedan supersedidas.

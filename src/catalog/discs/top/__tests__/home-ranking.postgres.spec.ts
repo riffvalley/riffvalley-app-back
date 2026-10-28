@@ -188,6 +188,7 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
       country: 'Fixtureland',
       genreId: GENRE_ID,
     },
+    legacy = false,
   ) {
     jest.useFakeTimers().setSystemTime(new Date(`${today}T12:00:00.000Z`));
     const queries: {
@@ -218,16 +219,15 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     const service = new DiscTopService(repository);
 
     try {
-      const result = await service.getTopDiscs(
-        Object.assign(new TopStatsQueryDto(), {
-          ...(dateRange
-            ? { dateRange: [new Date(dateRange[0]), new Date(dateRange[1])] }
-            : {}),
-          country: filters.country,
-        }),
-        homeUser(),
-        filters.genreId,
-      );
+      const query = Object.assign(new TopStatsQueryDto(), {
+        ...(dateRange
+          ? { dateRange: [new Date(dateRange[0]), new Date(dateRange[1])] }
+          : {}),
+        country: filters.country,
+      });
+      const result = legacy
+        ? await service.getLegacyTopDiscs(query, homeUser(), filters.genreId)
+        : await service.getTopDiscs(query, homeUser(), filters.genreId);
       return {
         result,
         queries,
@@ -489,6 +489,25 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
       ),
     );
     expect(main.sql).toContain(
+      'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 11;',
+    );
+
+    const legacy = await runHomeDiscs(
+      '2024-12-31',
+      ['2020-01-01', '2025-12-31'],
+      undefined,
+      true,
+    );
+    const legacyIds = legacy.main.rows!.map(({ id }) => id);
+    expect(legacyIds).toHaveLength(11);
+    expect(legacyIds).toEqual(
+      Array.from(
+        { length: 11 },
+        (_, index) =>
+          `00000000-0000-4000-8000-${String(index + 101).padStart(12, '0')}`,
+      ),
+    );
+    expect(legacy.main.sql).toContain(
       'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 11;',
     );
   });

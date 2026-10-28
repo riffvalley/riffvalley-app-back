@@ -19,6 +19,9 @@ import { loadTopDiscOptions } from './loaders/load-top-disc-options';
 import { DiscTopOptionsResult } from './types/disc-top-options';
 import { buildTopDiscEligibilityPredicate } from './helpers/top-disc-predicates';
 
+const OFFICIAL_TOP_DISCS_LIMIT = 11;
+const LEGACY_HOME_DISCS_LIMIT = 11;
+
 export interface DiscTopResult {
   discs: ReturnType<typeof mapHomeRankedDisc>[];
   totalDiscs: number;
@@ -45,6 +48,33 @@ export class DiscTopService {
     paginationDto: TopStatsQueryDto,
     user: User,
     genreId?: string,
+  ): Promise<DiscTopResult> {
+    return this.loadTopDiscs(
+      paginationDto,
+      user,
+      genreId,
+      OFFICIAL_TOP_DISCS_LIMIT,
+    );
+  }
+
+  async getLegacyTopDiscs(
+    paginationDto: TopStatsQueryDto,
+    user: User,
+    genreId?: string,
+  ): Promise<DiscTopResult> {
+    return this.loadTopDiscs(
+      paginationDto,
+      user,
+      genreId,
+      LEGACY_HOME_DISCS_LIMIT,
+    );
+  }
+
+  private async loadTopDiscs(
+    paginationDto: TopStatsQueryDto,
+    user: User,
+    genreId: string | undefined,
+    resultLimit: number,
   ): Promise<DiscTopResult> {
     const userId = user.id;
     const {
@@ -132,7 +162,7 @@ export class DiscTopService {
       LEFT JOIN current_rates user_rate ON user_rate."discId" = d.id AND user_rate."userId" = $1
       CROSS JOIN global_prior gp
       ORDER BY "weightedScore" DESC, d.id ASC
-      LIMIT 11;
+      LIMIT ${resultLimit};
     `;
 
     const topRatedDiscs = await this.discRepository.query(query, queryParams);

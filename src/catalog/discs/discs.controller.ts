@@ -100,7 +100,7 @@ export class DiscsController {
   @Auth()
   @Get('homeDiscs')
   findLegacyTopDiscs(@Query() dto: TopStatsQueryDto, @GetUser() user: User) {
-    return this.getTopDiscs(dto, user);
+    return this.discsServices.getLegacyTopDiscs(dto, user, dto.genreId);
   }
 
   @Get()
