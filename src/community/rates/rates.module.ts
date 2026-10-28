@@ -17,6 +17,7 @@ import { ArtistsModule } from 'src/catalog/artists/artists.module';
 import { LastfmIntegrationModule } from 'src/integrations/lastfm-integration/lastfm-integration.module';
 import { RatesArtistLastfmController } from './lastfm/rates-artist-lastfm.controller';
 import { RatesArtistLastfmService } from './lastfm/rates-artist-lastfm.service';
+import { RatesDiscListReader } from './disc-list/rates-disc-list.reader';
 
 @Module({
   controllers: [RatesController, RatesArtistLastfmController], // Controladores que gestionan las rutas
@@ -29,6 +30,7 @@ import { RatesArtistLastfmService } from './lastfm/rates-artist-lastfm.service';
     CommunityDashboardRatesService,
     RatesDashboardSummaryService,
     RatesArtistLastfmService,
+    RatesDiscListReader,
   ],
   imports: [
     TypeOrmModule.forFeature([Rate, Disc, RateVoteEvent]),
@@ -42,6 +44,7 @@ import { RatesArtistLastfmService } from './lastfm/rates-artist-lastfm.service';
     HistoricalRatesStatsService,
     RatesRandomSelectionService,
     CommunityDashboardRatesService,
+    RatesDiscListReader,
   ],
 })
 export class RatesModule {}

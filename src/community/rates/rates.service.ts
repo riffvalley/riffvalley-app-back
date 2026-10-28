@@ -97,7 +97,11 @@ export class RatesService {
     }
   }
 
-  async findAllByUser(paginationDto: CommunityListQueryDto, user: User) {
+  async findAllByUser(
+    paginationDto: CommunityListQueryDto,
+    user: User,
+    options?: { stableTieBreak: boolean },
+  ) {
     const {
       limit = 10,
       offset = 0,
@@ -251,6 +255,10 @@ export class RatesService {
       { field: 'disc.releaseDate', direction: 'DESC', nulls: 'NULLS LAST' },
       { field: 'artist.name', direction: 'ASC' },
     ]);
+
+    if (options?.stableTieBreak) {
+      queryBuilder.addOrderBy('rate.id', 'ASC');
+    }
 
     const { entities: rates, raw } = await queryBuilder.getRawAndEntities();
 

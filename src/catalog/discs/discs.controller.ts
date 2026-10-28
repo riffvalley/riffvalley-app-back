@@ -26,10 +26,15 @@ import { RandomQueryDto } from './dto/random-query.dto';
 import { OptionsQueryDto } from './dto/options-query.dto';
 import { ResolveSpotifyAlbumQueryDto } from './dto/resolve-spotify-album-query.dto';
 import { TopDiscOptionsQueryDto } from './dto/top-disc-options-query.dto';
+import { DiscListQueryDto } from './list/dto/disc-list-contracts.dto';
+import { DiscListService } from './list/disc-list.service';
 
 @Controller('discs')
 export class DiscsController {
-  constructor(private readonly discsServices: DiscsService) {}
+  constructor(
+    private readonly discsServices: DiscsService,
+    private readonly discListService: DiscListService,
+  ) {}
 
   @Post()
   @Auth(ValidRoles.riffvalley)
@@ -92,6 +97,12 @@ export class DiscsController {
   @Get('topDiscs')
   getTopDiscs(@Query() dto: TopStatsQueryDto, @GetUser() user: User) {
     return this.discsServices.getTopDiscs(dto, user, dto.genreId);
+  }
+
+  @Get('list')
+  @Auth()
+  findDiscList(@Query() query: DiscListQueryDto, @GetUser() user: User) {
+    return this.discListService.findAll(query, user);
   }
 
   /**

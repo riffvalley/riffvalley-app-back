@@ -12,6 +12,8 @@
 
 **Auditoría técnica relacionada:** las revisiones por módulo están en [Backend Cleanup — Catalog](../backend-cleanup/catalog.md); el índice global está en [Backend Cleanup](../backend-cleanup/README.md).
 
+**Evolución DiscList:** CAT-DISC-3b define los contratos y CAT-DISC-3c implementa la fachada de lectura autenticada sin alterar los endpoints legacy. El estado y las verificaciones están registrados en [CAT-DISC-3c](cat-disc-3c-implementacion-disc-list.md). CAT-DISC-3d y posteriores siguen pendientes.
+
 Este documento conserva el detalle de la planificación con ownership de Catalog, incluidos Discs y la fase de ownership de Catalog. Se preservan numeración, estados y notas históricas.
 
 ## Objetivos
@@ -133,7 +135,7 @@ Si Impeccable detecta hallazgos preexistentes, de atribución desconocida o fuer
 ## Verificaciones generales
 
 - Ejecutar pruebas focalizadas del servicio/controller afectado y conservar pruebas de regresión de contratos.
-- Antes de cerrar una fase, ejecutar las pruebas relacionadas y el build: <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>, <code>pnpm exec jest src/discs/__tests__/discs.controller.spec.ts --runInBand</code> cuando aplique, y <code>pnpm build</code>.
+- Antes de cerrar una fase, ejecutar las pruebas relacionadas y el build: <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>, <code>pnpm exec jest src/discs/**tests**/discs.controller.spec.ts --runInBand</code> cuando aplique, y <code>pnpm build</code>.
 - Ejecutar pruebas e2e de Discs si se incorporan o existen casos aplicables: <code>pnpm run test:e2e -- --runInBand</code>.
 - En cambios SQL de rendimiento, comparar planes con parámetros y datos representativos usando EXPLAIN ANALYZE; no inferir que un índice ayuda sin revisar el plan.
 - En tareas de migración, revisar el SQL generado, el método down y la compatibilidad con datos existentes antes de ejecutar la migración en un entorno de prueba.
@@ -151,7 +153,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** refactor de producción, cambio de contrato, migraciones o optimizaciones.
 - **Dependencias:** ninguna.
 - **Criterios de finalización:** existen los archivos/fixtures base; rutas y permisos actuales quedan registrados; se confirma que no hay pruebas de Discs previas; los casos específicos se cubren dentro de D1–D38.
-- **Verificaciones:** <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>; revisar las rutas y decoradores de Auth en discs.controller.ts; <code>pnpm build</code>.
+- **Verificaciones:** <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts src/discs/**tests**/discs.controller.spec.ts --runInBand</code>; revisar las rutas y decoradores de Auth en discs.controller.ts; <code>pnpm build</code>.
 - **Riesgo:** S.
 - **Nota de baseline (2026-10-02):** El repo usa Yarn 1.22.22. Los specs focalizados pasan; el `nest build` canónico no puede limpiar `dist/access-requests` (propiedad de `nobody`) y la compilación emitida en `/tmp` revela usos de `Express.Multer` sin tipo en cinco archivos preexistentes fuera de Discs. No se alteraron para cerrar D0.
 
@@ -163,7 +165,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** joins de respuesta, agregados, orden y paginación.
 - **Dependencias:** D0.
 - **Criterios de finalización:** cada filtro mantiene el resultado actual; country/countryId conserva la resolución por UUID o nombre; voted y votedType mantienen sus valores admitidos y su comportamiento actual.
-- **Verificaciones:** pruebas de filtros combinados y aislados en discs.service.spec.ts; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de filtros combinados y aislados en discs.service.spec.ts; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 
 ### D2 — findAll: joins y datos seleccionados
@@ -174,7 +176,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** Rate/Favorite/Pending por usuario, agregados, formato final y otros endpoints.
 - **Dependencias:** D0, D1.
 - **Criterios de finalización:** cada join tiene un consumidor identificado; se preservan todos los campos HTTP actuales y no aparecen N+1 ni duplicación de filas. La selección parcial de entidades no es un objetivo: no adoptarla si produce entidades ambiguamente hidratadas, reconstrucción compleja o mapping menos mantenible; limitar columnas solo cuando el beneficio sea claro.
-- **Verificaciones:** pruebas de respuesta completa y nulos; inspeccionar SQL generado y número de queries en fixture; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de respuesta completa y nulos; inspeccionar SQL generado y número de queries en fixture; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 
 ### D3 — findAll: agregados
@@ -185,7 +187,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** estadísticas de homeDiscs, filtros de voted y cambios de fórmula.
 - **Dependencias:** D0, D2.
 - **Criterios de finalización:** se preserva exactamente la semántica de averageRate, averageCover, voteCount y commentCount, incluidos casos sin datos, decimales y null/0. Cada agregado tiene una única definición lógica en la consulta y no se duplica accidentalmente para distintos puntos del mapping; no se impone una estrategia física al optimizador.
-- **Verificaciones:** pruebas con cero, uno y varios rates/comentarios y valores nulos; revisar SQL; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas con cero, uno y varios rates/comentarios y valores nulos; revisar SQL; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Candidato para D5:** al ordenar por `disc.averageRate`, una condición adicional repite `AVG(rate.rate)` para excluir medias nulas. No se modificó aquí; comparar con `EXPLAIN ANALYZE` y datos representativos al revisar la ordenación.
 
@@ -197,7 +199,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** estadísticas globales, escritura de esas relaciones y otros listados.
 - **Dependencias:** D0, D2.
 - **Criterios de finalización:** usuario con y sin cada relación recibe los mismos valores actuales; una relación de usuario no duplica discos ni altera voteCount.
-- **Verificaciones:** pruebas de combinaciones con y sin rate/favorite/pending; inspección de SQL y resultado raw; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de combinaciones con y sin rate/favorite/pending; inspección de SQL y resultado raw; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 - **Bloqueo resuelto por D4.1 (2026-10-02):** se conserva el resultado actual de los joins y se asocian los agregados raw por `disc.id`; las filas múltiples ya no desplazan los agregados de otro disco.
 
@@ -222,7 +224,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** filtros, agregados y paginación.
 - **Dependencias:** D0, D1.
 - **Criterios de finalización:** se preservan los campos y el orden por defecto observados; entradas no admitidas no introducen SQL ni cambian silenciosamente la selección de discos; queda cubierto el desempate si ya es observable.
-- **Verificaciones:** pruebas por campo, dirección, varios criterios y entrada inválida; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas por campo, dirección, varios criterios y entrada inválida; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-02):** caracterizados los cinco campos permitidos (`disc.releaseDate`, `artist.name`, `disc.createdAt`, `disc.name`, `disc.averageRate`), sus alias SQL, ASC/DESC, prioridad de criterios múltiples, campos desconocidos y criterios incompletos. El default se conserva exactamente como `disc.releaseDate DESC, artist.name ASC`, sin desempate adicional. Los fragmentos desconocidos/incompletos se ignoran; las direcciones se pasan en mayúsculas a TypeORM, que rechaza las que no sean ASC/DESC.
 - **`averageRate`:** se conserva el filtro que excluye discos sin media cuando se solicita este orden. Si el criterio se repite, su predicado `AVG` se añade una vez, aunque ambos criterios de orden se preservan. La consulta sigue expresando la media en el SELECT y en el predicado; evaluar si PostgreSQL evita/repite el cálculo requiere plan representativo. Candidato para la revisión integral posterior a D7: medir esa query con `EXPLAIN ANALYZE` antes de cambiar la forma de calcular/filtrar la media.
@@ -255,7 +257,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** cambio de convención de paginación o de contrato.
 - **Dependencias:** D0, D1.
 - **Criterios de finalización:** límites, offset, páginas vacías y filtros combinados coinciden con baseline; el count no incluye el límite de página y no cambia por joins de colección.
-- **Verificaciones:** pruebas de página inicial/final/vacía y total exacto; comparar SQL de datos y count; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de página inicial/final/vacía y total exacto; comparar SQL de datos y count; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Caracterización (2026-10-02):** se prueban defaults `limit=10`, `offset=0`, `take/skip`, primera/intermedia/última página, página vacía y las fórmulas actuales: `totalPages = ceil(totalItems / limit)` y `currentPage = floor(offset / limit) + 1`. Para filtros D1, la query principal y la de count reciben el mismo conjunto; la query de count no recibe límite, offset ni ordenación. TypeORM 0.3 usa `COUNT(DISTINCT disc.id)` para PostgreSQL cuando hay joins y su count ignora limit/offset/skip/take. No se justifica un cambio de producción en la ruta normal.
 - **Relaciones joined:** el count conserva únicamente los joins de artista/país y rate necesarios para filtros; no une favorites, pendings ni comments. La prueba incluye múltiples filas raw por disco y comprueba que `totalItems` procede del count de entidades, no del tamaño de la página ni de las filas raw.
@@ -316,7 +318,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** cambiar nombres, tipos o presencia de campos de respuesta.
 - **Dependencias:** D2, D3, D4, D6.
 - **Criterios de finalización:** payloads caracterizados coinciden incluidos null/0, relaciones vacías y campos de artista/país; el mapping no depende de coincidencia accidental de índices tras ordenar.
-- **Verificaciones:** snapshots/expectativas explícitas de payload; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** snapshots/expectativas explícitas de payload; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-02):** se conserva el mapping de producción. La caracterización exacta cubre relaciones de artista/país/género, arrays vacíos y poblados, estado de usuario, agregados nulos/cero/no nulos, más de un Disc y filas raw repetidas por Disc. `discId` solo sirve para indexar raw por clave primaria y no aparece en el payload final. No queda ninguna asociación posicional entre raw y entities: D4.1 ya reemplazó el índice por `Map<discId, raw>` y la nueva expectativa exacta verifica la forma resultante. No se justifica extraer o simplificar el mapper.
 
@@ -385,7 +387,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** hidratación de resultados y estado del usuario.
 - **Dependencias:** D0.
 - **Criterios de finalización:** el conjunto candidato respeta los filtros y el límite; se mantiene la consulta separada de IDs y se documenta el motivo técnico observado.
-- **Verificaciones:** pruebas de filtros y conjunto vacío; revisar SQL en PostgreSQL; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de filtros y conjunto vacío; revisar SQL en PostgreSQL; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Resultado (2026-10-02):** la consulta inicial proyecta solo `disc.id AS id`, aplica siempre `disc.releaseDate <= :today`, añade los filtros proporcionados y termina con `ORDER BY RANDOM() ASC` y el límite solicitado (default 5). El SQL generado sin conexión para filtros combinados fue `SELECT disc.id AS id FROM disc ... WHERE ... ORDER BY RANDOM() ASC LIMIT 12`; la variante sin país no lleva joins. `ep=false` y `debut=false` se conservan porque se comprueban contra `undefined`; country prevalece sobre countryId si ambos se envían; UUID usa `country.id` y cualquier otro valor usa `country.name`. Una selección vacía retorna `[]` sin iniciar la query posterior. No se alteran estos comportamientos.
 - **Candidatos y joins:** `disc.id` es la PK proyectada. Los joins `disc.artist` y `artist.country` son to-one y se usan para el filtro de país; ahora se añaden condicionalmente. Sin `country/countryId`, no hay joins ni multiplicación de IDs. No se modificó la resolución country por UUID/nombre. Los filtros de género, año, ep y debut usan columnas de Disc y no requieren joins.
@@ -421,7 +423,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** selección aleatoria, opción de rediseñar la fórmula estadística y otros endpoints.
 - **Dependencias:** D8.
 - **Criterios de finalización:** cada ID seleccionado se hidrata una vez; métricas y estado del usuario coinciden con el baseline; no se vuelven a cargar colecciones completas sin consumidor.
-- **Verificaciones:** fixtures con y sin estado/ratings y SQL de hidratación; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** fixtures con y sin estado/ratings y SQL de hidratación; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Resultado (2026-10-02):** la segunda query ejecuta una sola llamada a `getRawAndEntities()` con `disc.id IN (:...randomIds)` y produce una entidad Disc por ID seleccionado. Las pruebas cubren uno y varios IDs. Con los joins actuales, TypeORM agrupa filas de relaciones por PK de Disc al formar `entities`; las filas raw pueden seguir repetidas.
 - **Relaciones:** se mantienen `disc.artist`, `artist.country`, `disc.genre` y los joins seleccionados de `rates`, `favorites` y `pendings` limitados a `userId`. Esas tres colecciones aparecen en la respuesta actual junto a `userRate`, `favoriteId` y `pendingId`, así que no se reducen aquí sin auditoría contractual. `comments` no se carga como colección; solo se consulta su count.
@@ -474,7 +476,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** algoritmo de aleatoriedad o cardinalidad del endpoint.
 - **Dependencias:** D9.
 - **Criterios de finalización:** la respuesta conserva el orden decidido por la query de IDs, admite raw vacío/parcial de forma controlada y mantiene campos HTTP.
-- **Verificaciones:** prueba con IDs en orden distinto al retorno de base de datos; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** prueba con IDs en orden distinto al retorno de base de datos; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-04):** se caracteriza que las entidades pueden volver en orden distinto al de la selección D8; la respuesta se reordena según `randomIds`. `disc.id` se proyecta como `discId` en las filas raw y cada entidad obtiene sus agregados por ID, sin emparejamiento posicional. Las filas raw repetidas por joins conservan la asociación correcta; si falta la fila raw de una entidad, sus agregados usan los defaults actuales (`null` para medias, `0` para counts). La respuesta conserva las relaciones y arrays caracterizados en D9.
 - **Tests:** regresión de tres discos con orden de entidades distinto, múltiples filas raw por disco y valores independientes de `averageRate`, `averageCover`, `voteCount`, `commentCount`, `userRate`, `favoriteId` y `pendingId`; caso raw ausente y comprobación de que `discId` no se filtra al payload.
@@ -490,11 +492,11 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 - **Fuera de alcance:** cambiar los campos admitidos o el significado de la selección aleatoria.
 - **Dependencias:** D0.
 - **Criterios de finalización:** se conservan la omisión del filtro del campo pedido, las filas únicas, las conversiones de año/booleano y el límite validado.
-- **Verificaciones:** pruebas por cada valor de field y filtros combinados; inspeccionar SQL agrupado; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas por cada valor de field y filtros combinados; inspeccionar SQL agrupado; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-04):** se caracterizan los cinco campos admitidos, los filtros combinados con exclusión del filtro propio, las proyecciones y agrupaciones que conservan valores únicos, conversiones `Number`/`Boolean`, cutoff de fecha, límite y `ORDER BY RANDOM()`. Los joins `artist`/`country` y `genre` se crean solo cuando el campo solicitado o un filtro los requiere; no se modificaron el orden aleatorio ni el contrato.
 - **Tests:** cinco casos parametrizados (uno por field) verifican filtros, omisión del filtro propio, joins, select/groupBy y conversiones; casos adicionales cubren límite por defecto, año nulo y ausencia de joins para opciones escalares sin filtros de relaciones.
-- **Verificaciones:** spec focalizado de Discs: 95 tests pasan con `./node_modules/.bin/jest src/discs/__tests__/discs.service.spec.ts --runInBand --testRegex='.*\.spec\.ts$'`; `git diff --check` pasa. `pnpm exec jest` no arranca porque el proyecto declara Yarn como `packageManager`.
+- **Verificaciones:** spec focalizado de Discs: 95 tests pasan con `./node_modules/.bin/jest src/discs/**tests**/discs.service.spec.ts --runInBand --testRegex='.*\.spec\.ts$'`; `git diff --check` pasa. `pnpm exec jest` no arranca porque el proyecto declara Yarn como `packageManager`.
 - **Hallazgo contractual:** el año nulo de un disco con `releaseDate = NULL` puede agruparse y `Number(null)` lo expone como opción `0`; preservado por compatibilidad, sin bloquear D11.
 - **Siguiente:** D11.1 completada; D12 permanece pendiente.
 
@@ -519,7 +521,7 @@ Alcance inspeccionado: src/discs/discs.controller.ts, src/discs/discs.service.ts
 
 - [x] Completada
 - **Objetivo:** reorganizar físicamente el módulo `discs` sin cambiar lógica, contratos ni comportamiento.
-- **Resultado (2026-10-04):** `DiscCatalogService` quedó en `src/discs/services/`; los specs existentes y el baseline D0 quedaron en `src/discs/__tests__/`, siguiendo la convención explícita de `AGENTS.md` y dejando la raíz del módulo solo con sus archivos principales.
+- **Resultado (2026-10-04):** `DiscCatalogService` quedó en `src/discs/services/`; los specs existentes y el baseline D0 quedaron en `src/discs/**tests**/`, siguiendo la convención explícita de `AGENTS.md` y dejando la raíz del módulo solo con sus archivos principales.
 - **Conflicto de estructura:** la arquitectura objetivo provisional de este roadmap describe los servicios auxiliares junto a los archivos principales, mientras que `AGENTS.md` indica `services/`. Se aplicó `AGENTS.md`, de forma conservadora y sin ampliar alcance.
 - **Tests:** no se duplicaron suites ni se alteraron sus expectativas funcionales.
 - **Verificaciones:** suites focalizadas de Discs: 2 suites y 100 tests pasan; `tsc --noEmit -p tsconfig.build.json` pasa; `git diff --check` pasa.
@@ -554,7 +556,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** calendario público y payload agrupado.
 - **Dependencias:** D0.
 - **Criterios de finalización:** se preservan filtros, inclusión de fechas, orden ascendente y respuesta de paginación; no se introduce el corte de fecha de findAll en este endpoint.
-- **Verificaciones:** pruebas de filtro/fecha, páginas con joins y count; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de filtro/fecha, páginas con joins y count; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Resultado (2026-10-04):** añadida caracterización de filtros aislados y combinados; country por nombre/UUID y precedencia de `country` sobre `countryId`; `BETWEEN` conserva los extremos; `dateRange` con más de dos elementos se ignora. Se preservan `releaseDate ASC, artist.name ASC`, defaults `limit=10/offset=0`, y `take/skip` explícitos. `getManyAndCount()` se invoca una vez sobre el mismo QueryBuilder que contiene filtros y paginación; la prueba comprueba que la página y el total se toman de esa pareja y que el count no se calcula a partir de la longitud de la página. No se añadió el corte `releaseDate <= hoy`.
 - **Joins:** se mantienen artist y country (búsqueda/filtro y respuesta), genre (respuesta), rates/favorites/pendings (mapping autenticado D14) y asignations/user/list (D13). No hay un join de esta query que sea claramente eliminable sin afectar los campos actuales de respuesta o los filtros; la query batch de National Release y el mapping se dejan intactos para sus tareas asignadas.
@@ -588,7 +590,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** modificar módulos Asignations o National Releases, relaciones de escritura y forma de agrupación.
 - **Dependencias:** D12.
 - **Criterios de finalización:** asignaciones mantienen id/done/user/list y nationalReleaseId mantiene sus valores; las lecturas adicionales son acotadas al conjunto paginado y no crean N+1.
-- **Verificaciones:** fixture con cero/varias asignaciones y national release; contar queries; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** fixture con cero/varias asignaciones y national release; contar queries; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Resultado (2026-10-04):** las asignaciones se cargan en la consulta paginada mediante joins de `disc.asignations`, `asignation.user` y `asignation.list`; el mapeo conserva `id`, `done`, `user` y `list`. `nationalReleaseId` se carga con un único SELECT batch cuyos parámetros son los IDs de los discos de la página; para una página vacía no se ejecuta esa lectura.
 - **Tests:** añadidos casos para cero, una y varias asignaciones, con y sin `nationalRelease`; se comprueban el contenido asociado por disco, los joins necesarios, el límite de la página y una sola lectura batch sin consultas por disco.
@@ -641,7 +643,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** el payload resumido del calendario público.
 - **Dependencias:** D13.
 - **Criterios de finalización:** fechas y orden de grupos coinciden con baseline; campos null y relaciones vacías se preservan; no se filtran columnas adicionales al frontend.
-- **Verificaciones:** expectativas de payload para varias fechas y estado de usuario; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** expectativas de payload para varias fechas y estado de usuario; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-04):** el payload completo conserva el envelope (`totalItems`, `totalPages`, `currentPage`, `limit`, `data`), fechas ISO en orden cronológico y el orden de discos recibido dentro de cada fecha. Cada disco mantiene sus campos/relaciones, con `artist.country.name: null` cuando falta país, `genre` nullable, arrays de relaciones, `userRate`, `favoriteId`, `pendingId`, asignaciones (`id`, `done`, `user`, `list`) y `nationalReleaseId` asociado por `discId`.
 - **Tests:** añadido un fixture con tres discos en dos fechas, varios discos en una fecha, relaciones presentes y vacías, estado del usuario, país nulo y asignaciones. Las filas raw de National Release se devuelven en orden inverso para demostrar asociación por clave y no por posición. Añadido test de caracterización para `releaseDate: null`.
@@ -693,7 +695,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** añadir query de texto, datos de usuario o corte de fecha actual que hoy no existen.
 - **Dependencias:** D0.
 - **Criterios de finalización:** se conserva el subconjunto actual de filtros y no se cargan rates/favoritos/pendientes por usuario; count y página coinciden.
-- **Verificaciones:** pruebas de filtros y respuesta sin autenticación; revisar SQL de consulta y count; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de filtros y respuesta sin autenticación; revisar SQL de consulta y count; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 
 ### D16 — findAllByDatePublic: mapping
@@ -704,7 +706,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** forma del calendario autenticado y nuevos datos públicos.
 - **Dependencias:** D15.
 - **Criterios de finalización:** el payload expone los campos actuales y no los datos internos omitidos hoy; fechas, países nulos y orden se conservan.
-- **Verificaciones:** pruebas de payload con y sin país/género; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de payload con y sin país/género; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 
 ### D16.1 — Extraer calendario autenticado y público a DiscCalendarService
@@ -730,12 +732,12 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** cambiar si se incluyen entidades asociadas solo a discos futuros o sin género.
 - **Dependencias:** D0.
 - **Criterios de finalización:** se preservan columnas, orden y criterio de asociación; se documenta el coste de distinct/join con el plan si hay evidencia de lentitud.
-- **Verificaciones:** pruebas de conjuntos vacíos, duplicados y orden; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de conjuntos vacíos, duplicados y orden; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** XS.
 - **Resultado (2026-10-04):** `getPublicFilters` ejecuta una query de géneros unida internamente a `disc`, y otra de países unida internamente a `artist` y `disc`; por eso solo devuelve entidades asociadas a algún disco según las relaciones actuales. No hay filtro de fecha y no se cambió qué discos participan. Se preservan `genre.id/name/color`, `country.id/name/isoCode`, `DISTINCT`, orden ASC por nombre y la respuesta `{ genres, countries }`. Los joins son filtros de asociación y no cargan relaciones; las columnas proyectadas corresponden al payload actual. No se encontró evidencia de coste que justifique intervenir `DISTINCT`.
 - **Responsabilidad:** el endpoint `/discs/date/public/filters` sirve exclusivamente las opciones del calendario público. Se recomienda considerar `getPublicFilters` para una microextracción posterior a `DiscCalendarService`; no se movió en D17.
 - **Contrato:** no se detectó rareza que requiera cambio. Los géneros y países se derivan de asociaciones con cualquier disco, incluso si su fecha de lanzamiento es futura; no se añadió un filtro temporal.
-- **Tests:** añadidas pruebas de conjuntos vacíos, DISTINCT frente a asociaciones repetidas, géneros, países, joins, columnas y orden alfabético en `src/discs/__tests__/discs.service.spec.ts`.
+- **Tests:** añadidas pruebas de conjuntos vacíos, DISTINCT frente a asociaciones repetidas, géneros, países, joins, columnas y orden alfabético en `src/discs/**tests**/discs.service.spec.ts`.
 - **Verificaciones:** con Node 20.20.2, `yarn test src/discs --runInBand` (4 suites, 135 tests), `tsc --noEmit -p tsconfig.build.json` y `git diff --check` pasan.
 - **Siguiente:** D18 permanece pendiente.
 
@@ -793,7 +795,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** helper de semanas y formato final.
 - **Dependencias:** D18.
 - **Criterios de finalización:** límites mensuales, orden y discos incluidos coinciden con baseline; no se añaden filtros como releaseDate <= hoy.
-- **Verificaciones:** pruebas de límites mensuales, condición `BETWEEN`, joins, selección y orden en `src/discs/__tests__/discs.service.spec.ts`; <code>yarn test src/discs --runInBand</code>, <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Verificaciones:** pruebas de límites mensuales, condición `BETWEEN`, joins, selección y orden en `src/discs/**tests**/discs.service.spec.ts`; <code>yarn test src/discs --runInBand</code>, <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-04):** la consulta usa un único `getMany()` con `disc.releaseDate BETWEEN :start AND :end`, inicio local del día 1 y fin local del último día a las 23:59:59.999; `BETWEEN` conserva ambos límites. No se añadió ningún filtro temporal distinto del mes. El parámetro opcional `week` no reduce la consulta SQL: se obtiene el mes completo y el resultado se limita después mediante los rangos ya caracterizados.
 - **Joins y selección:** se mantienen los `LEFT JOIN` de `disc.artist`, `artist.country` y `disc.genre`: el nombre del artista también define el orden secundario; país y género aportan campos del payload, y los joins izquierdos preservan discos con relaciones opcionales ausentes. Se proyectan solo los campos usados por el mapping posterior, más las claves primarias necesarias para hidratar entidades relacionadas. No se alteró el payload.
@@ -811,7 +813,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** formato de otras rutas de calendario.
 - **Dependencias:** D19.
 - **Criterios de finalización:** semana opcional, etiquetas y payload observados quedan cubiertos; la declaración de tipo y la respuesta real se contrastan sin alterar el contrato en esta tarea.
-- **Verificaciones:** pruebas de respuesta, semanas, límites, orden y relaciones opcionales en `src/discs/__tests__/discs.service.spec.ts`; <code>yarn test src/discs --runInBand</code>, <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
+- **Verificaciones:** pruebas de respuesta, semanas, límites, orden y relaciones opcionales en `src/discs/**tests**/discs.service.spec.ts`; <code>yarn test src/discs --runInBand</code>, <code>tsc --noEmit -p tsconfig.build.json</code> y <code>git diff --check</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-04):** se caracterizaron los cinco grupos de mayo 2024, incluidos los vacíos, labels como `1-9 may`, fechas ISO con día/mes a dos dígitos, y los límites inclusivos de cada rango. La asignación con rangos disjuntos pone cada disco en un solo grupo. Se conserva el orden de la query (fecha y artista) dentro del grupo; `week` conserva únicamente el grupo indicado y una semana inexistente devuelve `[]`. No se modificaron agrupación ni mapping.
 - **Payload observado:** cada disco expone `artistName`, `countryCode`, `countryName`, `name`, `genre`, `genreColor`, `link`, `ep`, `debut`, `image` y `releaseDate`. Relaciones ausentes mantienen los fallbacks actuales: texto vacío, `null` o `false` según el campo.
@@ -878,7 +880,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** cliente LastFM, política de imágenes y endpoint semanal público.
 - **Dependencias:** D18.
 - **Criterios de finalización:** se conservan rango, criterio null/vacío de imagen, orden y forma de cada resultado; la llamada de LastFM sigue recibiendo los mismos datos.
-- **Verificaciones:** prueba de selección con imagen null/vacía/no vacía y llamada del caller; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/lastfm/lastfm.service.spec.ts --runInBand</code> si se incorpora la prueba de integración.
+- **Verificaciones:** prueba de selección con imagen null/vacía/no vacía y llamada del caller; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts src/lastfm/lastfm.service.spec.ts --runInBand</code> si se incorpora la prueba de integración.
 - **Riesgo:** S.
 - **Resultado (2026-10-04):** caracterizado `findWeeklyWithoutImage` sin cambiar su rango ni su criterio: sin `week`, la consulta cubre del día 1 al último día del mes; con `week`, consulta solo los límites inclusivos del rango devuelto por `getFridayWeekRanges`. Una semana inexistente retorna `[]` antes de crear una query. `releaseDate` es de tipo SQL `date`.
 - **Query:** una llamada ejecuta una query `getRawMany()`; una semana inexistente ejecuta cero. Aplica `disc.releaseDate BETWEEN :start AND :end`, `(disc.image IS NULL OR disc.image = :empty)` con `empty: ''`, y orden `disc.releaseDate ASC` sin desempate adicional. Solo necesita el `LEFT JOIN disc.artist` para el nombre; la relación ausente conserva el fallback `artistName: ''`.
@@ -973,7 +975,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** cambiar la respuesta, ocultar campos existentes o modificar eager en toda la aplicación.
 - **Dependencias:** D0.
 - **Criterios de finalización:** payload completo del detalle queda caracterizado; 404 para id ausente se conserva; cualquier cambio en traducción de errores queda fuera de esta tarea salvo decisión contractual explícita.
-- **Verificaciones:** tests de disco existente, inexistente y relaciones opcionales; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>.
+- **Verificaciones:** tests de disco existente, inexistente y relaciones opcionales; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts src/discs/**tests**/discs.controller.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-04):** `findOne` conserva el `id` como único filtro y retorna la entidad Disc sin mapping adicional. El detalle incluye `artist.country`, `genre`, `favorites.user`, `pendings.user` y `comments.user`; no carga `rates`, `asignations`, `Comment.replies` ni otras relaciones no eager. Las relaciones opcionales conservan `null` y las colecciones vacías `[]`.
 - **Query y joins:** una invocación a `Repository.findOneOrFail` usa `where: { id }` y declara explícitamente el grafo anterior; las selecciones de columnas siguen siendo las predeterminadas de TypeORM, incluidos todos los campos seleccionables de las relaciones cargadas. No hay mapping, escritura, transacción ni efectos secundarios en el método. Con TypeORM 0.3.26, `findOne` configura `take: 1`; usando estrategia de relaciones `join` (predeterminada), la combinación de `take` y joins ejecuta una query distinta para resolver IDs y una segunda para hidratar el resultado. Si el disco no existe, la primera query no retorna ids y no se ejecuta la segunda. El mock de servicio verifica una invocación al repositorio; el número SQL se determinó inspeccionando la implementación instalada de TypeORM, sin conexión a base de datos.
@@ -1011,7 +1013,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** createWithArtist, cambios de validación, permisos y nuevos valores por defecto.
 - **Dependencias:** D0.
 - **Criterios de finalización:** campos admitidos, defaults, relaciones indicadas por DTO y traducción actual de error 23505 quedan cubiertos; no cambia la ruta ni la respuesta.
-- **Verificaciones:** pruebas de DTO/servicio/controller y error de conflicto; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de DTO/servicio/controller y error de conflicto; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts src/discs/**tests**/discs.controller.spec.ts --runInBand</code>.
 - **Riesgo:** XS.
 - **Resultado (2026-10-04):** sin cambios de producción. `POST /discs` sigue delegando el DTO completo a `DiscsService.create`; el servicio hace `discRepository.create(dto)`, una llamada `discRepository.save(disc)` y retorna la misma instancia `disc` después de esperar el guardado. No usa transacción explícita ni modifica la ruta, permisos, DTO o respuesta.
 - **Campos y defaults:** `Repository.create` copia `name`, `description`, `image`, `verified`, `link`, `releaseDate`, `ep`, `debut`, `featured` y `pinned` cuando vienen definidos. La instancia nueva mantiene `verified`, `ep`, `debut`, `featured` y `pinned` en `false` si se omiten; description/image/link/releaseDate no tienen inicializador en la entidad y quedan ausentes antes del retorno del ORM. La validación global mantiene `transform`, conversión implícita, whitelist y rechazo de propiedades desconocidas. El DTO acepta payload mínimo `{ name }`; el spec cubre todos sus campos, UUIDs de relación, URL y conversión de releaseDate string a Date.
@@ -1088,7 +1090,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** cambiar la regla de coincidencia, el esquema de Artist o el flujo de Requests.
 - **Dependencias:** D0.
 - **Criterios de finalización:** cero coincidencias crea artista, una coincidencia reutiliza, varias requieren countryId y país no coincidente crea artista; nameNormalized respeta el formato actual.
-- **Verificaciones:** pruebas de los cuatro caminos y error BadRequest; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de los cuatro caminos y error BadRequest; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Resultado (2026-10-04):** `resolveArtist` permanece privado en `DiscsService`; no se cambió el flujo de `createWithArtist`. Sin coincidencias crea y persiste un artista; una coincidencia reutiliza esa entidad; varias sin `countryId` producen `BadRequestException`; varias con `countryId` reutilizan la que coincida o crean una nueva si ninguna tiene ese país.
 - **Búsqueda:** una llamada `artistRepository.find({ where: { name: ILike(artistName) } })` por resolución. `ILike` hace la comparación insensible a mayúsculas/minúsculas; se pasa el nombre original sin añadir `%` o `_`. No hay otra lectura, query de país, join escrito en el método ni paginación. La búsqueda múltiple es necesaria para contar duplicados y seleccionar por `countryId`.
@@ -1148,7 +1150,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** crear un caso de uso genérico, transacción nueva o cambiar validaciones HTTP.
 - **Dependencias:** D25.
 - **Criterios de finalización:** todos los campos del DTO mantienen la conversión/default actual; countryId solo afecta a la resolución del artista; respuesta HTTP coincide con baseline.
-- **Verificaciones:** pruebas del mapeo, artista/genre opcionales y fecha; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas del mapeo, artista/genre opcionales y fecha; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts src/discs/**tests**/discs.controller.spec.ts --runInBand</code>.
 - **Riesgo:** S.
 - **Resultado (2026-10-04):** sin cambios de producción. `createWithArtist` resuelve primero Artist con las reglas de D25, construye una sola entidad `Disc` con `discRepository.create` y la persiste una vez con `discRepository.save`; devuelve el resultado de `save` sin mapping posterior.
 - **Mapeo DTO → Disc:** `discName` pasa a `name`; el Artist resuelto se asigna entero a `artist`; `genreId` truthy se convierte en la referencia `genre: { id }`; `releaseDate` truthy se convierte con `new Date`; `ep` y `debut` usan `?? false`; `link`, `image` y `description` se pasan como están, incluso como `undefined`. `artistName` solo entra en `resolveArtist`; `countryId` solo entra en esa resolución y no pasa al Disc; `genreId` no se copia como campo escalar. El DTO no contiene `verified`, `featured` ni `pinned`, que conservan los defaults `false` de `Disc`.
@@ -1282,7 +1284,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** cambiar fórmulas, estadísticas por periodo o payload.
 - **Dependencias:** D0.
 - **Criterios de finalización:** cada valor sigue parametrizado; filtros de query principal y global son equivalentes; los parámetros no cambian de orden o tipo accidentalmente.
-- **Verificaciones:** pruebas de filtros individuales/combinados y SQL/params; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** pruebas de filtros individuales/combinados y SQL/params; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Resultado (2026-10-04):** las queries principal y global aplicaban los mismos filtros, pero duplicaban toda su construcción. Se centralizó en `buildHomeDiscFilters`, que conserva las cláusulas y genera los placeholders con el desplazamiento requerido por el `userId` adicional de la query principal.
 - **Caracterización:** el orden es fecha, `genreId`, país; sin `dateRange` se conserva `releaseDate <= today`. Un rango de dos valores enlaza `new Date(startDate)`, `new Date(endDate)` y `today`. `genreId` se enlaza como string. El país es `country || countryId`; un UUID (cualquiera de los dos campos) filtra `c.id`, y otro valor filtra `c.name`; el bind conserva el string recibido. La principal antepone `user.id` como `$1`; la global no lo recibe. Las condiciones restantes equivalen con placeholders desplazados en uno.
@@ -1299,7 +1301,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** fórmula de weightedScore o caché.
 - **Dependencias:** D30.
 - **Criterios de finalización:** media/mediana y fallback coinciden con baseline con ratings nulos, sin votos y varios discos; filtro temporal/género/país se aplica igual.
-- **Verificaciones:** casos de agregación en PostgreSQL; revisar el SQL generado; <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts --runInBand</code>.
+- **Verificaciones:** casos de agregación en PostgreSQL; revisar el SQL generado; <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts --runInBand</code>.
 - **Riesgo:** M.
 - **Resultado (2026-10-04):** la query y la conversión se aislaron en `src/discs/home/home-global-stats.ts`; la llamada reutiliza `globalWhere` y `globalParams` de D30. El SQL de la query principal y la fórmula de `weightedScore` no cambiaron.
 - **Definición SQL:** por cada `d.id` filtrado, `COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END)` cuenta solo ratings no nulos y `COALESCE(AVG(r.rate), 0)` calcula el promedio de los rates no nulos, sustituyendo por cero los discos sin rates válidos. `LEFT JOIN` y `GROUP BY d.id` mantienen una fila incluso para un disco sin rates. En la query exterior, `AVG(avgRates)` promedia esas medias por disco, incluyendo los ceros de discos sin votos; `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY voteCount)` calcula la mediana continua de los recuentos de todos los discos filtrados, incluidos los ceros.
@@ -1585,7 +1587,7 @@ Estas extracciones se incorporarán como tareas independientes en ese momento, s
 - **Fuera de alcance:** cleanup adicional de helpers (D38.2), cambios de contrato o avance a D39.
 - **Dependencias:** D30–D38.
 - **Resultado:** se creó `src/discs/home/disc-home.service.ts` con el método completo y su coordinación de filtros, ranking, estadísticas y envelope. Inyecta únicamente `Repository<Disc>`. `DiscsService` conserva la firma pública y delega el mismo `paginationDto`, `user` y `genreId`; `DiscModule` registra el nuevo provider. SQL, parámetros, fórmulas, orden, cardinalidad, aliases observables, null/0, errores y payload permanecen intactos.
-- **Tests:** la caracterización funcional del método se trasladó a `src/discs/home/disc-home.service.spec.ts`, incluida la comprobación de filtros y parámetros D30 y el envelope D38. Las suites PostgreSQL D32 y D33 ahora llaman `DiscHomeService`. `src/discs/__tests__/discs.service.spec.ts` conserva la prueba de delegación Home; las pruebas unitarias de helpers permanecen junto a sus helpers.
+- **Tests:** la caracterización funcional del método se trasladó a `src/discs/home/disc-home.service.spec.ts`, incluida la comprobación de filtros y parámetros D30 y el envelope D38. Las suites PostgreSQL D32 y D33 ahora llaman `DiscHomeService`. `src/discs/**tests**/discs.service.spec.ts` conserva la prueba de delegación Home; las pruebas unitarias de helpers permanecen junto a sus helpers.
 - **Tamaños:** `DiscHomeService` tiene 134 líneas y `DiscsService` 135 líneas. No se realizó cleanup adicional de los helpers.
 - **Estructura Home:** servicio/spec de coordinación; helpers de filtros, stats globales, estado personal y mapper, totals, top users por rate/cover y distribución, con sus specs unitarios y PostgreSQL existentes.
 - **Hallazgos:** se conservan los hallazgos contractuales de D30–D38, incluido el comportamiento histórico de aliases de la query principal. No se corrigió ninguno.
@@ -1909,7 +1911,7 @@ Se conservan íntegros los hallazgos contractuales previos del roadmap, incluido
 - **Fuera de alcance:** cambios funcionales nuevos o limpieza oportunista de otros módulos.
 - **Dependencias:** D1–D46.
 - **Criterios de finalización:** no hay responsabilidades mezcladas restantes que se hayan acordado para esta fase; helpers tienen un uso/responsabilidad clara; no se introducen abstracciones genéricas sin consumidor.
-- **Verificaciones:** revisar diff completo, <code>pnpm exec jest src/discs/__tests__/discs.service.spec.ts src/discs/__tests__/discs.controller.spec.ts --runInBand</code>, <code>pnpm build</code>.
+- **Verificaciones:** revisar diff completo, <code>pnpm exec jest src/discs/**tests**/discs.service.spec.ts src/discs/**tests**/discs.controller.spec.ts --runInBand</code>, <code>pnpm build</code>.
 - **Limpieza realizada:** en `calendar/helpers/map-weekly-discs-to-groups.ts`, `WeeklyDiscPayload` queda como tipo interno porque no tiene consumidores externos; `WeeklyCalendarGroup` sigue exponiendo la misma forma inferida. Se retiró de `DiscsService.getSpotifyTracks` el comentario explicativo que duplicaba palabra por palabra el comentario de la implementación en `DiscSpotifyService`.
 - **Revisión estructural:** `DiscsService` permanece como fachada de 132 líneas: no tiene repositorio propio, helpers privados ni lógica duplicada de Catalog, Calendar, Home, Write, Enrichment o Spotify. Inyecta los siete servicios que usa; conserva `SpotifyApiService` para las dos operaciones Spotify aún coordinadas allí y el 404 específico de resolver álbum. Los servicios extraídos mantienen sus dependencias directas. Helpers puros tienen consumidores; `getFridayWeekRanges` se comparte entre Calendar y Enrichment. No se reubicaron ni borraron archivos.
 - **Tamaños aproximados:** `DiscsService` 132 líneas; `DiscCatalogService` 394 (varios endpoints caracterizados); `DiscCalendarService` 261; `DiscHomeService` 133; `DiscWriteService` 140; `DiscEnrichmentService` 44; `DiscSpotifyService` 42. Los specs de Catalog y Calendar son extensos por las caracterizaciones de contratos y consultas; permanecen junto a sus responsabilidades y no se fragmentaron sin beneficio demostrable.

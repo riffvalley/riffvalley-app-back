@@ -19,6 +19,7 @@ import { Comment } from '../entities/comment.entity';
 import { CommentsController } from '../comments.controller';
 import { CommentsModule } from '../comments.module';
 import { CommentsService } from '../comments.service';
+import { CommentsDiscListReader } from '../disc-list/comments-disc-list.reader';
 
 describe('CommentsModule characterization', () => {
   let moduleRef: TestingModule;
@@ -46,6 +47,7 @@ describe('CommentsModule characterization', () => {
 
   it('resolves the controller, service and Comment repository through the module', () => {
     expect(moduleRef.get(CommentsController)).toBeDefined();
+    expect(moduleRef.get(CommentsDiscListReader)).toBeDefined();
     const service = moduleRef.get(CommentsService);
     expect(service).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Comment))).toBe(commentRepository);

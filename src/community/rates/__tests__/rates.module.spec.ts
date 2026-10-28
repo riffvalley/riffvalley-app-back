@@ -26,6 +26,7 @@ import { RatesRandomSelectionService } from '../random-selection/rates-random-se
 import { RatesDashboardSummaryService } from '../stats/rates-dashboard-summary.service';
 import { RatesArtistLastfmController } from '../lastfm/rates-artist-lastfm.controller';
 import { RatesArtistLastfmService } from '../lastfm/rates-artist-lastfm.service';
+import { RatesDiscListReader } from '../disc-list/rates-disc-list.reader';
 
 describe('RatesModule characterization', () => {
   let moduleRef: TestingModule;
@@ -68,6 +69,7 @@ describe('RatesModule characterization', () => {
     expect(moduleRef.get(HistoricalRatesStatsService)).toBeDefined();
     expect(moduleRef.get(RatesRandomSelectionService)).toBeDefined();
     expect(moduleRef.get(RatesDashboardSummaryService)).toBeDefined();
+    expect(moduleRef.get(RatesDiscListReader)).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Rate))).toBe(rateRepository);
     expect(moduleRef.get(getRepositoryToken(RateVoteEvent))).toBe(
       rateVoteEventRepository,

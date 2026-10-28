@@ -7,6 +7,7 @@ import { UpdateDiscDto } from '../dto/update-discs.dto';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
 import { RandomQueryDto } from '../dto/random-query.dto';
+import { DiscListService } from '../list/disc-list.service';
 
 describe('DiscsController write validation', () => {
   const validationPipe = new ValidationPipe({
@@ -35,7 +36,10 @@ describe('DiscsController write validation', () => {
     };
     moduleRef = await Test.createTestingModule({
       controllers: [DiscsController],
-      providers: [{ provide: DiscsService, useValue: service }],
+      providers: [
+        { provide: DiscsService, useValue: service },
+        { provide: DiscListService, useValue: { findAll: jest.fn() } },
+      ],
     })
       .overrideGuard(UserRoleGuard)
       .useValue({ canActivate: jest.fn(() => true) })

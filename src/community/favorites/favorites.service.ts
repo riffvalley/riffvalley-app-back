@@ -54,7 +54,11 @@ export class FavoritesService {
     }
   }
 
-  async findAllByUser(paginationDto: CommunityListQueryDto, user: User) {
+  async findAllByUser(
+    paginationDto: CommunityListQueryDto,
+    user: User,
+    options?: { stableTieBreak: boolean },
+  ) {
     const {
       limit = 10,
       offset = 0,
@@ -189,6 +193,10 @@ export class FavoritesService {
       { field: 'disc.releaseDate', direction: 'DESC', nulls: 'NULLS LAST' },
       { field: 'artist.name', direction: 'ASC' },
     ]);
+
+    if (options?.stableTieBreak) {
+      queryBuilder.addOrderBy('favorite.id', 'ASC');
+    }
 
     const { entities: favorites, raw } = await queryBuilder.getRawAndEntities();
 

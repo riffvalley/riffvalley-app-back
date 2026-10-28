@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
+import { DiscListService } from '../list/disc-list.service';
 
 describe('DiscsController Spotify album contracts', () => {
   let app;
@@ -17,7 +18,10 @@ describe('DiscsController Spotify album contracts', () => {
     jest.clearAllMocks();
     moduleRef = await Test.createTestingModule({
       controllers: [DiscsController],
-      providers: [{ provide: DiscsService, useValue: discsService }],
+      providers: [
+        { provide: DiscsService, useValue: discsService },
+        { provide: DiscListService, useValue: { findAll: jest.fn() } },
+      ],
     })
       .overrideGuard(UserRoleGuard)
       .useValue({ canActivate: () => true })

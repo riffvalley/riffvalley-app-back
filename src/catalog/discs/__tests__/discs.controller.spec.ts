@@ -22,6 +22,8 @@ import { TopStatsQueryDto } from '../dto/top-stats-query.dto';
 import { TopDiscOptionsQueryDto } from '../dto/top-disc-options-query.dto';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
+import { DiscListService } from '../list/disc-list.service';
+import { DiscListQueryDto } from '../list/dto/disc-list-contracts.dto';
 
 type ServiceMock = {
   create: jest.Mock<Promise<unknown>, Parameters<DiscsService['create']>>;
@@ -59,10 +61,15 @@ type ServiceMock = {
   remove: jest.Mock<Promise<unknown>, Parameters<DiscsService['remove']>>;
 };
 
+type DiscListServiceMock = {
+  findAll: jest.Mock<Promise<unknown>, Parameters<DiscListService['findAll']>>;
+};
+
 describe('DiscsController baseline', () => {
   let controller: DiscsController;
   let moduleRef: TestingModule;
   let discsService: ServiceMock;
+  let discListService: DiscListServiceMock;
 
   beforeEach(async () => {
     discsService = {
@@ -79,9 +86,13 @@ describe('DiscsController baseline', () => {
       update: jest.fn(),
       remove: jest.fn(),
     };
+    discListService = { findAll: jest.fn() };
     moduleRef = await Test.createTestingModule({
       controllers: [DiscsController],
-      providers: [{ provide: DiscsService, useValue: discsService }],
+      providers: [
+        { provide: DiscsService, useValue: discsService },
+        { provide: DiscListService, useValue: discListService },
+      ],
     })
       .overrideGuard(UserRoleGuard)
       .useValue({ canActivate: jest.fn(() => true) })
@@ -90,6 +101,33 @@ describe('DiscsController baseline', () => {
   });
 
   afterEach(async () => moduleRef.close());
+
+  it('registers the authenticated DiscList route before the dynamic ID route', async () => {
+    const handler = DiscsController.prototype.findDiscList;
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('list');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(0);
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toHaveLength(2);
+
+    const methods = Object.getOwnPropertyNames(DiscsController.prototype);
+    expect(methods.indexOf('findDiscList')).toBeLessThan(
+      methods.indexOf('findOne'),
+    );
+
+    const dto = Object.assign(new DiscListQueryDto(), { mode: 'all' });
+    const user = Object.assign(new User(), { id: 'authenticated-user' });
+    const response = {
+      totalItems: 0,
+      totalPages: 0,
+      currentPage: 1,
+      limit: 20,
+      data: [],
+    };
+    discListService.findAll.mockResolvedValue(response);
+
+    await expect(controller.findDiscList(dto, user)).resolves.toBe(response);
+    expect(discListService.findAll).toHaveBeenCalledWith(dto, user);
+    expect(discListService.findAll).toHaveBeenCalledTimes(1);
+  });
 
   it('exposes authenticated GET routes for official TopDiscs and the legacy alias', () => {
     const officialHandler = DiscsController.prototype.getTopDiscs;
