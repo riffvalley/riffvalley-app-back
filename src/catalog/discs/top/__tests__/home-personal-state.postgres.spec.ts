@@ -1,6 +1,8 @@
 import {
   HomePostgresClient,
   getHomePostgresValues,
+  requireTopDiscsPostgresTestTarget,
+  verifyTopDiscsPostgresTestIdentity,
 } from './home-postgres-types';
 import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { User } from '../../../../identity/auth/entities/user.entity';
@@ -31,9 +33,7 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
   beforeAll(async () => {
     const dotenv = await import('dotenv');
     dotenv.config();
-    if (process.env.STAGE !== 'dev') {
-      throw new Error('D33 PostgreSQL tests require STAGE=dev');
-    }
+    requireTopDiscsPostgresTestTarget('D33_POSTGRES_TEST');
 
     const { Client } = await import('pg');
     client = new Client({
@@ -44,6 +44,7 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
+    await verifyTopDiscsPostgresTestIdentity(client);
     await getClient().query(`
       CREATE TEMP TABLE country (id uuid PRIMARY KEY, name text, "isoCode" text);
       CREATE TEMP TABLE artist (id uuid PRIMARY KEY, name text, "countryId" uuid);
@@ -68,7 +69,9 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
         "discId" uuid,
         "userId" uuid,
         rate numeric,
-        cover numeric
+        cover numeric,
+        "createdAt" timestamp NOT NULL DEFAULT now(),
+        "editedAt" timestamp
       );
       CREATE TEMP TABLE favorite (id uuid PRIMARY KEY, "discId" uuid, "userId" uuid);
       CREATE TEMP TABLE pending (id uuid PRIMARY KEY, "discId" uuid, "userId" uuid);
@@ -133,10 +136,7 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
           params,
         };
         queries.push(call);
-        if (
-          sql.includes('AVG(avgRates)') ||
-          sql.includes('AS "weightedScore"')
-        ) {
+        if (sql.includes('AS "weightedScore"')) {
           call.rows = (
             await getClient().query(sql, getHomePostgresValues(params))
           ).rows;
@@ -153,11 +153,10 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
       homeUser(),
     );
     const main = queries.find(({ sql }) => sql.includes('AS "weightedScore"'))!;
-    const global = queries.find(({ sql }) => sql.includes('AVG(avgRates)'))!;
-    return { result, main, global };
+    return { result, main };
   }
 
-  it('selects personal state with correlated LIMIT 1 subqueries and keeps other users out of those fields', async () => {
+  it('selects personal state from the deduplicated current rate row and keeps other users out of those fields', async () => {
     await insertRate(
       '00000000-0000-4000-8000-000000000101',
       OTHER_USER_ID,
@@ -187,24 +186,17 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
     expect(disc.favoriteId).toBeNull();
     expect(disc.pendingId).toBeNull();
     expect(Number(disc.voteCount)).toBe(2);
-    expect(main.sql).toContain(
-      '(SELECT r.id FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userRateId"',
-    );
+    expect(main.sql).toContain('LEFT JOIN current_rates user_rate');
+    expect(main.sql).toContain('user_rate.id AS "userRateId"');
+    expect(main.sql).toContain('user_rate.rate AS "userRate"');
+    expect(main.sql).toContain('user_rate.cover AS "userCover"');
     expect(main.sql).toContain(
       '(SELECT f.id FROM favorite f WHERE f."discId" = d.id AND f."userId" = $1 LIMIT 1) AS "userFavoriteId"',
     );
     expect(main.sql).toContain(
       '(SELECT p.id FROM pending p WHERE p."discId" = d.id AND p."userId" = $1 LIMIT 1) AS "pendingId"',
     );
-    expect(main.sql).toContain(
-      '(SELECT r.rate FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userRate"',
-    );
-    expect(main.sql).toContain(
-      '(SELECT r.cover FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userCover"',
-    );
-    expect(main.sql).toContain(
-      'GROUP BY d.id, a.name, g.name, g.color, c.id, c.name, c."isoCode"',
-    );
+    expect(main.sql).not.toContain('GROUP BY d.id, a.name, g.name');
     expect(main.sql).not.toContain('LEFT JOIN favorite');
     expect(main.sql).not.toContain('LEFT JOIN pending');
     expect(main.sql).not.toContain(
@@ -233,6 +225,12 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
       null,
       4.75,
     );
+    await insertRate(
+      '00000000-0000-4000-8000-000000000104',
+      OTHER_USER_ID,
+      3,
+      null,
+    );
     const coverOnly = await runHome();
     expect(coverOnly.result.discs[0].userRate).toEqual({
       id: '00000000-0000-4000-8000-000000000103',
@@ -242,6 +240,12 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
   });
 
   it('maps favorite, pending, and their combination to one ranked disc', async () => {
+    await insertRate(
+      '00000000-0000-4000-8000-000000000105',
+      OTHER_USER_ID,
+      4,
+      null,
+    );
     await getClient().query(
       'INSERT INTO favorite (id, "discId", "userId") VALUES ($1, $2, $3)',
       ['00000000-0000-4000-8000-000000000202', DISC_ID, USER_ID],
@@ -283,28 +287,31 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
     );
   });
 
-  it('uses an unordered LIMIT 1 candidate for each personal rate alias when several rates exist', async () => {
+  it('selects the deterministic current personal rate row when several rates exist', async () => {
     const rateIds = [
       '00000000-0000-4000-8000-000000000107',
       '00000000-0000-4000-8000-000000000108',
     ];
-    await insertRate(rateIds[0], USER_ID, 2, 1);
-    await insertRate(rateIds[1], USER_ID, 5, 4);
+    await getClient().query(
+      `INSERT INTO rate (id, "discId", "userId", rate, cover, "createdAt", "editedAt") VALUES
+        ($1, $3, $2, 2, 1, TIMESTAMP '2024-01-01', TIMESTAMP '2024-01-01'),
+        ($4, $3, $2, 5, 4, TIMESTAMP '2024-01-02', TIMESTAMP '2024-01-02')`,
+      [rateIds[0], USER_ID, DISC_ID, rateIds[1]],
+    );
 
     const { result, main } = await runHome();
     const userRate = result.discs[0].userRate;
 
     expect(result.discs).toHaveLength(1);
     expect(rateIds).toContain(userRate.id);
-    expect([2, 5]).toContain(userRate.rate);
-    expect([1, 4]).toContain(userRate.cover);
-    expect(
-      main.sql.match(
-        /SELECT r\.(?:id|rate|cover) FROM rate r WHERE r\."discId" = d\.id AND r\."userId" = \$1 LIMIT 1/g,
-      ),
-    ).toHaveLength(3);
-    expect(main.sql).not.toMatch(
-      /SELECT r\.(?:id|rate|cover)[\s\S]{0,100}ORDER BY/,
+    expect(userRate.id).toBe(rateIds[1]);
+    expect(userRate.rate).toBe(5);
+    expect(userRate.cover).toBe(4);
+    expect(main.sql).toContain('r."editedAt" DESC NULLS LAST');
+    expect(main.sql).toContain('r."createdAt" DESC');
+    expect(main.sql).toContain('r.id DESC');
+    expect(main.sql.match(/LEFT JOIN current_rates user_rate/g)).toHaveLength(
+      1,
     );
   });
 
@@ -371,11 +378,6 @@ describePostgres('home personal state with PostgreSQL fixtures', () => {
     ).toHaveLength(1);
     expect(Number(pendingDisc.voteCount)).toBe(2);
     expect(Number(pendingDisc.averageRate)).toBe(3);
-    const { globalAvgRate, medianVotes } = duplicatePendings.global.rows![0];
-    const effectiveMedianVotes = parseInt(String(medianVotes), 10) || 1;
-    expect(Number(pendingDisc.weightedScore)).toBeCloseTo(
-      (3 * 2 + Number(globalAvgRate) * effectiveMedianVotes) /
-        (2 + effectiveMedianVotes),
-    );
+    expect(Number(pendingDisc.weightedScore)).toBeCloseTo(31 / 9);
   });
 });

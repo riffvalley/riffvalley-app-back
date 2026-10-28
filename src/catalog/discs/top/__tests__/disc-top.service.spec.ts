@@ -18,7 +18,6 @@ function makeUser(): User {
 }
 
 function classifyQuery(sql: string) {
-  if (sql.includes('AS "globalAvgRate"')) return 'global';
   if (sql.includes('AS "weightedScore"')) return 'discs';
   if (sql.includes('AS "totalDiscs"')) return 'totals';
   if (sql.includes('AS "rateCount"')) return 'rates';
@@ -28,16 +27,13 @@ function classifyQuery(sql: string) {
 }
 
 describe('getTopDiscs response', () => {
-  it('passes the D30 filters and binds to both Home queries with the existing order and types', async () => {
+  it('binds presentation filters and the global cutoff to the ranking statement', async () => {
     const today = new Date('2026-10-04T10:00:00.000Z');
     jest.useFakeTimers().setSystemTime(today);
     const queries: { sql: string; params: unknown[] }[] = [];
     const query: jest.MockedFunction<HomeQueryRunner['query']> = jest.fn(
       async (sql: string, params: unknown[] = []) => {
         queries.push({ sql, params });
-        if (sql.includes('AVG(avgRates)')) {
-          return [{ globalAvgRate: '4.25', medianVotes: '3' }];
-        }
         return [];
       },
     );
@@ -54,25 +50,13 @@ describe('getTopDiscs response', () => {
         'genre-23',
       );
 
-      const globalQuery = queries.find(({ sql }) =>
-        sql.includes('AVG(avgRates)'),
-      )!;
       const mainQuery = queries.find(({ sql }) =>
         sql.includes('AS "weightedScore"'),
       )!;
-      expect(globalQuery.sql).toContain(
-        'WHERE d."releaseDate" BETWEEN $1 AND $2 AND d."releaseDate" <= $3 AND d."genreId" = $4 AND c.id = $5',
-      );
       expect(mainQuery.sql).toContain(
         'WHERE d."releaseDate" BETWEEN $2 AND $3 AND d."releaseDate" <= $4 AND d."genreId" = $5 AND c.id = $6',
       );
-      expect(globalQuery.params).toEqual([
-        new Date('2020-01-01'),
-        new Date('2024-12-31'),
-        today,
-        'genre-23',
-        '123e4567-e89b-12d3-a456-426614174000',
-      ]);
+      expect(mainQuery.sql).toContain('prior_disc."releaseDate" <= $7');
       expect(mainQuery.params).toEqual([
         USER_ID,
         new Date('2020-01-01'),
@@ -80,19 +64,17 @@ describe('getTopDiscs response', () => {
         today,
         'genre-23',
         '123e4567-e89b-12d3-a456-426614174000',
+        today,
       ]);
-      expect(
-        globalQuery.params.slice(0, 3).every((value) => value instanceof Date),
-      ).toBe(true);
-      expect(typeof globalQuery.params[3]).toBe('string');
-      expect(typeof globalQuery.params[4]).toBe('string');
       expect(mainQuery.params[0]).toBe(USER_ID);
-      expect(mainQuery.params.slice(1).map((value) => typeof value)).toEqual([
+      expect(mainQuery.params.map((value) => typeof value)).toEqual([
+        'string',
         'object',
         'object',
         'object',
         'string',
         'string',
+        'object',
       ]);
     } finally {
       jest.useRealTimers();
@@ -152,7 +134,7 @@ describe('getTopDiscs response', () => {
         countryIsoCode: null,
         genreName: null,
         genreColor: null,
-        voteCount: '0',
+        voteCount: '1',
         averageRate: null,
         averageCover: null,
         userRateId: null,
@@ -161,11 +143,10 @@ describe('getTopDiscs response', () => {
         userRate: null,
         userCover: null,
         commentCount: null,
-        weightedScore: '0',
+        weightedScore: '0.75',
       },
     ];
     const rawResults: Record<string, Record<string, unknown>[]> = {
-      global: [{ globalAvgRate: '3.75', medianVotes: 2 }],
       discs: discRows,
       totals: [{ totalDiscs: '18', totalVotes: '42' }],
       rates: [{ userId: USER_ID, username: 'Ada', rateCount: '9' }],
@@ -221,7 +202,7 @@ describe('getTopDiscs response', () => {
           pendingId: null,
           averageRate: 0,
           averageCover: 0,
-          voteCount: 0,
+          voteCount: 1,
           commentCount: 0,
         },
       ],
@@ -242,7 +223,7 @@ describe('getTopDiscs response', () => {
     expect(typeof response.totalVotes).toBe('number');
     expect(typeof response.ratingDistribution[0].rate).toBe('number');
     expect(typeof response.ratingDistribution[0].count).toBe('number');
-    expect(query).toHaveBeenCalledTimes(6);
+    expect(query).toHaveBeenCalledTimes(5);
 
     // Aliases from the old disc row remain observable through its spread.
     expect(response.discs[0]).toHaveProperty('weightedScore', '4.1');
@@ -260,13 +241,12 @@ describe('getTopDiscs response', () => {
     expect(discQuery).toContain(
       '(SELECT COUNT(c.id) FROM comment c WHERE c."discId" = d.id) AS "commentCount"',
     );
-    expect(discQuery).toContain('d."pinned" = true OR EXISTS');
-    expect(discQuery).toContain('eligible_rate.rate IS NOT NULL');
+    expect(discQuery).toContain('valid_current_rates eligible_rate');
+    expect(discQuery).not.toContain('d."pinned"');
     expect(discQuery).toContain('ORDER BY "weightedScore" DESC, d.id ASC');
-    expect(discQuery).toContain('LIMIT 20');
-    expect(discQuery).toContain(
-      '(COALESCE(AVG(r.rate), 0) * COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END))',
-    );
+    expect(discQuery).toContain('LIMIT 11');
+    expect(discQuery).toContain('drs."averageRate" * drs."voteCount"');
+    expect(discQuery).toContain('gp."globalAvgRate" * 4');
     expect(discQuery).not.toMatch(/JOIN\s+comment\b/i);
   });
 
@@ -302,14 +282,12 @@ describe('getTopDiscs response', () => {
       userCover: null,
       averageRate: '0',
       averageCover: null,
-      voteCount: '0',
+      voteCount: '1',
       commentCount: '0',
       weightedScore: '0',
     };
     const { service } = makeService((sql) => {
       switch (classifyQuery(sql)) {
-        case 'global':
-          return [{ globalAvgRate: null, medianVotes: null }];
         case 'discs':
           return [partialDisc];
         case 'totals':
@@ -340,7 +318,7 @@ describe('getTopDiscs response', () => {
           pendingId: null,
           averageRate: 0,
           averageCover: 0,
-          voteCount: 0,
+          voteCount: 1,
           commentCount: 0,
         },
       ],

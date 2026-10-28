@@ -7,6 +7,7 @@ import {
 } from '../helpers/top-disc-predicates';
 import { HomeQueryRunner } from './home-query-runner';
 import { DiscTopOptionsResult } from '../types/disc-top-options';
+import { CURRENT_RATES_CTE } from './home-global-stats';
 
 type TopDiscOptionsQuery = {
   sql: string;
@@ -39,7 +40,8 @@ export function buildTopDiscOptionsQuery(
 
   return {
     sql: `
-      WITH eligible_discs AS (
+      WITH ${CURRENT_RATES_CTE},
+      eligible_discs AS (
         SELECT d.id, d."artistId", d."genreId"
         FROM disc d
         WHERE ${datePredicate.sql(1)}

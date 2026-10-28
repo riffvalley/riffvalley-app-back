@@ -1,15 +1,15 @@
+import { CURRENT_RATES_CTE } from '../loaders/home-global-stats';
 import {
   HomePostgresClient,
   getHomePostgresValues,
+  requireTopDiscsPostgresTestTarget,
+  verifyTopDiscsPostgresTestIdentity,
 } from './home-postgres-types';
-import { HomeQueryRunner } from '../loaders/home-query-runner';
-import { buildHomeDiscFilters } from '../helpers/home-disc-filters';
-import { loadHomeGlobalStats } from '../loaders/home-global-stats';
 
 const describePostgres =
   process.env.D31_POSTGRES_TEST === '1' ? describe : describe.skip;
 
-describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
+describePostgres('TopDiscs global vote prior with PostgreSQL fixtures', () => {
   let client: HomePostgresClient | null = null;
   const getClient = (): HomePostgresClient => {
     if (!client) throw new Error('PostgreSQL client is not initialized');
@@ -19,9 +19,7 @@ describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
   beforeAll(async () => {
     const dotenv = await import('dotenv');
     dotenv.config();
-    if (process.env.STAGE !== 'dev') {
-      throw new Error('D31 PostgreSQL tests require STAGE=dev');
-    }
+    requireTopDiscsPostgresTestTarget('D31_POSTGRES_TEST');
 
     const { Client } = await import('pg');
     client = new Client({
@@ -32,16 +30,18 @@ describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
+    await verifyTopDiscsPostgresTestIdentity(client);
     await getClient().query(`
-      CREATE TEMP TABLE disc (
+      CREATE TEMP TABLE disc (id integer PRIMARY KEY, "releaseDate" date);
+      CREATE TEMP TABLE rate (
         id integer PRIMARY KEY,
-        "releaseDate" date,
-        "genreId" text,
-        "artistId" integer
+        "discId" integer,
+        "userId" integer,
+        rate numeric,
+        cover numeric,
+        "createdAt" timestamp NOT NULL,
+        "editedAt" timestamp
       );
-      CREATE TEMP TABLE artist (id integer PRIMARY KEY, "countryId" integer);
-      CREATE TEMP TABLE country (id integer PRIMARY KEY, name text);
-      CREATE TEMP TABLE rate ("discId" integer, rate numeric);
     `);
   });
 
@@ -50,97 +50,43 @@ describePostgres('loadHomeGlobalStats with PostgreSQL fixtures', () => {
   });
 
   beforeEach(async () => {
-    await getClient().query('TRUNCATE rate, disc, artist, country');
-    await getClient().query(`
-      INSERT INTO country (id, name) VALUES (1, 'Fixtureland'), (2, 'Otherland');
-      INSERT INTO artist (id, "countryId") VALUES (1, 1), (2, 2);
-      INSERT INTO disc (id, "releaseDate", "genreId", "artistId") VALUES
-        (1, DATE '2020-01-01', 'g', 1),
-        (2, DATE '2022-06-30', 'g', 1),
-        (3, DATE '2023-01-01', 'g', 1),
-        (4, DATE '2024-12-31', 'g', 1),
-        (5, DATE '2019-12-31', 'g', 1),
-        (6, DATE '2025-01-01', 'g', 1),
-        (7, DATE '2023-01-01', 'other', 1),
-        (8, DATE '2023-01-01', 'g', 2);
-      INSERT INTO rate ("discId", rate) VALUES
-        (1, 4.00), (1, NULL),
-        (2, 2.00), (2, 4.00),
-        (3, NULL),
-        (4, 5.00), (5, 5.00), (6, 5.00), (7, 5.00), (8, 5.00);
-    `);
-  });
-
-  async function loadStats(
-    dateRange: string[] = ['2020-01-01', '2025-12-31'],
-    today = '2024-12-31',
-  ) {
-    const filters = buildHomeDiscFilters({
-      userId: 'unused-for-global-query',
-      dateRange,
-      genreId: 'g',
-      country: 'Fixtureland',
-      today: new Date(`${today}T00:00:00.000Z`),
-    });
-    let rawRow: Record<string, unknown> = {};
-    const repository: HomeQueryRunner = {
-      query: async (sql: string, params: unknown[]) => {
-        const result = await getClient().query(
-          sql,
-          getHomePostgresValues(params),
-        );
-        rawRow = result.rows[0];
-        return result.rows;
-      },
-    };
-
-    const stats = await loadHomeGlobalStats(
-      repository,
-      filters.globalWhere,
-      filters.globalParams,
-    );
-    return { stats, rawRow };
-  }
-
-  it('aggregates multiple discs, ignores NULL rates as votes, includes unrated discs, and honors filters and inclusive date bounds', async () => {
-    const { stats, rawRow } = await loadStats();
-
-    // The four matching per-disc averages are 4, 3, 0 (NULL-only), and 5.
-    expect(stats).toEqual({ globalAvgRate: 3, medianVotes: 1 });
-    expect(rawRow.globalAvgRate).toBe('3.0000000000000000');
-    expect(rawRow.medianVotes).toBe(1);
-    expect(typeof rawRow.globalAvgRate).toBe('string');
-    expect(typeof rawRow.medianVotes).toBe('number');
-  });
-
-  it('includes a disc on the dateRange upper boundary when today is later', async () => {
-    const { stats } = await loadStats(
-      ['2020-01-01', '2024-12-31'],
-      '2025-12-31',
-    );
-
-    expect(stats).toEqual({ globalAvgRate: 3, medianVotes: 1 });
-  });
-
-  it('returns NULL aggregates for no matching discs and preserves the TypeScript defaults', async () => {
-    const { stats, rawRow } = await loadStats(['2030-01-01', '2030-12-31']);
-
-    expect(rawRow).toEqual({ globalAvgRate: null, medianVotes: null });
-    expect(stats).toEqual({ globalAvgRate: 0, medianVotes: 1 });
-  });
-
-  it('preserves continuous median output followed by the current integer conversion and fallback', async () => {
     await getClient().query('TRUNCATE rate, disc');
     await getClient().query(`
-      INSERT INTO disc (id, "releaseDate", "genreId", "artistId") VALUES
-        (1, DATE '2023-01-01', 'g', 1),
-        (2, DATE '2023-01-01', 'g', 1);
-      INSERT INTO rate ("discId", rate) VALUES (2, 4.00);
+      INSERT INTO disc (id, "releaseDate") VALUES
+        (1, DATE '2020-01-01'),
+        (2, DATE '2027-01-01');
+      INSERT INTO rate (id, "discId", "userId", rate, "createdAt", "editedAt") VALUES
+        (1, 1, 1, 8, TIMESTAMP '2024-01-01', TIMESTAMP '2024-01-01'),
+        (2, 1, 1, 10, TIMESTAMP '2024-01-01', TIMESTAMP '2024-02-01'),
+        (3, 1, 2, 0, TIMESTAMP '2024-01-01', NULL),
+        (4, 1, 3, NULL, TIMESTAMP '2024-01-01', NULL),
+        (5, 1, 4, 11, TIMESTAMP '2024-01-01', NULL),
+        (6, 2, 5, 10, TIMESTAMP '2024-01-01', NULL),
+        (7, 1, NULL, 10, TIMESTAMP '2024-01-01', NULL);
     `);
+  });
 
-    const { stats, rawRow } = await loadStats();
+  async function loadPrior(asOf = '2026-10-28') {
+    const sql = `
+      WITH ${CURRENT_RATES_CTE},
+      global_prior AS (
+        SELECT SUM(vr.rate) / NULLIF(COUNT(*), 0) AS "globalAvgRate"
+        FROM valid_current_rates vr
+        INNER JOIN disc prior_disc ON prior_disc.id = vr."discId"
+        WHERE prior_disc."releaseDate" <= $1
+      )
+      SELECT "globalAvgRate" FROM global_prior;
+    `;
+    const result = await getClient().query(sql, getHomePostgresValues([asOf]));
+    return result.rows[0].globalAvgRate;
+  }
 
-    expect(rawRow.medianVotes).toBe(0.5);
-    expect(stats).toEqual({ globalAvgRate: 2, medianVotes: 1 });
+  it('deduplicates current votes, retains zero, excludes null/out-of-scale and future releases', async () => {
+    expect(await loadPrior()).toBe('5.0000000000000000');
+  });
+
+  it('returns a NULL prior when no valid published votes exist', async () => {
+    await getClient().query('DELETE FROM rate WHERE "discId" = 1');
+    expect(await loadPrior()).toBeNull();
   });
 });
