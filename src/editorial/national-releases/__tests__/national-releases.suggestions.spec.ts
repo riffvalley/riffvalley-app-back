@@ -187,6 +187,11 @@ describe('NationalReleasesService admin suggestion batching', () => {
     expect(discRepository.query.mock.calls[0][0]).toContain(
       'LEFT JOIN LATERAL',
     );
+    expect(discRepository.query.mock.calls[0][0]).toContain(
+      'search_name_normalized = ANY',
+    );
     expect(discRepository.query.mock.calls[0][0]).toContain('LIMIT 1');
+    expect(discRepository.query.mock.calls[0][0]).not.toContain('ORDER BY');
+    expect(discRepository.query.mock.calls[0][1]).toHaveLength(5);
   });
 });

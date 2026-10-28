@@ -3,6 +3,8 @@ import {
   buildMusicNameMultiColumnPartialPredicate,
   buildMusicNamePartialPredicate,
 } from '../music-name-search';
+import { buildDiscSuggestionQuery } from '../../../../editorial/national-releases/helpers/build-disc-suggestion-query';
+import { applyDiscListFilters } from '../../../../community/common/helpers/apply-disc-list-filters';
 import {
   HomePostgresClient,
   requireTopDiscsPostgresTestTarget,
@@ -112,7 +114,8 @@ describePostgres(
         ('00000000-0000-4000-8000-000000000011', 'The Secrets of Pandora', 'the secrets of pandora', '00000000-0000-4000-8000-000000000002'),
         ('00000000-0000-4000-8000-000000000014', 'Secrets of Pandora', 'secrets of pandora', '00000000-0000-4000-8000-000000000002'),
         ('00000000-0000-4000-8000-000000000012', 'Echo_% recording', NULL, '00000000-0000-4000-8000-000000000003'),
-        ('00000000-0000-4000-8000-000000000013', 'EchoXY recording', NULL, '00000000-0000-4000-8000-000000000003');
+        ('00000000-0000-4000-8000-000000000013', 'EchoXY recording', NULL, '00000000-0000-4000-8000-000000000003'),
+        ('00000000-0000-4000-8000-000000000015', 'Sólstafir', 'solstafir', '00000000-0000-4000-8000-000000000001');
     `);
     });
 
@@ -168,21 +171,75 @@ describePostgres(
     });
 
     it('uses NULL-only legacy fallback and treats LIKE metacharacters literally', async () => {
-      const search = buildMusicNameMultiColumnPartialPredicate('Echo_%', [
-        {
-          normalizedColumn: 'disc.search_name_normalized',
-          legacyColumn: 'disc.name',
-          legacyValue: 'Echo_%',
-          legacyOperator: 'ILIKE',
-        },
-      ]);
-      const results = await dataSource
+      const query = dataSource
         .getRepository(MusicSearchDisc)
         .createQueryBuilder('disc')
-        .where(search.predicate, search.parameters)
-        .getManyAndCount();
+        .innerJoin('disc.artist', 'artist');
+      applyDiscListFilters(query, { query: 'Echo_%' });
+      const results = await query.getManyAndCount();
       expect(results[1]).toBe(1);
       expect(results[0][0]?.name).toBe('Echo_% recording');
+    });
+
+    it('applies a Community partial filter to normalized names before count and pagination', async () => {
+      const pageQuery = dataSource
+        .getRepository(MusicSearchDisc)
+        .createQueryBuilder('disc')
+        .innerJoin('disc.artist', 'artist');
+      applyDiscListFilters(pageQuery, { query: 'MOL' });
+      const page = await pageQuery
+        .orderBy('disc.name', 'ASC')
+        .take(1)
+        .skip(0)
+        .getManyAndCount();
+
+      expect(page[1]).toBe(1);
+      expect(page[0]).toHaveLength(1);
+      expect(page[0][0]?.name).toBe('Sólstafir');
+    });
+
+    it('recovers normalized National Releases candidates and retains NULL-key compatibility', async () => {
+      const query = buildDiscSuggestionQuery([
+        {
+          id: '00000000-0000-4000-8000-000000000101',
+          discName: 'Solstafir',
+          artistName: 'MOL',
+        },
+        {
+          id: '00000000-0000-4000-8000-000000000102',
+          discName: 'Secrets of Pandora',
+          artistName: 'The Secrets Artist',
+        },
+        {
+          id: '00000000-0000-4000-8000-000000000103',
+          discName: 'Echo_% recording',
+          artistName: 'Legacy Artist',
+        },
+        {
+          id: '00000000-0000-4000-8000-000000000104',
+          discName: '%_\\',
+          artistName: 'Legacy Artist',
+        },
+      ]);
+      const rows = await dataSource.query(query.sql, query.parameters);
+      const candidates = new Map(
+        (rows as { releaseId: string; discId: string | null }[]).map((row) => [
+          row.releaseId,
+          row.discId,
+        ]),
+      );
+
+      expect(candidates.get('00000000-0000-4000-8000-000000000101')).toBe(
+        '00000000-0000-4000-8000-000000000015',
+      );
+      expect([
+        '00000000-0000-4000-8000-000000000011',
+        '00000000-0000-4000-8000-000000000014',
+      ]).toContain(candidates.get('00000000-0000-4000-8000-000000000102'));
+      expect(candidates.get('00000000-0000-4000-8000-000000000103')).toBe(
+        '00000000-0000-4000-8000-000000000012',
+      );
+      expect(candidates.get('00000000-0000-4000-8000-000000000104')).toBeNull();
     });
   },
 );

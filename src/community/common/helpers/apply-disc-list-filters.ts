@@ -1,4 +1,5 @@
 import { SelectQueryBuilder } from 'typeorm';
+import { buildMusicNameMultiColumnPartialPredicate } from 'src/catalog/shared/music-name/music-name-search';
 import { DiscListOptionsCriteria } from '../types/disc-list-options';
 
 export interface DiscListFilterOptions {
@@ -8,7 +9,7 @@ export interface DiscListFilterOptions {
 }
 
 export function applyDiscListFilters<Entity extends object>(
-  queryBuilder: SelectQueryBuilder<Entity>,
+  queryBuilder: Pick<SelectQueryBuilder<Entity>, 'andWhere'>,
   criteria: DiscListOptionsCriteria,
   options: DiscListFilterOptions = {},
 ): void {
@@ -23,11 +24,25 @@ export function applyDiscListFilters<Entity extends object>(
   }
 
   if (criteria.query) {
-    const search = `%${criteria.query}%`;
-    queryBuilder.andWhere(
-      '(disc.name ILIKE :discListSearch OR artist.name ILIKE :discListSearch)',
-      { discListSearch: search },
+    const search = buildMusicNameMultiColumnPartialPredicate(
+      criteria.query,
+      [
+        {
+          normalizedColumn: 'disc.search_name_normalized',
+          legacyColumn: 'disc.name',
+          legacyValue: criteria.query,
+          legacyOperator: 'ILIKE',
+        },
+        {
+          normalizedColumn: 'artist.search_name_normalized',
+          legacyColumn: 'artist.name',
+          legacyValue: criteria.query,
+          legacyOperator: 'ILIKE',
+        },
+      ],
+      'discListSearch',
     );
+    queryBuilder.andWhere(search.predicate, search.parameters);
   }
 
   if (!options.omitGenre && criteria.genreIds !== undefined) {

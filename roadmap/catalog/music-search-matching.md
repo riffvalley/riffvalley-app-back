@@ -1,10 +1,10 @@
 # Roadmap de búsqueda y matching musical
 
-**Estado:** MEDIA-1 completada como auditoría documental; MEDIA-2 completada; MEDIA-3a y MEDIA-3b.1–3b.4 completadas el 2026-10-28. MEDIA-3b.5–3b.8 y MEDIA-4–MEDIA-6/MEDIA-8 continúan pendientes. MEDIA-7 descartada por decisión del usuario.
+**Estado:** MEDIA-1 completada como auditoría documental; MEDIA-2 completada; MEDIA-3a y MEDIA-3b.1–3b.5 completadas el 2026-10-28. MEDIA-3b.6–3b.8 y MEDIA-4–MEDIA-6/MEDIA-8 continúan pendientes. MEDIA-7 descartada por decisión del usuario.
 
 **Alcance:** búsqueda interna de artistas y discos, matching de candidatos Spotify/Bandcamp y revisión segura de enlaces históricos.
 
-**Límite vigente:** MEDIA-3b.4 integra la utilidad solo en los readers propios de Catalog descritos en el diseño SQL. Readers secundarios de Community, imports, reglas de duplicados, elegibilidad CAT-DISC-4c, sincronizaciones y reparación automática de datos permanecen independientes.
+**Límite vigente:** MEDIA-3b.4 integra los readers principales de Catalog y MEDIA-3b.5 los filtros de búsqueda de candidatos en Community y National Releases, conservando ownership y contratos. Imports/resolución de identidad, reglas de duplicados, elegibilidad CAT-DISC-4c, sincronizaciones y reparación automática de datos permanecen independientes.
 
 ## Objetivo
 
@@ -82,12 +82,13 @@ Estados convencionales: **Pendiente**, **En curso**, **Bloqueada** y **Completad
 ### MEDIA-3 — Búsqueda interna normalizada
 
 - **Tamaño:** M.
-- **Estado:** En curso; MEDIA-3a y MEDIA-3b.1–3b.4 completadas (2026-10-28); MEDIA-3b.5–3b.8 pendientes.
+- **Estado:** En curso; MEDIA-3a y MEDIA-3b.1–3b.5 completadas (2026-10-28); MEDIA-3b.6–3b.8 pendientes.
 - **Objetivo:** aplicar la política aprobada solo a lectores internos autorizados por MEDIA-1.
 - **Criterios:** nombres originales sin cambios; coincidencia normalizada exacta diferenciada de parcial; evitar normalizadores duplicados; resultados y contratos actuales preservados salvo cambio aprobado; no ampliar resultados irrelevantes; latencia y query plan medidos.
 - **Evaluar:** `unaccent`, índices funcionales, trigramas, campos normalizados ya existentes u otra solución concreta, según la evidencia de MEDIA-1/2. Cualquier extensión, columna o migración necesita tarea/decisión separada con evaluación `up`/`down` y despliegue.
-- **Diseño y avance MEDIA-3b:** [music-search-sql-design.md](music-search-sql-design.md). MEDIA-3b.2 creó las columnas nullable y añadió dual-write; MEDIA-3b.3 aplicó/verificó el backfill en `spammusic-back` con cero claves NULL o discrepantes. MEDIA-3b.4 integró Artist Search/Management/Orphans/exact lookup y Disc Catalog/Calendar, con fallback legacy limitado a claves NULL y variantes acotadas. Las pruebas unitarias focalizadas y PostgreSQL real aislado pasan. No se modificaron nombres, metadatos musicales ni `Artist.nameNormalized`.
-- **Siguiente paso:** MEDIA-3b.5, readers secundarios por ownership (Community DiscList y filtros/options). No se han cambiado sus consultas; mantener MEDIA-3b.6–3b.8 pendientes.
+- **Diseño y avance MEDIA-3b:** [music-search-sql-design.md](music-search-sql-design.md). MEDIA-3b.2 creó las columnas nullable y añadió dual-write; MEDIA-3b.3 aplicó/verificó el backfill en `spammusic-back` con cero claves NULL o discrepantes. MEDIA-3b.4 integró Artist Search/Management/Orphans/exact lookup y Disc Catalog/Calendar. MEDIA-3b.5 adaptó los filtros de candidatos de Community DiscList y la sugerencia revisable de National Releases; la matriz incluye las lecturas que permanecen intactas y los casos diferidos. Fallback legacy solo para claves NULL, sin cambiar nombres, metadatos, decisiones de identidad ni `Artist.nameNormalized`.
+- **MEDIA-3b.5:** auditoría y adaptación completadas; Calendar ya estaba cubierto. Requests e Imports de escritura permanecen intactos; comparaciones de duplicados se difieren a MEDIA-3b.6. Sugerencias de National Releases no escriben asociaciones. PostgreSQL 17 aislado, 4 pruebas; 7 suites focalizadas, 63 tests; typecheck, build, ESLint/Prettier focalizados y `git diff --check` aprobados. Los gates arquitectónico y de tipado no detectaron hallazgos nuevos (9 y 5 históricos respectivamente).
+- **Siguiente paso:** MEDIA-3b.6, reglas de duplicados; no iniciada aquí.
 - **Pruebas:** casos de matriz, Unicode y límites de entrada; consultas de PostgreSQL aislado con datos representativos y `EXPLAIN (ANALYZE, BUFFERS)` antes/después cuando se cambie estrategia SQL.
 - **Dependencias:** MEDIA-1 y MEDIA-2.
 
@@ -176,4 +177,4 @@ MEDIA-3 puede avanzar en paralelo con MEDIA-4 una vez aprobada la política, por
 
 ## Registro de esta ejecución
 
-MEDIA-1 se completó como auditoría documental; MEDIA-2 definió e implementó la política; MEDIA-3a y MEDIA-3b.1–3b.4 están completadas. El avance de lectores, compatibilidad NULL y pruebas está en [music-search-sql-design.md](music-search-sql-design.md). MEDIA-3b.5–3b.8, MEDIA-4–MEDIA-6 y MEDIA-8 siguen pendientes; MEDIA-7 fue descartada por decisión del usuario.
+MEDIA-1 se completó como auditoría documental; MEDIA-2 definió e implementó la política; MEDIA-3a y MEDIA-3b.1–3b.5 están completadas. El inventario, adaptaciones, compatibilidad NULL y pruebas están en [music-search-sql-design.md](music-search-sql-design.md). MEDIA-3b.6–3b.8, MEDIA-4–MEDIA-6 y MEDIA-8 siguen pendientes; MEDIA-7 fue descartada por decisión del usuario.

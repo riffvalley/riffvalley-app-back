@@ -13,6 +13,7 @@ import { CreateNationalReleaseFromDiscDto } from './dto/create-national-release-
 import { MailService } from '../../communications/mail/mail.service';
 import { Disc } from '../../catalog/discs/entities/disc.entity';
 import { normalizeMusicName } from '../../catalog/shared/music-name/normalize-music-name';
+import { buildDiscSuggestionQuery } from './helpers/build-disc-suggestion-query';
 
 interface SuggestedDiscCandidate {
   releaseId: string;
@@ -231,28 +232,12 @@ export class NationalReleasesService {
   ): Promise<Map<string, Disc | null>> {
     if (releases.length === 0) return new Map();
 
-    // Keep the original per-release LIMIT 1 selection semantics while sending
-    // all lookups in one round trip. There is intentionally no ORDER BY here:
-    // the old getOne() query did not define a priority among duplicate matches.
+    // Keep per-release LIMIT 1 candidate selection and batch all lookups. A
+    // candidate remains a human-reviewed suggestion and is never linked here.
+    const suggestionQuery = buildDiscSuggestionQuery(releases);
     const rawRows: unknown = await this.discRepo.query(
-      `
-        SELECT requested."releaseId" AS "releaseId", candidate.id AS "discId"
-        FROM unnest($1::uuid[], $2::varchar[], $3::varchar[])
-          AS requested("releaseId", "discName", "artistName")
-        LEFT JOIN LATERAL (
-          SELECT disc.id
-          FROM "disc" AS disc
-          LEFT JOIN "artist" AS artist ON artist.id = disc."artistId"
-          WHERE LOWER(disc.name) = LOWER(requested."discName")
-            AND LOWER(artist.name) = LOWER(requested."artistName")
-          LIMIT 1
-        ) AS candidate ON TRUE
-      `,
-      [
-        releases.map((release) => release.id),
-        releases.map((release) => release.discName),
-        releases.map((release) => release.artistName),
-      ],
+      suggestionQuery.sql,
+      suggestionQuery.parameters,
     );
 
     if (!Array.isArray(rawRows) || !rawRows.every(isSuggestedDiscCandidate)) {
