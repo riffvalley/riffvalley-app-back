@@ -213,6 +213,12 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
           ).rows;
           return call.rows;
         }
+        if (legacy && sql.includes('AS "globalAvgRate"')) {
+          call.rows = (
+            await getClient().query(sql, getHomePostgresValues(params))
+          ).rows;
+          return call.rows;
+        }
         return [];
       },
     };
@@ -305,6 +311,39 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     ]);
 
     expect(main.rows!.map(({ id }) => id)).toContain(DISC_IDS[4]);
+  });
+
+  it('restores legacy membership and filtered prior independently of TopDiscs', async () => {
+    await seedBaseFixtures();
+
+    const legacy = await runHomeDiscs(
+      '2024-12-31',
+      ['2020-01-01', '2025-12-31'],
+      { country: 'Fixtureland', genreId: GENRE_ID },
+      true,
+    );
+    const legacyIds = legacy.main.rows!.map(({ id }) => id);
+    const official = await runHomeDiscs(
+      '2024-12-31',
+      ['2020-01-01', '2025-12-31'],
+      { country: 'Fixtureland', genreId: GENRE_ID },
+    );
+    const officialIds = official.main.rows!.map(({ id }) => id);
+    const globalQuery = legacy.queries.find(({ sql }) =>
+      sql.includes('AS "globalAvgRate"'),
+    );
+
+    expect(legacyIds).toContain(DISC_IDS[1]);
+    expect(legacyIds).toContain(DISC_IDS[4]);
+    expect(legacyIds).toContain(DISC_IDS[8]);
+    expect(legacyIds).not.toContain(DISC_IDS[2]);
+    expect(legacyIds).not.toContain(DISC_IDS[5]);
+    expect(officialIds).not.toContain(DISC_IDS[1]);
+    expect(globalQuery?.sql).toContain('PERCENTILE_CONT(0.5)');
+    expect(globalQuery?.sql).toContain('d."genreId" = $4 AND c.name = $5');
+    expect(globalQuery?.sql).not.toContain('valid_current_rates');
+    expect(legacy.main.sql).toContain('d."pinned" = true OR EXISTS');
+    expect(legacy.main.sql).not.toContain('global_prior');
   });
 
   it('deduplicates by user/disc, counts zero, rejects invalid current values, excludes future releases, and keeps scores filter-stable', async () => {
@@ -442,7 +481,7 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     expect(main.rows).toEqual([]);
   });
 
-  it('limits 25 equal-score pinned discs to the first 11 IDs in stable tie order', async () => {
+  it('applies independent 11-disc official and 20-disc legacy limits', async () => {
     await clearFixtures();
     await getClient().query(
       `INSERT INTO country (id, name, "isoCode") VALUES ($1, 'Fixtureland', 'FX')`,
@@ -499,16 +538,16 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
       true,
     );
     const legacyIds = legacy.main.rows!.map(({ id }) => id);
-    expect(legacyIds).toHaveLength(11);
+    expect(legacyIds).toHaveLength(20);
     expect(legacyIds).toEqual(
       Array.from(
-        { length: 11 },
+        { length: 20 },
         (_, index) =>
           `00000000-0000-4000-8000-${String(index + 101).padStart(12, '0')}`,
       ),
     );
     expect(legacy.main.sql).toContain(
-      'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 11;',
+      'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 20;',
     );
   });
 

@@ -93,7 +93,14 @@ describe('getTopDiscs response', () => {
 
     expect(rankingQueries).toHaveLength(2);
     expect(rankingQueries[0]).toContain('LIMIT 11');
-    expect(rankingQueries[1]).toContain('LIMIT 11');
+    expect(rankingQueries[1]).toContain('LIMIT 20');
+    expect(rankingQueries[1]).toContain('d."pinned" = true OR EXISTS');
+    expect(rankingQueries[1]).not.toContain('valid_current_rates');
+    expect(rankingQueries[1]).not.toContain('global_prior');
+    const legacyPriorQuery = query.mock.calls
+      .map(([sql]) => sql)
+      .find((sql) => sql.includes('PERCENTILE_CONT(0.5)'));
+    expect(legacyPriorQuery).toContain('PERCENTILE_CONT(0.5)');
   });
 
   it('combines every result into the complete established envelope for multiple discs', async () => {
