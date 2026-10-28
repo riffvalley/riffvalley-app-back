@@ -6,7 +6,7 @@
 
 ## Estado de TopDiscs
 
-C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. El límite vigente de 11 discos es intencionado y definitivo, confirmado por el usuario. Las referencias anteriores a 20 son históricas y están supersedidas.
+C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDiscs` devuelve hasta 11 discos. La ruta legacy `/homeDiscs` conserva por separado el comportamiento anterior y su límite de 20 hasta que se retire.
 
 ## Documentos actuales
 
@@ -16,7 +16,7 @@ C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. El límite vigente de 11 
 - [C-TOP-8 — Auditoría estadística de TopDiscs](c-top-8-auditoria-estadistica-topdiscs.md) — fórmula, universo estadístico, simulaciones reproducibles y recomendación; sin cambios de producción. Su estado de C-TOP-7 refleja la fecha histórica del informe; la tarea quedó completada después.
 - [C-TOP-9 — Evaluación de un modelo bayesiano estable](c-top-9-validacion-bayesiana.md) — comparación de priors y k, simulación con aserciones y propuesta de validación; sin cambios productivos.
 - [C-TOP-10 — Implementación bayesiana estable de TopDiscs](c-top-10-implementacion-bayesiana-topdiscs.md) — modelo aprobado con prior por voto, `k = 4`, deduplicación determinista y elegibilidad estadística separada de `pinned`.
-- [C-TOP-11 — Validación PostgreSQL del modelo bayesiano TopDiscs](c-top-11-validacion-postgresql-topdiscs.md) — pruebas SQL sobre PostgreSQL 17.10 aislado en Docker, verificación de deduplicación/elegibilidad/filtros y planes `EXPLAIN (ANALYZE, BUFFERS)` con fixtures sintéticos. Ambas rutas devuelven 11; sus entradas están separadas y el núcleo estadístico se comparte.
+- [C-TOP-11 — Validación PostgreSQL del modelo bayesiano TopDiscs](c-top-11-validacion-postgresql-topdiscs.md) — pruebas SQL sobre PostgreSQL 17.10 aislado en Docker, verificación del ranking oficial, filtros y planes con fixtures sintéticos. La nota de corrección registra la restauración independiente de `/homeDiscs`.
 
 ## Destinos previstos
 

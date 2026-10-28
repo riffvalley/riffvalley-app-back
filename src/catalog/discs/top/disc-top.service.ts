@@ -18,9 +18,12 @@ import { TopDiscOptionsQueryDto } from '../dto/top-disc-options-query.dto';
 import { loadTopDiscOptions } from './loaders/load-top-disc-options';
 import { DiscTopOptionsResult } from './types/disc-top-options';
 import { buildTopDiscEligibilityPredicate } from './helpers/top-disc-predicates';
+import { buildLegacyHomeDiscFilters } from './helpers/legacy-home-disc-filters';
+import { buildLegacyHomeDiscEligibilityPredicate } from './helpers/legacy-home-disc-eligibility';
+import { loadLegacyHomeGlobalStats } from './loaders/legacy-home-global-stats';
 
 const OFFICIAL_TOP_DISCS_LIMIT = 11;
-const LEGACY_HOME_DISCS_LIMIT = 11;
+const LEGACY_HOME_DISCS_LIMIT = 20;
 
 export interface DiscTopResult {
   discs: ReturnType<typeof mapHomeRankedDisc>[];
@@ -62,12 +65,91 @@ export class DiscTopService {
     user: User,
     genreId?: string,
   ): Promise<DiscTopResult> {
-    return this.loadTopDiscs(
-      paginationDto,
-      user,
+    const {
+      dateRange,
+      country,
+      countryId,
+      statsDateRange,
+      distributionDateRange,
+    } = paginationDto;
+    const today = new Date();
+    const filters = buildLegacyHomeDiscFilters({
+      userId: user.id,
+      dateRange,
       genreId,
-      LEGACY_HOME_DISCS_LIMIT,
+      country,
+      countryId,
+      today,
+    });
+    const { globalAvgRate, medianVotes } = await loadLegacyHomeGlobalStats(
+      this.discRepository,
+      filters.globalWhere,
+      filters.globalParams,
     );
+
+    const rankingQuery = `
+      SELECT
+        d.*,
+        a.name AS "artistName",
+        c.id AS "countryId",
+        c.name AS "countryName",
+        c."isoCode" AS "countryIsoCode",
+        g.name AS "genreName",
+        g.color AS "genreColor",
+        COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) AS "voteCount",
+        COALESCE(AVG(r.rate), 0) AS "averageRate",
+        COALESCE(AVG(r.cover), 0) AS "averageCover",
+        (SELECT r.id FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userRateId",
+        (SELECT f.id FROM favorite f WHERE f."discId" = d.id AND f."userId" = $1 LIMIT 1) AS "userFavoriteId",
+        (SELECT p.id FROM pending p WHERE p."discId" = d.id AND p."userId" = $1 LIMIT 1) AS "pendingId",
+        (SELECT r.rate FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userRate",
+        (SELECT r.cover FROM rate r WHERE r."discId" = d.id AND r."userId" = $1 LIMIT 1) AS "userCover",
+        (SELECT COUNT(c.id) FROM comment c WHERE c."discId" = d.id) AS "commentCount",
+        (
+          (COALESCE(AVG(r.rate), 0) * COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END))
+          + (${globalAvgRate} * ${medianVotes})
+        ) / (COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) + ${medianVotes}) AS "weightedScore"
+      FROM disc d
+      LEFT JOIN artist a ON d."artistId" = a.id
+      LEFT JOIN country c ON a."countryId" = c.id
+      LEFT JOIN genre g ON d."genreId" = g.id
+      LEFT JOIN rate r ON d.id = r."discId"
+      ${filters.mainWhere}
+      AND ${buildLegacyHomeDiscEligibilityPredicate('d')}
+      GROUP BY d.id, a.name, g.name, g.color, c.id, c.name, c."isoCode"
+      ORDER BY "weightedScore" DESC, d.id ASC
+      LIMIT ${LEGACY_HOME_DISCS_LIMIT};
+    `;
+    const topRatedDiscs = await this.discRepository.query(
+      rankingQuery,
+      filters.mainParams,
+    );
+
+    const { totalDiscs, totalVotes } = await loadHomeDiscTotals(
+      this.discRepository,
+      statsDateRange,
+    );
+    const topUsersByRates = await loadHomeTopUsersByRates(
+      this.discRepository,
+      statsDateRange,
+    );
+    const topUsersByCover = await loadHomeTopUsersByCover(
+      this.discRepository,
+      statsDateRange,
+    );
+    const ratingDistribution = await loadHomeRatingDistribution(
+      this.discRepository,
+      distributionDateRange,
+    );
+
+    return {
+      discs: topRatedDiscs.map(mapHomeRankedDisc),
+      totalDiscs,
+      totalVotes,
+      topUsersByRates,
+      topUsersByCover,
+      ratingDistribution,
+    };
   }
 
   private async loadTopDiscs(
