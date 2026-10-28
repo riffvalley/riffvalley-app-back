@@ -81,6 +81,21 @@ describe('getTopDiscs response', () => {
     }
   });
 
+  it('keeps independent result limits for official and legacy rankings', async () => {
+    const { service, query } = makeService(() => []);
+
+    await service.getTopDiscs(new TopStatsQueryDto(), makeUser());
+    await service.getLegacyTopDiscs(new TopStatsQueryDto(), makeUser());
+
+    const rankingQueries = query.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql) => sql.includes('AS "weightedScore"'));
+
+    expect(rankingQueries).toHaveLength(2);
+    expect(rankingQueries[0]).toContain('LIMIT 11');
+    expect(rankingQueries[1]).toContain('LIMIT 11');
+  });
+
   it('combines every result into the complete established envelope for multiple discs', async () => {
     const discRows = [
       {

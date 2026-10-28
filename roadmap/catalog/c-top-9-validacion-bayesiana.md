@@ -3,7 +3,7 @@
 **Estado:** evaluación documental y simulación aislada completadas; sin cambios de producción.
 **Fecha:** 2026-10-28.
 **Base:** [Auditoría C-TOP-8](c-top-8-auditoria-estadistica-topdiscs.md) y su [simulador](simulate-topdiscs-c-top-8.mjs), ambos leídos antes de comenzar.
-**Separación:** C-TOP-7, regresión visual de TopDiscs, permanece pendiente e independiente.
+**Separación en la fecha del informe:** C-TOP-7, regresión visual de TopDiscs, permanecía pendiente e independiente.
 
 ## Conclusión ejecutiva
 
@@ -168,7 +168,7 @@ No hay medida de carga actual que justifique cache o tabla materializada. D46 ya
 ### Impacto esperado en consumidores
 
 - `GET /api/discs/topDiscs` y el alias legacy `GET /api/discs/homeDiscs` delegan al mismo método y reciben el mismo nuevo orden/score si se cambiara su lógica. El shape puede mantenerse, pero `weightedScore` y las posiciones son observables; es regresión de orden y requiere aprobación/caracterización.
-- La vista actual conserva su límite visible de 11 según C-TOP-8; API solicita 20. El algoritmo solo alteraría scores y orden; no es necesario cambiar límite/rutas para evaluar.
+- En la evaluación C-TOP-9, la vista mostraba hasta 11 mientras la API aún tenía tope 20. C-TOP-11 redujo después el límite backend a 11; el usuario confirmó en C-TOP-7 que esa reducción es intencionada y definitiva.
 - `CommunityDashboardRatesService` calcula estadísticas anuales/de participación por separado. No reutiliza el weightedScore de TopDiscs y no debería cambiar por una modificación interna del prior. Comprobar consumers end-to-end antes de desplegar, pero no adaptar Dashboard/Community en este trabajo.
 
 ## Recomendación
@@ -198,9 +198,11 @@ Estas son conclusiones de diseño y evidencia de código. Los efectos en la tabl
 
 - Nuevo: `roadmap/catalog/c-top-9-validacion-bayesiana.md`.
 - Nuevo: `roadmap/catalog/simulate-topdiscs-c-top-9.mjs`, simulador sintético con aserciones ejecutadas.
-- Índice y roadmap de Catalog actualizados; C-TOP-7 permanece pendiente.
+- Índice y roadmap de Catalog actualizados en la fecha del informe; C-TOP-7 se cerró posteriormente.
 - No se modificaron producción, contratos, frontend, Dashboard, Community, datos, rutas, dependencias ni migraciones.
 - Dataset: ninguno representativo. No se consultó base local ni producción.
 - Ejecutado: `node roadmap/catalog/simulate-topdiscs-c-top-9.mjs`; aserciones incluidas aprobadas.
 - Ejecutado: comprobación de enlaces Markdown relativos en README, roadmap e informe; todos los destinos existen.
 - Ejecutado: `git diff --check` aprobado.
+
+**Actualización posterior — C-TOP-7 (2026-10-28):** completada; el usuario confirmó que el límite actual de 11 discos es intencionado y definitivo. No se inició otra vista de Catalog.

@@ -17,7 +17,7 @@ S = (R × v + C × 4) / (v + 4)
 - `C = SUM(votos válidos vigentes publicados) / COUNT(votos válidos vigentes publicados)`.
 - `k = 4` se centraliza como `TOP_DISCS_PRIOR_STRENGTH`; no depende de filtros ni de estadísticas de cada periodo.
 - La media observada se sigue exponiendo en `averageRate`; `weightedScore` conserva la puntuación bayesiana SQL sin redondeo previo.
-- Se mantiene el orden `weightedScore DESC, d.id ASC` y el límite de 20.
+- En el hito C-TOP-10 se usaba `weightedScore DESC, d.id ASC` con límite 20. C-TOP-11 redujo después el límite a 11; el orden se conserva.
 
 `C` se calcula por voto, no como media de medias de discos. El universo incluye todo disco con `releaseDate <= hoy`, sin filtros de país, género o periodo de TopDiscs. Un voto cero participa; los valores nulos y fuera del rango 0–10 no participan. Los discos sin votos no aportan ceros. Los eventos históricos de Rate no se consultan.
 
@@ -42,7 +42,7 @@ El predicado compartido del ranking y `GET /api/discs/topDiscs/options` ahora ac
 - Pinned sin votos válidos, discos sin votos y discos con solo Rates nulas quedan excluidos.
 - Un voto válido de cero sí hace elegible al disco.
 
-Las opciones siguen devolviendo una sola respuesta con países y géneros, ordenados y sin duplicados. Países usan periodo y género seleccionado e ignoran país; géneros usan periodo y país seleccionado e ignoran género. No ejecutan puntuaciones ni aplican el límite Top 20. El JSON y validaciones existentes no cambian.
+Las opciones siguen devolviendo una sola respuesta con países y géneros, ordenados y sin duplicados. Países usan periodo y género seleccionado e ignoran país; géneros usan periodo y país seleccionado e ignoran género. No ejecutan puntuaciones ni se limitan a los 11 resultados del ranking. El JSON y validaciones existentes no cambian.
 
 La búsqueda de consumidores confirmó que el predicado compartido se usa solo en el ranking TopDiscs y sus opciones; otros dominios no heredan el cambio de elegibilidad.
 
@@ -66,7 +66,7 @@ No se ejecutó `EXPLAIN ANALYZE`: no se confirmó una base PostgreSQL aislada y 
 
 C-TOP-8 describía la elegibilidad `votos OR pinned` y un prior filtrado por vista; C-TOP-9 simulaba varias alternativas de k y prior, y proponía validación offline adicional. Esas descripciones se conservan como historial de auditoría. Para producción, sus propuestas de elegibilidad o calibración que difieran de este acuerdo quedan supersedidas por C-TOP-10: `pinned` no concede elegibilidad y `k=4` es el valor inicial aprobado. La elección se adapta provisionalmente a la participación habitual estimada; no constituye validación estadística definitiva. Revisar k en el futuro con datos representativos.
 
-C-TOP-7 permanece pendiente como regresión final de la vista y no forma parte de esta tarea.
+En la fecha de cierre de C-TOP-10, C-TOP-7 seguía pendiente como regresión final de la vista y no formaba parte de esa tarea. Se completó después.
 
 ## Verificaciones
 
@@ -78,4 +78,6 @@ C-TOP-7 permanece pendiente como regresión final de la vista y no forma parte d
 
 **Actualización posterior:** C-TOP-11 completó la validación del SQL y de los planes PostgreSQL en una base Docker local aislada con fixtures sintéticos. Véase [el informe C-TOP-11](c-top-11-validacion-postgresql-topdiscs.md); no hubo cambios al algoritmo aprobado.
 
-**Ajuste posterior de contrato:** el límite SQL del ranking bajó de 20 a 11 discos para alinear la respuesta backend con las 11 posiciones mostradas. El límite de 20 descrito arriba corresponde a la implementación original de C-TOP-10.
+**Ajuste posterior de contrato:** el límite SQL de ambas rutas bajó de 20 a 11 discos para alinear sus respuestas con las 11 posiciones mostradas. Las rutas tienen puntos de entrada separados; el cálculo estadístico interno sigue compartido. La legacy puede retirarse sin cambiar el endpoint oficial. El límite de 20 descrito arriba corresponde a la implementación original de C-TOP-10.
+
+**Cierre posterior de C-TOP-7 (2026-10-28):** la regresión quedó completada y TopDiscs cerrado. El usuario confirmó que el límite de 11 es intencionado y definitivo; la referencia de 20 en este informe corresponde al estado original de C-TOP-10.
