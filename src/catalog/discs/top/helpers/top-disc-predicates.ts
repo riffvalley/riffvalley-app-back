@@ -22,12 +22,11 @@ export function buildDiscReleaseDatePredicate(
 }
 
 export function buildTopDiscEligibilityPredicate(discAlias = 'd'): string {
-  return `(${discAlias}."pinned" = true OR EXISTS (
+  return `EXISTS (
     SELECT 1
-    FROM rate eligible_rate
+    FROM valid_current_rates eligible_rate
     WHERE eligible_rate."discId" = ${discAlias}.id
-      AND eligible_rate.rate IS NOT NULL
-  ))`;
+  )`;
 }
 
 export function isTopDiscCountryId(value: string): boolean {

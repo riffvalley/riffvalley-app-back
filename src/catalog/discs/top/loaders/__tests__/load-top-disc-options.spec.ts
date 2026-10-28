@@ -23,19 +23,20 @@ describe('buildTopDiscOptionsQuery', () => {
       TODAY,
     );
 
-    expect(query.sql.match(/WITH eligible_discs/g)).toHaveLength(1);
+    expect(query.sql.match(/eligible_discs AS/g)).toHaveLength(1);
     expect(query.sql).toContain(
       'd."releaseDate" BETWEEN $1 AND $2 AND d."releaseDate" <= $3',
     );
-    expect(query.sql).toContain('eligible_rate.rate IS NOT NULL');
-    expect(query.sql).toContain('d."pinned" = true OR EXISTS');
+    expect(query.sql).toContain('valid_current_rates eligible_rate');
+    expect(query.sql).not.toContain('d."pinned"');
+    expect(query.sql).toContain('DISTINCT ON (r."discId", r."userId")');
     expect(query.sql).toContain('WHERE ed."genreId" = $4');
     expect(query.sql).toContain('WHERE c.id = $5');
     expect(query.sql).toContain('UNION ALL');
     expect(query.sql).toContain('ORDER BY dimension ASC, name ASC, id ASC');
     expect(query.sql).not.toContain('weightedScore');
     expect(query.sql).not.toContain('LIMIT');
-    expect(query.sql).not.toContain('JOIN rate');
+    expect(query.sql).not.toContain('JOIN rate r');
     expect(query.params).toEqual([
       new Date('2026-10-01T00:00:00.000Z'),
       new Date('2026-10-31T00:00:00.000Z'),

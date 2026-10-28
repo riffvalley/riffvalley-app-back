@@ -1,5 +1,15 @@
 # Roadmap de Catalog
 
+## C-TOP — TopDiscs
+
+- [ ] **C-TOP-7 — Regresión visual de TopDiscs:** pendiente; se mantiene separada de la auditoría estadística.
+- [x] **C-TOP-8 — Auditoría estadística del ranking TopDiscs:** completada el 2026-10-28, sin cambios productivos. Véase [el informe específico](c-top-8-auditoria-estadistica-topdiscs.md), con simulador standalone reproducible. El cierre de esta auditoría no cierra C-TOP-7.
+- [x] **C-TOP-9 — Evaluar el modelo bayesiano estable:** completada el 2026-10-28 como análisis documental y simulación reproducible; no implementa el modelo ni selecciona k como óptimo. Véase [el informe C-TOP-9](c-top-9-validacion-bayesiana.md).
+- [x] **C-TOP-10 — Implementar el modelo bayesiano estable:** implementación backend con prior global por voto, `k = 4`, Rates vigentes deduplicados y sin elegibilidad estadística por `pinned`. Véase [el informe C-TOP-10](c-top-10-implementacion-bayesiana-topdiscs.md). La elección es provisional hasta validarla con datos representativos.
+- [x] **C-TOP-11 — Validación PostgreSQL del modelo bayesiano:** completada el 2026-10-28 con PostgreSQL 17.10 en Docker local aislado, 19 pruebas SQL y planes `EXPLAIN (ANALYZE, BUFFERS)` para ranking y opciones. La evidencia usa exclusivamente fixtures sintéticos y no calibra k con datos de comunidad. Véase [el informe C-TOP-11](c-top-11-validacion-postgresql-topdiscs.md).
+- **Ajuste posterior:** el límite HTTP/SQL de resultados de TopDiscs se redujo de 20 a 11; las rutas oficial y legacy siguen compartiendo consulta y filtros.
+- **Siguiente paso propuesto:** revisar la calibración de k con un snapshot anonimizado/representativo cuando esté disponible. C-TOP-7 sigue pendiente por separado como regresión final de la vista.
+
 **Auditoría técnica relacionada:** las revisiones por módulo están en [Backend Cleanup — Catalog](../backend-cleanup/catalog.md); el índice global está en [Backend Cleanup](../backend-cleanup/README.md).
 
 Este documento conserva el detalle de la planificación con ownership de Catalog, incluidos Discs y la fase de ownership de Catalog. Se preservan numeración, estados y notas históricas.

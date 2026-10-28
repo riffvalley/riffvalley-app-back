@@ -16,11 +16,9 @@ type HomeDiscFilterInput = {
 type HomeDiscFilters = {
   mainWhere: string;
   mainParams: unknown[];
-  globalWhere: string;
-  globalParams: unknown[];
 };
 
-/** Builds the equivalent filters used by the home discs and global stats queries. */
+/** Builds the presentation filters used only to select ranking candidates. */
 export function buildHomeDiscFilters({
   userId,
   dateRange,
@@ -53,8 +51,8 @@ export function buildHomeDiscFilters({
     });
   }
 
-  const buildWhere = (parameterOffset: number) => {
-    let nextParameter = parameterOffset + 1;
+  const buildWhere = () => {
+    let nextParameter = 2;
     const conditions = predicates.map(({ sql, values }) => {
       const condition = sql(nextParameter);
       nextParameter += values.length;
@@ -66,9 +64,7 @@ export function buildHomeDiscFilters({
   const filterParams = predicates.flatMap(({ values }) => values);
 
   return {
-    mainWhere: buildWhere(1),
+    mainWhere: buildWhere(),
     mainParams: [userId, ...filterParams],
-    globalWhere: buildWhere(0),
-    globalParams: filterParams,
   };
 }
