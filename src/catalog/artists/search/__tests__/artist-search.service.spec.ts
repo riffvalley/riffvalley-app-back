@@ -66,12 +66,36 @@ describe('ArtistSearchService', () => {
       'artist.country',
       'country',
     );
-    expect(artistsQb.where).toHaveBeenCalledWith(
-      'artist.name_normalized LIKE :q',
-      { q: '%bjork%' },
-    );
+    const [predicate, parameters] = artistsQb.where.mock.calls[0] as [
+      string,
+      Record<string, string>,
+    ];
+    expect(predicate).toContain('artist.search_name_normalized LIKE');
+    expect(predicate).toContain('artist.search_name_normalized IS NULL');
+    expect(predicate).toContain("ESCAPE '\\'");
+    expect(parameters).toMatchObject({
+      musicSearch0: '%bjork%',
+      musicSearchLegacy: '%bjork%',
+    });
     expect(artistsQb.orderBy).toHaveBeenCalledWith('artist.name', 'ASC');
     expect(discRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['MOL', '%mol%'],
+    ['Solstafir', '%solstafir%'],
+    ['Motorhead', '%motorhead%'],
+    ['Bjork', '%bjork%'],
+    ['Dodsrit', '%dodsrit%'],
+  ])('normalizes the partial artist search %s', async (name, expected) => {
+    const artistsQb = queryBuilder({ many: [] });
+    artistRepository.createQueryBuilder.mockReturnValue(artistsQb);
+
+    await expect(service.findByName(name)).resolves.toEqual([]);
+
+    expect(artistsQb.where.mock.calls[0]?.[1]).toMatchObject({
+      musicSearch0: expected,
+    });
   });
 
   it('returns the current Artist and Disc projection, including Country, Genre and rate metrics', async () => {

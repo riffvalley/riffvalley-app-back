@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Artist } from '../entities/artist.entity';
 import { normalizeForSearch } from '../helpers/normalize-for-search';
+import { buildMusicNamePartialPredicate } from '../../shared/music-name/music-name-search';
 
 @Injectable()
 export class ArtistOrphansService {
@@ -24,9 +25,13 @@ export class ArtistOrphansService {
       );
 
     if (query) {
-      orphanCountQb.andWhere('artist.name_normalized LIKE :q', {
-        q: `%${normalizeForSearch(query)}%`,
-      });
+      const search = buildMusicNamePartialPredicate(
+        query,
+        'artist.search_name_normalized',
+        'artist.name_normalized',
+        normalizeForSearch(query),
+      );
+      orphanCountQb.andWhere(search.predicate, search.parameters);
     }
     if (needsReview !== undefined) {
       orphanCountQb.andWhere('artist.needsReview = :needsReview', {

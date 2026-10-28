@@ -89,14 +89,22 @@ describe('ArtistManagementService', () => {
     expect(dataQb.orderBy).toHaveBeenCalledWith('artist.updatedAt', 'DESC');
     expect(dataQb.take).toHaveBeenCalledWith(5);
     expect(dataQb.skip).toHaveBeenCalledWith(10);
-    expect(dataQb.where).toHaveBeenCalledWith(
-      'artist.name_normalized LIKE :q',
-      { q: '%bjork co%' },
-    );
-    expect(countQb.where).toHaveBeenCalledWith(
-      'artist.name_normalized LIKE :q',
-      { q: '%bjork co%' },
-    );
+    const [dataPredicate, dataParameters] = dataQb.where.mock.calls[0] as [
+      string,
+      Record<string, string>,
+    ];
+    const [countPredicate, countParameters] = countQb.where.mock.calls[0] as [
+      string,
+      Record<string, string>,
+    ];
+    expect(dataPredicate).toContain('artist.search_name_normalized LIKE');
+    expect(dataPredicate).toContain('artist.search_name_normalized IS NULL');
+    expect(dataParameters).toMatchObject({
+      musicSearch0: '%bjork co%',
+      musicSearchLegacy: '%bjork co%',
+    });
+    expect(countPredicate).toBe(dataPredicate);
+    expect(countParameters).toEqual(dataParameters);
     expect(dataQb.andWhere).toHaveBeenCalledWith(expect.any(Function), {
       genreId: 'genre-id',
     });

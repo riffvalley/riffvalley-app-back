@@ -6,6 +6,11 @@ import { Artist } from '../entities/artist.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { normalizeForSearch } from '../helpers/normalize-for-search';
 import {
+  compareNormalizedMusicNames,
+  normalizeMusicName,
+} from '../../shared/music-name/normalize-music-name';
+import { getMusicNameSearchKeys } from '../../shared/music-name/music-name-search';
+import {
   ArtistCatalogDiscSummary,
   ArtistCatalogNameMatch,
 } from './artist-catalog.types';
@@ -70,30 +75,32 @@ export class ArtistCatalogService {
     names: string[],
   ): Promise<ArtistCatalogNameMatch[]> {
     const searchKeys = [
+      ...new Set(names.flatMap(getMusicNameSearchKeys).filter(Boolean)),
+    ];
+    if (!searchKeys.length) return names.map(() => emptyNameMatch());
+    const legacySearchKeys = [
       ...new Set(
-        names
-          .map((name) => normalizeForSearch(name.normalize('NFKC')))
+        searchKeys
+          .map((key) => normalizeForSearch(key.normalize('NFKC')))
           .filter(Boolean),
       ),
     ];
-    if (!searchKeys.length) return names.map(() => emptyNameMatch());
 
     const candidates = await this.artistRepository
       .createQueryBuilder('artist')
       .select(['artist.id', 'artist.name'])
-      .where('artist.nameNormalized IN (:...searchKeys)', { searchKeys })
+      .where(
+        '(artist.search_name_normalized IN (:...searchKeys) OR (artist.search_name_normalized IS NULL AND artist.nameNormalized IN (:...legacySearchKeys)))',
+        { searchKeys, legacySearchKeys },
+      )
       .getMany();
 
-    const candidatesByName = new Map<string, Artist[]>();
-    for (const candidate of candidates) {
-      const key = normalizeCatalogName(candidate.name);
-      const grouped = candidatesByName.get(key) ?? [];
-      grouped.push(candidate);
-      candidatesByName.set(key, grouped);
-    }
-
     const matchedArtists = names.map((name) => {
-      const matched = candidatesByName.get(normalizeCatalogName(name)) ?? [];
+      const key = normalizeMusicName(name);
+      if (!key) return null;
+      const matched = candidates.filter((candidate) =>
+        compareNormalizedMusicNames(name, candidate.name),
+      );
       return matched.length === 1 ? matched[0] : null;
     });
     const artistIds = [
@@ -153,10 +160,6 @@ export class ArtistCatalogService {
       };
     });
   }
-}
-
-function normalizeCatalogName(value: string): string {
-  return normalizeForSearch(value.normalize('NFKC'));
 }
 
 function emptyNameMatch(): ArtistCatalogNameMatch {

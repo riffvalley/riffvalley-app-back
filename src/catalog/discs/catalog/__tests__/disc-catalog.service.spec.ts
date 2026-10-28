@@ -543,16 +543,26 @@ describe('DiscCatalogService.findAll', () => {
     ).toHaveLength(1);
   });
 
-  it('uses the current ILIKE search expression and wildcard wrapping', async () => {
+  it('uses normalized contains patterns and escapes legacy LIKE metacharacters', async () => {
     const builders = await run({ query: 'Echo_%' });
-    const expected = {
-      condition:
-        '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-      parameters: { search: '%Echo_%%' },
-    };
-
-    expect(filtersFor(builders[0])).toContainEqual(expected);
-    expect(filtersFor(builders[1])).toContainEqual(expected);
+    for (const builder of builders) {
+      const filter = filtersFor(builder).find(({ condition }) =>
+        condition.includes('disc.search_name_normalized'),
+      );
+      expect(filter?.condition).toContain('artist.search_name_normalized');
+      expect(filter?.condition).toContain(
+        'disc.search_name_normalized IS NULL',
+      );
+      expect(filter?.condition).toContain(
+        'artist.search_name_normalized IS NULL',
+      );
+      expect(filter?.condition).toContain("ESCAPE '\\'");
+      expect(filter?.parameters).toMatchObject({
+        musicSearch0: '%echo%',
+        musicSearchLegacy0: '%Echo\\_\\%%',
+        musicSearchLegacy1: '%echo\\_\\%%',
+      });
+    }
   });
 
   it('filters by genre in both result and count queries', async () => {

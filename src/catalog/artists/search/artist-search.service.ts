@@ -9,6 +9,8 @@ import { Repository } from 'typeorm';
 import { Artist } from '../entities/artist.entity';
 import { Disc } from '../../discs/entities/disc.entity';
 import { normalizeForSearch } from '../helpers/normalize-for-search';
+import { buildMusicNamePartialPredicate } from '../../shared/music-name/music-name-search';
+import { normalizeMusicName } from '../../shared/music-name/normalize-music-name';
 import {
   ArtistDiscProjection,
   DiscRateProjectionRaw,
@@ -44,13 +46,20 @@ export class ArtistSearchService {
       throw new BadRequestException('Name parameter is required');
     }
 
-    const q = `%${normalizeForSearch(name)}%`;
+    const normalizedName = normalizeMusicName(name);
+    if (!normalizedName) return [];
+    const search = buildMusicNamePartialPredicate(
+      name,
+      'artist.search_name_normalized',
+      'artist.name_normalized',
+      normalizeForSearch(name),
+    );
 
     try {
       const artists = await this.artistRepository
         .createQueryBuilder('artist')
         .leftJoinAndSelect('artist.country', 'country')
-        .where('artist.name_normalized LIKE :q', { q })
+        .where(search.predicate, search.parameters)
         .orderBy('artist.name', 'ASC')
         .getMany();
 

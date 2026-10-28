@@ -215,3 +215,7 @@ Esta auditoría cierra MEDIA-1 documentalmente. MEDIA-2–MEDIA-8 permanecen pen
 - Esquema y evidencia estática: `src/catalog/artists/entities/artist.entity.ts`, `src/catalog/discs/entities/disc.entity.ts`, `src/migrations/1758355724537-SyncEntities.ts`, `src/migrations/1758424806274-AddStateToVersionItem.ts`.
 - Tests consultados: specs `__tests__` de los servicios anteriores; no ejecutados en esta tarea.
 - Documentación histórica cotejada: `roadmap/integrations/integrations.md`, `roadmap/integrations/spotify/`, `roadmap/catalog/catalog-discs-media-eligibility-audit.md`.
+
+## Actualización posterior — MEDIA-3b.4
+
+La recomendación de migrar readers de Catalog quedó implementada en MEDIA-3b.4 (2026-10-28): `ArtistSearchService`, `ArtistManagementService`, conteo de huérfanos de management, `ArtistCatalogService.findExactNameMatches`, `DiscCatalogService` y `DiscCalendarService` consultan las claves MEDIA-2. Las búsquedas parciales mantienen contains y escapan metacaracteres; exact Artist conserva la ambigüedad; las claves `NULL` usan legacy por fila. Se validó el SQL de TypeORM contra PostgreSQL 17 aislado con fixtures sintéticos. La evidencia, los lectores concretos y la limitación de rendimiento sin EXPLAIN representativo están en [music-search-sql-design.md](music-search-sql-design.md). Community, imports, Requests y reglas de duplicados siguen fuera de esta subtarea.

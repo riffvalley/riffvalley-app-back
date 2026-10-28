@@ -8,6 +8,7 @@ import { NationalRelease } from '../../../editorial/national-releases/entities/n
 import { RiffValleyPlaylistArtist } from '../../../editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
 import { RiffValleyPlaylist } from '../../../editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { ArtistOrphansService } from '../orphans/artist-orphans.service';
+import { buildMusicNamePartialPredicate } from '../../shared/music-name/music-name-search';
 import {
   ArtistDiscProjection,
   DiscRateProjectionRaw,
@@ -60,9 +61,13 @@ export class ArtistManagementService {
       .skip(offset);
 
     if (query) {
-      qb.where('artist.name_normalized LIKE :q', {
-        q: `%${normalizeForSearch(query)}%`,
-      });
+      const search = buildMusicNamePartialPredicate(
+        query,
+        'artist.search_name_normalized',
+        'artist.name_normalized',
+        normalizeForSearch(query),
+      );
+      qb.where(search.predicate, search.parameters);
     }
 
     if (genreId) {
@@ -79,9 +84,13 @@ export class ArtistManagementService {
 
     const countQb = this.artistRepository.createQueryBuilder('artist');
     if (query) {
-      countQb.where('artist.name_normalized LIKE :q', {
-        q: `%${normalizeForSearch(query)}%`,
-      });
+      const search = buildMusicNamePartialPredicate(
+        query,
+        'artist.search_name_normalized',
+        'artist.name_normalized',
+        normalizeForSearch(query),
+      );
+      countQb.where(search.predicate, search.parameters);
     }
     if (genreId) {
       countQb.andWhere(

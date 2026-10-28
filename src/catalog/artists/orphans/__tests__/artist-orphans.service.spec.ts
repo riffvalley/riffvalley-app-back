@@ -51,8 +51,15 @@ describe('ArtistOrphansService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith(
       'NOT EXISTS (SELECT 1 FROM riff_valley_playlist_artists spa WHERE spa.artist_id = artist.id)',
     );
-    expect(qb.andWhere).toHaveBeenCalledWith('artist.name_normalized LIKE :q', {
-      q: '%bjork co%',
+    const [searchPredicate, searchParameters] = qb.andWhere.mock.calls.find(
+      ([sql]) =>
+        typeof sql === 'string' && sql.includes('search_name_normalized'),
+    ) as [string, Record<string, string>];
+    expect(searchPredicate).toContain('artist.search_name_normalized LIKE');
+    expect(searchPredicate).toContain('artist.search_name_normalized IS NULL');
+    expect(searchParameters).toMatchObject({
+      musicSearch0: '%bjork co%',
+      musicSearchLegacy: '%bjork co%',
     });
     expect(qb.andWhere).toHaveBeenCalledWith(
       'artist.needsReview = :needsReview',

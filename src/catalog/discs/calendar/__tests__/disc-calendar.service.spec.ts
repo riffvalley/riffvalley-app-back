@@ -50,12 +50,6 @@ describe('DiscCalendarService authenticated calendar query', () => {
 
   it.each([
     [
-      'query',
-      { query: 'needle' },
-      '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-      { search: '%needle%' },
-    ],
-    [
       'genre',
       { genre: 'genre-id' },
       'disc.genreId = :genre',
@@ -96,6 +90,24 @@ describe('DiscCalendarService authenticated calendar query', () => {
     expect(queryCalls).toHaveLength(1);
   });
 
+  it('searches normalized title and artist keys with a NULL-only legacy fallback', async () => {
+    await runCalendarQuery({ query: 'needle' });
+
+    expect(queryCalls).toHaveLength(1);
+    expect(queryCalls[0].sql).toContain('disc.search_name_normalized LIKE');
+    expect(queryCalls[0].sql).toContain('artist.search_name_normalized LIKE');
+    expect(queryCalls[0].sql).toContain('disc.search_name_normalized IS NULL');
+    expect(queryCalls[0].sql).toContain(
+      'artist.search_name_normalized IS NULL',
+    );
+    expect(queryCalls[0].sql).toContain("ESCAPE '\\'");
+    expect(queryCalls[0].parameters).toMatchObject({
+      musicSearch0: '%needle%',
+      musicSearchLegacy0: '%needle%',
+      musicSearchLegacy1: '%needle%',
+    });
+  });
+
   it('combines search, genre, country and inclusive date range predicates', async () => {
     const startDate = new Date('2024-01-01T00:00:00.000Z');
     const endDate = new Date('2024-01-31T23:59:59.999Z');
@@ -106,11 +118,10 @@ describe('DiscCalendarService authenticated calendar query', () => {
       dateRange: [startDate, endDate],
     });
 
-    expect(queryCalls).toEqual([
-      {
-        sql: '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-        parameters: { search: '%needle%' },
-      },
+    expect(queryCalls).toHaveLength(4);
+    expect(queryCalls[0].sql).toContain('disc.search_name_normalized LIKE');
+    expect(queryCalls[0].sql).toContain('artist.search_name_normalized LIKE');
+    expect(queryCalls.slice(1)).toEqual([
       { sql: 'disc.genreId = :genre', parameters: { genre: 'genre-id' } },
       {
         sql: 'country.name = :countryFilter',

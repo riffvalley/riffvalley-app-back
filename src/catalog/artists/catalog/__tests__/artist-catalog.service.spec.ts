@@ -138,13 +138,62 @@ describe('ArtistCatalogService', () => {
     ]);
     expect(artistRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
     expect(queryBuilder.where).toHaveBeenCalledWith(
-      'artist.nameNormalized IN (:...searchKeys)',
-      { searchKeys: ['thornhill', 'unknown'] },
+      '(artist.search_name_normalized IN (:...searchKeys) OR (artist.search_name_normalized IS NULL AND artist.nameNormalized IN (:...legacySearchKeys)))',
+      {
+        searchKeys: [
+          'thornhill',
+          'the thornhill',
+          'a thornhill',
+          'an thornhill',
+          'unknown',
+          'the unknown',
+          'a unknown',
+          'an unknown',
+        ],
+        legacySearchKeys: [
+          'thornhill',
+          'the thornhill',
+          'a thornhill',
+          'an thornhill',
+          'unknown',
+          'the unknown',
+          'a unknown',
+          'an unknown',
+        ],
+      },
     );
     expect(discRepository.query).toHaveBeenCalledTimes(1);
     expect(discRepository.query.mock.calls[0][0]).toContain(
       'disc."releaseDate" DESC NULLS LAST',
     );
+  });
+
+  it.each([
+    ['MOL', 'MØL'],
+    ['Solstafir', 'Sólstafir'],
+    ['Motorhead', 'Motörhead'],
+    ['Bjork', 'Björk'],
+    ['Dodsrit', 'Dödsrit'],
+    ['Secrets of Pandora', 'The Secrets of Pandora'],
+  ])('uses normalized exact candidates for %s → %s', async (query, name) => {
+    const candidate = Object.assign(new Artist(), {
+      id: 'artist-1',
+      name,
+    });
+    artistRepository.createQueryBuilder.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([candidate]),
+    });
+    discRepository.query.mockResolvedValue([]);
+
+    await expect(service.findExactNameMatches([query])).resolves.toEqual([
+      {
+        catalogArtistId: 'artist-1',
+        catalogDiscCount: 0,
+        catalogDiscs: [],
+      },
+    ]);
   });
 
   it('does not link ambiguous names or fuzzy matches', async () => {

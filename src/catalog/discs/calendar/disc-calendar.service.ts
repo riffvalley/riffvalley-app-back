@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { buildMusicNameMultiColumnPartialPredicate } from '../../shared/music-name/music-name-search';
+import { normalizeForSearch } from '../../artists/helpers/normalize-for-search';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from 'src/identity/auth/entities/user.entity';
@@ -138,11 +140,21 @@ export class DiscCalendarService {
       );
 
     if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-        { search },
-      );
+      const search = buildMusicNameMultiColumnPartialPredicate(query, [
+        {
+          normalizedColumn: 'disc.search_name_normalized',
+          legacyColumn: 'disc.name',
+          legacyValue: query,
+          legacyOperator: 'ILIKE',
+        },
+        {
+          normalizedColumn: 'artist.search_name_normalized',
+          legacyColumn: 'artist.name_normalized',
+          legacyValue: normalizeForSearch(query),
+          legacyOperator: 'ILIKE',
+        },
+      ]);
+      queryBuilder.andWhere(search.predicate, search.parameters);
     }
 
     if (genre) {

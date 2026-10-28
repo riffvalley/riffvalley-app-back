@@ -18,6 +18,8 @@ import {
   DiscListSort,
 } from '../list/dto/disc-list-contracts.dto';
 import { DiscListOptionsResponse } from '../list/disc-list.types';
+import { buildMusicNameMultiColumnPartialPredicate } from '../../shared/music-name/music-name-search';
+import { normalizeForSearch } from '../../artists/helpers/normalize-for-search';
 
 const FIND_ALL_ORDER_FIELDS: Record<string, string> = {
   'disc.releaseDate': 'disc.releaseDate',
@@ -636,11 +638,21 @@ export class DiscCatalogService {
     }
 
     if (query) {
-      const search = `%${query}%`;
-      queryBuilder.andWhere(
-        '(disc.name ILIKE :search OR artist.name_normalized ILIKE :search)',
-        { search },
-      );
+      const search = buildMusicNameMultiColumnPartialPredicate(query, [
+        {
+          normalizedColumn: 'disc.search_name_normalized',
+          legacyColumn: 'disc.name',
+          legacyValue: query,
+          legacyOperator: 'ILIKE',
+        },
+        {
+          normalizedColumn: 'artist.search_name_normalized',
+          legacyColumn: 'artist.name_normalized',
+          legacyValue: normalizeForSearch(query),
+          legacyOperator: 'ILIKE',
+        },
+      ]);
+      queryBuilder.andWhere(search.predicate, search.parameters);
     }
 
     if (startDate && endDate) {
