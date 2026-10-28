@@ -20,6 +20,7 @@ import { Pending } from '../entities/pending.entity';
 import { PendingsController } from '../pendings.controller';
 import { PendingsModule } from '../pendings.module';
 import { PendingsService } from '../pendings.service';
+import { PendingsDiscListReader } from '../disc-list/pendings-disc-list.reader';
 
 describe('PendingsModule characterization', () => {
   let moduleRef: TestingModule;
@@ -47,6 +48,7 @@ describe('PendingsModule characterization', () => {
 
   it('resolves the controller, service and repositories through PendingsModule/AuthorizationModule', () => {
     expect(moduleRef.get(PendingsController)).toBeDefined();
+    expect(moduleRef.get(PendingsDiscListReader)).toBeDefined();
     const service = moduleRef.get(PendingsService);
     expect(service).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Pending))).toBe(pendingRepository);

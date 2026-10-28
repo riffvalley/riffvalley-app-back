@@ -12,6 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Pending } from './entities/pending.entity';
 import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
+import { DiscListReaderSort } from '../common/types/disc-list-reader-criteria';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 
@@ -48,7 +49,11 @@ export class PendingsService {
     }
   }
 
-  async findAllByUser(paginationDto: CommunityListQueryDto, user: User) {
+  async findAllByUser(
+    paginationDto: CommunityListQueryDto,
+    user: User,
+    options?: { stableTieBreak: boolean; sort?: DiscListReaderSort },
+  ) {
     const {
       limit = 10,
       offset = 0,
@@ -151,11 +156,21 @@ export class PendingsService {
       }
     }
 
-    queryBuilder
-      .take(limit)
-      .skip(offset)
-      .orderBy('disc.releaseDate', 'DESC')
-      .addOrderBy('artist.name', 'ASC');
+    queryBuilder.take(limit).skip(offset);
+
+    if (options?.stableTieBreak) {
+      const order = this.getDiscListOrder(options.sort);
+      queryBuilder.orderBy(order.field, order.direction);
+      if (order.field !== 'disc.releaseDate') {
+        queryBuilder.addOrderBy('disc.releaseDate', 'DESC');
+      }
+      queryBuilder.addOrderBy('artist.name', 'ASC');
+      queryBuilder.addOrderBy('pending.id', 'ASC');
+    } else {
+      queryBuilder
+        .orderBy('disc.releaseDate', 'DESC')
+        .addOrderBy('artist.name', 'ASC');
+    }
 
     const { entities: pendings, raw } = await queryBuilder.getRawAndEntities();
 
@@ -242,6 +257,38 @@ export class PendingsService {
       limit,
       data: processedPendings,
     };
+  }
+
+  private getDiscListOrder(sort?: DiscListReaderSort): {
+    field: string;
+    direction: 'ASC' | 'DESC';
+  } {
+    switch (sort) {
+      case 'releaseDateAsc':
+        return { field: 'disc.releaseDate', direction: 'ASC' };
+      case 'createdAtAsc':
+        return { field: 'pending.createdAt', direction: 'ASC' };
+      case 'createdAtDesc':
+        return { field: 'pending.createdAt', direction: 'DESC' };
+      case 'myRateAsc':
+        return { field: 'rate.rate', direction: 'ASC' };
+      case 'myRateDesc':
+        return { field: 'rate.rate', direction: 'DESC' };
+      case 'myCoverAsc':
+        return { field: 'rate.cover', direction: 'ASC' };
+      case 'myCoverDesc':
+        return { field: 'rate.cover', direction: 'DESC' };
+      case 'averageRateAsc':
+        return { field: 'averageRate', direction: 'ASC' };
+      case 'averageRateDesc':
+        return { field: 'averageRate', direction: 'DESC' };
+      case 'averageCoverAsc':
+        return { field: 'averageCover', direction: 'ASC' };
+      case 'averageCoverDesc':
+        return { field: 'averageCover', direction: 'DESC' };
+      default:
+        return { field: 'disc.releaseDate', direction: 'DESC' };
+    }
   }
 
   async findOne(id: string, user: User): Promise<Pending> {

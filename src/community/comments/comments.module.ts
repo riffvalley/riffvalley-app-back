@@ -5,10 +5,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Comment } from './entities/comment.entity';
 import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { CommentsDiscListReader } from './disc-list/comments-disc-list.reader';
 
 @Module({
   controllers: [CommentsController], // Controladores que gestionan las rutas
-  providers: [CommentsService], // Servicios que contienen la lógica de negocio
+  providers: [CommentsService, CommentsDiscListReader], // Servicios que contienen la lógica de negocio
   imports: [TypeOrmModule.forFeature([Comment, Disc]), AuthorizationModule], // Registro de la entidad Comment en TypeORM
+  exports: [CommentsDiscListReader],
 })
 export class CommentsModule {}

@@ -18,6 +18,7 @@ import { Favorite } from '../entities/favorite.entity';
 import { FavoritesController } from '../favorites.controller';
 import { FavoritesModule } from '../favorites.module';
 import { FavoritesService } from '../favorites.service';
+import { FavoritesDiscListReader } from '../disc-list/favorites-disc-list.reader';
 
 describe('FavoritesModule characterization', () => {
   let moduleRef: TestingModule;
@@ -45,6 +46,7 @@ describe('FavoritesModule characterization', () => {
 
   it('resolves the controller, service and repositories through FavoritesModule/AuthorizationModule', () => {
     expect(moduleRef.get(FavoritesController)).toBeDefined();
+    expect(moduleRef.get(FavoritesDiscListReader)).toBeDefined();
     const service = moduleRef.get(FavoritesService);
     expect(service).toBeDefined();
     expect(moduleRef.get(getRepositoryToken(Favorite))).toBe(

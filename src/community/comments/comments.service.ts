@@ -13,6 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Comment } from './entities/comment.entity';
 import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
+import { DiscListReaderSort } from '../common/types/disc-list-reader-criteria';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { CommentResponseDto } from './dto/comment-response.dto';
@@ -68,7 +69,15 @@ export class CommentsService {
     }
   }
 
-  async findAllByUser(paginationDto: CommunityListQueryDto, user: User) {
+  async findAllByUser(
+    paginationDto: CommunityListQueryDto,
+    user: User,
+    options?: {
+      stableTieBreak: boolean;
+      includeCountry: boolean;
+      sort?: DiscListReaderSort;
+    },
+  ) {
     const {
       limit = 10,
       offset = 0,
@@ -92,6 +101,10 @@ export class CommentsService {
       .leftJoinAndSelect('disc.artist', 'artist')
       .leftJoinAndSelect('disc.genre', 'genre')
       .where('comment.userId = :userId', { userId });
+
+    if (options?.includeCountry) {
+      queryBuilder.leftJoinAndSelect('artist.country', 'country');
+    }
 
     const totalItemsQueryBuilder = this.commentRepository
       .createQueryBuilder('comment')
@@ -143,11 +156,21 @@ export class CommentsService {
       });
     }
 
-    queryBuilder
-      .take(limit)
-      .skip(offset)
-      .orderBy('disc.releaseDate', 'DESC')
-      .addOrderBy('artist.name', 'ASC');
+    queryBuilder.take(limit).skip(offset);
+
+    if (options?.stableTieBreak) {
+      const order = this.getDiscListOrder(options.sort);
+      queryBuilder.orderBy(order.field, order.direction);
+      if (order.field !== 'disc.releaseDate') {
+        queryBuilder.addOrderBy('disc.releaseDate', 'DESC');
+      }
+      queryBuilder.addOrderBy('artist.name', 'ASC');
+      queryBuilder.addOrderBy('comment.id', 'ASC');
+    } else {
+      queryBuilder
+        .orderBy('disc.releaseDate', 'DESC')
+        .addOrderBy('artist.name', 'ASC');
+    }
 
     const comments = await queryBuilder.getMany();
     const totalItems = await totalItemsQueryBuilder.getCount();
@@ -161,6 +184,22 @@ export class CommentsService {
       limit,
       data: comments,
     };
+  }
+
+  private getDiscListOrder(sort?: DiscListReaderSort): {
+    field: string;
+    direction: 'ASC' | 'DESC';
+  } {
+    switch (sort) {
+      case 'releaseDateAsc':
+        return { field: 'disc.releaseDate', direction: 'ASC' };
+      case 'createdAtAsc':
+        return { field: 'comment.createdAt', direction: 'ASC' };
+      case 'createdAtDesc':
+        return { field: 'comment.createdAt', direction: 'DESC' };
+      default:
+        return { field: 'disc.releaseDate', direction: 'DESC' };
+    }
   }
 
   async findOne(id: string, user: User): Promise<Comment> {

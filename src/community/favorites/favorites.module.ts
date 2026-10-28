@@ -5,10 +5,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Favorite } from './entities/favorite.entity';
 import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { FavoritesDiscListReader } from './disc-list/favorites-disc-list.reader';
 
 @Module({
   controllers: [FavoritesController], // Controladores que gestionan las rutas
-  providers: [FavoritesService], // Servicios que contienen la lógica de negocio
+  providers: [FavoritesService, FavoritesDiscListReader], // Servicios que contienen la lógica de negocio
   imports: [TypeOrmModule.forFeature([Favorite, Disc]), AuthorizationModule], // Registro de la entidad Rate en TypeORM
+  exports: [FavoritesDiscListReader],
 })
 export class FavoritesModule {}

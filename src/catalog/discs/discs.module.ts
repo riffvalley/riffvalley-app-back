@@ -16,6 +16,10 @@ import { DiscSpotifyService } from './spotify/disc-spotify.service';
 import { DiscTopService } from './top/disc-top.service';
 import { DiscLinkMaintenanceService } from './maintenance/disc-link-maintenance.service';
 import { RatesModule } from 'src/community/rates/rates.module';
+import { CommentsModule } from 'src/community/comments/comments.module';
+import { FavoritesModule } from 'src/community/favorites/favorites.module';
+import { PendingsModule } from 'src/community/pendings/pendings.module';
+import { DiscListService } from './list/disc-list.service';
 
 @Module({
   controllers: [DiscsController],
@@ -28,12 +32,16 @@ import { RatesModule } from 'src/community/rates/rates.module';
     DiscSpotifyService,
     DiscTopService,
     DiscLinkMaintenanceService,
+    DiscListService,
   ],
   imports: [
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
     AuthorizationModule,
     SpotifyIntegrationModule,
     RatesModule,
+    CommentsModule,
+    FavoritesModule,
+    PendingsModule,
   ],
   exports: [DiscsService, DiscLinkMaintenanceService, DiscCatalogService],
 })

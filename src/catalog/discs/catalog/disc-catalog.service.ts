@@ -11,6 +11,11 @@ import { mapCatalogDisc } from './helpers/map-catalog-disc';
 import { mapOptionRows } from './helpers/map-option-rows';
 import { restoreRandomDiscOrder } from './helpers/restore-random-disc-order';
 import { RatesRandomSelectionService } from 'src/community/rates/random-selection/rates-random-selection.service';
+import {
+  DiscListEligibility,
+  DiscListQueryDto,
+  DiscListSort,
+} from '../list/dto/disc-list-contracts.dto';
 
 const FIND_ALL_ORDER_FIELDS: Record<string, string> = {
   'disc.releaseDate': 'disc.releaseDate',
@@ -267,7 +272,68 @@ export class DiscCatalogService {
     }
   }
 
-  async findAll(paginationDto: DiscsListQueryDto, user: User) {
+  findDiscList(paginationDto: DiscListQueryDto, user: User) {
+    const legacyQuery = Object.assign(new DiscsListQueryDto(), {
+      limit: paginationDto.limit,
+      offset: paginationDto.offset,
+      query: paginationDto.query,
+      dateRange: paginationDto.dateRange,
+      countryId: paginationDto.countryId,
+      genre: paginationDto.genreId,
+      voted:
+        paginationDto.eligibility === DiscListEligibility.ALL
+          ? undefined
+          : paginationDto.eligibility
+            ? false
+            : undefined,
+      votedType:
+        paginationDto.eligibility === DiscListEligibility.UNVOTED_COVER
+          ? 'cover'
+          : 'rate',
+      orderBy: this.getDiscListOrderBy(
+        paginationDto.sort,
+        paginationDto.eligibility,
+      ),
+    });
+
+    return this.findAll(legacyQuery, user, { stableTieBreak: true });
+  }
+
+  private getDiscListOrderBy(
+    sort: DiscListSort | undefined,
+    eligibility: DiscListEligibility | undefined,
+  ): string | undefined {
+    if (
+      eligibility === DiscListEligibility.UNVOTED_RATE ||
+      eligibility === DiscListEligibility.UNVOTED_COVER
+    ) {
+      return undefined;
+    }
+
+    switch (sort) {
+      case DiscListSort.RELEASE_DATE_ASC:
+        return 'disc.releaseDate:ASC,artist.name:ASC';
+      case DiscListSort.ARTIST_NAME_ASC:
+        return 'artist.name:ASC,disc.releaseDate:DESC';
+      case DiscListSort.DISC_NAME_ASC:
+        return 'disc.name:ASC,disc.releaseDate:DESC';
+      case DiscListSort.AVERAGE_RATE_ASC:
+        return 'disc.averageRate:ASC,disc.releaseDate:DESC';
+      case DiscListSort.AVERAGE_RATE_DESC:
+        return 'disc.averageRate:DESC,disc.releaseDate:DESC';
+      case DiscListSort.RELEASE_DATE_DESC:
+      case undefined:
+        return undefined;
+      default:
+        return undefined;
+    }
+  }
+
+  async findAll(
+    paginationDto: DiscsListQueryDto,
+    user: User,
+    options?: { stableTieBreak: boolean },
+  ) {
     const {
       limit = 10,
       offset = 0,
@@ -402,6 +468,10 @@ export class DiscCatalogService {
       queryBuilder
         .orderBy('disc.releaseDate', 'DESC')
         .addOrderBy('artist.name', 'ASC');
+    }
+
+    if (options?.stableTieBreak) {
+      queryBuilder.addOrderBy('disc.id', 'ASC');
     }
 
     queryBuilder.take(limit).skip(offset);
