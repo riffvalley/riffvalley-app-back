@@ -1,4 +1,4 @@
-import { DiscHomeService } from '../disc-home.service';
+import { DiscTopService } from '../disc-top.service';
 import { TopStatsQueryDto } from 'src/catalog/discs/dto/top-stats-query.dto';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { HomeQueryRunner } from '../loaders/home-query-runner';
@@ -9,7 +9,7 @@ function makeService(responses: (sql: string) => Record<string, unknown>[]) {
   const query: jest.MockedFunction<HomeQueryRunner['query']> = jest.fn(
     async (sql: string) => responses(sql),
   );
-  const service = new DiscHomeService({ query });
+  const service = new DiscTopService({ query });
   return { service, query };
 }
 
@@ -27,7 +27,7 @@ function classifyQuery(sql: string) {
   throw new Error(`Unexpected Home SQL query: ${sql}`);
 }
 
-describe('findTopRatedOrFeaturedAndStats response', () => {
+describe('getTopDiscs response', () => {
   it('passes the D30 filters and binds to both Home queries with the existing order and types', async () => {
     const today = new Date('2026-10-04T10:00:00.000Z');
     jest.useFakeTimers().setSystemTime(today);
@@ -41,10 +41,10 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
         return [];
       },
     );
-    const service = new DiscHomeService({ query });
+    const service = new DiscTopService({ query });
 
     try {
-      await service.findTopRatedOrFeaturedAndStats(
+      await service.getTopDiscs(
         Object.assign(new TopStatsQueryDto(), {
           dateRange: [new Date('2020-01-01'), new Date('2024-12-31')],
           country: '123e4567-e89b-12d3-a456-426614174000',
@@ -179,7 +179,7 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
       (sql) => rawResults[classifyQuery(sql)],
     );
 
-    const response = await service.findTopRatedOrFeaturedAndStats(
+    const response = await service.getTopDiscs(
       new TopStatsQueryDto(),
       makeUser(),
     );
@@ -260,6 +260,13 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
     expect(discQuery).toContain(
       '(SELECT COUNT(c.id) FROM comment c WHERE c."discId" = d.id) AS "commentCount"',
     );
+    expect(discQuery).toContain('d."pinned" = true OR EXISTS');
+    expect(discQuery).toContain('eligible_rate.rate IS NOT NULL');
+    expect(discQuery).toContain('ORDER BY "weightedScore" DESC, d.id ASC');
+    expect(discQuery).toContain('LIMIT 20');
+    expect(discQuery).toContain(
+      '(COALESCE(AVG(r.rate), 0) * COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END))',
+    );
     expect(discQuery).not.toMatch(/JOIN\s+comment\b/i);
   });
 
@@ -267,10 +274,7 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
     const { service } = makeService(() => []);
 
     await expect(
-      service.findTopRatedOrFeaturedAndStats(
-        new TopStatsQueryDto(),
-        makeUser(),
-      ),
+      service.getTopDiscs(new TopStatsQueryDto(), makeUser()),
     ).resolves.toEqual({
       discs: [],
       totalDiscs: 0,
@@ -317,7 +321,7 @@ describe('findTopRatedOrFeaturedAndStats response', () => {
       }
     });
 
-    const response = await service.findTopRatedOrFeaturedAndStats(
+    const response = await service.getTopDiscs(
       new TopStatsQueryDto(),
       makeUser(),
     );

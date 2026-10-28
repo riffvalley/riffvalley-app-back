@@ -16,7 +16,9 @@ import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
 import type { WeeklyCalendarGroup } from './calendar/helpers/map-weekly-discs-to-groups';
 import { DiscWriteService } from './write/disc-write.service';
 import { DiscSpotifyService } from './spotify/disc-spotify.service';
-import { DiscHomeService, DiscHomeResult } from './home/disc-home.service';
+import { DiscTopService, DiscTopResult } from './top/disc-top.service';
+import { TopDiscOptionsQueryDto } from './dto/top-disc-options-query.dto';
+import { DiscTopOptionsResult } from './top/types/disc-top-options';
 
 @Injectable()
 export class DiscsService {
@@ -27,7 +29,7 @@ export class DiscsService {
     private readonly discEnrichmentService: DiscEnrichmentService,
     private readonly discWriteService: DiscWriteService,
     private readonly discSpotifyService: DiscSpotifyService,
-    private readonly discHomeService: DiscHomeService,
+    private readonly discTopService: DiscTopService,
   ) {}
 
   async getSpotifyTracks(id: string) {
@@ -95,16 +97,18 @@ export class DiscsService {
     return this.discWriteService.remove(id);
   }
 
-  findTopRatedOrFeaturedAndStats(
+  getTopDiscs(
     query: TopStatsQueryDto,
     user: User,
     genreId?: string,
-  ): Promise<DiscHomeResult> {
-    return this.discHomeService.findTopRatedOrFeaturedAndStats(
-      query,
-      user,
-      genreId,
-    );
+  ): Promise<DiscTopResult> {
+    return this.discTopService.getTopDiscs(query, user, genreId);
+  }
+
+  getTopDiscOptions(
+    query: TopDiscOptionsQueryDto,
+  ): Promise<DiscTopOptionsResult> {
+    return this.discTopService.getTopDiscOptions(query);
   }
 
   findWeekly(

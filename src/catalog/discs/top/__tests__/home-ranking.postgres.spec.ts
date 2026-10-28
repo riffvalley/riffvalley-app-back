@@ -5,7 +5,8 @@ import {
 import { HomeQueryRunner } from '../loaders/home-query-runner';
 import { User } from '../../../../identity/auth/entities/user.entity';
 import { TopStatsQueryDto } from 'src/catalog/discs/dto/top-stats-query.dto';
-import { DiscHomeService } from '../disc-home.service';
+import { DiscTopService } from '../disc-top.service';
+import { TopDiscOptionsQueryDto } from '../../dto/top-disc-options-query.dto';
 
 const describePostgres =
   process.env.D32_POSTGRES_TEST === '1' ? describe : describe.skip;
@@ -164,6 +165,19 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     );
   }
 
+  async function getOptions(query: TopDiscOptionsQueryDto) {
+    const repository: HomeQueryRunner = {
+      query: async (sql, params = []) => {
+        const result = await getClient().query(
+          sql,
+          getHomePostgresValues(params),
+        );
+        return result.rows;
+      },
+    };
+    return new DiscTopService(repository).getTopDiscOptions(query);
+  }
+
   async function runHomeDiscs(
     today: string,
     dateRange: [string, string] = ['2020-01-01', '2025-12-31'],
@@ -200,10 +214,10 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
         return [];
       },
     };
-    const service = new DiscHomeService(repository);
+    const service = new DiscTopService(repository);
 
     try {
-      const result = await service.findTopRatedOrFeaturedAndStats(
+      const result = await service.getTopDiscs(
         Object.assign(new TopStatsQueryDto(), {
           dateRange: [new Date(dateRange[0]), new Date(dateRange[1])],
           country: 'Fixtureland',
@@ -262,9 +276,9 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     expect(main.sql).toContain('LEFT JOIN country c ON a."countryId" = c.id');
     expect(main.sql).toContain('LEFT JOIN genre g ON d."genreId" = g.id');
     expect(main.sql).toContain('LEFT JOIN rate r ON d.id = r."discId"');
-    expect(main.sql).toContain(
-      'HAVING COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) > 0 OR d."pinned" = true',
-    );
+    expect(main.sql).toContain('d."pinned" = true OR EXISTS');
+    expect(main.sql).toContain('eligible_rate.rate IS NOT NULL');
+    expect(main.sql).not.toContain('HAVING');
     expect(main.sql).toContain(
       'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 20;',
     );
@@ -358,5 +372,234 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
 
     const ids = main.rows!.map(({ id }) => id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('returns cross-filtered options for every eligible disc, including zero-rate and pinned discs', async () => {
+    await seedBaseFixtures();
+    jest.useFakeTimers().setSystemTime(new Date('2024-12-31T12:00:00.000Z'));
+
+    try {
+      const zeroCountryId = '00000000-0000-4000-8000-000000000008';
+      const unratedCountryId = '00000000-0000-4000-8000-000000000009';
+      const zeroGenreId = '00000000-0000-4000-8000-000000000010';
+      const unratedGenreId = '00000000-0000-4000-8000-000000000011';
+      const zeroArtistId = '00000000-0000-4000-8000-000000000012';
+      const unratedArtistId = '00000000-0000-4000-8000-000000000013';
+      await getClient().query(
+        `INSERT INTO country (id, name, "isoCode") VALUES
+          ($1, 'Zero Country', 'Z0'), ($2, 'Unrated Country', 'U0')`,
+        [zeroCountryId, unratedCountryId],
+      );
+      await getClient().query(
+        `INSERT INTO genre (id, name, color) VALUES
+          ($1, 'Zero Genre', '#000'), ($2, 'Unrated Genre', '#fff')`,
+        [zeroGenreId, unratedGenreId],
+      );
+      await getClient().query(
+        `INSERT INTO artist (id, name, "countryId") VALUES
+          ($1, 'Zero Rate Artist', $2), ($3, 'Unrated Artist', $4)`,
+        [zeroArtistId, zeroCountryId, unratedArtistId, unratedCountryId],
+      );
+      await getClient().query(
+        `UPDATE disc SET "artistId" = $2, "genreId" = $3 WHERE id = $1`,
+        [DISC_IDS[2], zeroArtistId, zeroGenreId],
+      );
+      await getClient().query(
+        `UPDATE disc SET "artistId" = $2, "genreId" = $3 WHERE id = $1`,
+        [DISC_IDS[3], unratedArtistId, unratedGenreId],
+      );
+      await getClient().query(
+        `INSERT INTO rate (id, "discId", "userId", rate, cover)
+         VALUES ('00000000-0000-4000-8000-000000000108', $1,
+           '00000000-0000-4000-8000-000000000118', 0, NULL)`,
+        [DISC_IDS[2]],
+      );
+
+      const dateRange: [Date, Date] = [
+        new Date('2020-01-01'),
+        new Date('2025-12-31'),
+      ];
+      const allOptions = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), { dateRange }),
+      );
+      expect(allOptions.countries.map(({ id }) => id)).toEqual([
+        COUNTRY_ID,
+        OTHER_COUNTRY_ID,
+        zeroCountryId,
+      ]);
+      expect(allOptions.genres.map(({ id }) => id)).toEqual([
+        GENRE_ID,
+        OTHER_GENRE_ID,
+        zeroGenreId,
+      ]);
+      expect(allOptions.countries.map(({ name }) => name)).not.toContain(
+        'Unrated Country',
+      );
+      expect(allOptions.genres.map(({ name }) => name)).not.toContain(
+        'Unrated Genre',
+      );
+
+      const byCountry = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange,
+          countryId: OTHER_COUNTRY_ID,
+        }),
+      );
+      expect(byCountry.countries.map(({ id }) => id)).toEqual([
+        COUNTRY_ID,
+        OTHER_COUNTRY_ID,
+        zeroCountryId,
+      ]);
+      expect(byCountry.genres.map(({ id }) => id)).toEqual([GENRE_ID]);
+
+      const matchingRanking = await runHomeDiscs('2024-12-31', [
+        '2020-01-01',
+        '2025-12-31',
+      ]);
+      const matchingOptions = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange,
+          country: 'Fixtureland',
+          genreId: GENRE_ID,
+        }),
+      );
+      expect(matchingRanking.main.rows?.length).toBeGreaterThan(0);
+      expect(
+        matchingRanking.main.rows?.every((row) =>
+          matchingOptions.countries.some(
+            (option) => option.id === row.countryId,
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        matchingRanking.main.rows?.every((row) =>
+          matchingOptions.genres.some(
+            (option) => option.name === row.genreName,
+          ),
+        ),
+      ).toBe(true);
+
+      const byGenre = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange,
+          genreId: OTHER_GENRE_ID,
+        }),
+      );
+      expect(byGenre.countries.map(({ id }) => id)).toEqual([COUNTRY_ID]);
+      expect(byGenre.genres.map(({ id }) => id)).toEqual([
+        GENRE_ID,
+        OTHER_GENRE_ID,
+        zeroGenreId,
+      ]);
+
+      const unknownCountry = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange,
+          countryId: '00000000-0000-4000-8000-000000000099',
+        }),
+      );
+      expect(unknownCountry.countries).toHaveLength(3);
+      expect(unknownCountry.genres).toEqual([]);
+
+      const unknownGenre = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange,
+          genreId: '00000000-0000-4000-8000-000000000098',
+        }),
+      );
+      expect(unknownGenre.countries).toEqual([]);
+      expect(unknownGenre.genres).toHaveLength(3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('caps future dates, keeps inclusive bounds, and returns empty options for future or inverted ranges', async () => {
+    await seedBaseFixtures();
+    jest.useFakeTimers().setSystemTime(new Date('2024-12-31T12:00:00.000Z'));
+
+    try {
+      const boundaryCountryId = '00000000-0000-4000-8000-000000000014';
+      const futureCountryId = '00000000-0000-4000-8000-000000000015';
+      const boundaryGenreId = '00000000-0000-4000-8000-000000000016';
+      const futureGenreId = '00000000-0000-4000-8000-000000000017';
+      const boundaryArtistId = '00000000-0000-4000-8000-000000000018';
+      const futureArtistId = '00000000-0000-4000-8000-000000000019';
+      await getClient().query(
+        `INSERT INTO country (id, name, "isoCode") VALUES
+          ($1, 'Boundaryland', 'BD'), ($2, 'Futureland', 'FU')`,
+        [boundaryCountryId, futureCountryId],
+      );
+      await getClient().query(
+        `INSERT INTO genre (id, name, color) VALUES
+          ($1, 'Boundary Genre', '#bbb'), ($2, 'Future Genre', '#fff')`,
+        [boundaryGenreId, futureGenreId],
+      );
+      await getClient().query(
+        `INSERT INTO artist (id, name, "countryId") VALUES
+          ($1, 'Boundary Artist', $2), ($3, 'Future Artist', $4)`,
+        [boundaryArtistId, boundaryCountryId, futureArtistId, futureCountryId],
+      );
+      await getClient().query(
+        `UPDATE disc SET "artistId" = $2, "genreId" = $3 WHERE id = $1`,
+        [DISC_IDS[8], boundaryArtistId, boundaryGenreId],
+      );
+      await getClient().query(
+        `UPDATE disc SET "artistId" = $2, "genreId" = $3 WHERE id = $1`,
+        [DISC_IDS[5], futureArtistId, futureGenreId],
+      );
+
+      const exactBoundary = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange: [new Date('2024-12-31'), new Date('2024-12-31')],
+        }),
+      );
+      expect(exactBoundary.countries.map(({ id }) => id)).toEqual([
+        boundaryCountryId,
+      ]);
+      expect(exactBoundary.genres.map(({ id }) => id)).toEqual([
+        boundaryGenreId,
+      ]);
+
+      const inclusive = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange: [new Date('2020-01-01'), new Date('2025-12-31')],
+        }),
+      );
+      expect(inclusive.countries.map(({ id }) => id)).toContain(COUNTRY_ID);
+      expect(inclusive.countries.map(({ id }) => id)).toContain(
+        OTHER_COUNTRY_ID,
+      );
+      expect(inclusive.countries.map(({ id }) => id)).toContain(
+        boundaryCountryId,
+      );
+      expect(inclusive.countries.map(({ id }) => id)).not.toContain(
+        futureCountryId,
+      );
+
+      const allPeriod = await getOptions(new TopDiscOptionsQueryDto());
+      expect(allPeriod.countries.map(({ id }) => id)).toContain(
+        boundaryCountryId,
+      );
+      expect(allPeriod.countries.map(({ id }) => id)).not.toContain(
+        futureCountryId,
+      );
+
+      const futureStart = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange: [new Date('2025-01-01'), new Date('2025-12-31')],
+        }),
+      );
+      expect(futureStart).toEqual({ countries: [], genres: [] });
+
+      const inverted = await getOptions(
+        Object.assign(new TopDiscOptionsQueryDto(), {
+          dateRange: [new Date('2024-12-31'), new Date('2020-01-01')],
+        }),
+      );
+      expect(inverted).toEqual({ countries: [], genres: [] });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

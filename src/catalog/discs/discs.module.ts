@@ -13,7 +13,7 @@ import { DiscCalendarService } from './calendar/disc-calendar.service';
 import { DiscEnrichmentService } from './enrichment/disc-enrichment.service';
 import { DiscWriteService } from './write/disc-write.service';
 import { DiscSpotifyService } from './spotify/disc-spotify.service';
-import { DiscHomeService } from './home/disc-home.service';
+import { DiscTopService } from './top/disc-top.service';
 import { DiscLinkMaintenanceService } from './maintenance/disc-link-maintenance.service';
 import { RatesModule } from 'src/community/rates/rates.module';
 
@@ -26,7 +26,7 @@ import { RatesModule } from 'src/community/rates/rates.module';
     DiscEnrichmentService,
     DiscWriteService,
     DiscSpotifyService,
-    DiscHomeService,
+    DiscTopService,
     DiscLinkMaintenanceService,
   ],
   imports: [

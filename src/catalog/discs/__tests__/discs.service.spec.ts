@@ -4,11 +4,12 @@ import { User } from '../../../identity/auth/entities/user.entity';
 import { DiscsCalendarQueryDto } from '../dto/discs-calendar-query.dto';
 import { DiscsListQueryDto } from '../dto/discs-list-query.dto';
 import { TopStatsQueryDto } from '../dto/top-stats-query.dto';
+import { TopDiscOptionsQueryDto } from '../dto/top-disc-options-query.dto';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api';
 import { DiscCatalogService } from '../catalog/disc-catalog.service';
 import { DiscCalendarService } from '../calendar/disc-calendar.service';
 import { DiscEnrichmentService } from '../enrichment/disc-enrichment.service';
-import { DiscHomeService } from '../home/disc-home.service';
+import { DiscTopService } from '../top/disc-top.service';
 import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
 import { CreateDiscDto } from '../dto/create-discs.dto';
 import { OptionsQueryDto } from '../dto/options-query.dto';
@@ -57,10 +58,9 @@ type ServiceMocks = {
   discSpotifyService: {
     getSpotifyTracks: AsyncMethod<DiscSpotifyService['getSpotifyTracks']>;
   };
-  discHomeService: {
-    findTopRatedOrFeaturedAndStats: AsyncMethod<
-      DiscHomeService['findTopRatedOrFeaturedAndStats']
-    >;
+  discTopService: {
+    getTopDiscs: AsyncMethod<DiscTopService['getTopDiscs']>;
+    getTopDiscOptions: AsyncMethod<DiscTopService['getTopDiscOptions']>;
   };
 };
 
@@ -93,7 +93,10 @@ function createServiceMocks(): ServiceMocks {
       remove: jest.fn(),
     },
     discSpotifyService: { getSpotifyTracks: jest.fn() },
-    discHomeService: { findTopRatedOrFeaturedAndStats: jest.fn() },
+    discTopService: {
+      getTopDiscs: jest.fn(),
+      getTopDiscOptions: jest.fn(),
+    },
   };
 }
 
@@ -109,7 +112,7 @@ async function createTestingModule(
       { provide: DiscEnrichmentService, useValue: mocks.discEnrichmentService },
       { provide: DiscWriteService, useValue: mocks.discWriteService },
       { provide: DiscSpotifyService, useValue: mocks.discSpotifyService },
-      { provide: DiscHomeService, useValue: mocks.discHomeService },
+      { provide: DiscTopService, useValue: mocks.discTopService },
     ],
   }).compile();
 }
@@ -193,7 +196,7 @@ describe('DiscsService facade', () => {
     expect(service).toBeInstanceOf(DiscsService);
   });
 
-  it('delegates the home ranking operation and returns its payload unchanged', async () => {
+  it('delegates the TopDiscs ranking operation and returns its payload unchanged', async () => {
     const payload = {
       discs: [],
       totalDiscs: 2,
@@ -202,19 +205,28 @@ describe('DiscsService facade', () => {
       topUsersByCover: [],
       ratingDistribution: [],
     };
-    mocks.discHomeService.findTopRatedOrFeaturedAndStats.mockResolvedValue(
-      payload,
-    );
+    mocks.discTopService.getTopDiscs.mockResolvedValue(payload);
     const pagination = new TopStatsQueryDto();
     pagination.dateRange = [new Date('2020-01-01'), new Date('2024-12-31')];
     const user = Object.assign(new User(), { id: 'user-id' });
 
     await expect(
-      service.findTopRatedOrFeaturedAndStats(pagination, user, 'genre-id'),
+      service.getTopDiscs(pagination, user, 'genre-id'),
     ).resolves.toBe(payload);
-    expect(
-      mocks.discHomeService.findTopRatedOrFeaturedAndStats,
-    ).toHaveBeenCalledWith(pagination, user, 'genre-id');
+    expect(mocks.discTopService.getTopDiscs).toHaveBeenCalledWith(
+      pagination,
+      user,
+      'genre-id',
+    );
+  });
+
+  it('delegates dynamic TopDiscs options and returns the payload unchanged', async () => {
+    const payload = { countries: [], genres: [] };
+    const query = new TopDiscOptionsQueryDto();
+    mocks.discTopService.getTopDiscOptions.mockResolvedValue(payload);
+
+    await expect(service.getTopDiscOptions(query)).resolves.toBe(payload);
+    expect(mocks.discTopService.getTopDiscOptions).toHaveBeenCalledWith(query);
   });
 
   it('delegates all public write operations and returns their results unchanged', async () => {

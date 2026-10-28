@@ -3,8 +3,14 @@ import {
   NotFoundException,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import {
+  GUARDS_METADATA,
+  METHOD_METADATA,
+  PATH_METADATA,
+} from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRoleGuard } from '../../../identity/auth/guards/user-role/user-role.guard';
+import { META_MINIMUM_ROLE } from '../../../identity/authorization/decorators/role-protected.decorator';
 import { User } from '../../../identity/auth/entities/user.entity';
 import { PaginationDto } from '../../../shared/dto/pagination.dto';
 import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
@@ -12,6 +18,8 @@ import { CreateDiscDto } from '../dto/create-discs.dto';
 import { OptionsQueryDto } from '../dto/options-query.dto';
 import { RandomQueryDto } from '../dto/random-query.dto';
 import { UpdateDiscDto } from '../dto/update-discs.dto';
+import { TopStatsQueryDto } from '../dto/top-stats-query.dto';
+import { TopDiscOptionsQueryDto } from '../dto/top-disc-options-query.dto';
 import { DiscsController } from '../discs.controller';
 import { DiscsService } from '../discs.service';
 
@@ -35,6 +43,14 @@ type ServiceMock = {
     Promise<unknown>,
     Parameters<DiscsService['getSpotifyTracks']>
   >;
+  getTopDiscs: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscsService['getTopDiscs']>
+  >;
+  getTopDiscOptions: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscsService['getTopDiscOptions']>
+  >;
   update: jest.Mock<Promise<unknown>, Parameters<DiscsService['update']>>;
   remove: jest.Mock<Promise<unknown>, Parameters<DiscsService['remove']>>;
 };
@@ -53,6 +69,8 @@ describe('DiscsController baseline', () => {
       findOptions: jest.fn(),
       findOne: jest.fn(),
       getSpotifyTracks: jest.fn(),
+      getTopDiscs: jest.fn(),
+      getTopDiscOptions: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
@@ -67,6 +85,103 @@ describe('DiscsController baseline', () => {
   });
 
   afterEach(async () => moduleRef.close());
+
+  it('exposes authenticated GET routes for official TopDiscs and the legacy alias', () => {
+    const officialHandler = DiscsController.prototype.getTopDiscs;
+    const legacyHandler = DiscsController.prototype.findLegacyTopDiscs;
+
+    expect(Reflect.getMetadata(PATH_METADATA, DiscsController)).toBe('discs');
+    expect(Reflect.getMetadata(PATH_METADATA, officialHandler)).toBe(
+      'topDiscs',
+    );
+    expect(Reflect.getMetadata(PATH_METADATA, legacyHandler)).toBe('homeDiscs');
+    expect(Reflect.getMetadata(METHOD_METADATA, officialHandler)).toBe(0);
+    expect(Reflect.getMetadata(METHOD_METADATA, legacyHandler)).toBe(0);
+    expect(Reflect.getMetadata(GUARDS_METADATA, officialHandler)).toHaveLength(
+      2,
+    );
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, officialHandler)).toBe(
+      undefined,
+    );
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, legacyHandler)).toBe(
+      Reflect.getMetadata(META_MINIMUM_ROLE, officialHandler),
+    );
+    expect(Reflect.getMetadata(GUARDS_METADATA, legacyHandler)).toEqual(
+      Reflect.getMetadata(GUARDS_METADATA, officialHandler),
+    );
+  });
+
+  it('exposes the authenticated options route before the dynamic disc ID route', async () => {
+    const handler = DiscsController.prototype.getTopDiscOptions;
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(
+      'topDiscs/options',
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(0);
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toHaveLength(2);
+
+    const dto = new TopDiscOptionsQueryDto();
+    const response = { countries: [], genres: [] };
+    discsService.getTopDiscOptions.mockResolvedValue(response);
+
+    await expect(controller.getTopDiscOptions(dto)).resolves.toBe(response);
+    expect(discsService.getTopDiscOptions).toHaveBeenCalledWith(dto);
+  });
+
+  it('delegates GET /discs/topDiscs with the existing DTO, user and genre filter', async () => {
+    const dto = Object.assign(new TopStatsQueryDto(), {
+      dateRange: [new Date('2024-01-01'), new Date('2024-12-31')],
+      country: 'country-name',
+      countryId: 'country-id',
+      genreId: 'genre-id',
+      statsDateRange: [new Date('2024-01-01'), new Date('2024-12-31')],
+    });
+    const user = Object.assign(new User(), { id: 'user-id' });
+    const response = {
+      discs: [{ id: 'ranked-disc', weightedScore: '4.5' }],
+      totalDiscs: 2,
+      totalVotes: 4,
+      topUsersByRates: [],
+      topUsersByCover: [],
+      ratingDistribution: [],
+    };
+    discsService.getTopDiscs.mockResolvedValue(response);
+
+    await expect(controller.getTopDiscs(dto, user)).resolves.toBe(response);
+    expect(discsService.getTopDiscs).toHaveBeenCalledWith(
+      dto,
+      user,
+      'genre-id',
+    );
+    expect(discsService.getTopDiscs).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps GET /discs/homeDiscs as a response-identical alias of TopDiscs', async () => {
+    const dto = Object.assign(new TopStatsQueryDto(), {
+      dateRange: [new Date('2024-01-01'), new Date('2024-12-31')],
+      genreId: 'genre-id',
+      countryId: 'country-id',
+    });
+    const user = Object.assign(new User(), { id: 'user-id' });
+    const response = {
+      discs: [{ id: 'ranked-disc', weightedScore: '4.5' }],
+      totalDiscs: 2,
+      totalVotes: 4,
+      topUsersByRates: [],
+      topUsersByCover: [],
+      ratingDistribution: [],
+    };
+    discsService.getTopDiscs.mockResolvedValue(response);
+
+    await expect(controller.findLegacyTopDiscs(dto, user)).resolves.toBe(
+      response,
+    );
+    expect(discsService.getTopDiscs).toHaveBeenCalledWith(
+      dto,
+      user,
+      'genre-id',
+    );
+    expect(discsService.getTopDiscs).toHaveBeenCalledTimes(1);
+  });
 
   it('delegates relation IDs on POST /discs and returns its response unchanged', async () => {
     const dto = Object.assign(new CreateDiscDto(), {

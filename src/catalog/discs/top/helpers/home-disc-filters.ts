@@ -1,3 +1,9 @@
+import {
+  buildDiscReleaseDatePredicate,
+  isTopDiscCountryId,
+  resolveTopDiscCountryFilter,
+} from './top-disc-predicates';
+
 type HomeDiscFilterInput = {
   userId: string | number;
   dateRange?: (string | Date)[];
@@ -27,20 +33,9 @@ export function buildHomeDiscFilters({
     sql: (firstParameter: number) => string;
     values: unknown[];
   }[] = [];
-  const countryFilter = country || countryId;
+  const countryFilter = resolveTopDiscCountryFilter(country, countryId);
 
-  if (dateRange && dateRange.length === 2) {
-    predicates.push({
-      sql: (firstParameter) =>
-        `d."releaseDate" BETWEEN $${firstParameter} AND $${firstParameter + 1} AND d."releaseDate" <= $${firstParameter + 2}`,
-      values: [new Date(dateRange[0]), new Date(dateRange[1]), today],
-    });
-  } else {
-    predicates.push({
-      sql: (firstParameter) => `d."releaseDate" <= $${firstParameter}`,
-      values: [today],
-    });
-  }
+  predicates.push(buildDiscReleaseDatePredicate(dateRange, today));
 
   if (genreId) {
     predicates.push({
@@ -50,10 +45,7 @@ export function buildHomeDiscFilters({
   }
 
   if (countryFilter) {
-    const isUUID =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        countryFilter,
-      );
+    const isUUID = isTopDiscCountryId(countryFilter);
     predicates.push({
       sql: (firstParameter) =>
         `${isUUID ? 'c.id' : 'c.name'} = $${firstParameter}`,

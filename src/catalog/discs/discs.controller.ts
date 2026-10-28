@@ -25,6 +25,7 @@ import { WeeklyQueryDto } from './dto/weekly-query.dto';
 import { RandomQueryDto } from './dto/random-query.dto';
 import { OptionsQueryDto } from './dto/options-query.dto';
 import { ResolveSpotifyAlbumQueryDto } from './dto/resolve-spotify-album-query.dto';
+import { TopDiscOptionsQueryDto } from './dto/top-disc-options-query.dto';
 
 @Controller('discs')
 export class DiscsController {
@@ -82,16 +83,24 @@ export class DiscsController {
   }
 
   @Auth()
+  @Get('topDiscs/options')
+  getTopDiscOptions(@Query() dto: TopDiscOptionsQueryDto) {
+    return this.discsServices.getTopDiscOptions(dto);
+  }
+
+  @Auth()
+  @Get('topDiscs')
+  getTopDiscs(@Query() dto: TopStatsQueryDto, @GetUser() user: User) {
+    return this.discsServices.getTopDiscs(dto, user, dto.genreId);
+  }
+
+  /**
+   * @deprecated LEGACY: use GET /api/discs/topDiscs. No removal date is planned.
+   */
+  @Auth()
   @Get('homeDiscs')
-  findTopRatedOrFeatured(
-    @Query() dto: TopStatsQueryDto,
-    @GetUser() user: User,
-  ) {
-    return this.discsServices.findTopRatedOrFeaturedAndStats(
-      dto,
-      user,
-      dto.genreId,
-    );
+  findLegacyTopDiscs(@Query() dto: TopStatsQueryDto, @GetUser() user: User) {
+    return this.getTopDiscs(dto, user);
   }
 
   @Get()

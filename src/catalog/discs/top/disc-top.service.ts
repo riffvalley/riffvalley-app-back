@@ -11,8 +11,12 @@ import { loadHomeRatingDistribution } from './loaders/home-rating-distribution';
 import { buildHomeDiscFilters } from './helpers/home-disc-filters';
 import { mapHomeRankedDisc } from './helpers/map-home-ranked-disc';
 import { HomeQueryRunner } from './loaders/home-query-runner';
+import { TopDiscOptionsQueryDto } from '../dto/top-disc-options-query.dto';
+import { loadTopDiscOptions } from './loaders/load-top-disc-options';
+import { DiscTopOptionsResult } from './types/disc-top-options';
+import { buildTopDiscEligibilityPredicate } from './helpers/top-disc-predicates';
 
-export interface DiscHomeResult {
+export interface DiscTopResult {
   discs: ReturnType<typeof mapHomeRankedDisc>[];
   totalDiscs: number;
   totalVotes: number;
@@ -28,17 +32,17 @@ export interface DiscHomeResult {
 }
 
 @Injectable()
-export class DiscHomeService {
+export class DiscTopService {
   constructor(
     @InjectRepository(Disc)
     private readonly discRepository: HomeQueryRunner,
   ) {}
 
-  async findTopRatedOrFeaturedAndStats(
+  async getTopDiscs(
     paginationDto: TopStatsQueryDto,
     user: User,
     genreId?: string,
-  ): Promise<DiscHomeResult> {
+  ): Promise<DiscTopResult> {
     const userId = user.id;
     const {
       dateRange,
@@ -63,7 +67,7 @@ export class DiscHomeService {
       homeDiscFilters.globalParams,
     );
 
-    // --- Consulta principal de discos (ordenados por featured y weightedScore) ---
+    // --- Consulta principal del ranking, ordenada por weightedScore ---
     const query = `
       SELECT
         d.*,
@@ -92,8 +96,8 @@ export class DiscHomeService {
       LEFT JOIN genre g ON d."genreId" = g.id
       LEFT JOIN rate r ON d.id = r."discId"
       ${homeDiscFilters.mainWhere}
+      AND ${buildTopDiscEligibilityPredicate('d')}
       GROUP BY d.id, a.name, g.name, g.color, c.id, c.name, c."isoCode"
-      HAVING COUNT(CASE WHEN r.rate IS NOT NULL THEN 1 END) > 0 OR d."pinned" = true
       ORDER BY "weightedScore" DESC, d.id ASC
       LIMIT 20;
     `;
@@ -138,5 +142,11 @@ export class DiscHomeService {
       topUsersByCover,
       ratingDistribution,
     };
+  }
+
+  getTopDiscOptions(
+    query: TopDiscOptionsQueryDto,
+  ): Promise<DiscTopOptionsResult> {
+    return loadTopDiscOptions(this.discRepository, query, new Date());
   }
 }
