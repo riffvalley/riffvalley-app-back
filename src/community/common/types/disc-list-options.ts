@@ -3,6 +3,7 @@ export interface DiscListOptionsCriteria {
   dateRange?: [Date, Date];
   countryId?: string;
   genreId?: string;
+  genreIds?: string[];
 }
 
 export interface DiscListOptionsResult {

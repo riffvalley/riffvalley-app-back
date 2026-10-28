@@ -142,6 +142,27 @@ const sortsByMode: Record<DiscListMode, readonly DiscListSort[]> = {
   ],
 };
 
+function parseGenreIds(value: unknown): unknown {
+  if (typeof value === 'string') return value.split(',');
+  if (Array.isArray(value)) {
+    return value.flatMap((item) =>
+      typeof item === 'string' ? item.split(',') : [item],
+    );
+  }
+  return value;
+}
+
+function normalizeGenreIds(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return [
+    ...new Set(
+      value.map((item) =>
+        typeof item === 'string' ? item.toLowerCase() : item,
+      ),
+    ),
+  ];
+}
+
 @ValidatorConstraint({ name: 'discListSortForMode', async: false })
 class DiscListSortForMode implements ValidatorConstraintInterface {
   validate(sort: unknown, args: { object: object }): boolean {
@@ -219,6 +240,12 @@ export class DiscListFiltersDto {
   @IsOptional()
   @IsUUID('4')
   genreId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @Transform(({ value }) => normalizeGenreIds(parseGenreIds(value)))
+  genreIds?: string[];
 
   @IsOptional()
   @IsEnum(DiscListEligibility)

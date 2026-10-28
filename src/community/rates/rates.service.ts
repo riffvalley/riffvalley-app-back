@@ -148,7 +148,7 @@ export class RatesService {
   async findAllByUser(
     paginationDto: CommunityListQueryDto,
     user: User,
-    options?: { stableTieBreak: boolean },
+    options?: { stableTieBreak: boolean; genreIds?: string[] },
   ) {
     const {
       limit = 10,
@@ -233,6 +233,7 @@ export class RatesService {
       dateRange,
       countryId: country,
       genreId: genre,
+      genreIds: options?.genreIds,
     };
     applyDiscListFilters(queryBuilder, discListFilters);
     applyDiscListFilters(totalItemsQueryBuilder, discListFilters);

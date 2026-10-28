@@ -100,6 +100,35 @@ describe('DiscList query contracts', () => {
     }
   });
 
+  it('accepts CSV or repeated genreIds, normalizes duplicates, and rejects empty or invalid IDs', async () => {
+    const ids = [
+      'b1234567-89ab-4cde-8123-456789abcdef',
+      'c1234567-89ab-4cde-8123-456789abcdef',
+      'd1234567-89ab-4cde-8123-456789abcdef',
+    ];
+    await expect(
+      validateList({
+        mode: 'all',
+        genreIds: `${ids[0]},${ids[1]},${ids[2]},${ids[0]}`,
+      }),
+    ).resolves.toMatchObject({ genreIds: ids });
+    await expect(
+      validateOptions({
+        mode: 'all',
+        genreIds: [ids[0], ids[0].toUpperCase()],
+      }),
+    ).resolves.toMatchObject({ genreIds: [ids[0]] });
+    await expect(
+      validateList({ mode: 'all', genreIds: [] }),
+    ).resolves.toMatchObject({ genreIds: [] });
+    await expect(
+      validateList({ mode: 'all', genreIds: `${ids[0]},` }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      validateList({ mode: 'all', genreIds: 'not-a-uuid' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('accepts only allowlisted sorts valid for the selected mode', async () => {
     await expect(
       validateList({ mode: 'all', sort: DiscListSort.AVERAGE_RATE_DESC }),

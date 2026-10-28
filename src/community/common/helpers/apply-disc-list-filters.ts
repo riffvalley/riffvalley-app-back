@@ -30,7 +30,13 @@ export function applyDiscListFilters<Entity extends object>(
     );
   }
 
-  if (!options.omitGenre && criteria.genreId) {
+  if (!options.omitGenre && criteria.genreIds !== undefined) {
+    if (criteria.genreIds.length > 0) {
+      queryBuilder.andWhere('disc.genreId IN (:...discListGenreIds)', {
+        discListGenreIds: criteria.genreIds,
+      });
+    }
+  } else if (!options.omitGenre && criteria.genreId) {
     queryBuilder.andWhere('disc.genreId = :discListGenreId', {
       discListGenreId: criteria.genreId,
     });

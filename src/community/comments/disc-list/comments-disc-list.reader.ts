@@ -48,6 +48,7 @@ export class CommentsDiscListReader {
         stableTieBreak: true,
         includeCountry: true,
         sort: criteria.sort,
+        genreIds: criteria.genreIds,
       })
       .then((page) => ({
         totalItems: page.totalItems,

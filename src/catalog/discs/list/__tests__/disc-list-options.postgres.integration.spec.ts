@@ -10,6 +10,9 @@ import { RatesService } from 'src/community/rates/rates.service';
 import { CommentsService } from 'src/community/comments/comments.service';
 import { FavoritesService } from 'src/community/favorites/favorites.service';
 import { PendingsService } from 'src/community/pendings/pendings.service';
+import { Pending } from 'src/community/pendings/entities/pending.entity';
+import { CommunityListQueryDto } from 'src/community/common/dto/community-list-query.dto';
+import { DiscListQueryDto } from '../dto/disc-list-contracts.dto';
 import { User } from 'src/identity/auth/entities/user.entity';
 import {
   HomePostgresClient,
@@ -36,8 +39,6 @@ class SqlDisc {}
 class SqlRate {}
 class SqlComment {}
 class SqlFavorite {}
-class SqlPending {}
-
 function id(index: number): string {
   return `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 }
@@ -139,6 +140,16 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
             target: () => SqlRate,
             inverseSide: 'disc',
           },
+          favorites: {
+            type: 'one-to-many',
+            target: () => SqlFavorite,
+            inverseSide: 'disc',
+          },
+          pendings: {
+            type: 'one-to-many',
+            target: () => Pending,
+            inverseSide: 'disc',
+          },
         },
       }),
       new EntitySchema<Record<string, unknown>>({
@@ -197,7 +208,7 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
       }),
       new EntitySchema<Record<string, unknown>>({
         name: 'Pending',
-        target: SqlPending,
+        target: Pending,
         tableName: 'pending',
         columns: {
           id: { type: 'uuid', primary: true },
@@ -264,7 +275,7 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
     Reflect.set(
       pendings,
       'pendingRepository',
-      dataSource.getRepository(SqlPending),
+      dataSource.getRepository(Pending),
     );
   });
 
@@ -355,7 +366,7 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
         Date,
       ],
       countryId: COUNTRY_NO,
-      genreId: GENRE_BLACK,
+      genreIds: [GENRE_BLACK, GENRE_DOOM],
     });
     const modes = [
       {
@@ -467,6 +478,122 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
     expect(commentsOptions.countries).toHaveLength(1);
     expect(commentsOptions.genres).toHaveLength(1);
     expect(commentsOptions.genres[0]?.id).toBe(GENRE_BLACK);
+  });
+
+  it('executes owner list SQL with multi-genre OR, cross-filters, totals, and comment row cardinality', async () => {
+    await expect(catalog.countDiscListGenres()).resolves.toBe(2);
+    const genreIds = [GENRE_BLACK, GENRE_DOOM];
+    const communityQuery = Object.assign(new CommunityListQueryDto(), {
+      limit: 20,
+      offset: 0,
+      query: 'Option fixture',
+      dateRange: [new Date('2026-06-01'), new Date('2026-06-30')] as [
+        Date,
+        Date,
+      ],
+      country: COUNTRY_NO,
+      genre: GENRE_BLACK,
+      type: 'rate',
+    });
+
+    const ratesPage = await rates.findAllByUser(communityQuery, sessionUser(), {
+      stableTieBreak: true,
+      genreIds,
+    });
+    expect(ratesPage.totalItems).toBe(10);
+    expect(ratesPage.data).toHaveLength(10);
+    expect(
+      ratesPage.data.every((entry) =>
+        genreIds.includes(entry.disc.genre?.id ?? ''),
+      ),
+    ).toBe(true);
+
+    const coversPage = await rates.findAllByUser(
+      Object.assign(new CommunityListQueryDto(), communityQuery, {
+        country: COUNTRY_SE,
+        type: 'cover',
+      }),
+      sessionUser(),
+      { stableTieBreak: true, genreIds },
+    );
+    expect(coversPage.totalItems).toBe(10);
+    expect(coversPage.data).toHaveLength(10);
+
+    const commentsPage = await comments.findAllByUser(
+      Object.assign(new CommunityListQueryDto(), communityQuery, {
+        type: 'comment',
+      }),
+      sessionUser(),
+      { stableTieBreak: true, includeCountry: true, genreIds },
+    );
+    expect(commentsPage.totalItems).toBe(2);
+    expect(commentsPage.data).toHaveLength(2);
+    expect(commentsPage.data[0]?.disc.id).toBe(commentsPage.data[1]?.disc.id);
+
+    const favoritesPage = await favorites.findAllByUser(
+      communityQuery,
+      sessionUser(),
+      { stableTieBreak: true, genreIds },
+    );
+    expect(favoritesPage.totalItems).toBe(14);
+    expect(favoritesPage.data).toHaveLength(14);
+
+    const page = await favorites.findAllByUser(
+      Object.assign(new CommunityListQueryDto(), communityQuery, {
+        limit: 2,
+        offset: 2,
+      }),
+      sessionUser(),
+      { stableTieBreak: true, genreIds },
+    );
+    expect(page.totalItems).toBe(14);
+    expect(page.data).toHaveLength(2);
+    expect(new Set(page.data.map(({ id: entryId }) => entryId)).size).toBe(2);
+
+    const emptyPage = await favorites.findAllByUser(
+      Object.assign(new CommunityListQueryDto(), communityQuery, {
+        query: 'no matching disc',
+      }),
+      sessionUser(),
+      { stableTieBreak: true, genreIds },
+    );
+    expect(emptyPage.totalItems).toBe(0);
+    expect(emptyPage.data).toHaveLength(0);
+
+    const otherUsersPage = await favorites.findAllByUser(
+      Object.assign(new CommunityListQueryDto(), {
+        limit: 20,
+        offset: 0,
+      }),
+      sessionUser(OTHER_USER_ID),
+      { stableTieBreak: true, genreIds },
+    );
+    expect(otherUsersPage.totalItems).toBe(1);
+    expect(otherUsersPage.data[0]?.disc.id).toBe(id(25));
+
+    const pendingsPage = await pendings.findAllByUser(
+      communityQuery,
+      sessionUser(),
+      { stableTieBreak: true, genreIds },
+    );
+    expect(pendingsPage.totalItems).toBe(1);
+    expect(pendingsPage.data[0]?.disc.id).toBe(id(3));
+
+    const catalogPage = await catalog.findDiscList(
+      Object.assign(new DiscListQueryDto(), {
+        mode: DiscListMode.ALL,
+        query: 'Option fixture',
+        dateRange: communityQuery.dateRange,
+        countryId: COUNTRY_NO,
+        genreId: GENRE_BLACK,
+        genreIds,
+        limit: 20,
+        offset: 0,
+      }),
+      sessionUser(),
+    );
+    expect(catalogPage.totalItems).toBe(14);
+    expect(catalogPage.data).toHaveLength(14);
   });
 
   it('honors the all-mode unvoted filters and returns empty dimensions for empty owners', async () => {

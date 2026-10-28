@@ -26,7 +26,7 @@ export class DiscListService {
     @Inject(DiscCatalogService)
     private readonly discCatalogService: Pick<
       DiscCatalogService,
-      'findDiscList' | 'findDiscListOptions'
+      'findDiscList' | 'findDiscListOptions' | 'countDiscListGenres'
     >,
     @Inject(RatesDiscListReader)
     private readonly ratesReader: Pick<
@@ -50,15 +50,17 @@ export class DiscListService {
     >,
   ) {}
 
-  findOptions(
+  async findOptions(
     query: DiscListOptionsQueryDto,
     user: User,
   ): Promise<DiscListOptionsResponse> {
+    await this.validateGenreCount(query.genreIds);
     const criteria = {
       query: query.query,
       dateRange: query.dateRange,
       countryId: query.countryId,
       genreId: query.genreId,
+      genreIds: query.genreIds,
     };
 
     switch (query.mode) {
@@ -83,6 +85,7 @@ export class DiscListService {
     query: DiscListQueryDto,
     user: User,
   ): Promise<DiscListResponse> {
+    await this.validateGenreCount(query.genreIds);
     const criteria = this.toReaderCriteria(query);
 
     switch (query.mode) {
@@ -163,7 +166,19 @@ export class DiscListService {
       dateRange: query.dateRange,
       countryId: query.countryId,
       genreId: query.genreId,
+      genreIds: query.genreIds,
       sort: query.sort,
     };
+  }
+
+  private async validateGenreCount(genreIds?: string[]): Promise<void> {
+    if (!genreIds?.length) return;
+    const catalogGenreCount =
+      await this.discCatalogService.countDiscListGenres();
+    if (genreIds.length > catalogGenreCount) {
+      throw new BadRequestException(
+        `genreIds cannot contain more than ${catalogGenreCount} catalog genres`,
+      );
+    }
   }
 }

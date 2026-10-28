@@ -101,7 +101,7 @@ export class FavoritesService {
   async findAllByUser(
     paginationDto: CommunityListQueryDto,
     user: User,
-    options?: { stableTieBreak: boolean },
+    options?: { stableTieBreak: boolean; genreIds?: string[] },
   ) {
     const {
       limit = 10,
@@ -175,6 +175,7 @@ export class FavoritesService {
       dateRange,
       countryId: country,
       genreId: genre,
+      genreIds: options?.genreIds,
     };
     applyDiscListFilters(queryBuilder, discListFilters);
     const ALLOWED_ORDER_FIELDS = new Set<string>([

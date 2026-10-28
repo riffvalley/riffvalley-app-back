@@ -1,6 +1,6 @@
 # CAT-DISC-3d — Opciones dinámicas de filtros para DiscList
 
-**Estado:** implementación completada el 2026-10-28. La validación SQL de opciones pasó en PostgreSQL Docker aislado; la validación SQL específica del listado CAT-DISC-3c sigue pendiente antes de migrar el frontend.
+**Estado:** implementación completada el 2026-10-28. La validación SQL de opciones pasó en PostgreSQL Docker aislado. La validación SQL del listado CAT-DISC-3c se completó en CAT-DISC-3h.
 
 ## Endpoint y contrato
 
@@ -12,14 +12,14 @@ La petición reutiliza `mode`, `query`, `dateRange`, `countryId`, `genreId` y `e
 
 `DiscListService.findOptions` selecciona el owner y propaga el `User` autenticado. Catalog no consulta repositorios privados de Community. Cada reader ya exportado desde su módulo delega en un método de opciones de su servicio propietario; no se añadieron dependencias Nest, exports de servicios de escritura ni ciclos.
 
-| Modo | Lector/criterio conservado | Unidad al deduplicar opciones |
-|---|---|---|
-| `all` | `DiscCatalogService`; discos hasta hoy y `eligibility` de usuario para valoración musical/portada no votada. No usa TopDiscs. | Discos elegibles |
-| `rates` | Rates; `rate.rate IS NOT NULL` y usuario autenticado. | Rates elegibles, dimensiones sin duplicados |
-| `covers` | Rates; `rate.cover IS NOT NULL` y usuario autenticado. | Rates de portada elegibles |
-| `comments` | Comments; comentario propio no nulo, manteniendo el comportamiento vigente de `isDeleted`. | Las dimensiones se deduplican aunque un disco tenga comentarios repetidos |
-| `favorites` | Favorites propios del usuario. | Favoritos elegibles |
-| `pendientes` | Pendings propios del usuario. | Pendientes elegibles |
+| Modo         | Lector/criterio conservado                                                                                                    | Unidad al deduplicar opciones                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `all`        | `DiscCatalogService`; discos hasta hoy y `eligibility` de usuario para valoración musical/portada no votada. No usa TopDiscs. | Discos elegibles                                                          |
+| `rates`      | Rates; `rate.rate IS NOT NULL` y usuario autenticado.                                                                         | Rates elegibles, dimensiones sin duplicados                               |
+| `covers`     | Rates; `rate.cover IS NOT NULL` y usuario autenticado.                                                                        | Rates de portada elegibles                                                |
+| `comments`   | Comments; comentario propio no nulo, manteniendo el comportamiento vigente de `isDeleted`.                                    | Las dimensiones se deduplican aunque un disco tenga comentarios repetidos |
+| `favorites`  | Favorites propios del usuario.                                                                                                | Favoritos elegibles                                                       |
+| `pendientes` | Pendings propios del usuario.                                                                                                 | Pendientes elegibles                                                      |
 
 Se comparten los filtros de búsqueda, periodo, país y género entre las dos consultas de dimensiones mediante `applyDiscListFilters`. La lectura de opciones de cada owner parte de su asociación elegible, no de la página ni de sus 20 items. `all` llama al mismo `applyFindAllFilters` usado por `findAll`, con los mismos filtros, y aplica el corte temporal del listado.
 
@@ -41,7 +41,7 @@ La ruta requiere sesión válida; no define rol superior al usuario autenticado.
 - `pnpm run verify`: **aprobado**; 231 suites unitarias/2.248 tests aprobados, 17 suites/113 tests opt-in omitidos, 2 snapshots aprobados; build Nest y runtime dependency gate aprobados.
 - Gates globales: typecheck **0 errores**; ESLint **839 diagnósticos históricos, 0 nuevos**; estructural **9 infracciones históricas, 0 nuevas**; tipado seguro **5 hallazgos históricos, 0 nuevos**. No se modificaron baselines.
 - ESLint focal y `git diff --check`: verificados sin hallazgos nuevos tras formatear únicamente los archivos del alcance.
-- No se ejecutó una consulta SQL real de `GET /api/discs/list` de CAT-DISC-3c en este fixture; el listado tiene joins/agregaciones y debe recibir prueba PostgreSQL aislada propia antes de migrar el frontend. No se afirma validación productiva ni mediciones de rendimiento representativas.
+- La validación PostgreSQL del SQL real de `GET /api/discs/list` y la evolución multi-género están documentadas en [CAT-DISC-3h](cat-disc-3h-multiseleccion-generos.md). No se afirma validación productiva ni mediciones de rendimiento representativas.
 
 ## Compatibilidad y límites
 
@@ -58,5 +58,5 @@ No se modificaron los contratos de `GET /api/discs/list`, `GET /api/discs`, Rate
 ## Siguiente trabajo
 
 - **CAT-DISC-3e:** corregir la identidad de consulta `all` en frontend antes de migrar solo `/disc-list`, adaptar los items discriminados y sustituir opciones globales por este endpoint.
-- **Precondición de CAT-DISC-3e:** ejecutar una validación PostgreSQL local aislada del listado CAT-DISC-3c, especialmente sus agregados, proyección y conteo. Este informe valida en PostgreSQL las nuevas consultas de opciones, no ese SQL anterior.
+- La precondición técnica de validación PostgreSQL del listado para CAT-DISC-3e está satisfecha por CAT-DISC-3h; la identidad de sesión `all` del frontend sigue siendo una precondición funcional pendiente.
 - No se implementó la reorganización visual de filtros. CAT-DISC-3e y posteriores siguen pendientes.

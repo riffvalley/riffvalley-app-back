@@ -5,7 +5,11 @@ import { Disc } from '../../entities/disc.entity';
 import { Genre } from '../../../genres/entities/genre.entity';
 import { Rate } from 'src/community/rates/entities/rate.entity';
 import { DiscListService } from '../disc-list.service';
-import { DiscListMode, DiscListQueryDto } from '../dto/disc-list-contracts.dto';
+import {
+  DiscListMode,
+  DiscListOptionsQueryDto,
+  DiscListQueryDto,
+} from '../dto/disc-list-contracts.dto';
 import { DiscListSourceDisc } from '../helpers/map-disc-list-items';
 import {
   DiscListReaderCommentRecord,
@@ -23,7 +27,7 @@ import { User } from 'src/identity/auth/entities/user.entity';
 type CatalogPage = Awaited<ReturnType<DiscCatalogService['findDiscList']>>;
 type CatalogReaderMock = Pick<
   DiscCatalogService,
-  'findDiscList' | 'findDiscListOptions'
+  'findDiscList' | 'findDiscListOptions' | 'countDiscListGenres'
 > & {
   findDiscList: jest.Mock<
     ReturnType<DiscCatalogService['findDiscList']>,
@@ -32,6 +36,9 @@ type CatalogReaderMock = Pick<
   findDiscListOptions: jest.Mock<
     ReturnType<DiscCatalogService['findDiscListOptions']>,
     Parameters<DiscCatalogService['findDiscListOptions']>
+  >;
+  countDiscListGenres: jest.MockedFunction<
+    DiscCatalogService['countDiscListGenres']
   >;
 };
 type RatesReaderMock = Pick<
@@ -137,6 +144,7 @@ describe('DiscListService', () => {
     catalog = {
       findDiscList: jest.fn(),
       findDiscListOptions: jest.fn(),
+      countDiscListGenres: jest.fn().mockResolvedValue(100),
     };
     rates = { findByUser: jest.fn(), findOptions: jest.fn() };
     comments = { findByUser: jest.fn(), findOptions: jest.fn() };
@@ -258,6 +266,7 @@ describe('DiscListService', () => {
           dateRange: undefined,
           countryId: undefined,
           genreId: undefined,
+          genreIds: undefined,
           sort: undefined,
         },
         user,
@@ -406,6 +415,7 @@ describe('DiscListService', () => {
         ],
         countryId: 'country-id',
         genreId: 'genre-id',
+        genreIds: ['b1234567-89ab-4cde-8123-456789abcdef'],
       };
       const result = { countries: [], genres: [] };
       if (owner === 'all') {
@@ -426,6 +436,7 @@ describe('DiscListService', () => {
         dateRange: query.dateRange,
         countryId: query.countryId,
         genreId: query.genreId,
+        genreIds: query.genreIds,
       };
       if (owner === 'all') {
         expect(catalog.findDiscListOptions).toHaveBeenCalledWith(query, user);
@@ -440,4 +451,79 @@ describe('DiscListService', () => {
       }
     },
   );
+
+  it.each(Object.values(DiscListMode))(
+    'propagates the same multi-genre selection to %s',
+    async (mode) => {
+      const genreIds = [
+        'b1234567-89ab-4cde-8123-456789abcdef',
+        'c1234567-89ab-4cde-8123-456789abcdef',
+      ];
+      const query = Object.assign(new DiscListQueryDto(), { mode, genreIds });
+      catalog.findDiscList.mockResolvedValue({
+        totalItems: 0,
+        totalPages: 0,
+        currentPage: 1,
+        limit: 20,
+        data: [],
+      });
+      rates.findByUser.mockResolvedValue(readerPage([]));
+      comments.findByUser.mockResolvedValue(readerPage([]));
+      favorites.findByUser.mockResolvedValue(readerPage([]));
+      pendings.findByUser.mockResolvedValue(readerPage([]));
+
+      await service.findAll(query, user);
+
+      if (mode === DiscListMode.ALL) {
+        expect(catalog.findDiscList).toHaveBeenCalledWith(query, user);
+      } else {
+        if (mode === DiscListMode.RATES || mode === DiscListMode.COVERS) {
+          expect(rates.findByUser).toHaveBeenCalledWith(
+            mode,
+            expect.objectContaining({ genreIds }),
+            user,
+          );
+          return;
+        }
+        const reader = {
+          [DiscListMode.RATES]: rates.findByUser,
+          [DiscListMode.COVERS]: rates.findByUser,
+          [DiscListMode.COMMENTS]: comments.findByUser,
+          [DiscListMode.FAVORITES]: favorites.findByUser,
+          [DiscListMode.PENDIENTES]: pendings.findByUser,
+          [DiscListMode.ALL]: catalog.findDiscList,
+        }[mode];
+        expect(reader).toHaveBeenCalledWith(
+          expect.objectContaining({ genreIds }),
+          user,
+        );
+      }
+    },
+  );
+
+  it('limits the genre selection to the current catalog count on both endpoints', async () => {
+    catalog.countDiscListGenres.mockResolvedValue(2);
+    const genreIds = [
+      'b1234567-89ab-4cde-8123-456789abcdef',
+      'c1234567-89ab-4cde-8123-456789abcdef',
+      'd1234567-89ab-4cde-8123-456789abcdef',
+    ];
+    const listQuery = Object.assign(new DiscListQueryDto(), {
+      mode: DiscListMode.ALL,
+      genreIds,
+    });
+    const optionsQuery = Object.assign(new DiscListOptionsQueryDto(), {
+      mode: DiscListMode.ALL,
+      genreIds,
+    });
+
+    await expect(service.findAll(listQuery, user)).rejects.toThrow(
+      'genreIds cannot contain more than 2 catalog genres',
+    );
+    await expect(service.findOptions(optionsQuery, user)).rejects.toThrow(
+      'genreIds cannot contain more than 2 catalog genres',
+    );
+    expect(catalog.findDiscList).not.toHaveBeenCalled();
+    expect(catalog.findDiscListOptions).not.toHaveBeenCalled();
+  });
 });

@@ -125,6 +125,7 @@ export class CommentsService {
       stableTieBreak: boolean;
       includeCountry: boolean;
       sort?: DiscListReaderSort;
+      genreIds?: string[];
     },
   ) {
     const {
@@ -166,6 +167,7 @@ export class CommentsService {
       dateRange,
       countryId: country,
       genreId: genre,
+      genreIds: options?.genreIds,
     };
     applyDiscListFilters(queryBuilder, discListFilters, {
       countryColumn: 'artist.countryId',

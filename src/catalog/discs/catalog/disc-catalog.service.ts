@@ -45,6 +45,14 @@ export class DiscCatalogService {
     return this.discRepository.count();
   }
 
+  countDiscListGenres(): Promise<number> {
+    return this.discRepository
+      .query('SELECT COUNT(*)::int AS count FROM genre')
+      .then((rows: { count: number | string }[]) =>
+        Number(rows[0]?.count ?? 0),
+      );
+  }
+
   async countDiscsReleasedInYear(year: number): Promise<number> {
     const [row] = (await this.discRepository.query(
       `SELECT COUNT(DISTINCT disc.id)::int AS count
@@ -281,7 +289,10 @@ export class DiscCatalogService {
       query: paginationDto.query,
       dateRange: paginationDto.dateRange,
       countryId: paginationDto.countryId,
-      genre: paginationDto.genreId,
+      genre:
+        paginationDto.genreIds === undefined
+          ? paginationDto.genreId
+          : undefined,
       voted:
         paginationDto.eligibility === DiscListEligibility.ALL
           ? undefined
@@ -298,7 +309,10 @@ export class DiscCatalogService {
       ),
     });
 
-    return this.findAll(legacyQuery, user, { stableTieBreak: true });
+    return this.findAll(legacyQuery, user, {
+      stableTieBreak: true,
+      genreIds: paginationDto.genreIds,
+    });
   }
 
   async findDiscListOptions(
@@ -323,7 +337,11 @@ export class DiscCatalogService {
       }
 
       this.applyFindAllFilters(query, {
-        genre: omitGenre ? undefined : criteria.genreId,
+        genre:
+          omitGenre || criteria.genreIds !== undefined
+            ? undefined
+            : criteria.genreId,
+        genreIds: omitGenre ? undefined : criteria.genreIds,
         countryFilter: omitCountry ? undefined : criteria.countryId,
         query: criteria.query,
         startDate: criteria.dateRange?.[0],
@@ -397,7 +415,7 @@ export class DiscCatalogService {
   async findAll(
     paginationDto: DiscsListQueryDto,
     user: User,
-    options?: { stableTieBreak: boolean },
+    options?: { stableTieBreak: boolean; genreIds?: string[] },
   ) {
     const {
       limit = 10,
@@ -504,6 +522,16 @@ export class DiscCatalogService {
     this.applyFindAllFilters(queryBuilder, filterOptions);
     this.applyFindAllFilters(totalItemsQueryBuilder, filterOptions);
 
+    if (options?.genreIds?.length) {
+      queryBuilder.andWhere('disc.genreId IN (:...discListGenreIds)', {
+        discListGenreIds: options.genreIds,
+      });
+      totalItemsQueryBuilder.andWhere(
+        'disc.genreId IN (:...discListGenreIds)',
+        { discListGenreIds: options.genreIds },
+      );
+    }
+
     if (paginationDto.orderBy) {
       const sortParts = paginationDto.orderBy.split(',');
       let excludesDiscsWithoutAverageRate = false;
@@ -564,6 +592,7 @@ export class DiscCatalogService {
     queryBuilder: SelectQueryBuilder<Disc>,
     filters: {
       genre?: string;
+      genreIds?: string[];
       countryFilter?: string;
       query?: string;
       startDate?: Date;
@@ -574,6 +603,7 @@ export class DiscCatalogService {
   ): void {
     const {
       genre,
+      genreIds,
       countryFilter,
       query,
       startDate,
@@ -582,7 +612,13 @@ export class DiscCatalogService {
       votedType,
     } = filters;
 
-    if (genre) {
+    if (genreIds !== undefined) {
+      if (genreIds.length > 0) {
+        queryBuilder.andWhere('disc.genreId IN (:...discListGenreIds)', {
+          discListGenreIds: genreIds,
+        });
+      }
+    } else if (genre) {
       queryBuilder.andWhere('disc.genreId = :genre', { genre });
     }
 

@@ -55,6 +55,7 @@ export class RatesDiscListReader {
     return this.ratesService
       .findAllByUser(query, user, {
         stableTieBreak: true,
+        genreIds: criteria.genreIds,
       })
       .then((page) => ({
         totalItems: page.totalItems,

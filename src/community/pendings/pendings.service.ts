@@ -96,7 +96,11 @@ export class PendingsService {
   async findAllByUser(
     paginationDto: CommunityListQueryDto,
     user: User,
-    options?: { stableTieBreak: boolean; sort?: DiscListReaderSort },
+    options?: {
+      stableTieBreak: boolean;
+      sort?: DiscListReaderSort;
+      genreIds?: string[];
+    },
   ) {
     const {
       limit = 10,
@@ -166,6 +170,7 @@ export class PendingsService {
       dateRange,
       countryId: country,
       genreId: genre,
+      genreIds: options?.genreIds,
     };
     applyDiscListFilters(queryBuilder, discListFilters);
 

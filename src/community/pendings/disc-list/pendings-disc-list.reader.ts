@@ -46,6 +46,7 @@ export class PendingsDiscListReader {
       .findAllByUser(query, user, {
         stableTieBreak: true,
         sort: criteria.sort,
+        genreIds: criteria.genreIds,
       })
       .then((page) => ({
         totalItems: page.totalItems,
