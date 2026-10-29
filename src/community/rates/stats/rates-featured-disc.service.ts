@@ -109,13 +109,19 @@ export class RatesFeaturedDiscService {
           (row): row is GroupFeaturedDiscRow & { groupValue: string } =>
             row.groupType === 'month' && row.groupValue !== null,
         )
-        .map((row) => ({ month: row.groupValue, topDisc: mapFeaturedDisc(row) })),
+        .map((row) => ({
+          month: row.groupValue,
+          topDisc: mapFeaturedDisc(row),
+        })),
       byGenre: rows
         .filter(
           (row): row is GroupFeaturedDiscRow & { groupValue: string } =>
             row.groupType === 'genre' && row.groupValue !== null,
         )
-        .map((row) => ({ genre: row.groupValue, topDisc: mapFeaturedDisc(row) })),
+        .map((row) => ({
+          genre: row.groupValue,
+          topDisc: mapFeaturedDisc(row),
+        })),
     };
   }
 }

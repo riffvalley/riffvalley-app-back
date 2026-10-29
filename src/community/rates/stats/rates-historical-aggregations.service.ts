@@ -167,7 +167,9 @@ export class RatesHistoricalAggregationsService {
       .map(([date, count]) => {
         const assignments = assignmentsByDay.get(date) ?? [];
         if (assignments.length !== count) {
-          throw new Error('Historical daily assignment details do not match activity counts.');
+          throw new Error(
+            'Historical daily assignment details do not match activity counts.',
+          );
         }
         return { date, activityCount: count, assignments };
       });

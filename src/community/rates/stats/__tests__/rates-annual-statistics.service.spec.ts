@@ -195,9 +195,11 @@ describe('RatesAnnualStatisticsService', () => {
         'featured',
         'controversy',
       ]);
-      expect(
-        setup.featured.selectAnnualHighlightsForUser,
-      ).toHaveBeenCalledWith('session-user', year, 'America/Los_Angeles');
+      expect(setup.featured.selectAnnualHighlightsForUser).toHaveBeenCalledWith(
+        'session-user',
+        year,
+        'America/Los_Angeles',
+      );
     },
   );
 

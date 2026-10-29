@@ -201,10 +201,10 @@ integrationSuite('Rates historical cohort PostgreSQL integration', () => {
     });
 
     const blackMetalGenreId = randomUUID();
-    await dataSource.query('INSERT INTO "genre" ("id", "name") VALUES ($1, $2)', [
-      blackMetalGenreId,
-      'Black Metal',
-    ]);
+    await dataSource.query(
+      'INSERT INTO "genre" ("id", "name") VALUES ($1, $2)',
+      [blackMetalGenreId, 'Black Metal'],
+    );
     await dataSource.query(
       'UPDATE "disc" SET "genreId" = $2 WHERE "id" IN ($1, $3)',
       [firstDay2025.discId, blackMetalGenreId, duplicateDisc],

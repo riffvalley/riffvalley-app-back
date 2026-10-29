@@ -96,14 +96,14 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       [eligibleDiscId, wrongYearDiscId, '2027-05-01', '2026-12-31'],
     );
     const blackMetalGenreId = randomUUID();
-    await dataSource.query('INSERT INTO "genre" ("id", "name") VALUES ($1, $2)', [
-      blackMetalGenreId,
-      'Black Metal',
-    ]);
     await dataSource.query(
-      'UPDATE "disc" SET "genreId" = $2 WHERE "id" = $1',
-      [eligibleDiscId, blackMetalGenreId],
+      'INSERT INTO "genre" ("id", "name") VALUES ($1, $2)',
+      [blackMetalGenreId, 'Black Metal'],
     );
+    await dataSource.query('UPDATE "disc" SET "genreId" = $2 WHERE "id" = $1', [
+      eligibleDiscId,
+      blackMetalGenreId,
+    ]);
     await dataSource.query(
       'INSERT INTO "rate" ("id", "userId", "discId", rate, "createdAt") VALUES ($1, $2, $3, 8.5, now())',
       [randomUUID(), userId, eligibleDiscId],

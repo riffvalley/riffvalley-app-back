@@ -16,17 +16,19 @@ function createService(
     rate: number | string | null;
   }>,
 ) {
-  const dailyAssignments = dailyAssignmentOverride ?? rows.flatMap((row) =>
-    row.aggregation === 'day' && row.period
-      ? Array.from({ length: Number(row.activityCount) }, (_, index) => ({
-          date: row.period as string,
-          discId: `disc-${index + 1}`,
-          title: 'Album',
-          artist: null,
-          rate: null,
-        }))
-      : [],
-  );
+  const dailyAssignments =
+    dailyAssignmentOverride ??
+    rows.flatMap((row) =>
+      row.aggregation === 'day' && row.period
+        ? Array.from({ length: Number(row.activityCount) }, (_, index) => ({
+            date: row.period as string,
+            discId: `disc-${index + 1}`,
+            title: 'Album',
+            artist: null,
+            rate: null,
+          }))
+        : [],
+    );
   const repository = new Repository<Rate>(
     Rate,
     new EntityManager(
@@ -124,7 +126,9 @@ describe('RatesHistoricalAggregationsService', () => {
     expect(query.mock.calls[0][0]).toContain('disc."releaseDate" >= $2::date');
     expect(query.mock.calls[0][0]).toContain('genre.id = disc."genreId"');
     expect(query.mock.calls[1][0]).toContain('LEFT JOIN current_scores');
-    expect(query.mock.calls[1][0]).toContain('ORDER BY eligible_rate_rows."createdAtLocal", eligible_rate_rows."rateId"');
+    expect(query.mock.calls[1][0]).toContain(
+      'ORDER BY eligible_rate_rows."createdAtLocal", eligible_rate_rows."rateId"',
+    );
   });
 
   it('returns zero and twelve zero months when the historical source is empty', async () => {

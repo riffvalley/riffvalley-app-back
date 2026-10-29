@@ -178,7 +178,9 @@ export class RatesEventSetAggregationsService {
       .map(([date, count]) => {
         const assignments = assignmentsByDay.get(date) ?? [];
         if (assignments.length !== count) {
-          throw new Error('Event set daily assignment details do not match activity counts.');
+          throw new Error(
+            'Event set daily assignment details do not match activity counts.',
+          );
         }
         return { date, activityCount: count, assignments };
       });

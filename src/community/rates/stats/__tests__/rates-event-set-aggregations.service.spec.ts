@@ -19,17 +19,19 @@ function createService(
     rate: number | string | null;
   }>,
 ) {
-  const dailyAssignments = dailyAssignmentOverride ?? rows.flatMap((row) =>
-    row.aggregation === 'day' && row.period
-      ? Array.from({ length: Number(row.activityCount) }, (_, index) => ({
-          date: row.period as string,
-          discId: `disc-${index + 1}`,
-          title: 'Album',
-          artist: null,
-          rate: null,
-        }))
-      : [],
-  );
+  const dailyAssignments =
+    dailyAssignmentOverride ??
+    rows.flatMap((row) =>
+      row.aggregation === 'day' && row.period
+        ? Array.from({ length: Number(row.activityCount) }, (_, index) => ({
+            date: row.period as string,
+            discId: `disc-${index + 1}`,
+            title: 'Album',
+            artist: null,
+            rate: null,
+          }))
+        : [],
+    );
   const repository = new Repository<RateVoteEvent>(
     RateVoteEvent,
     new EntityManager(
@@ -76,16 +78,40 @@ describe('RatesEventSetAggregationsService', () => {
           date: '2027-01-01',
           activityCount: 2,
           assignments: [
-            { discId: 'disc-1', title: 'Album', artist: null, rate: null, date: '2027-01-01' },
-            { discId: 'disc-2', title: 'Album', artist: null, rate: null, date: '2027-01-01' },
+            {
+              discId: 'disc-1',
+              title: 'Album',
+              artist: null,
+              rate: null,
+              date: '2027-01-01',
+            },
+            {
+              discId: 'disc-2',
+              title: 'Album',
+              artist: null,
+              rate: null,
+              date: '2027-01-01',
+            },
           ],
         },
         {
           date: '2027-12-31',
           activityCount: 2,
           assignments: [
-            { discId: 'disc-1', title: 'Album', artist: null, rate: null, date: '2027-12-31' },
-            { discId: 'disc-2', title: 'Album', artist: null, rate: null, date: '2027-12-31' },
+            {
+              discId: 'disc-1',
+              title: 'Album',
+              artist: null,
+              rate: null,
+              date: '2027-12-31',
+            },
+            {
+              discId: 'disc-2',
+              title: 'Album',
+              artist: null,
+              rate: null,
+              date: '2027-12-31',
+            },
           ],
         },
       ],

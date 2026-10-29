@@ -39,16 +39,11 @@ export class RatesAnnualStatisticsService {
           year,
           timeZone,
         );
-    const [scores, highlights, controversy] =
-      await Promise.all([
-        this.currentScores.aggregateForUser(userId, year, timeZone),
-        this.featuredDisc.selectAnnualHighlightsForUser(
-          userId,
-          year,
-          timeZone,
-        ),
-        this.controversialDiscs.analyzeForUser(userId, year, timeZone),
-      ]);
+    const [scores, highlights, controversy] = await Promise.all([
+      this.currentScores.aggregateForUser(userId, year, timeZone),
+      this.featuredDisc.selectAnnualHighlightsForUser(userId, year, timeZone),
+      this.controversialDiscs.analyzeForUser(userId, year, timeZone),
+    ]);
 
     assertSameYear(year, activity.year, scores.year);
     return {
@@ -66,8 +61,9 @@ export class RatesAnnualStatisticsService {
           genre: item.genre,
           activityCount: item.activityCount,
           topDisc:
-            highlights.byGenre.find((highlight) => highlight.genre === item.genre)
-              ?.topDisc ?? null,
+            highlights.byGenre.find(
+              (highlight) => highlight.genre === item.genre,
+            )?.topDisc ?? null,
         }),
       ),
       activityByMonth: activity.activityByMonth.map(
@@ -75,8 +71,9 @@ export class RatesAnnualStatisticsService {
           month: item.month,
           activityCount: item.activityCount,
           topDisc:
-            highlights.byMonth.find((highlight) => highlight.month === item.month)
-              ?.topDisc ?? null,
+            highlights.byMonth.find(
+              (highlight) => highlight.month === item.month,
+            )?.topDisc ?? null,
         }),
       ),
       scoreDistribution: scores.scoreDistribution.map(
