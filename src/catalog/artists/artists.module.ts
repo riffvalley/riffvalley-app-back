@@ -13,6 +13,7 @@ import { ArtistWriteService } from './write/artist-write.service';
 import { ArtistCatalogService } from './catalog/artist-catalog.service';
 import { ArtistSearchService } from './search/artist-search.service';
 import { ArtistDetailsService } from './details/artist-details.service';
+import { ArtistDirectoryService } from './directory/artist-directory.service';
 
 @Module({
   controllers: [ArtistsController],
@@ -22,6 +23,7 @@ import { ArtistDetailsService } from './details/artist-details.service';
     ArtistWriteService,
     ArtistSearchService,
     ArtistDetailsService,
+    ArtistDirectoryService,
     ArtistManagementService,
     ArtistOrphansService,
   ],
