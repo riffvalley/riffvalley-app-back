@@ -29,6 +29,7 @@ import { TopDiscOptionsQueryDto } from './dto/top-disc-options-query.dto';
 import {
   DiscListOptionsQueryDto,
   DiscListQueryDto,
+  DiscListSuggestionsQueryDto,
 } from './list/dto/disc-list-contracts.dto';
 import { DiscListService } from './list/disc-list.service';
 
@@ -109,6 +110,12 @@ export class DiscsController {
     @GetUser() user: User,
   ) {
     return this.discListService.findOptions(query, user);
+  }
+
+  @Get('list/suggestions')
+  @Auth()
+  findDiscListSuggestions(@Query() query: DiscListSuggestionsQueryDto) {
+    return this.discListService.findSuggestions(query.query);
   }
 
   @Get('list')

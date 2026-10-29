@@ -19,6 +19,8 @@ import {
   mapDiscListRate,
 } from './helpers/map-disc-list-items';
 import { DiscListOptionsResponse, DiscListResponse } from './disc-list.types';
+import { DiscListSuggestionsService } from '../suggestions/disc-list-suggestions.service';
+import { DiscListSuggestionsResponse } from '../suggestions/disc-list-suggestions.types';
 
 @Injectable()
 export class DiscListService {
@@ -48,7 +50,16 @@ export class DiscListService {
       PendingsDiscListReader,
       'findByUser' | 'findOptions'
     >,
+    @Inject(DiscListSuggestionsService)
+    private readonly suggestionsService: Pick<
+      DiscListSuggestionsService,
+      'findSuggestions'
+    >,
   ) {}
+
+  findSuggestions(query?: string): Promise<DiscListSuggestionsResponse> {
+    return this.suggestionsService.findSuggestions(query);
+  }
 
   async findOptions(
     query: DiscListOptionsQueryDto,

@@ -4,6 +4,8 @@
 
 **Estado:** Catalog completado formalmente por BC-CAT el 2026-10-20. La evolución independiente de DiscList se registra en [Roadmap de Catalog](catalog.md); CAT-DISC-3b define sus contratos y CAT-DISC-3c registra la implementación backend. Las verificaciones de cierre BC-CAT están en [Backend Cleanup — Catalog](../backend-cleanup/catalog.md).
 
+**CAT-DISC-5 — Autocompletado:** CAT-DISC-5a (auditoría documental) y CAT-DISC-5b (backend de sugerencias) completadas el 2026-10-29 en [CAT-DISC-5a/5b](catalog-discs-autocomplete.md). CAT-DISC-5c (frontend) y CAT-DISC-5d (regresión y cierre) siguen pendientes y no se han iniciado.
+
 ## Estado de TopDiscs
 
 C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDiscs` devuelve hasta 11 discos. La ruta legacy `/homeDiscs` conserva por separado el comportamiento anterior y su límite de 20 hasta que se retire.
@@ -16,6 +18,7 @@ C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDisc
 - [CAT-DISC-3c — Implementación backend de DiscList](cat-disc-3c-implementacion-disc-list.md) — fachada, endpoint autenticado, lectores propietarios y verificaciones.
 - [CAT-DISC-3d — Opciones dinámicas de DiscList](cat-disc-3d-opciones-disc-list.md) — endpoint autenticado, opciones por modo y usuario, filtros cruzados y validación PostgreSQL aislada.
 - [CAT-DISC-4c.1a — Auditoría de medios y elegibilidad](catalog-discs-media-eligibility-audit.md) — investigación documental de Spotify, Bandcamp, persistencia de portadas/enlaces y la regla OR; CAT-DISC-4c.1b queda como implementación posible posterior.
+- [CAT-DISC-5a/5b — Autocompletado](catalog-discs-autocomplete.md) — auditoría y endpoint backend autenticado de sugerencias concurrentes con la búsqueda en vivo; límites 3/5, relevancia normalizada, contrato ligero y verificaciones. CAT-DISC-5c/5d pendientes.
 - [Regresión de Catalog del 2026-10-15](regression-2026-10-15.md) — registro histórico de pruebas de integración y recomendaciones pre-merge.
 - [Evidencia: selector de archivo bloqueado](regression-evidence/excel-selector-blocked.jpg) — captura asociada al informe de regresión.
 - [C-TOP-8 — Auditoría estadística de TopDiscs](c-top-8-auditoria-estadistica-topdiscs.md) — fórmula, universo estadístico, simulaciones reproducibles y recomendación; sin cambios de producción. Su estado de C-TOP-7 refleja la fecha histórica del informe; la tarea quedó completada después.

@@ -20,6 +20,7 @@ import { CommentsModule } from 'src/community/comments/comments.module';
 import { FavoritesModule } from 'src/community/favorites/favorites.module';
 import { PendingsModule } from 'src/community/pendings/pendings.module';
 import { DiscListService } from './list/disc-list.service';
+import { DiscListSuggestionsService } from './suggestions/disc-list-suggestions.service';
 
 @Module({
   controllers: [DiscsController],
@@ -33,6 +34,7 @@ import { DiscListService } from './list/disc-list.service';
     DiscTopService,
     DiscLinkMaintenanceService,
     DiscListService,
+    DiscListSuggestionsService,
   ],
   imports: [
     TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
