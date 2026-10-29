@@ -112,7 +112,7 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
     }
   });
 
-  it('selects only missing images and preserves review/name fields on conditional updates', async () => {
+  it('selects missing and review-pending images and corrects them conditionally', async () => {
     if (!client || !dataSource || !schema)
       throw new Error('PostgreSQL not initialized');
     await client.query(
@@ -124,12 +124,13 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
     );
     const spotify = {
       findArtistCandidates: jest.fn(async (name: string) =>
-        name === 'Verified Artist'
+        name === 'Verified Artist' || name === 'Existing Artist'
           ? [
               {
                 spotifyId: 'spotify-real-id',
-                name: 'Verified Artist',
-                imageUrl: 'verified.jpg',
+                name,
+                imageUrl:
+                  name === 'Verified Artist' ? 'verified.jpg' : 'corrected.jpg',
                 listenUrl: null,
                 genres: [],
               },
@@ -149,7 +150,7 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
     }).compile();
     const service = moduleRef.get(ArtistImageFillService);
     const preview = await service.preview();
-    expect(preview.eligible).toBe(2);
+    expect(preview.eligible).toBe(3);
     const result = await service.fill(
       Object.assign(new FillArtistImagesDto(), {
         cursor: preview.startCursor ?? undefined,
@@ -158,8 +159,8 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
     );
 
     expect(result).toMatchObject({
-      processed: 2,
-      updated: 1,
+      processed: 3,
+      updated: 2,
       notFound: 1,
       hasMore: false,
       nextCursor: null,
@@ -177,7 +178,7 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
         id: id(1),
         image: 'verified.jpg',
         name_normalized: 'verified artist',
-        needsReview: true,
+        needsReview: false,
       }),
       expect.objectContaining({
         id: id(2),
@@ -187,8 +188,8 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
       }),
       expect.objectContaining({
         id: id(3),
-        image: 'existing.jpg',
-        needsReview: true,
+        image: 'corrected.jpg',
+        needsReview: false,
       }),
     ]);
     await client.query(`DELETE FROM "${schema}".artist`);

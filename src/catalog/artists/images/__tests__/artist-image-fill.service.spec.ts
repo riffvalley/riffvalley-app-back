@@ -59,8 +59,13 @@ async function makeService(
   };
 }
 
-function artist(id: string, name: string): Artist {
-  return { id, name, image: null } as Artist;
+function artist(
+  id: string,
+  name: string,
+  image: string | null = null,
+  needsReview = false,
+): Artist {
+  return { id, name, image, needsReview } as Artist;
 }
 
 describe('ArtistImageFillService', () => {
@@ -215,11 +220,58 @@ describe('ArtistImageFillService', () => {
         },
       ],
     });
-    expect(updateQuery.set).toHaveBeenCalledWith({ image: 'spotify.jpg' });
+    expect(updateQuery.set).toHaveBeenCalledWith({
+      image: 'spotify.jpg',
+      needsReview: false,
+    });
     expect(updateQuery.where).toHaveBeenCalledWith('id = :id', { id: ids[0] });
     expect(updateQuery.andWhere).toHaveBeenCalledWith(
-      "(image IS NULL OR BTRIM(image) = '')",
+      'image IS NOT DISTINCT FROM :selectedImage',
+      { selectedImage: null },
     );
+    await moduleRef.close();
+  });
+
+  it('corrects a review-pending image and clears needsReview conditionally', async () => {
+    const updateQuery = makeBuilder({ affected: 1 });
+    const finished = makeBuilder({ exists: false });
+    const spotify = {
+      findArtistCandidates: jest.fn().mockResolvedValue([
+        {
+          spotifyId: 'provider-id',
+          name: 'The Artist',
+          imageUrl: 'corrected.jpg',
+          listenUrl: null,
+          genres: [],
+        },
+      ]),
+    };
+    const { service, moduleRef } = await makeService(
+      [
+        makeBuilder({ many: [artist(ids[0], 'The Artist', 'old.jpg', true)] }),
+        updateQuery,
+        finished,
+      ],
+      spotify,
+    );
+    const cursor = Buffer.from(
+      JSON.stringify({ version: 1, after: null, upperBound: ids[0] }),
+    ).toString('base64url');
+
+    const result = await service.fill(
+      Object.assign(new FillArtistImagesDto(), { cursor }),
+    );
+
+    expect(result).toMatchObject({ processed: 1, updated: 1, hasMore: false });
+    expect(updateQuery.set).toHaveBeenCalledWith({
+      image: 'corrected.jpg',
+      needsReview: false,
+    });
+    expect(updateQuery.andWhere).toHaveBeenCalledWith(
+      'image IS NOT DISTINCT FROM :selectedImage',
+      { selectedImage: 'old.jpg' },
+    );
+    expect(updateQuery.andWhere).toHaveBeenCalledWith('"needsReview" = true');
     await moduleRef.close();
   });
 

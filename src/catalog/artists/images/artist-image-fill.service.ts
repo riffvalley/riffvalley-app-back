@@ -153,15 +153,18 @@ export class ArtistImageFillService {
       };
     }
 
-    const result = await this.artistRepository
+    const updateQuery = this.artistRepository
       .createQueryBuilder()
       .update(Artist)
-      .set({ image })
+      .set({ image, needsReview: false })
       .where('id = :id', { id: artist.id })
-      .andWhere("(image IS NULL OR BTRIM(image) = '')")
-      .execute();
+      .andWhere('image IS NOT DISTINCT FROM :selectedImage', {
+        selectedImage: artist.image,
+      });
+    if (artist.image?.trim()) updateQuery.andWhere('"needsReview" = true');
+    const updateResult = await updateQuery.execute();
 
-    return result.affected === 1
+    return updateResult.affected === 1
       ? { artistId: artist.id, outcome: 'updated' }
       : {
           artistId: artist.id,
@@ -173,8 +176,15 @@ export class ArtistImageFillService {
   private eligibleQuery(): SelectQueryBuilder<Artist> {
     return this.artistRepository
       .createQueryBuilder('artist')
-      .select(['artist.id', 'artist.name', 'artist.image'])
-      .where("(artist.image IS NULL OR BTRIM(artist.image) = '')");
+      .select([
+        'artist.id',
+        'artist.name',
+        'artist.image',
+        'artist.needsReview',
+      ])
+      .where(
+        '(artist.image IS NULL OR BTRIM(artist.image) = \'\') OR artist."needsReview" = true',
+      );
   }
 
   private async highWatermark(): Promise<string | null> {

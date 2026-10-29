@@ -12,13 +12,13 @@ El informe referenciado como `cat-art-4a-auditoria-rellenar-imagenes.md` no est�
 
 ## Recorrido, búsqueda y persistencia
 
-El recorrido ordena por UUID ascendente y usa comparación keyset (`id > after`), más el límite superior capturado al crear el cursor. Solo selecciona imágenes nulas o vacías. El cursor avanza al último ID seleccionado independientemente de si se actualizó, no hubo candidato, hubo ambigüedad o falló Spotify. Una imagen añadida concurrentemente no altera el orden ni desplaza otros registros como ocurriría con `OFFSET`.
+El recorrido ordena por UUID ascendente y usa comparación keyset (`id > after`), más el límite superior capturado al crear el cursor. Selecciona artistas con imagen nula/vacía y artistas con `needsReview=true`, incluidos estos últimos cuando ya tienen imagen. El cursor avanza al último ID seleccionado independientemente de si se actualizó, no hubo candidato, hubo ambigüedad o falló Spotify. Una imagen añadida concurrentemente no altera el orden ni desplaza otros registros como ocurriría con `OFFSET`.
 
 El límite superior es el UUID mayor observado, no una marca temporal: los UUID aleatorios no permiten un snapshot de inserciones entre peticiones. Un registro nuevo con ID entre `after` y el límite aún puede aparecer; uno con ID anterior a `after` o superior al límite queda fuera. Si otra operación elimina una imagen de un artista cuyo ID ya pasó, ese artista se recoge en un nuevo preview, no en el cursor actual. No se mantiene una transacción ni una tabla de snapshot entre peticiones.
 
 La búsqueda reutiliza `SpotifyPublicApiService.findArtistCandidates` y recupera hasta cinco perfiles. Compara nombres con `compareNormalizedMusicNames`. Cero candidatos compatibles produce `not_found`; más de uno produce `ambiguous`; exactamente uno con imagen puede actualizarse. Esta señal verifica compatibilidad textual y unicidad dentro de la muestra de Spotify, no demuestra identidad musical independiente. La búsqueda del proveedor no ofrece en este flujo un identificador local u otra evidencia común para desambiguar homónimos; por tanto, un homónimo fuera de los cinco candidatos sigue siendo un riesgo residual. No se guarda ningún ID inventado.
 
-La escritura ejecuta `UPDATE artist SET image = ... WHERE id = ... AND (image IS NULL OR BTRIM(image) = '')`, sin pasar por `ArtistWriteService.update()`. `affected = 0` se informa como `concurrent_update`. La operación no toca `needsReview`, nombre ni claves normalizadas.
+La escritura ejecuta un `UPDATE` por ID que fija `image` a la imagen verificada de Spotify y `needsReview=false`. La condición compara la imagen actual con la imagen leída al seleccionar el artista; si ya tenía imagen, también exige que siga con `needsReview=true`. Así se permite corregir imágenes existentes marcadas para revisión, pero no sobrescribir una imagen modificada concurrentemente. `affected = 0` se informa como `concurrent_update`. Los artistas sin coincidencia, ambiguos o con error del proveedor conservan imagen y estado. No se modifican nombres ni claves normalizadas.
 
 ## Tiempo y concurrencia
 
