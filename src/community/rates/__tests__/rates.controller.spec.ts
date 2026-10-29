@@ -11,6 +11,7 @@ import {
   METHOD_METADATA,
   PATH_METADATA,
   ROUTE_ARGS_METADATA,
+  SELF_DECLARED_DEPS_METADATA,
 } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
 import { META_MINIMUM_ROLE } from 'src/identity/auth/decorators/role-protected.decorator';
@@ -100,6 +101,18 @@ function createUsersService(): UsersService {
 }
 
 describe('RatesController home insights route', () => {
+  it('uses the annual statistics class as the Nest injection token', () => {
+    const dependencies = Reflect.getMetadata(
+      SELF_DECLARED_DEPS_METADATA,
+      RatesController,
+    ) as Array<{ index: number; param: unknown }>;
+
+    expect(dependencies).toContainEqual({
+      index: 4,
+      param: RatesAnnualStatisticsService,
+    });
+  });
+
   it('registers an authenticated personal dashboard summary route', async () => {
     const ratesService = new RatesService(createRateRepository());
     const ratesStatsService = new RatesStatsService(

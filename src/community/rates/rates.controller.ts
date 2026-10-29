@@ -8,6 +8,7 @@ import {
   Delete,
   BadRequestException,
   ForbiddenException,
+  Inject,
   ParseUUIDPipe,
   Query,
   Optional,
@@ -35,6 +36,7 @@ export class RatesController {
     private readonly ratesStatsService: RatesStatsService,
     private readonly ratesHistoryService: RatesHistoryService,
     private readonly ratesDashboardSummaryService: RatesDashboardSummaryService,
+    @Inject(RatesAnnualStatisticsService)
     @Optional()
     private readonly annualStatisticsService?: Pick<
       RatesAnnualStatisticsService,
