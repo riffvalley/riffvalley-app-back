@@ -75,62 +75,6 @@
     },
     {
       "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
-      "line": 1,
-      "column": 9,
-      "fingerprint": "3b49d1145ff507ab017a89856b1c6f8ccf51e9fcb9f392e53004485e3e748855",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
-      "line": 26,
-      "column": 34,
-      "fingerprint": "78b2da0193d8819b90429493b17a29e9ebc0a987fd2a91165052e8258bff6059",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
-      "line": 42,
-      "column": 17,
-      "fingerprint": "6e79d13b9fd1c55bde45d3aef67e5ace0e6c7799debaf629a3b7dfc448943c6f",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
-      "line": 74,
-      "column": 6,
-      "fingerprint": "d90f4a48858bbc580375588259a5007f0b7133d293ea14d337133fcbf7c88cb2",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/__tests__/lastfm-api.service.spec.ts",
-      "line": 76,
-      "column": 34,
-      "fingerprint": "54070a870bf08785d6a0904b92c8ece51f42ad516a033ae4e7dc66295f2a24b9",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-api.service.ts",
-      "line": 29,
-      "column": 37,
-      "fingerprint": "fd0ea179759def589b72e56507e36f2fa188e81bd7edc8b1ec75c7ec92b85a73",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
-      "path": "src/integrations/lastfm-integration/lastfm-api.service.ts",
-      "line": 64,
-      "column": 20,
-      "fingerprint": "7f8cec3d11234e21de768995f81a1302741b1a7465a3dbdac0dd55d3d407042a",
-      "occurrence": 0
-    },
-    {
-      "rule": "prettier/prettier",
       "path": "src/integrations/lastfm-integration/__tests__/lastfm-integration.module.spec.ts",
       "line": 12,
       "column": 12,
