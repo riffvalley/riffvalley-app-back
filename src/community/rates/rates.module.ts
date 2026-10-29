@@ -18,12 +18,30 @@ import { LastfmIntegrationModule } from 'src/integrations/lastfm-integration/las
 import { RatesArtistLastfmController } from './lastfm/rates-artist-lastfm.controller';
 import { RatesArtistLastfmService } from './lastfm/rates-artist-lastfm.service';
 import { RatesDiscListReader } from './disc-list/rates-disc-list.reader';
+import { RatesHistoricalCohortService } from './stats/rates-historical-cohort.service';
+import { RatesHistoricalAggregationsService } from './stats/rates-historical-aggregations.service';
+import { RatesEventSetCohortService } from './stats/rates-event-set-cohort.service';
+import { RatesEventSetAggregationsService } from './stats/rates-event-set-aggregations.service';
+import { RatesCurrentScoresService } from './stats/rates-current-scores.service';
+import { RatesFeaturedDiscService } from './stats/rates-featured-disc.service';
+import { RatesControversialDiscsService } from './stats/rates-controversial-discs.service';
+import { RatesGalaxyDiscsService } from './stats/rates-galaxy-discs.service';
+import { RatesAnnualStatisticsService } from './stats/rates-annual-statistics.service';
 
 @Module({
   controllers: [RatesController, RatesArtistLastfmController], // Controladores que gestionan las rutas
   providers: [
     RatesService,
     RatesStatsService,
+    RatesHistoricalCohortService,
+    RatesHistoricalAggregationsService,
+    RatesEventSetCohortService,
+    RatesEventSetAggregationsService,
+    RatesCurrentScoresService,
+    RatesFeaturedDiscService,
+    RatesControversialDiscsService,
+    RatesGalaxyDiscsService,
+    RatesAnnualStatisticsService,
     RatesHistoryService,
     HistoricalRatesStatsService,
     RatesRandomSelectionService,
@@ -41,6 +59,15 @@ import { RatesDiscListReader } from './disc-list/rates-disc-list.reader';
   ], // Registro de la entidad Rate en TypeORM
   exports: [
     RatesStatsService,
+    RatesHistoricalCohortService,
+    RatesHistoricalAggregationsService,
+    RatesEventSetCohortService,
+    RatesEventSetAggregationsService,
+    RatesCurrentScoresService,
+    RatesFeaturedDiscService,
+    RatesControversialDiscsService,
+    RatesGalaxyDiscsService,
+    RatesAnnualStatisticsService,
     HistoricalRatesStatsService,
     RatesRandomSelectionService,
     CommunityDashboardRatesService,
