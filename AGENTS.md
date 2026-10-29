@@ -38,6 +38,10 @@ pnpm run verify
 
 GitHub Actions ejecuta `pnpm run verify` en `push` y `pull_request`, con Node 24. El workflow conserva estado de fallo y logs visibles. No configura protección de ramas ni checks obligatorios para merge; esa política se gestiona fuera de este repositorio.
 
+## Convenciones Git
+
+Nombra las ramas según el tipo de cambio, con prefijos como `feat/`, `fix/`, `chore/`, `docs/` o `refactor/` y una descripción breve. No uses `codex/` como prefijo de rama.
+
 ### Quality Gate de pruebas
 
 `pnpm run test:unit` ejecuta las suites unitarias de `src/` usando la configuración Jest de `package.json`; `pnpm run test:e2e` ejecuta únicamente los specs `*.e2e-spec.ts` mediante `test/jest-e2e.json`. Ambos comandos propagan el resultado de Jest: cualquier test fallido termina con código distinto de cero. No hay baseline de tests. `pnpm run test:quality-tests` comprueba esa conducta con un fixture Jest aprobado y otro que falla una expectativa. Las reglas y pruebas unitarias son obligatorias para código nuevo y `pnpm run test:unit` forma parte de `pnpm run verify`. E2E queda fuera del control estándar; ejecútalo solo cuando el entorno esté aislado y autorizado. No conectes tests a PostgreSQL ni servicios reales por defecto.
