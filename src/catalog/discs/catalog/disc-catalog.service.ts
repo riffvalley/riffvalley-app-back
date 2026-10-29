@@ -20,6 +20,7 @@ import {
 import { DiscListOptionsResponse } from '../list/disc-list.types';
 import { buildMusicNameMultiColumnPartialPredicate } from '../../shared/music-name/music-name-search';
 import { normalizeForSearch } from '../../artists/helpers/normalize-for-search';
+import { applyDiscListArtistIdFilter } from '../../shared/disc-list/apply-disc-list-artist-id-filter';
 
 const FIND_ALL_ORDER_FIELDS: Record<string, string> = {
   'disc.releaseDate': 'disc.releaseDate',
@@ -314,6 +315,7 @@ export class DiscCatalogService {
     return this.findAll(legacyQuery, user, {
       stableTieBreak: true,
       genreIds: paginationDto.genreIds,
+      artistId: paginationDto.artistId,
     });
   }
 
@@ -345,6 +347,7 @@ export class DiscCatalogService {
             : criteria.genreId,
         genreIds: omitGenre ? undefined : criteria.genreIds,
         countryFilter: omitCountry ? undefined : criteria.countryId,
+        artistId: criteria.artistId,
         query: criteria.query,
         startDate: criteria.dateRange?.[0],
         endDate: criteria.dateRange?.[1],
@@ -417,7 +420,11 @@ export class DiscCatalogService {
   async findAll(
     paginationDto: DiscsListQueryDto,
     user: User,
-    options?: { stableTieBreak: boolean; genreIds?: string[] },
+    options?: {
+      stableTieBreak: boolean;
+      genreIds?: string[];
+      artistId?: string;
+    },
   ) {
     const {
       limit = 10,
@@ -515,6 +522,7 @@ export class DiscCatalogService {
     const filterOptions = {
       genre,
       countryFilter,
+      artistId: options?.artistId,
       query,
       startDate,
       endDate,
@@ -601,18 +609,22 @@ export class DiscCatalogService {
       endDate?: Date;
       voted?: string | boolean;
       votedType?: string;
+      artistId?: string;
     },
   ): void {
     const {
       genre,
       genreIds,
       countryFilter,
+      artistId,
       query,
       startDate,
       endDate,
       voted,
       votedType,
     } = filters;
+
+    applyDiscListArtistIdFilter(queryBuilder, artistId);
 
     if (genreIds !== undefined) {
       if (genreIds.length > 0) {

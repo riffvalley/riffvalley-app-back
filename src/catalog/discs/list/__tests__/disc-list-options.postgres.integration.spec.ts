@@ -21,7 +21,10 @@ import {
 } from '../../top/__tests__/home-postgres-types';
 
 const describePostgres =
-  process.env.DISC_LIST_OPTIONS_PG_TEST === '1' ? describe : describe.skip;
+  process.env.DISC_LIST_OPTIONS_PG_TEST === '1' ||
+  process.env.DISC_LIST_OPTIONS_PG_TEST === 'catalog-test'
+    ? describe
+    : describe.skip;
 const USER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_USER_ID = '00000000-0000-4000-8000-000000000002';
 const COUNTRY_NO = '00000000-0000-4000-8000-000000000003';
@@ -47,6 +50,53 @@ function sessionUser(idValue = USER_ID): User {
   return Object.assign(new User(), { id: idValue });
 }
 
+function requireDisposableCatalogTestTarget(): void {
+  if (
+    process.env.DISC_LIST_OPTIONS_PG_TEST !== 'catalog-test' ||
+    process.env.STAGE !== 'dev' ||
+    process.env.DB_HOST !== '127.0.0.1' ||
+    process.env.DB_PORT !== '55432' ||
+    process.env.DB_NAME !== 'riffvalley_catalog_test_20261015' ||
+    process.env.DB_USERNAME !== 'riffvalley_catalog_test' ||
+    !process.env.CATALOG_TEST_DB_PASSWORD ||
+    process.env.DATABASE_URL
+  ) {
+    throw new Error(
+      'La regresión de DiscList requiere la base PostgreSQL Catalog desechable de localhost.',
+    );
+  }
+  process.env.DB_PASSWORD = process.env.CATALOG_TEST_DB_PASSWORD;
+}
+
+async function verifyDisposableCatalogTestIdentity(
+  client: HomePostgresClient,
+): Promise<void> {
+  const identity = await client.query(`
+    SELECT current_database() AS database,
+           current_user AS username,
+           pg_get_userbyid(datdba) AS owner,
+           inet_server_port() AS port,
+           (SELECT count(*)::integer FROM pg_class relation
+             JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+             WHERE namespace.nspname = 'public'
+               AND relation.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')) AS public_relation_count
+    FROM pg_database
+    WHERE datname = current_database()
+  `);
+  const row = identity.rows[0];
+  if (
+    row?.database !== 'riffvalley_catalog_test_20261015' ||
+    row.username !== 'riffvalley_catalog_test' ||
+    row.owner !== 'riffvalley_catalog_test' ||
+    Number(row.port) !== 5432 ||
+    Number(row.public_relation_count) !== 0
+  ) {
+    throw new Error(
+      'La conexión PostgreSQL no corresponde a la base Catalog desechable y vacía.',
+    );
+  }
+}
+
 describePostgres('DiscList dynamic options PostgreSQL integration', () => {
   let dataSource: DataSource;
   let client: HomePostgresClient;
@@ -59,7 +109,13 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
   beforeAll(async () => {
     const dotenv = await import('dotenv');
     dotenv.config();
-    requireTopDiscsPostgresTestTarget('DISC_LIST_OPTIONS_PG_TEST');
+    const disposableCatalogTarget =
+      process.env.DISC_LIST_OPTIONS_PG_TEST === 'catalog-test';
+    if (disposableCatalogTarget) {
+      requireDisposableCatalogTestTarget();
+    } else {
+      requireTopDiscsPostgresTestTarget('DISC_LIST_OPTIONS_PG_TEST');
+    }
     const { Client } = await import('pg');
     client = new Client({
       host: process.env.DB_HOST,
@@ -69,7 +125,11 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
       password: process.env.DB_PASSWORD,
     });
     await client.connect();
-    await verifyTopDiscsPostgresTestIdentity(client);
+    if (disposableCatalogTarget) {
+      await verifyDisposableCatalogTestIdentity(client);
+    } else {
+      await verifyTopDiscsPostgresTestIdentity(client);
+    }
     const optionEntities = [
       new EntitySchema<Record<string, unknown>>({
         name: 'Country',
@@ -239,10 +299,14 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
     await dataSource.initialize();
     await dataSource.query(`
       CREATE TEMP TABLE country (id uuid PRIMARY KEY, name text, "isoCode" text);
-      CREATE TEMP TABLE artist (id uuid PRIMARY KEY, name text, name_normalized text, "countryId" uuid);
+      CREATE TEMP TABLE artist (
+        id uuid PRIMARY KEY, name text, name_normalized text,
+        search_name_normalized text, "countryId" uuid
+      );
       CREATE TEMP TABLE genre (id uuid PRIMARY KEY, name text, color text);
       CREATE TEMP TABLE disc (
-        id uuid PRIMARY KEY, name text, "releaseDate" date, "artistId" uuid,
+        id uuid PRIMARY KEY, name text, search_name_normalized text,
+        "releaseDate" date, "artistId" uuid,
         "genreId" uuid, image text, link text, ep boolean, debut boolean
       );
       CREATE TEMP TABLE rate (id uuid PRIMARY KEY, "discId" uuid, "userId" uuid, rate numeric, cover numeric);
@@ -293,7 +357,7 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
       [COUNTRY_NO, COUNTRY_SE],
     );
     await dataSource.query(
-      `INSERT INTO artist (id, name, name_normalized, "countryId") VALUES ($1, 'Norway Artist', 'norway artist', $2), ($3, 'No Country Artist', 'no country artist', NULL), ($4, 'Sweden Artist', 'sweden artist', $5)`,
+      `INSERT INTO artist (id, name, name_normalized, search_name_normalized, "countryId") VALUES ($1, 'Norway Artist', 'norway artist', 'norway artist', $2), ($3, 'No Country Artist', 'no country artist', 'no country artist', NULL), ($4, 'Sweden Artist', 'sweden artist', 'sweden artist', $5)`,
       [ARTIST_ID, COUNTRY_NO, MISSING_ARTIST_ID, ARTIST_SE_ID, COUNTRY_SE],
     );
     await dataSource.query(
@@ -302,8 +366,8 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
     );
     for (let index = 1; index <= 25; index += 1) {
       await dataSource.query(
-        `INSERT INTO disc (id, name, "releaseDate", "artistId", "genreId", image, link, ep, debut)
-         VALUES ($1, $2, DATE '2026-06-01', $3, $4, NULL, NULL, false, false)`,
+        `INSERT INTO disc (id, name, search_name_normalized, "releaseDate", "artistId", "genreId", image, link, ep, debut)
+         VALUES ($1, $2, $5, DATE '2026-06-01', $3, $4, NULL, NULL, false, false)`,
         [
           id(index),
           `Option fixture ${index}`,
@@ -313,6 +377,7 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
               ? ARTIST_SE_ID
               : ARTIST_ID,
           index % 2 === 0 ? GENRE_DOOM : GENRE_BLACK,
+          `option fixture ${index}`,
         ],
       );
     }
@@ -335,8 +400,8 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
       }
     }
     await dataSource.query(
-      `INSERT INTO disc (id, name, "releaseDate", "artistId", "genreId", image, link, ep, debut)
-       VALUES ($1, 'No genre fixture', DATE '2026-06-01', $2, NULL, NULL, NULL, false, false)`,
+      `INSERT INTO disc (id, name, search_name_normalized, "releaseDate", "artistId", "genreId", image, link, ep, debut)
+       VALUES ($1, 'No genre fixture', 'no genre fixture', DATE '2026-06-01', $2, NULL, NULL, NULL, false, false)`,
       [id(26), ARTIST_SE_ID],
     );
     await dataSource.query(
@@ -448,6 +513,176 @@ describePostgres('DiscList dynamic options PostgreSQL integration', () => {
         expect.objectContaining({ id: GENRE_BLACK, name: 'Black Metal' }),
       ],
     });
+  });
+
+  it('filters every mode, count, page, and contextual option by exact artist ID', async () => {
+    const artistCriteria = Object.assign(new DiscListOptionsQueryDto(), {
+      query: 'Option fixture',
+      dateRange: [new Date('2026-06-01'), new Date('2026-06-30')] as [
+        Date,
+        Date,
+      ],
+      artistId: ARTIST_ID,
+      genreIds: [GENRE_BLACK, GENRE_DOOM],
+    });
+    const user = sessionUser();
+    const optionsFor = async (mode: DiscListMode) => {
+      const query = Object.assign(new DiscListOptionsQueryDto(), {
+        ...artistCriteria,
+        mode,
+      });
+      if (mode === DiscListMode.ALL)
+        return catalog.findDiscListOptions(query, user);
+      if (mode === DiscListMode.RATES)
+        return rates.findDiscListOptions(query, user, 'rate');
+      if (mode === DiscListMode.COVERS)
+        return rates.findDiscListOptions(query, user, 'cover');
+      if (mode === DiscListMode.COMMENTS)
+        return comments.findDiscListOptions(query, user);
+      if (mode === DiscListMode.FAVORITES)
+        return favorites.findDiscListOptions(query, user);
+      return pendings.findDiscListOptions(query, user);
+    };
+
+    for (const mode of Object.values(DiscListMode)) {
+      const options = await optionsFor(mode);
+      const expectedCountries = mode === DiscListMode.COVERS ? [] : ['Norway'];
+      expect(options.countries.map(({ name }) => name)).toEqual(
+        expectedCountries,
+      );
+      const expectedGenres =
+        mode === DiscListMode.COVERS
+          ? []
+          : mode === DiscListMode.PENDIENTES || mode === DiscListMode.COMMENTS
+            ? ['Black Metal']
+            : ['Black Metal', 'Doom'];
+      expect({ mode, genres: options.genres.map(({ name }) => name) }).toEqual({
+        mode,
+        genres: expectedGenres,
+      });
+    }
+
+    const listQuery = Object.assign(new DiscListQueryDto(), {
+      ...artistCriteria,
+      mode: DiscListMode.ALL,
+      countryId: COUNTRY_NO,
+      limit: 2,
+      offset: 2,
+    });
+    const catalogPage = await catalog.findDiscList(listQuery, user);
+    expect(catalogPage.totalItems).toBe(14);
+    expect(catalogPage.data).toHaveLength(2);
+    expect(catalogPage.data.every((disc) => disc.artist.id === ARTIST_ID)).toBe(
+      true,
+    );
+
+    const communityQuery = Object.assign(new CommunityListQueryDto(), {
+      limit: 20,
+      offset: 0,
+      query: artistCriteria.query,
+      dateRange: artistCriteria.dateRange,
+      country: COUNTRY_NO,
+      genre: GENRE_BLACK,
+      type: 'rate',
+    });
+    const readerOptions = {
+      stableTieBreak: true,
+      genreIds: artistCriteria.genreIds,
+      artistId: ARTIST_ID,
+    };
+    const ratesPage = await rates.findAllByUser(
+      communityQuery,
+      user,
+      readerOptions,
+    );
+    expect(ratesPage.totalItems).toBe(10);
+    expect(
+      ratesPage.data.every(
+        (entry) => entry.disc.artist.country?.id === COUNTRY_NO,
+      ),
+    ).toBe(true);
+
+    const coversPage = await rates.findAllByUser(
+      Object.assign(new CommunityListQueryDto(), communityQuery, {
+        type: 'cover',
+      }),
+      user,
+      readerOptions,
+    );
+    expect(coversPage.totalItems).toBe(0);
+    expect(coversPage.data).toEqual([]);
+
+    const commentsPage = await comments.findAllByUser(
+      Object.assign(new CommunityListQueryDto(), communityQuery, {
+        type: 'comment',
+      }),
+      user,
+      {
+        ...readerOptions,
+        includeCountry: true,
+      },
+    );
+    expect(commentsPage.totalItems).toBe(2);
+    expect(
+      commentsPage.data.every(
+        ({ disc }) => disc.artist.name === 'Norway Artist',
+      ),
+    ).toBe(true);
+
+    const favoritesPage = await favorites.findAllByUser(
+      communityQuery,
+      user,
+      readerOptions,
+    );
+    expect(favoritesPage.totalItems).toBe(14);
+    expect(
+      favoritesPage.data.every(
+        ({ disc }) => disc.artist.name === 'Norway Artist',
+      ),
+    ).toBe(true);
+
+    const favoritesPageTwo = await favorites.findAllByUser(
+      Object.assign(new CommunityListQueryDto(), communityQuery, {
+        limit: 2,
+        offset: 2,
+      }),
+      user,
+      readerOptions,
+    );
+    expect(favoritesPageTwo.totalItems).toBe(14);
+    expect(favoritesPageTwo.data).toHaveLength(2);
+
+    const otherUserFavorites = await favorites.findAllByUser(
+      communityQuery,
+      sessionUser(OTHER_USER_ID),
+      readerOptions,
+    );
+    expect(otherUserFavorites.totalItems).toBe(0);
+
+    const pendingPage = await pendings.findAllByUser(
+      communityQuery,
+      user,
+      readerOptions,
+    );
+    expect(pendingPage.totalItems).toBe(1);
+    expect(pendingPage.data[0]?.disc.artist.name).toBe('Norway Artist');
+
+    const missingArtist = id(999);
+    const missingPage = await catalog.findDiscList(
+      Object.assign(new DiscListQueryDto(), listQuery, {
+        artistId: missingArtist,
+      }),
+      user,
+    );
+    expect(missingPage).toMatchObject({ totalItems: 0, data: [] });
+    await expect(
+      catalog.findDiscListOptions(
+        Object.assign(new DiscListOptionsQueryDto(), artistCriteria, {
+          artistId: missingArtist,
+        }),
+        user,
+      ),
+    ).resolves.toEqual({ countries: [], genres: [] });
   });
 
   it('keeps rate and cover eligibility separate, ignores other users, and deduplicates comments', async () => {

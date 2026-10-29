@@ -100,6 +100,7 @@ export class PendingsService {
       stableTieBreak: boolean;
       sort?: DiscListReaderSort;
       genreIds?: string[];
+      artistId?: string;
     },
   ) {
     const {
@@ -169,6 +170,7 @@ export class PendingsService {
       query,
       dateRange,
       countryId: country,
+      artistId: options?.artistId,
       genreId: genre,
       genreIds: options?.genreIds,
     };

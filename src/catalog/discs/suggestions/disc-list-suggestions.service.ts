@@ -23,6 +23,7 @@ export type MusicSuggestionQueryBuilder<Entity> = Pick<
   | 'where'
   | 'andWhere'
   | 'innerJoin'
+  | 'leftJoin'
   | 'orderBy'
   | 'addOrderBy'
   | 'take'
@@ -37,6 +38,9 @@ interface ArtistSuggestionRow {
   id: string;
   name: string;
   image: string | null;
+  countryId: string | null;
+  countryName: string | null;
+  countryIsoCode: string | null;
 }
 
 interface DiscSuggestionRow {
@@ -72,7 +76,7 @@ export class DiscListSuggestionsService {
 
   private async findArtistSuggestions(
     query: string,
-  ): Promise<ArtistSuggestionRow[]> {
+  ): Promise<DiscListSuggestionsResponse['artists']> {
     const search = buildMusicNamePartialPredicate(
       query,
       'artist.search_name_normalized',
@@ -86,18 +90,36 @@ export class DiscListSuggestionsService {
       'artistSuggestionRank',
     );
 
-    return this.artistRepository
+    const rows = await this.artistRepository
       .createQueryBuilder('artist')
+      .leftJoin('artist.country', 'country')
       .select('artist.id', 'id')
       .addSelect('artist.name', 'name')
       .addSelect('artist.image', 'image')
+      .addSelect('country.id', 'countryId')
+      .addSelect('country.name', 'countryName')
+      .addSelect('country.isoCode', 'countryIsoCode')
       .addSelect(rank.expression, 'suggestionRank')
       .where(search.predicate, { ...search.parameters, ...rank.parameters })
-      .orderBy('suggestionRank', 'ASC')
+      .orderBy('"suggestionRank"', 'ASC')
       .addOrderBy('artist.name', 'ASC')
       .addOrderBy('artist.id', 'ASC')
       .take(ARTIST_SUGGESTION_LIMIT)
       .getRawMany<ArtistSuggestionRow>();
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      image: row.image,
+      country:
+        row.countryId && row.countryName
+          ? {
+              id: row.countryId,
+              name: row.countryName,
+              isoCode: row.countryIsoCode,
+            }
+          : null,
+    }));
   }
 
   private async findDiscSuggestions(
@@ -143,7 +165,7 @@ export class DiscListSuggestionsService {
       .andWhere('disc.releaseDate <= :suggestionToday', {
         suggestionToday: new Date(),
       })
-      .orderBy('suggestionRank', 'ASC')
+      .orderBy('"suggestionRank"', 'ASC')
       .addOrderBy('disc.name', 'ASC')
       .addOrderBy('artist.name', 'ASC')
       .addOrderBy('disc.id', 'ASC')

@@ -99,18 +99,24 @@ describe('DiscList query contracts', () => {
   });
 
   it('validates UUID filters, integer offset, and bounded positive limit', async () => {
+    const artistId = 'e1234567-89ab-4cde-8123-456789abcdef';
     const valid = await validateList({
       mode: 'favorites',
       countryId: 'a1234567-89ab-4cde-8123-456789abcdef',
+      artistId,
       genreId: 'b1234567-89ab-4cde-8123-456789abcdef',
       offset: '40',
       limit: '100',
     });
 
-    expect(valid).toMatchObject({ offset: 40, limit: 100 });
+    expect(valid).toMatchObject({ offset: 40, limit: 100, artistId });
+    await expect(
+      validateOptions({ mode: 'all', artistId }),
+    ).resolves.toMatchObject({ artistId });
 
     for (const input of [
       { mode: 'all', countryId: 'not-a-uuid' },
+      { mode: 'all', artistId: 'not-a-uuid' },
       { mode: 'all', genreId: 'not-a-uuid' },
       { mode: 'all', offset: '-1' },
       { mode: 'all', offset: '1.5' },
@@ -121,6 +127,9 @@ describe('DiscList query contracts', () => {
         BadRequestException,
       );
     }
+    await expect(
+      validateOptions({ mode: 'all', artistId: 'not-a-uuid' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('accepts CSV or repeated genreIds, normalizes duplicates, and rejects empty or invalid IDs', async () => {

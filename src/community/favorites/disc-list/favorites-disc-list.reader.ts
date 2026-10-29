@@ -47,6 +47,7 @@ export class FavoritesDiscListReader {
       .findAllByUser(query, user, {
         stableTieBreak: true,
         genreIds: criteria.genreIds,
+        artistId: criteria.artistId,
       })
       .then((page) => ({
         totalItems: page.totalItems,

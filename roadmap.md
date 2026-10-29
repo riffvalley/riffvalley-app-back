@@ -14,8 +14,8 @@ Roadmap de reorganización progresiva del backend de Riff Valley para mejorar la
 
 ## Roadmaps por área
 
-- [Catalog](roadmap/catalog/README.md) — ownership de Catalog y planificación de Discs, Artists, Genres, Countries e integración de Catalog; CAT-ART-2b/4b y CAT-DISC-5a/5b completadas; las siguientes fases de Artistas y Discs siguen pendientes.
-- [MEDIA — Búsqueda y matching musical](roadmap/catalog/music-search-matching.md) — MEDIA-3b.7 completada: mediciones sintéticas PostgreSQL no justifican índices nuevos para la cardinalidad actual. P1 de Requests/Excel siguen abiertos y MEDIA-3b.6 global no cerrada; MEDIA-3b.8 pendiente. Véase la [auditoría de duplicados e identidad](roadmap/catalog/music-search-duplicates-audit.md) y el [diseño SQL con resultados de rendimiento](roadmap/catalog/music-search-sql-design.md); MEDIA-4–MEDIA-6 y MEDIA-8 pendientes, MEDIA-7 descartada.
+- [Catalog](roadmap/catalog/README.md) — ownership de Catalog y planificación de Discs, Artists, Genres, Countries e integración de Catalog; CAT-ART-2b/4b y CAT-DISC-5a/5b/5b.1 completadas; las siguientes fases de Artistas y Discs siguen pendientes.
+- [MEDIA — Búsqueda y matching musical](roadmap/catalog/music-search-matching.md) — MEDIA-3b.6b completada para Catalog y MEDIA-3b.7 completada sin índices nuevos; Requests y Excel mantienen P1 pendientes y 3b.6 global sigue abierta. Véanse la [auditoría de duplicados](roadmap/catalog/music-search-duplicates-audit.md) y el [diseño SQL con mediciones](roadmap/catalog/music-search-sql-design.md); MEDIA-3b.8 y MEDIA-4–MEDIA-6/8 pendientes, MEDIA-7 descartada.
 - [Community](roadmap/community/README.md) — Comments, Requests, Favorites, Pendings y Rates como capacidades de interacción y contribución al catálogo.
 - [Roles](roadmap/roles/README.md) — inventario, contrato de permisos, adaptación progresiva y migración de roles de usuario.
 - [Spotify](roadmap/integrations/spotify/README.md) — separación del dominio de la playlist de Riff Valley y la integración con la API externa de Spotify.

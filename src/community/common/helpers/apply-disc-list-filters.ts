@@ -1,5 +1,6 @@
 import { SelectQueryBuilder } from 'typeorm';
 import { buildMusicNameMultiColumnPartialPredicate } from 'src/catalog/shared/music-name/music-name-search';
+import { applyDiscListArtistIdFilter } from 'src/catalog/shared/disc-list/apply-disc-list-artist-id-filter';
 import { DiscListOptionsCriteria } from '../types/disc-list-options';
 
 export interface DiscListFilterOptions {
@@ -13,6 +14,8 @@ export function applyDiscListFilters<Entity extends object>(
   criteria: DiscListOptionsCriteria,
   options: DiscListFilterOptions = {},
 ): void {
+  applyDiscListArtistIdFilter(queryBuilder, criteria.artistId);
+
   if (criteria.dateRange && criteria.dateRange.length === 2) {
     queryBuilder.andWhere(
       'disc.releaseDate BETWEEN :discListStartDate AND :discListEndDate',
