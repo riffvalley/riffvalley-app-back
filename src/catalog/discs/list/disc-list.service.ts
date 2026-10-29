@@ -70,6 +70,7 @@ export class DiscListService {
       query: query.query,
       dateRange: query.dateRange,
       countryId: query.countryId,
+      artistId: query.artistId,
       genreId: query.genreId,
       genreIds: query.genreIds,
     };
@@ -176,6 +177,7 @@ export class DiscListService {
       query: query.query,
       dateRange: query.dateRange,
       countryId: query.countryId,
+      artistId: query.artistId,
       genreId: query.genreId,
       genreIds: query.genreIds,
       sort: query.sort,

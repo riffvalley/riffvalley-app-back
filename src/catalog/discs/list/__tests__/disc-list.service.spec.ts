@@ -172,7 +172,7 @@ describe('DiscListService', () => {
 
   it('delegates suggestions without invoking or changing the paginated list', async () => {
     const response: DiscListSuggestionsResponse = {
-      artists: [{ id: 'artist-id', name: 'MØL', image: null }],
+      artists: [{ id: 'artist-id', name: 'MØL', image: null, country: null }],
       discs: [],
     };
     suggestions.findSuggestions.mockResolvedValue(response);
@@ -436,6 +436,7 @@ describe('DiscListService', () => {
           Date,
         ],
         countryId: 'country-id',
+        artistId: 'artist-id',
         genreId: 'genre-id',
         genreIds: ['b1234567-89ab-4cde-8123-456789abcdef'],
       };
@@ -457,6 +458,7 @@ describe('DiscListService', () => {
         query: query.query,
         dateRange: query.dateRange,
         countryId: query.countryId,
+        artistId: query.artistId,
         genreId: query.genreId,
         genreIds: query.genreIds,
       };
@@ -482,6 +484,7 @@ describe('DiscListService', () => {
         'c1234567-89ab-4cde-8123-456789abcdef',
       ];
       const query = Object.assign(new DiscListQueryDto(), { mode, genreIds });
+      query.artistId = 'a1234567-89ab-4cde-8123-456789abcdef';
       catalog.findDiscList.mockResolvedValue({
         totalItems: 0,
         totalPages: 0,
@@ -502,7 +505,7 @@ describe('DiscListService', () => {
         if (mode === DiscListMode.RATES || mode === DiscListMode.COVERS) {
           expect(rates.findByUser).toHaveBeenCalledWith(
             mode,
-            expect.objectContaining({ genreIds }),
+            expect.objectContaining({ genreIds, artistId: query.artistId }),
             user,
           );
           return;
@@ -516,7 +519,7 @@ describe('DiscListService', () => {
           [DiscListMode.ALL]: catalog.findDiscList,
         }[mode];
         expect(reader).toHaveBeenCalledWith(
-          expect.objectContaining({ genreIds }),
+          expect.objectContaining({ genreIds, artistId: query.artistId }),
           user,
         );
       }

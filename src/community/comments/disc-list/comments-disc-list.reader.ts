@@ -49,6 +49,7 @@ export class CommentsDiscListReader {
         includeCountry: true,
         sort: criteria.sort,
         genreIds: criteria.genreIds,
+        artistId: criteria.artistId,
       })
       .then((page) => ({
         totalItems: page.totalItems,

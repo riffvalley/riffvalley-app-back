@@ -239,6 +239,10 @@ export class DiscListFiltersDto {
 
   @IsOptional()
   @IsUUID('4')
+  artistId?: string;
+
+  @IsOptional()
+  @IsUUID('4')
   genreId?: string;
 
   @IsOptional()

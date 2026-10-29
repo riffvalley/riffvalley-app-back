@@ -1,6 +1,6 @@
 # CAT-DISC-5a — Auditoría del autocompletado de búsqueda
 
-**Estado:** auditoría CAT-DISC-5a completada el 2026-10-29. Implementación backend CAT-DISC-5b completada el 2026-10-29; contrato y verificaciones registrados abajo. CAT-DISC-5c y 5d siguen pendientes y no se han iniciado.
+**Estado:** auditoría CAT-DISC-5a completada el 2026-10-29. Backend CAT-DISC-5b completado el 2026-10-29 y CAT-DISC-5b.1 (filtro exacto de artistas) completada el 2026-10-29. CAT-DISC-5c y 5d siguen pendientes y no se han iniciado.
 
 **Alcance:** búsqueda de Catalog en la página de DiscList, sus seis modos, opciones, navegación a disco y contrato de sugerencias. El frontend se inspeccionó en el checkout hermano `../riffvalley-app-front`; el backend, en este repositorio. No se hicieron llamadas HTTP ni se accedió a producción.
 
@@ -12,7 +12,7 @@ La vista compone el buscador superior, `DiscListExplorationFilters`, seis modos 
 
 La ruta no serializa búsqueda, filtros, modo ni página en la URL. El coordinador envía `query` como texto libre a `GET /api/discs/list`; las seis ramas de resultados reciben la búsqueda, aunque cada modo tiene su lector propietario. Las opciones se consultan aparte en `GET /api/discs/list/options` y dependen del contexto de modo y filtros.
 
-El endpoint de lista y el endpoint de opciones no aceptan hoy un filtro `artistId`. La consulta general de Catalog aplica una búsqueda parcial normalizada sobre título de disco **o** nombre de artista. Las ramas personales de Rates, Covers, Comments, Favorites y Pendientes aplican el mismo criterio parcial en sus readers. Por tanto, convertir la selección de un artista en una cadena de búsqueda no representa una identidad inequívoca. El texto sigue siendo el criterio actual de búsqueda libre; las sugerencias serán una capa concurrente y no sustituirán ni retrasarán ese flujo.
+Antes de CAT-DISC-5b.1, el endpoint de lista y el endpoint de opciones no aceptaban un filtro `artistId`. La consulta general de Catalog aplica una búsqueda parcial normalizada sobre título de disco **o** nombre de artista. Las ramas personales de Rates, Covers, Comments, Favorites y Pendientes aplican el mismo criterio parcial en sus readers. Por tanto, convertir la selección de un artista en una cadena de búsqueda no representa una identidad inequívoca. El texto sigue siendo el criterio actual de búsqueda libre; las sugerencias son una capa concurrente y no sustituyen ni retrasan ese flujo.
 
 ## 2. Componentes y endpoints reutilizables
 
@@ -40,7 +40,10 @@ Contrato implementado (sin envoltorio de paginación):
 
 ```json
 {
-  "artists": [{ "id": "uuid", "name": "MØL", "image": null }],
+  "artists": [{
+    "id": "uuid", "name": "MØL", "image": null,
+    "country": { "id": "uuid", "name": "Norway", "isoCode": "NO" }
+  }],
   "discs": [
     {
       "id": "uuid",
@@ -53,13 +56,13 @@ Contrato implementado (sin envoltorio de paginación):
 }
 ```
 
-`image` es anulable. No incluir descripciones, métricas comunitarias, relaciones de usuario, discos anidados ni entidades completas. Los discos deben estar disponibles para el catálogo público/listado (`releaseDate <= hoy`), sin filtrar por portada, enlace, `pinned` u otras reglas de elegibilidad pendientes de CAT-DISC-4c. Los artistas y discos son candidatos del catálogo por el texto y no dependen de modo, filtros ni offset; los filtros existentes siguen determinando las tarjetas mostradas. Límites invariables: máximo 3 artistas y 5 discos. Sin parámetros de límite ni campos de paginación. Si `query` está ausente, vacío o queda por debajo del umbral normalizado, responder con `{ "artists": [], "discs": [] }` sin ejecutar consultas.
+`image` es anulable. No incluir descripciones, métricas comunitarias, relaciones de usuario, discos anidados ni entidades completas. Los discos deben estar disponibles para el catálogo público/listado (`releaseDate <= hoy`), sin filtrar por portada, enlace, `pinned` u otras reglas de elegibilidad pendientes de CAT-DISC-4c. Los artistas y discos son candidatos del catálogo por el texto y no dependen de modo, filtros ni offset; los filtros existentes siguen determinando las tarjetas mostradas. Límites invariables: máximo 3 artistas y 5 discos. Los artistas homónimos con IDs distintos se conservan como sugerencias separadas, con imagen y país real cuando esté disponible. Sin parámetros de límite ni campos de paginación. Si `query` está ausente, vacío o queda por debajo del umbral normalizado, responder con `{ "artists": [], "discs": [] }` sin ejecutar consultas.
 
 La consulta trata el texto como literal escapado para `LIKE`, normalizado con la infraestructura compartida y con fallback acotado para registros legacy cuya clave normalizada sea `NULL`. El mínimo son dos caracteres Unicode después de `trim` y normalización; una entrada ausente o menor devuelve secciones vacías sin consultar repositorios. Las lecturas no escriben entidades ni crean asociaciones. `GET /api/discs/list` conserva exactamente su envelope actual (`totalItems`, `totalPages`, `currentPage`, `limit`, `data`), sus criterios y su paginación; no recibe `includeSuggestions`.
 
 ## 4. Flujo de selección de artistas
 
-La selección debe guardar `selectedArtist = { id, name }` y filtrar mediante `artistId` (UUID validado), nunca reemplazar `query` por `name`. El texto escrito se conserva y sigue aplicando su búsqueda general en vivo; el `artistId` añade precisión de identidad y el backend debe propagarlo a resultados y opciones de los seis modos, usando la relación/columna de artista existente. Es un criterio adicional combinable con texto, fecha, país, género, orden y modo. La selección debe reiniciar el offset y la página visible como hace cualquier criterio nuevo, conservar scroll infinito y demás filtros, y descartar resultados anteriores por la identidad/generación existente.
+La selección debe guardar `selectedArtist = { id, name }` y filtrar mediante `artistId` (UUID validado), nunca reemplazar `query` por `name`. El texto escrito se conserva y sigue aplicando su búsqueda general en vivo; el `artistId` añade precisión de identidad y el backend lo propaga a resultados y opciones de los seis modos, usando la relación real de artista. Es un criterio adicional combinable con texto, fecha, país, género, orden y modo. La selección debe reiniciar el offset y la página visible como hace cualquier criterio nuevo, conservar scroll infinito y demás filtros, y descartar resultados anteriores por la identidad/generación existente.
 
 Al seleccionar una sugerencia, mantener el texto libre y mostrar el artista elegido como selección removible junto al campo o dentro de él, sin cambiar su valor textual. Como la sugerencia se obtuvo a partir de ese texto, la consulta existente ya acepta coincidencias en el nombre del artista; `artistId` evita que otros artistas con claves equivalentes se mezclen. Al retirar la selección, el listado continúa con el texto y los filtros que estaban activos. Si se edita el texto después de la selección, puede limpiarse la selección de artista para evitar una combinación sorprendente, pero la búsqueda libre nunca se detiene. «Ver todos los resultados» limpia solo una selección de artista activa y conserva el texto; sin esa selección, cierra el menú sin volver a cargar la lista. Enter sin opción activa conserva el texto y los resultados en vivo, pudiendo cerrar el menú sin emitir una petición de listado redundante. Enter con una sugerencia activa selecciona esa opción.
 
@@ -99,7 +102,7 @@ Para discos, priorizar coincidencia en título sobre coincidencia únicamente en
 ## 8. Riesgos y compatibilidad
 
 - **Identidad ambigua:** las coincidencias normalizadas/contains no son únicas. El ID del artista debe ser el filtro seleccionado y permanecer intacto hasta deselección; nunca convertir la coincidencia textual en asociación.
-- **Seis modos y opciones:** añadir `artistId` solo a `all` dejaría incoherentes las bibliotecas personales y sus contadores/opciones. Hay que propagarlo por criterios, DTOs y cinco readers personales además del catálogo, junto con consulta de opciones.
+- **Seis modos y opciones:** el filtro debe llegar a `all` y a las bibliotecas personales, así como a sus conteos y opciones contextuales. CAT-DISC-5b.1 aplica la condición en las consultas propietarias de Catalog y Community antes de paginar y contar.
 - **Carga y límites:** el listado ya hace una búsqueda normalizada en vivo mientras se escribe. Las sugerencias añaden lecturas para devolver candidatos específicos; reutilizar el endpoint de Artist por nombre devolvería todo el catálogo asociado a coincidencias y más datos de los necesarios. Mantener un endpoint de sugerencias ligero evita volver a pedir el listado, pero no elimina el trabajo SQL compartido por ambas consultas. Derivar sugerencias del resultado paginado actual reduciría una llamada en algunos casos, aunque omitiría artistas/discos por modo, filtros y límite de página. Se recomienda no refactorizar ni ampliar el contrato del listado en 5a; en 5b comparar el coste de las consultas acotadas y considerar reutilizar internamente predicados/proyecciones, sin una segunda solicitud de lista por causa del desplegable.
 - **Detalle:** no hay ruta de ficha; el modal actual usa datos del disco y consulta información de Spotify. La selección debe confirmar datos necesarios y evitar el endpoint de detalle sobredimensionado para la lista de sugerencias.
 - **Compatibilidad:** mantener intacto `query` para la búsqueda en vivo y Enter, y añadir el filtro UUID como parámetro opcional. Sin selección, petición y respuesta actuales no cambian. La selección añade un criterio sin retirar texto, filtros ni modo. No cambiar el estado de URL, los filtros existentes, la paginación más allá del reinicio normal al cambiar criterios ni la autenticación general de la lista.
@@ -109,8 +112,9 @@ Para discos, priorizar coincidencia en título sobre coincidencia únicamente en
 
 ## 9. Plan posterior
 
-- **CAT-DISC-5b — Backend (completada el 2026-10-29):** endpoint dedicado autenticado de sugerencias con límites fijos, ranking y proyección. Implementación y verificaciones abajo. El listado existente y sus seis modos no cambian. La propagación de `artistId` para filtrar el listado queda como parte backend coordinada de CAT-DISC-5c antes de conectar la selección del frontend; no se empezó en 5b para mantener esta entrega limitada a sugerencias.
-- **CAT-DISC-5c — Frontend:** añadir wrapper tipado y autocomplete agrupado bajo el campo actual; debounce de sugerencias, teclado/ARIA, cancelación y estados. La entrada sigue actualizando en vivo el listado existente y no provoca una segunda carga de resultados al aparecer/cerrar sugerencias. Integrar selección por ID como criterio adicional y modal de detalle; preservar Enter sin opción activa, «Ver todos los resultados», filtros, URL, paginación y seis modos.
+- **CAT-DISC-5b — Backend de sugerencias (completada el 2026-10-29):** endpoint dedicado autenticado, límites fijos, ranking y proyección; verificación PostgreSQL registrada abajo.
+- **CAT-DISC-5b.1 — Filtro exacto de artistas (completada el 2026-10-29):** añadir `artistId` UUID opcional al listado y opciones. La condición `artist.id = :artistId` se combina con texto y filtros, y se ejecuta en los seis modos antes de paginar, contar y construir opciones. Las consultas personales conservan su aislamiento por usuario. Las sugerencias mantienen homónimos con IDs distintos e incluyen imagen y país real cuando está disponible. Cobertura PostgreSQL aislada aprobada.
+- **CAT-DISC-5c — Frontend (pendiente, desbloqueada):** añadir wrapper tipado y autocomplete agrupado bajo el campo actual; debounce de sugerencias, teclado/ARIA, cancelación y estados. La entrada sigue actualizando en vivo el listado existente y no provoca una segunda carga de resultados al aparecer/cerrar sugerencias. Integrar selección por ID como criterio adicional y modal de detalle; preservar Enter sin opción activa, «Ver todos los resultados», filtros, URL, paginación y seis modos.
 - **CAT-DISC-5d — Regresión y cierre:** comprobar contratos backend y wrappers frontend, selección exacta MØL, seis modos con filtros combinados, límites/orden, carrera y cancelación, accesibilidad de teclado y uso móvil; verificar la navegación al detalle, documentar limitaciones entre repositorios y cerrar CAT-DISC-5 solo tras evidencia.
 
 ## Verificación de CAT-DISC-5a
@@ -125,3 +129,11 @@ Auditoría de solo lectura de los archivos y rutas indicados en las secciones an
 - **Pruebas:** suites focalizadas de controller, DTO, listado, servicio de sugerencias y ranking: 53 pruebas aprobadas. Jest completo: 2.350 aprobadas, 0 fallidas y 127 omitidas, en 239 suites aprobadas y 20 omitidas. El test PostgreSQL aislado se añadió con activación explícita, pero no se ejecutó porque no estaba disponible su servidor local de pruebas en `127.0.0.1:55432`; no hubo conexión a producción.
 - **Calidad:** typecheck directo aprobado; structural, type-safety, ESLint y typecheck quality gates aprobados; Nest build y runtime dependency check aprobados; ocho suites de pruebas de los quality gates aprobadas; `git diff --check` pendiente al cierre. `pnpm run verify` no pudo arrancar porque el entorno local de pnpm devolvió `unable to open database file`; se ejecutaron directamente sus controles aplicables.
 - **Límite pendiente:** el SQL no se validó contra PostgreSQL en esta sesión por falta del servidor aislado. El test de integración queda listo para ejecutarse en ese entorno antes del cierre global si se requiere evidencia SQL real. La interfaz CAT-DISC-5c deberá llamar a este endpoint tras su debounce independiente, conservar el flujo de listado en vivo y consumir el payload ligero descrito arriba.
+
+## Implementación y verificación de CAT-DISC-5b.1
+
+- **Listado y opciones:** `artistId` opcional validado como UUID v4 en los DTOs compartidos por `GET /api/discs/list` y `GET /api/discs/list/options`. Sin ID, la consulta mantiene el comportamiento anterior. Un ID válido sin artista relacionado devuelve el resultado vacío normal; un formato inválido falla la validación HTTP existente.
+- **Filtro exacto:** los lectores propietarios de Catalog y Community aplican `artist.id = :discListArtistId` usando la relación real. El criterio se propaga a los seis modos y sus opciones contextuales, conteos y resultados antes de paginar. Se combina con texto, fechas, país y géneros; las consultas personales conservan su predicado de `userId`.
+- **Sugerencias:** artistas homónimos con UUID distintos no se deduplican por nombre normalizado. La respuesta conserva `id`, `name` e `image` y suma `country: { id, name, isoCode } | null`; el límite sigue siendo tres con orden determinista por relevancia, nombre e ID. La consulta de país usa `LEFT JOIN`, sin N+1 ni escrituras.
+- **Pruebas PostgreSQL aisladas:** aprobaron la suite del listado/opciones con los seis modos, filtros combinados, conteos, paginación, opciones, ID inexistente y aislamiento entre usuarios; también aprobaron las sugerencias con dos artistas MØL homónimos, imágenes y países distintos. Se usó un contenedor desechable local sin volumen y no se accedió a producción.
+- **CAT-DISC-5c:** el backend ahora admite la selección precisa. El frontend puede propagar `artistId` sin cambiar el texto del buscador ni los otros filtros. La tarea frontend no se ha iniciado.

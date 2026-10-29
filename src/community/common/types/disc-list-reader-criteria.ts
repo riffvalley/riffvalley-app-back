@@ -22,6 +22,7 @@ export interface DiscListReaderCriteria {
   query?: string;
   dateRange?: [Date, Date];
   countryId?: string;
+  artistId?: string;
   genreId?: string;
   genreIds?: string[];
   sort?: DiscListReaderSort;
