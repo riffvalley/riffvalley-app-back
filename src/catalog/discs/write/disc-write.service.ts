@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { FindOptionsWhere, In, IsNull, Raw, Repository } from 'typeorm';
 import { Artist } from '../../artists/entities/artist.entity';
 import { Genre } from '../../genres/entities/genre.entity';
 import { CreateDiscDto } from '../dto/create-discs.dto';
@@ -14,6 +14,8 @@ import { CreateDiscWithArtistDto } from '../dto/create-disc-with-artist.dto';
 import { UpdateDiscDto } from '../dto/update-discs.dto';
 import { Disc } from '../entities/disc.entity';
 import { normalizeArtistName } from './helpers/normalize-artist-name';
+import { normalizeForSearch } from '../../artists/helpers/normalize-for-search';
+import { getMusicNameSearchKeys } from '../../shared/music-name/music-name-search';
 import { normalizeMusicName } from 'src/catalog/shared/music-name/normalize-music-name';
 
 @Injectable()
@@ -121,11 +123,48 @@ export class DiscWriteService {
     artistRepository: Repository<Artist>,
     countryId?: string,
   ): Promise<Artist> {
-    const matches = await artistRepository.find({
-      where: { name: ILike(artistName) },
+    const exactMatches = await artistRepository.find({
+      where: {
+        name: Raw((nameColumn) => `LOWER(${nameColumn}) = LOWER(:artistName)`, {
+          artistName,
+        }),
+      },
     });
 
-    if (matches.length === 0) {
+    const searchKeys = getMusicNameSearchKeys(artistName);
+    const legacySearchKeys = [
+      ...new Set(
+        searchKeys
+          .map((key) => normalizeForSearch(key.normalize('NFKC')))
+          .filter(Boolean),
+      ),
+    ];
+    const candidateConditions: FindOptionsWhere<Artist>[] = [];
+    if (searchKeys.length > 0) {
+      candidateConditions.push({ searchNameNormalized: In(searchKeys) });
+    }
+    if (legacySearchKeys.length > 0) {
+      candidateConditions.push({
+        searchNameNormalized: IsNull(),
+        nameNormalized: In(legacySearchKeys),
+      });
+    }
+    const normalizedCandidates =
+      candidateConditions.length > 0
+        ? await artistRepository.find({ where: candidateConditions })
+        : [];
+    const exactArtistIds = new Set(exactMatches.map((artist) => artist.id));
+    const unconfirmedCandidates = normalizedCandidates.filter(
+      (artist) => !exactArtistIds.has(artist.id),
+    );
+
+    if (unconfirmedCandidates.length > 0) {
+      throw new BadRequestException(
+        `Hay artistas compatibles con "${artistName}" tras normalizar el nombre, pero esa coincidencia no confirma su identidad. Revisa el artista antes de crear el disco.`,
+      );
+    }
+
+    if (exactMatches.length === 0) {
       const createdArtist = await artistRepository.save(
         artistRepository.create({
           name: artistName,
@@ -138,21 +177,21 @@ export class DiscWriteService {
       return createdArtist;
     }
 
-    if (matches.length === 1) {
-      return matches[0];
+    if (exactMatches.length === 1) {
+      return exactMatches[0];
     }
 
     // Más de un artista con el mismo nombre → necesitamos countryId para desambiguar
     if (!countryId) {
       throw new BadRequestException(
-        `Hay ${matches.length} artistas con el nombre "${artistName}". Especifica countryId para desambiguar.`,
+        `Hay ${exactMatches.length} artistas con el nombre "${artistName}". Especifica countryId para desambiguar.`,
       );
     }
 
-    const match = matches.find((artist) => artist.countryId === countryId);
+    const match = exactMatches.find((artist) => artist.countryId === countryId);
     if (match) return match;
 
-    // No hay ninguno con ese país → es un artista distinto, se crea
+    // Ningún artista exacto tiene ese país: conservar el flujo de alta.
     const createdArtist = await artistRepository.save(
       artistRepository.create({
         name: artistName,

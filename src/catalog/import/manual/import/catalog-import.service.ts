@@ -4,7 +4,15 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, ILike, QueryFailedError, Repository } from 'typeorm';
+import {
+  DataSource,
+  FindOptionsWhere,
+  In,
+  IsNull,
+  QueryFailedError,
+  Raw,
+  Repository,
+} from 'typeorm';
 import { isUUID } from 'class-validator';
 
 import { ProcessManualDataDto } from '../dto/process-manual-data.dto';
@@ -12,6 +20,7 @@ import { parseManualAlbumLine } from '../parser/parse-manual-album-line';
 import { parseManualDate } from '../parser/parse-manual-date';
 import { normalizeForSearch } from '../../../artists/helpers/normalize-for-search';
 import { normalizeMusicName } from '../../../shared/music-name/normalize-music-name';
+import { getMusicNameSearchKeys } from '../../../shared/music-name/music-name-search';
 import { ManualImportLogger } from '../logging/manual-import-logger';
 import { Artist } from '../../../artists/entities/artist.entity';
 import { Disc } from '../../../discs/entities/disc.entity';
@@ -29,6 +38,15 @@ import {
 
 const SAFE_GLOBAL_ERROR =
   'No se pudo completar la importación. Los discos confirmados antes del fallo se conservan.';
+
+class AmbiguousArtistResolutionError extends Error {
+  constructor() {
+    super(
+      'No se ha podido identificar el artista de forma inequívoca. Añade un país que permita desambiguarlo y revisa la fila.',
+    );
+    this.name = AmbiguousArtistResolutionError.name;
+  }
+}
 const RECOVERABLE_ROW_SQLSTATES = new Set([
   '22001', // string_data_right_truncation
   '22003', // numeric_value_out_of_range
@@ -225,9 +243,60 @@ export class CatalogImportService {
             const artistRepository = manager.getRepository(Artist);
             const discRepository = manager.getRepository(Disc);
             const normalizedArtistName = normalizeForSearch(artistName);
-            let artist = await artistRepository.findOne({
+            const legacyArtistCandidates = await artistRepository.find({
               where: { nameNormalized: normalizedArtistName },
             });
+
+            const artistSearchKeys = getMusicNameSearchKeys(artistName);
+            const legacySearchKeys = [
+              ...new Set(
+                artistSearchKeys
+                  .map((key) => normalizeForSearch(key.normalize('NFKC')))
+                  .filter(Boolean),
+              ),
+            ];
+            const candidateConditions: FindOptionsWhere<Artist>[] = [];
+            if (artistSearchKeys.length > 0) {
+              candidateConditions.push({
+                searchNameNormalized: In(artistSearchKeys),
+              });
+            }
+            if (legacySearchKeys.length > 0) {
+              candidateConditions.push({
+                searchNameNormalized: IsNull(),
+                nameNormalized: In(legacySearchKeys),
+              });
+            }
+            const normalizedArtistCandidates =
+              candidateConditions.length > 0
+                ? await artistRepository.find({ where: candidateConditions })
+                : [];
+            const legacyArtistIds = new Set(
+              legacyArtistCandidates.map((candidate) => candidate.id),
+            );
+            if (
+              normalizedArtistCandidates.some(
+                (candidate) => !legacyArtistIds.has(candidate.id),
+              )
+            ) {
+              throw new AmbiguousArtistResolutionError();
+            }
+
+            let artist = legacyArtistCandidates[0];
+            if (legacyArtistCandidates.length > 1) {
+              const countryMatches = countryId
+                ? legacyArtistCandidates.filter(
+                    (candidate) => candidate.countryId === countryId,
+                  )
+                : [];
+              if (countryMatches.length === 1) {
+                artist = countryMatches[0];
+              } else if (!countryId || countryMatches.length > 1) {
+                throw new AmbiguousArtistResolutionError();
+              } else {
+                artist = undefined;
+              }
+            }
 
             if (!artist) {
               artist = artistRepository.create({
@@ -241,12 +310,27 @@ export class CatalogImportService {
               artist = await artistRepository.save(artist);
             }
 
-            // Keep the existing case-insensitive Disc duplicate rule unchanged.
-            const existingDisc = await discRepository.findOne({
-              where: {
-                name: ILike(discName.trim()),
+            const exactTitle = Raw(
+              (nameColumn) => `LOWER(${nameColumn}) = LOWER(:discName)`,
+              { discName: discName.trim() },
+            );
+            const duplicateConditions: FindOptionsWhere<Disc>[] = [
+              {
+                name: exactTitle,
                 artist: { id: artist.id },
+                ep,
               },
+            ];
+            if (!ep) {
+              duplicateConditions.push({
+                name: exactTitle,
+                artist: { id: artist.id },
+                ep: IsNull(),
+              });
+            }
+
+            const existingDisc = await discRepository.findOne({
+              where: duplicateConditions,
             });
 
             if (existingDisc) {
@@ -274,6 +358,18 @@ export class CatalogImportService {
       } catch (error) {
         if (error instanceof CatalogImportTransactionError) {
           throw safeGlobalError();
+        }
+        if (error instanceof AmbiguousArtistResolutionError) {
+          results.push(
+            failedResult(
+              inputIndex,
+              sourceLine,
+              'INVALID_INPUT',
+              error.message,
+              { artistName, discName },
+            ),
+          );
+          continue;
         }
         if (isRecoverableRowPersistenceError(error)) {
           results.push(
