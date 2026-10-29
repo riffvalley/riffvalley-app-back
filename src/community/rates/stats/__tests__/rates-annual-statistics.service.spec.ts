@@ -23,6 +23,7 @@ const scores = (year: number) => ({
   scoredDiscs: 0,
   mean: null,
   median: null,
+  standardDeviation: null,
   scoreDistribution: Array.from({ length: 11 }, (_, score) => ({
     score,
     scoredDiscCount: 0,
@@ -87,6 +88,15 @@ function createService() {
           expect(zone).toBe('America/Los_Angeles');
           expect(year).toBeGreaterThanOrEqual(2025);
           return null;
+        },
+      ),
+      selectAnnualHighlightsForUser: jest.fn(
+        async (userId: string, year: number, zone?: string) => {
+          calls.push('featured');
+          expect(userId).toBe('session-user');
+          expect(year).toBeGreaterThanOrEqual(2025);
+          expect(zone).toBe('America/Los_Angeles');
+          return { topDiscOverall: null, byMonth: [], byGenre: [] };
         },
       ),
     },
@@ -185,6 +195,11 @@ describe('RatesAnnualStatisticsService', () => {
         'featured',
         'controversy',
       ]);
+      expect(setup.featured.selectAnnualHighlightsForUser).toHaveBeenCalledWith(
+        'session-user',
+        year,
+        'America/Los_Angeles',
+      );
     },
   );
 
@@ -207,7 +222,7 @@ describe('RatesAnnualStatisticsService', () => {
       2027,
       'America/Los_Angeles',
     );
-    expect(setup.featured.selectForUser).toHaveBeenCalledWith(
+    expect(setup.featured.selectAnnualHighlightsForUser).toHaveBeenCalledWith(
       'session-user',
       2027,
       'America/Los_Angeles',
@@ -231,7 +246,28 @@ describe('RatesAnnualStatisticsService', () => {
       activityByMonth: activity(2026).activityByMonth.map((item, index) =>
         index === 2 ? { ...item, activityCount: 2 } : item,
       ),
-      activityByDay: [{ date: '2026-03-14', activityCount: 2 }],
+      activityByDay: [
+        {
+          date: '2026-03-14',
+          activityCount: 2,
+          assignments: [
+            {
+              discId: 'disc-1',
+              title: 'Album one',
+              artist: null,
+              rate: null,
+              date: '2026-03-14',
+            },
+            {
+              discId: 'disc-1',
+              title: 'Album one',
+              artist: null,
+              rate: null,
+              date: '2026-03-14',
+            },
+          ],
+        },
+      ],
       activityByGenre: [{ genre: 'Rock', activityCount: 1 }],
       activityWithoutGenre: 1,
     });
@@ -247,12 +283,22 @@ describe('RatesAnnualStatisticsService', () => {
       activityByMonth: expect.arrayContaining([
         { month: '2026-03', activityCount: 2, topDisc: null },
       ]),
-      activityByDay: [{ date: '2026-03-14', activityCount: 2 }],
+      activityByDay: [
+        {
+          date: '2026-03-14',
+          activityCount: 2,
+          assignments: expect.arrayContaining([
+            expect.objectContaining({ discId: 'disc-1', rate: null }),
+            expect.objectContaining({ discId: 'disc-1', rate: null }),
+          ]),
+        },
+      ],
       activityByGenre: [{ genre: 'Rock', activityCount: 1, topDisc: null }],
       activityWithoutGenre: 1,
       scoredDiscs: 0,
       mean: null,
       median: null,
+      standardDeviation: null,
       topDiscOverall: null,
       mostControversial: [],
     });

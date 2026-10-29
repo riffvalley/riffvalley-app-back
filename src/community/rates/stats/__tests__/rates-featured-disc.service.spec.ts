@@ -15,6 +15,8 @@ interface QueryRow {
   artistName: string | null;
   genreName: string | null;
   genreColor: string | null;
+  groupType?: 'overall' | 'month' | 'genre';
+  groupValue?: string;
 }
 
 function createRepositories(rows: QueryRow[] = []): {
@@ -109,6 +111,90 @@ describe('RatesFeaturedDiscService', () => {
     );
 
     await expect(service.selectForUser('user-id', 2025)).resolves.toBeNull();
+  });
+
+  it('returns monthly and current-genre highlights with nullable catalogue covers', async () => {
+    const rows: QueryRow[] = [
+      { ...discRow, groupType: 'overall', groupValue: null },
+      { ...discRow, groupType: 'month', groupValue: '2026-03' },
+      {
+        ...discRow,
+        image: 'catalog-cover.jpg',
+        genreName: 'Black Metal',
+        groupType: 'genre',
+        groupValue: 'Black Metal',
+      },
+    ];
+    const repositories = createRepositories(rows);
+    const service = new RatesFeaturedDiscService(
+      repositories.rateRepository,
+      repositories.eventRepository,
+    );
+
+    await expect(
+      service.selectAnnualHighlightsForUser('user-id', 2026),
+    ).resolves.toEqual({
+      topDiscOverall: {
+        id: 'disc-id',
+        name: 'Example record',
+        image: null,
+        rate: 9.25,
+        artist: { name: 'Example artist' },
+        genre: null,
+      },
+      byMonth: [
+        {
+          month: '2026-03',
+          topDisc: {
+            id: 'disc-id',
+            name: 'Example record',
+            image: null,
+            rate: 9.25,
+            artist: { name: 'Example artist' },
+            genre: null,
+          },
+        },
+      ],
+      byGenre: [
+        {
+          genre: 'Black Metal',
+          topDisc: {
+            id: 'disc-id',
+            name: 'Example record',
+            image: 'catalog-cover.jpg',
+            rate: 9.25,
+            artist: { name: 'Example artist' },
+            genre: { name: 'Black Metal', color: null },
+          },
+        },
+      ],
+    });
+    const [sql, parameters] = repositories.rateQuery.mock.calls[0];
+    expect(sql).toContain('eligible_rate_rows."createdAtLocal"');
+    expect(sql).toContain('PARTITION BY genre.name');
+    expect(sql).toContain('ORDER BY current_scores."currentRate" DESC');
+    expect(sql).toContain('disc.image');
+    expect(parameters?.[0]).toBe('user-id');
+  });
+
+  it('assigns monthly event highlights in the requested local zone and preserves repeated-set eligibility', async () => {
+    const repositories = createRepositories([discRow]);
+    const service = new RatesFeaturedDiscService(
+      repositories.rateRepository,
+      repositories.eventRepository,
+    );
+
+    await service.selectGroupHighlightsForUser(
+      'user-id',
+      2027,
+      'Europe/Madrid',
+    );
+    const [sql, parameters] = repositories.eventQuery.mock.calls[0];
+    expect(sql).toContain('eligible_set_events event');
+    expect(sql).toContain('event."occurredAt" AT TIME ZONE $7');
+    expect(sql).toContain("event.event_type = 'set'");
+    expect(sql).toContain('current_scores."eligibleAt" DESC, disc.id ASC');
+    expect(parameters?.[6]).toBe('Europe/Madrid');
   });
 
   it('preserves an eligible disc when its artist is missing', async () => {

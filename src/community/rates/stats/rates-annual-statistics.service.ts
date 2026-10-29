@@ -39,21 +39,11 @@ export class RatesAnnualStatisticsService {
           year,
           timeZone,
         );
-    const scores = await this.currentScores.aggregateForUser(
-      userId,
-      year,
-      timeZone,
-    );
-    const topDiscOverall = await this.featuredDisc.selectForUser(
-      userId,
-      year,
-      timeZone,
-    );
-    const controversy = await this.controversialDiscs.analyzeForUser(
-      userId,
-      year,
-      timeZone,
-    );
+    const [scores, highlights, controversy] = await Promise.all([
+      this.currentScores.aggregateForUser(userId, year, timeZone),
+      this.featuredDisc.selectAnnualHighlightsForUser(userId, year, timeZone),
+      this.controversialDiscs.analyzeForUser(userId, year, timeZone),
+    ]);
 
     assertSameYear(year, activity.year, scores.year);
     return {
@@ -65,29 +55,37 @@ export class RatesAnnualStatisticsService {
       scoredDiscs: scores.scoredDiscs,
       mean: scores.mean,
       median: scores.median,
+      standardDeviation: scores.standardDeviation,
       activityByGenre: activity.activityByGenre.map(
         (item): RatesStatsGenreActivityDto => ({
           genre: item.genre,
           activityCount: item.activityCount,
-          topDisc: null,
+          topDisc:
+            highlights.byGenre.find(
+              (highlight) => highlight.genre === item.genre,
+            )?.topDisc ?? null,
         }),
       ),
       activityByMonth: activity.activityByMonth.map(
         (item): RatesStatsMonthlyActivityDto => ({
           month: item.month,
           activityCount: item.activityCount,
-          topDisc: null,
+          topDisc:
+            highlights.byMonth.find(
+              (highlight) => highlight.month === item.month,
+            )?.topDisc ?? null,
         }),
       ),
       scoreDistribution: scores.scoreDistribution.map(
         (item): RatesStatsScoreDistributionDto => ({ ...item }),
       ),
-      topDiscOverall,
+      topDiscOverall: highlights.topDiscOverall,
       mostControversial: controversy.map(toContractControversy),
       activityByDay: activity.activityByDay.map(
         (item): RatesStatsDailyActivityDto => ({
           date: item.date,
           activityCount: item.activityCount,
+          assignments: item.assignments,
         }),
       ),
       activityWithoutGenre: activity.activityWithoutGenre,

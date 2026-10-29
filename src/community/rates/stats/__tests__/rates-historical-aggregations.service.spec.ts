@@ -8,16 +8,37 @@ function createService(
     period: string | null;
     activityCount: number | string;
   }> = [],
+  dailyAssignmentOverride?: Array<{
+    date: string;
+    discId: string;
+    title: string;
+    artist: string | null;
+    rate: number | string | null;
+  }>,
 ) {
+  const dailyAssignments =
+    dailyAssignmentOverride ??
+    rows.flatMap((row) =>
+      row.aggregation === 'day' && row.period
+        ? Array.from({ length: Number(row.activityCount) }, (_, index) => ({
+            date: row.period as string,
+            discId: `disc-${index + 1}`,
+            title: 'Album',
+            artist: null,
+            rate: null,
+          }))
+        : [],
+    );
   const repository = new Repository<Rate>(
     Rate,
     new EntityManager(
       new DataSource({ type: 'postgres', database: 'historical-aggregations' }),
     ),
   );
-  const query = jest
-    .fn<Promise<typeof rows>, [string, unknown[]?]>()
-    .mockResolvedValue(rows);
+  const query = jest.fn<Promise<unknown[]>, [string, unknown[]?]>(
+    async (sql) =>
+      sql.includes('ranked_current_rates') ? dailyAssignments : rows,
+  );
   Object.assign(repository, { query });
   return {
     service: new RatesHistoricalAggregationsService(repository),
@@ -52,8 +73,46 @@ describe('RatesHistoricalAggregationsService', () => {
         { month: '2025-12', activityCount: 3 },
       ],
       activityByDay: [
-        { date: '2025-01-01', activityCount: 1 },
-        { date: '2025-12-31', activityCount: 3 },
+        {
+          date: '2025-01-01',
+          activityCount: 1,
+          assignments: [
+            {
+              discId: 'disc-1',
+              title: 'Album',
+              artist: null,
+              rate: null,
+              date: '2025-01-01',
+            },
+          ],
+        },
+        {
+          date: '2025-12-31',
+          activityCount: 3,
+          assignments: [
+            {
+              discId: 'disc-1',
+              title: 'Album',
+              artist: null,
+              rate: null,
+              date: '2025-12-31',
+            },
+            {
+              discId: 'disc-2',
+              title: 'Album',
+              artist: null,
+              rate: null,
+              date: '2025-12-31',
+            },
+            {
+              discId: 'disc-3',
+              title: 'Album',
+              artist: null,
+              rate: null,
+              date: '2025-12-31',
+            },
+          ],
+        },
       ],
       activityByGenre: [
         { genre: 'Black Metal', activityCount: 3 },
@@ -61,11 +120,15 @@ describe('RatesHistoricalAggregationsService', () => {
       ],
       activityWithoutGenre: 0,
     });
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[0][0]).toContain("AT TIME ZONE 'Europe/Madrid'");
     expect(query.mock.calls[0][0]).toContain('rate."userId" = $1');
     expect(query.mock.calls[0][0]).toContain('disc."releaseDate" >= $2::date');
     expect(query.mock.calls[0][0]).toContain('genre.id = disc."genreId"');
+    expect(query.mock.calls[1][0]).toContain('LEFT JOIN current_scores');
+    expect(query.mock.calls[1][0]).toContain(
+      'ORDER BY eligible_rate_rows."createdAtLocal", eligible_rate_rows."rateId"',
+    );
   });
 
   it('returns zero and twelve zero months when the historical source is empty', async () => {
@@ -81,6 +144,56 @@ describe('RatesHistoricalAggregationsService', () => {
       result.activityByMonth.every((month) => month.activityCount === 0),
     ).toBe(true);
     expect(result.activityByDay).toEqual([]);
+  });
+
+  it('preserves repeated historical assignments for one disc and leaves missing current notes null', async () => {
+    const { service } = createService(
+      [
+        { aggregation: 'year', period: null, activityCount: 2 },
+        { aggregation: 'month', period: '2025-04', activityCount: 2 },
+        { aggregation: 'day', period: '2025-04-02', activityCount: 2 },
+        { aggregation: 'withoutGenre', period: null, activityCount: 2 },
+      ],
+      [
+        {
+          date: '2025-04-02',
+          discId: 'same-disc',
+          title: 'Album',
+          artist: null,
+          rate: null,
+        },
+        {
+          date: '2025-04-02',
+          discId: 'same-disc',
+          title: 'Album',
+          artist: 'Artist',
+          rate: null,
+        },
+      ],
+    );
+
+    const result = await service.aggregateActivityForUser('user-id', 2025);
+
+    expect(result.activityByDay[0]).toEqual({
+      date: '2025-04-02',
+      activityCount: 2,
+      assignments: [
+        {
+          discId: 'same-disc',
+          title: 'Album',
+          artist: null,
+          rate: null,
+          date: '2025-04-02',
+        },
+        {
+          discId: 'same-disc',
+          title: 'Album',
+          artist: 'Artist',
+          rate: null,
+          date: '2025-04-02',
+        },
+      ],
+    });
   });
 
   it('rejects years after 2026 through the historical selector without querying', async () => {

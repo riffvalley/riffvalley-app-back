@@ -61,8 +61,21 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       'CREATE TABLE "genre" ("id" uuid PRIMARY KEY, "name" text NOT NULL)',
     );
     await dataSource.query(
-      'CREATE TABLE "disc" ("id" uuid PRIMARY KEY, "releaseDate" date, "genreId" uuid)',
+      'CREATE TABLE "artist" ("id" uuid PRIMARY KEY, "name" text NOT NULL)',
     );
+    await dataSource.query(
+      'CREATE TABLE "disc" ("id" uuid PRIMARY KEY, "name" text NOT NULL DEFAULT \'Test album\', "releaseDate" date, "genreId" uuid, "artistId" uuid)',
+    );
+    await dataSource.query(`
+      CREATE TABLE "rate" (
+        "id" uuid PRIMARY KEY,
+        "userId" uuid NOT NULL,
+        "discId" uuid NOT NULL,
+        rate decimal(4,2),
+        "createdAt" timestamptz NOT NULL,
+        "editedAt" timestamptz
+      )
+    `);
     await dataSource.query(`
       CREATE TABLE "rate_vote_events" (
         "id" uuid PRIMARY KEY,
@@ -83,13 +96,17 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       [eligibleDiscId, wrongYearDiscId, '2027-05-01', '2026-12-31'],
     );
     const blackMetalGenreId = randomUUID();
-    await dataSource.query('INSERT INTO "genre" ("id", "name") VALUES ($1, $2)', [
+    await dataSource.query(
+      'INSERT INTO "genre" ("id", "name") VALUES ($1, $2)',
+      [blackMetalGenreId, 'Black Metal'],
+    );
+    await dataSource.query('UPDATE "disc" SET "genreId" = $2 WHERE "id" = $1', [
+      eligibleDiscId,
       blackMetalGenreId,
-      'Black Metal',
     ]);
     await dataSource.query(
-      'UPDATE "disc" SET "genreId" = $2 WHERE "id" = $1',
-      [eligibleDiscId, blackMetalGenreId],
+      'INSERT INTO "rate" ("id", "userId", "discId", rate, "createdAt") VALUES ($1, $2, $3, 8.5, now())',
+      [randomUUID(), userId, eligibleDiscId],
     );
     service = new RatesEventSetAggregationsService(
       new Repository<RateVoteEvent>(
@@ -103,7 +120,9 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
     if (!dataSource?.isInitialized) return;
     if (ownsFixtureTables) {
       await dataSource.query('DROP TABLE IF EXISTS "rate_vote_events"');
+      await dataSource.query('DROP TABLE IF EXISTS "rate"');
       await dataSource.query('DROP TABLE IF EXISTS "disc"');
+      await dataSource.query('DROP TABLE IF EXISTS "artist"');
       await dataSource.query('DROP TABLE IF EXISTS "genre"');
     }
     await dataSource.destroy();
@@ -194,11 +213,11 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       ]),
     );
     expect(utcSession.activityByDay).toEqual([
-      { date: '2027-01-01', activityCount: 3 },
-      { date: '2027-03-14', activityCount: 2 },
-      { date: '2027-06-30', activityCount: 1 },
-      { date: '2027-11-07', activityCount: 2 },
-      { date: '2027-12-31', activityCount: 1 },
+      expect.objectContaining({ date: '2027-01-01', activityCount: 3 }),
+      expect.objectContaining({ date: '2027-03-14', activityCount: 2 }),
+      expect.objectContaining({ date: '2027-06-30', activityCount: 1 }),
+      expect.objectContaining({ date: '2027-11-07', activityCount: 2 }),
+      expect.objectContaining({ date: '2027-12-31', activityCount: 1 }),
     ]);
     expect(
       sum(utcSession.activityByMonth.map((row) => row.activityCount)),
@@ -215,8 +234,8 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
     expect(madrid.activityCount).toBe(8);
     expect(madrid.activityByDay).toEqual(
       expect.arrayContaining([
-        { date: '2027-01-01', activityCount: 3 },
-        { date: '2027-07-01', activityCount: 1 },
+        expect.objectContaining({ date: '2027-01-01', activityCount: 3 }),
+        expect.objectContaining({ date: '2027-07-01', activityCount: 1 }),
       ]),
     );
 
@@ -228,9 +247,9 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
     expect(losAngeles.activityCount).toBe(7);
     expect(losAngeles.activityByDay).toEqual(
       expect.arrayContaining([
-        { date: '2027-01-01', activityCount: 1 },
-        { date: '2027-06-30', activityCount: 1 },
-        { date: '2027-12-31', activityCount: 1 },
+        expect.objectContaining({ date: '2027-01-01', activityCount: 1 }),
+        expect.objectContaining({ date: '2027-06-30', activityCount: 1 }),
+        expect.objectContaining({ date: '2027-12-31', activityCount: 1 }),
       ]),
     );
 
@@ -242,9 +261,9 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
     expect(kathmandu.activityCount).toBe(8);
     expect(kathmandu.activityByDay).toEqual(
       expect.arrayContaining([
-        { date: '2027-01-01', activityCount: 3 },
-        { date: '2027-07-01', activityCount: 1 },
-        { date: '2027-12-31', activityCount: 1 },
+        expect.objectContaining({ date: '2027-01-01', activityCount: 3 }),
+        expect.objectContaining({ date: '2027-07-01', activityCount: 1 }),
+        expect.objectContaining({ date: '2027-12-31', activityCount: 1 }),
       ]),
     );
   });
@@ -288,8 +307,8 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
 
     expect(result.activityCount).toBe(2);
     expect(result.activityByDay).toEqual([
-      { date: '2027-01-01', activityCount: 1 },
-      { date: '2027-12-31', activityCount: 1 },
+      expect.objectContaining({ date: '2027-01-01', activityCount: 1 }),
+      expect.objectContaining({ date: '2027-12-31', activityCount: 1 }),
     ]);
   });
 });

@@ -556,7 +556,7 @@ EST-BE-7 se acepta y cierra con un único género opcional por disco. Cada fila 
 
 **Limitación PostgreSQL:** no se instaló ni inició PostgreSQL, no se modificaron permisos y no se consultó producción. Los SQL reales de EST-BE-4 y demás suites gated siguen sin validación de integración; EST-BE-4 permanece pendiente de integración PostgreSQL. Los mocks focalizados no se presentan como prueba de SQL real.
 
-EST-BE-12 revisó y cerró la implementación backend; la adaptación del consumidor frontend y la verificación PostgreSQL real quedan documentadas como pendientes fuera de esta tarea.
+EST-BE-12 cerró la composición backend inicial. EST-BE-M completa después los destacados y campos funcionales que quedaron pendientes; la adaptación del consumidor frontend y la verificación PostgreSQL real siguen fuera de esta tarea.
 
 ## EST-BE-12 — Revisión final y cierre del backend de Estadísticas
 
@@ -568,7 +568,7 @@ La organización bajo `src/community/rates/stats/` mantiene servicios separados 
 
 `GET /rates/stats` y `GET /rates/stats/discs` requieren autenticación, `year` de cuatro cifras desde 2025 hasta el año civil actual de la zona solicitada, y aceptan `timeZone` IANA opcional con `UTC` predeterminado. No reciben `userId`, no responden HTTP 501 y no usan campos legacy (`yearOverYear`, `rank`, `totalUsers`, `weeks` ni nombres retirados). Las referencias a HTTP 501 en las notas de EST-BE-2–10 describían estados intermedios y quedan superadas por esta integración.
 
-La revisión encontró que los resultados de destacado y controversia descartaban discos elegibles sin relación de artista mediante `INNER JOIN`, mientras el contrato y la galaxia admitían artista nullable. Se cambió a `LEFT JOIN`, se alinearon DTOs y resultados y se añadieron casos focalizados; un disco sin artista se conserva con `artist: null`. Artista y género son nullable en esas proyecciones. `topDisc` mensual y por género se devuelve como `null`: el contrato lo permite y el algoritmo correspondiente no está implementado, por lo que el valor no se anuncia como disponible. El destacado global y la controversia sí usan la población elegible y notas vigentes.
+La revisión encontró que los resultados de destacado y controversia descartaban discos elegibles sin relación de artista mediante `INNER JOIN`, mientras el contrato y la galaxia admitían artista nullable. Se cambió a `LEFT JOIN`, se alinearon DTOs y resultados y se añadieron casos focalizados; un disco sin artista se conserva con `artist: null`. Artista y género son nullable en esas proyecciones. En EST-BE-12 `topDisc` mensual y por género todavía se devolvía como `null`; EST-BE-M completa esos algoritmos sobre la población elegible y las notas vigentes.
 
 ### Fuentes, elegibilidad y métricas
 
@@ -578,7 +578,7 @@ La actividad cuenta filas Rates elegibles en el tramo histórico o eventos `set`
 
 Las puntuaciones vigentes alimentan `scoredDiscs`, media, mediana y once buckets `[n,n+1)` (el bucket 10 contiene exactamente 10); se comprueba que los buckets sumen `scoredDiscs`. Sin puntuaciones, media y mediana son `null`, y los buckets conservan ceros. Sin candidato, el destacado es `null`; controversia y galaxia vacías son `[]`. La controversia exige cuatro Rates válidas de usuarios distintos además de la persona consultante, incluye su nota en la media comunitaria, calcula diferencia con signo y devuelve como máximo cinco resultados ordenados por diferencia absoluta y desempates estables. La galaxia deduplica eventos por disco y devuelve las mismas puntuaciones válidas que `scoredDiscs`, si no hay escrituras concurrentes entre consultas.
 
-La composición ejecuta consultas secuenciales sin transacción/snapshot compartido. Una escritura concurrente puede producir pequeñas discrepancias entre métricas de una respuesta; no se midió rendimiento SQL porque no se ejecutó PostgreSQL real. Los errores se propagan y no se sustituyen por resultados parciales. Los vacíos representan `0`, `null` y `[]` de acuerdo con el significado de cada campo, sin capturas generales que oculten fallos.
+La composición ejecuta las consultas de actividad antes de las métricas independientes, que se solicitan en paralelo y sin transacción/snapshot compartido. Una escritura concurrente puede producir pequeñas discrepancias entre métricas de una respuesta; no se midió rendimiento SQL porque no se ejecutó PostgreSQL real. Los errores se propagan y no se sustituyen por resultados parciales. Los vacíos representan `0`, `null` y `[]` de acuerdo con el significado de cada campo, sin capturas generales que oculten fallos.
 
 ### Verificaciones y pendientes
 
@@ -602,6 +602,32 @@ Las limitaciones temporales de Rates 2025–2026 implican cobertura histórica d
 | EST-BE-12 | Completada; cierre de implementación backend |
 
 **Pendiente fuera de este cierre:** adaptar y verificar el consumidor frontend contra los contratos implementados; ejecutar las suites PostgreSQL aisladas autorizadas en un entorno disponible y, después, actualizar EST-BE-4 con evidencia real.
+
+## EST-BE-M — Mejoras funcionales de Estadísticas
+
+**Estado:** completada el 2026-10-29 para implementación y verificaciones focalizadas. La validación de SQL PostgreSQL real sigue pendiente; no se instalaron servicios ni se consultó producción.
+
+### Contrato y semántica añadidos
+
+- `standardDeviation` aparece en `GET /rates/stats` y se calcula con `STDDEV_POP` sobre las mismas puntuaciones vigentes válidas de `mean` y `median`. Es desviación poblacional, no una estimación desde los buckets. Sin puntuaciones es `null`; una puntuación produce `0`; con varias, el valor no se redondea en backend. La precisión de presentación queda a cargo del frontend.
+- Cada mes y cada género ahora incluye `topDisc: RatesStatsDiscDto | null`. Los meses seleccionan usando el mes civil de asignación: `Rate.createdAt` con la convención histórica Europe/Madrid en 2025–2026 y eventos `set` con `timeZone` desde 2027. `change` queda fuera; eventos `set` repetidos pueden destacar el mismo disco en varios meses. El desempate usa nota vigente descendente, asignación elegible más reciente y `disc.id` ascendente. Los conteos mensuales no cambian.
+- El destacado por género usa los discos puntuados elegibles del año y el género único actual de Catalog. Agrupa por `genre.name`, incluyendo nombres duplicados según el contrato, no limita la cantidad de géneros y usa desempates deterministas. Sin disco puntuado vigente devuelve `null`.
+- Los DTOs de destacado global, mensual, género y controversia entregan `image` desde `Disc.image`, la imagen persistida por Catalog. Se conserva `null` cuando no hay portada; no se derivan URLs ni se consulta Spotify.
+- Cada fecha activa de `activityByDay` añade `assignments`, con una entrada por Rate histórica elegible o evento `set`: `discId`, `title`, `artist` nullable, `rate` vigente o `null`, y fecha civil `date`. Las entradas repetidas conservan multiplicidad aunque compartan disco. Una asignación continúa presente si actualmente no hay nota. El servicio comprueba que el detalle diario y los conteos coincidan; el total anual conserva su semántica anterior.
+
+La respuesta sigue usando las rutas existentes, autenticación, usuario de sesión, año y zona IANA, población anual y distinción entre actividad y notas vigentes. No se añaden aliases legacy, endpoints, cambios de frontend, entidades ni migraciones.
+
+### Verificaciones
+
+- Jest focalizado de servicios, composición, DTO/contrato y controller: 7 suites y 98 tests aprobados.
+- `pnpm exec tsc --noEmit --incremental false`: aprobado.
+- `pnpm run build`: aprobado; el gate encontró 543 archivos compilados y 26 módulos runtime declarados/cargables.
+- `git diff --check`: se ejecuta al cerrar esta tarea.
+- No se ejecutaron pruebas PostgreSQL, suites generales, E2E ni `verify`; la integración real de las consultas permanece pendiente. No se modificó frontend ni se ejecutaron migraciones o consultas de producción.
+
+| Tarea | Estado final |
+| --- | --- |
+| EST-BE-M | Completada; validación PostgreSQL real pendiente |
 
 ## Registro EST
 

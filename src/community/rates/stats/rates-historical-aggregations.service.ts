@@ -3,11 +3,20 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Rate } from '../entities/rate.entity';
 import { getHistoricalRateCohortQuery } from './helpers/historical-rate-cohort-query';
+import { RatesStatsDailyAssignmentDto } from '../dto/rates-user-stats.dto';
 
 interface HistoricalActivityAggregateRow {
   aggregation: 'year' | 'month' | 'day' | 'genre' | 'withoutGenre';
   period: string | null;
   activityCount: number | string;
+}
+
+interface HistoricalDailyAssignmentRow {
+  date: string;
+  discId: string;
+  title: string;
+  artist: string | null;
+  rate: number | string | null;
 }
 
 export interface HistoricalMonthlyActivity {
@@ -18,6 +27,7 @@ export interface HistoricalMonthlyActivity {
 export interface HistoricalDailyActivity {
   date: string;
   activityCount: number;
+  assignments: RatesStatsDailyAssignmentDto[];
 }
 
 export interface HistoricalGenreActivity {
@@ -85,6 +95,30 @@ export class RatesHistoricalAggregationsService {
       `,
       query.parameters,
     );
+    const assignmentRows = await this.rateRepository.query<
+      HistoricalDailyAssignmentRow[]
+    >(
+      `WITH ${query.eligibleRateRowsCte}, ranked_current_rates AS (
+        SELECT "discId", "currentRate",
+          ROW_NUMBER() OVER (
+            PARTITION BY "discId"
+            ORDER BY "editedAt" DESC NULLS LAST, "createdAt" DESC, "rateId" DESC
+          ) AS current_position
+        FROM eligible_rate_rows
+      ), current_scores AS (
+        SELECT "discId", "currentRate" FROM ranked_current_rates
+        WHERE current_position = 1 AND "currentRate" BETWEEN 0 AND 10
+      )
+      SELECT TO_CHAR(eligible_rate_rows."createdAtLocal"::date, 'YYYY-MM-DD') AS date,
+        eligible_rate_rows."discId" AS "discId", disc.name AS title,
+        artist.name AS artist, current_scores."currentRate" AS rate
+      FROM eligible_rate_rows
+      INNER JOIN disc ON disc.id = eligible_rate_rows."discId"
+      LEFT JOIN artist ON artist.id = disc."artistId"
+      LEFT JOIN current_scores ON current_scores."discId" = eligible_rate_rows."discId"
+      ORDER BY eligible_rate_rows."createdAtLocal", eligible_rate_rows."rateId"`,
+      query.parameters,
+    );
     const annualRow = rows.find((row) => row.aggregation === 'year');
     if (!annualRow) {
       throw new Error(
@@ -116,9 +150,29 @@ export class RatesHistoricalAggregationsService {
       const month = `${query.year}-${String(monthIndex + 1).padStart(2, '0')}`;
       return { month, activityCount: monthCounts.get(month) ?? 0 };
     });
+    const assignmentsByDay = new Map<string, RatesStatsDailyAssignmentDto[]>();
+    for (const row of assignmentRows) {
+      const assignments = assignmentsByDay.get(row.date) ?? [];
+      assignments.push({
+        discId: row.discId,
+        title: row.title,
+        artist: row.artist,
+        rate: row.rate === null ? null : toNullableScore(row.rate),
+        date: row.date,
+      });
+      assignmentsByDay.set(row.date, assignments);
+    }
     const activityByDay = [...dayCounts]
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([date, count]) => ({ date, activityCount: count }));
+      .map(([date, count]) => {
+        const assignments = assignmentsByDay.get(date) ?? [];
+        if (assignments.length !== count) {
+          throw new Error(
+            'Historical daily assignment details do not match activity counts.',
+          );
+        }
+        return { date, activityCount: count, assignments };
+      });
     const attributedActivityCount =
       sum(activityByGenre.map((row) => row.activityCount)) +
       activityWithoutGenre;
@@ -130,6 +184,11 @@ export class RatesHistoricalAggregationsService {
     ) {
       throw new Error(
         'Historical activity aggregate totals are inconsistent across periods.',
+      );
+    }
+    if (assignmentRows.length !== activityCount) {
+      throw new Error(
+        'Historical daily assignment details do not match annual activity count.',
       );
     }
 
@@ -158,4 +217,12 @@ function toNonNegativeInteger(value: number | string): number {
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
+}
+
+function toNullableScore(value: number | string): number {
+  const score = Number(value);
+  if (!Number.isFinite(score) || score < 0 || score > 10) {
+    throw new Error('Historical current score must be a valid Rate score.');
+  }
+  return score;
 }
