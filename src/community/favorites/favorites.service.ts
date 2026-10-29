@@ -101,7 +101,11 @@ export class FavoritesService {
   async findAllByUser(
     paginationDto: CommunityListQueryDto,
     user: User,
-    options?: { stableTieBreak: boolean; genreIds?: string[] },
+    options?: {
+      stableTieBreak: boolean;
+      genreIds?: string[];
+      artistId?: string;
+    },
   ) {
     const {
       limit = 10,
@@ -174,6 +178,7 @@ export class FavoritesService {
       query,
       dateRange,
       countryId: country,
+      artistId: options?.artistId,
       genreId: genre,
       genreIds: options?.genreIds,
     };

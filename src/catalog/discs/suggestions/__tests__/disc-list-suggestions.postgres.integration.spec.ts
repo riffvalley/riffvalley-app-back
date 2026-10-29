@@ -86,12 +86,18 @@ describePostgres('DiscList suggestions PostgreSQL integration', () => {
     });
     await dataSource.initialize();
     await dataSource.query(`
+      CREATE TABLE "${schema}".country (
+        id uuid PRIMARY KEY,
+        name text NOT NULL,
+        "isoCode" text NULL
+      );
       CREATE TABLE "${schema}".artist (
         id uuid PRIMARY KEY,
         name text NOT NULL,
         name_normalized text NOT NULL,
         search_name_normalized text NULL,
-        image text NULL
+        image text NULL,
+        "countryId" uuid NULL REFERENCES "${schema}".country(id)
       );
       CREATE TABLE "${schema}".disc (
         id uuid PRIMARY KEY,
@@ -118,12 +124,19 @@ describePostgres('DiscList suggestions PostgreSQL integration', () => {
     if (!client || !dataSource)
       throw new Error('PostgreSQL fixture is unavailable');
     await client.query(
-      `INSERT INTO "${schema}".artist (id, name, name_normalized, search_name_normalized) VALUES
-        ($1, 'MØL', 'møl', 'mol'),
-        ($2, 'MØL', 'møl', 'mol'),
-        ($3, 'Molar Field', 'molar field', 'molar field'),
-        ($4, 'Metal Artist', 'metal artist', 'metal artist')`,
-      [id(10), id(11), id(12), id(13)],
+      `INSERT INTO "${schema}".country (id, name, "isoCode") VALUES
+        ($1, 'Norway', 'NO'),
+        ($2, 'Sweden', 'SE')`,
+      [id(40), id(41)],
+    );
+    await client.query(
+      `INSERT INTO "${schema}".artist
+        (id, name, name_normalized, search_name_normalized, image, "countryId") VALUES
+        ($1, 'MØL', 'møl', 'mol', 'mol-norway.jpg', $5),
+        ($2, 'MØL', 'møl', 'mol', 'mol-sweden.jpg', $6),
+        ($3, 'Molar Field', 'molar field', 'molar field', NULL, NULL),
+        ($4, 'Metal Artist', 'metal artist', 'metal artist', NULL, NULL)`,
+      [id(10), id(11), id(12), id(13), id(40), id(41)],
     );
     await client.query(
       `INSERT INTO "${schema}".disc (id, name, search_name_normalized, image, "releaseDate", "artistId") VALUES
@@ -153,12 +166,24 @@ describePostgres('DiscList suggestions PostgreSQL integration', () => {
     expect(
       suggestions.artists.slice(0, 2).map(({ id: artistId }) => artistId),
     ).toEqual([id(10), id(11)]);
+    expect(suggestions.artists.slice(0, 2)).toMatchObject([
+      {
+        name: 'MØL',
+        image: 'mol-norway.jpg',
+        country: { id: id(40), name: 'Norway', isoCode: 'NO' },
+      },
+      {
+        name: 'MØL',
+        image: 'mol-sweden.jpg',
+        country: { id: id(41), name: 'Sweden', isoCode: 'SE' },
+      },
+    ]);
     expect(
       new Set(suggestions.artists.map(({ id: artistId }) => artistId)).size,
     ).toBe(suggestions.artists.length);
     expect(suggestions.discs).toHaveLength(5);
     expect(suggestions.discs[0]).toMatchObject({ id: id(20), title: 'Mol' });
-    expect(suggestions.discs[1]).toMatchObject({
+    expect(suggestions.discs[4]).toMatchObject({
       id: id(21),
       title: 'Molar Field',
     });

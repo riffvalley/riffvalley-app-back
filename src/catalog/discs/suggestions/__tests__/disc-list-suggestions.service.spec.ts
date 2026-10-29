@@ -13,6 +13,7 @@ function queryBuilderMock<Entity, Row>(rows: Row[]) {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
@@ -23,8 +24,22 @@ function queryBuilderMock<Entity, Row>(rows: Row[]) {
 
 describe('DiscListSuggestionsService', () => {
   const artistRows = [
-    { id: 'artist-1', name: 'MØL', image: null },
-    { id: 'artist-2', name: 'MOL', image: 'artist.jpg' },
+    {
+      id: 'artist-1',
+      name: 'MØL',
+      image: null,
+      countryId: null,
+      countryName: null,
+      countryIsoCode: null,
+    },
+    {
+      id: 'artist-2',
+      name: 'MØL',
+      image: 'artist.jpg',
+      countryId: 'country-2',
+      countryName: 'Sweden',
+      countryIsoCode: 'SE',
+    },
   ];
   const discRows = [
     {
@@ -81,13 +96,38 @@ describe('DiscListSuggestionsService', () => {
     );
 
     await expect(service.findSuggestions('mol')).resolves.toEqual({
-      artists: artistRows,
+      artists: [
+        {
+          id: 'artist-1',
+          name: 'MØL',
+          image: null,
+          country: null,
+        },
+        {
+          id: 'artist-2',
+          name: 'MØL',
+          image: 'artist.jpg',
+          country: {
+            id: 'country-2',
+            name: 'Sweden',
+            isoCode: 'SE',
+          },
+        },
+      ],
       discs: discRows,
     });
 
     expect(artistQuery.take).toHaveBeenCalledWith(3);
     expect(discQuery.take).toHaveBeenCalledWith(5);
-    expect(artistQuery.orderBy).toHaveBeenCalledWith('suggestionRank', 'ASC');
+    expect(artistQuery.orderBy).toHaveBeenCalledWith('"suggestionRank"', 'ASC');
+    expect(artistQuery.leftJoin).toHaveBeenCalledWith(
+      'artist.country',
+      'country',
+    );
+    expect(artistQuery.addSelect).toHaveBeenCalledWith(
+      'country.name',
+      'countryName',
+    );
     expect(artistQuery.addOrderBy).toHaveBeenNthCalledWith(
       1,
       'artist.name',
