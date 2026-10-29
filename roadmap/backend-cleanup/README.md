@@ -23,6 +23,7 @@ Las normas transversales y el plan BC-QG2 están en [Quality Gates](quality-gate
 ### Community
 
 - [Cierre de Community](community.md) — BC-COMM-0–9 completadas; saneamiento verificado, cero entradas Community en los tres baselines y riesgos contractuales diferidos documentados (2026-10-21).
+- [Actividad de Rates — ACT-BE](../activity.md) — ACT-BE-1–4 completadas; backend de Actividad cerrado para el alcance acordado, con verificación PostgreSQL aislada pendiente (2026-10-29).
 
 ### Product
 

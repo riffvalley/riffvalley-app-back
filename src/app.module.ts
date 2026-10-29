@@ -22,6 +22,7 @@ import { PendingsModule } from './community/pendings/pendings.module';
 import { RatesModule } from './community/rates/rates.module';
 import { RequestsModule } from './community/requests/requests.module';
 import { CommunityDashboardModule } from './community/dashboard/dashboard.module';
+import { ActivityHistoryModule } from './community/activity-history/activity-history.module';
 
 // Editorial
 import { AsignationsModule } from './editorial/lists/asignations/asignations.module';
@@ -78,6 +79,7 @@ import { VersionsModule } from './product/versions/versions.module';
     RatesModule,
     RequestsModule,
     CommunityDashboardModule,
+    ActivityHistoryModule,
 
     // Editorial
     AsignationsModule,

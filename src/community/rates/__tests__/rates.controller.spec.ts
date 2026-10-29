@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   ParseUUIDPipe,
   Type,
   ValidationPipe,
@@ -392,7 +393,7 @@ describe('RatesController home insights route', () => {
     const routes = [
       ['getUserStats', RequestMethod.GET, 'stats', true],
       ['getUserRatedDiscs', RequestMethod.GET, 'stats/discs', true],
-      ['getUserHistoryQB', RequestMethod.GET, 'user/:userId/history', false],
+      ['getUserHistoryQB', RequestMethod.GET, 'user/:userId/history', true],
       ['findRatesByDisc', RequestMethod.GET, 'disc/:discId', false],
       ['create', RequestMethod.POST, '/', true],
       ['findAll', RequestMethod.GET, '/', true],
@@ -445,7 +446,11 @@ describe('RatesController history route', () => {
     );
 
     const query = await validateHistoryQuery({});
-    await controller.getUserHistoryQB('user-1', query);
+    await controller.getUserHistoryQB(
+      Object.assign(new User(), { id: 'user-1' }),
+      'user-1',
+      query,
+    );
 
     expect(findHistory).toHaveBeenCalledWith('user-1', {
       type: 'both',
@@ -465,7 +470,11 @@ describe('RatesController history route', () => {
       from,
       to,
     });
-    await controller.getUserHistoryQB('user-2', validQuery);
+    await controller.getUserHistoryQB(
+      Object.assign(new User(), { id: 'user-2' }),
+      'user-2',
+      validQuery,
+    );
     expect(findHistory).toHaveBeenLastCalledWith('user-2', {
       type: 'cover',
       order: 'ASC',
@@ -505,12 +514,16 @@ describe('RatesController history route', () => {
       GUARDS_METADATA,
       RatesController.prototype.getUserHistoryQB,
     );
-    expect(guards).toBeUndefined();
+    expect(guards).toContain(UserRoleGuard);
 
     for (const type of ['rate', 'cover', 'both'] as const) {
       for (const order of ['ASC', 'DESC'] as const) {
         const query = await validateHistoryQuery({ type, order });
-        await controller.getUserHistoryQB('public-user-id', query);
+        await controller.getUserHistoryQB(
+          Object.assign(new User(), { id: 'public-user-id' }),
+          'public-user-id',
+          query,
+        );
         expect(findHistory).toHaveBeenLastCalledWith(
           'public-user-id',
           expect.objectContaining({ type, order }),
@@ -549,6 +562,7 @@ describe('RatesController history route', () => {
 
     expect(() =>
       controller.getUserHistoryQB(
+        Object.assign(new User(), { id: 'public-user-id' }),
         'public-user-id',
         Object.assign(new RatesHistoryQueryDto(), { from: '2025-01-01' }),
       ),
@@ -556,6 +570,7 @@ describe('RatesController history route', () => {
 
     expect(() =>
       controller.getUserHistoryQB(
+        Object.assign(new User(), { id: 'public-user-id' }),
         'public-user-id',
         Object.assign(new RatesHistoryQueryDto(), { to: '2025-01-31' }),
       ),
@@ -589,7 +604,11 @@ describe('RatesController history route', () => {
       offset: '0',
     });
 
-    await controller.getUserHistoryQB('public-user-id', query);
+    await controller.getUserHistoryQB(
+      Object.assign(new User(), { id: 'public-user-id' }),
+      'public-user-id',
+      query,
+    );
 
     expect(findHistory).toHaveBeenCalledWith('public-user-id', {
       type: 'both',
@@ -598,6 +617,29 @@ describe('RatesController history route', () => {
       offset: 0,
       dateRange: [new Date('2025-01-01'), new Date('2025-01-31')],
     });
+  });
+
+  it('rejects requests for another user before querying history', async () => {
+    const ratesHistoryService = new RatesHistoryService(createRateRepository());
+    const findHistory = jest.spyOn(
+      ratesHistoryService,
+      'findUserActionHistoryPaginatedQB',
+    );
+    const controller = new RatesController(
+      new RatesService(createRateRepository()),
+      new RatesStatsService(createRateRepository(), createUsersService()),
+      ratesHistoryService,
+      new RatesDashboardSummaryService(createRateRepository()),
+    );
+
+    expect(() =>
+      controller.getUserHistoryQB(
+        Object.assign(new User(), { id: 'session-user-id' }),
+        'other-user-id',
+        new RatesHistoryQueryDto(),
+      ),
+    ).toThrow(ForbiddenException);
+    expect(findHistory).not.toHaveBeenCalled();
   });
 });
 

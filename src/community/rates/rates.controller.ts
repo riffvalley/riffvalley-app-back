@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   BadRequestException,
+  ForbiddenException,
   ParseUUIDPipe,
   Query,
 } from '@nestjs/common';
@@ -94,10 +95,15 @@ export class RatesController {
 
   // Esta estaba abajo y fallaba porque chocaba con :id
   @Get('user/:userId/history')
+  @Auth()
   getUserHistoryQB(
+    @GetUser() user: User,
     @Param('userId') userId: string,
     @Query() query: RatesHistoryQueryDto,
   ) {
+    if (userId !== user.id) {
+      throw new ForbiddenException('You can only view your own rate history.');
+    }
     if (Boolean(query.from) !== Boolean(query.to)) {
       throw new BadRequestException('from and to must be provided together');
     }

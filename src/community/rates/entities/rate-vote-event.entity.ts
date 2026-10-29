@@ -25,7 +25,7 @@ export class RateVoteEvent {
   @CreateDateColumn({
     name: 'occurred_at',
     type: 'timestamptz',
-    default: () => 'CURRENT_TIMESTAMP',
+    default: () => 'clock_timestamp()',
   })
   occurredAt: Date;
 
