@@ -9,7 +9,7 @@ type RawRow = {
   occurred_at: string;
   previous_value: string | null;
   new_value: string | null;
-  disc_id: string | null;
+  disc_id: string;
   disc_name: string | null;
   disc_image: string | null;
   artist_id: string | null;
@@ -19,6 +19,7 @@ type RawRow = {
 };
 
 type HistoryQueryBuilderMock = {
+  innerJoin: jest.Mock<HistoryQueryBuilderMock, [string, string, string]>;
   leftJoin: jest.Mock<HistoryQueryBuilderMock, [string, string, string]>;
   select: jest.Mock<HistoryQueryBuilderMock, [string, string]>;
   addSelect: jest.Mock<HistoryQueryBuilderMock, [string, string]>;
@@ -35,6 +36,7 @@ type HistoryQueryBuilderMock = {
 
 function createQueryBuilder(rows: RawRow[]): HistoryQueryBuilderMock {
   const builder: HistoryQueryBuilderMock = {
+    innerJoin: jest.fn<HistoryQueryBuilderMock, [string, string, string]>(),
     leftJoin: jest.fn<HistoryQueryBuilderMock, [string, string, string]>(),
     select: jest.fn<HistoryQueryBuilderMock, [string, string]>(),
     addSelect: jest.fn<HistoryQueryBuilderMock, [string, string]>(),
@@ -52,6 +54,7 @@ function createQueryBuilder(rows: RawRow[]): HistoryQueryBuilderMock {
     getRawMany: jest.fn<Promise<RawRow[]>, []>().mockResolvedValue(rows),
   };
   for (const method of [
+    builder.innerJoin,
     builder.leftJoin,
     builder.select,
     builder.addSelect,
@@ -118,6 +121,11 @@ describe('ActivityHistoryService', () => {
     });
     expect(builder.andWhere).toHaveBeenCalledWith(
       "event.eventType IN ('set', 'change')",
+    );
+    expect(builder.innerJoin).toHaveBeenCalledWith(
+      'disc',
+      'disc',
+      'disc.id = event.disc_id',
     );
     expect(builder.orderBy).toHaveBeenCalledWith('event.occurredAt', 'DESC');
     expect(builder.addOrderBy).toHaveBeenCalledWith('event.id', 'DESC');
@@ -214,22 +222,15 @@ describe('ActivityHistoryService', () => {
     );
   });
 
-  it('projects catalog fields once and preserves legacy nulls and deleted discs', async () => {
+  it('projects disc-associated events and preserves nullable values and incomplete artist or genre relations', async () => {
     const rows = [
       eventRow('event-1', occurredAt, {
         previous_value: null,
         new_value: null,
-        disc_id: null,
-        disc_name: null,
-        disc_image: null,
-        artist_id: null,
-        artist_name: null,
-        genre_id: null,
-        genre_name: null,
       }),
       eventRow('event-2', occurredAt, {
-        disc_id: 'deleted-disc',
-        disc_name: null,
+        disc_id: 'disc-2',
+        disc_name: 'Second record',
         artist_id: null,
         artist_name: null,
         genre_id: null,
@@ -243,17 +244,18 @@ describe('ActivityHistoryService', () => {
     expect(page.items[0]).toMatchObject({
       previousValue: null,
       newValue: null,
-      disc: null,
+      disc: { id: 'disc-1', title: 'Record' },
     });
     expect(page.items[1].disc).toEqual({
-      id: 'deleted-disc',
-      title: null,
+      id: 'disc-2',
+      title: 'Second record',
       artist: null,
       coverUrl: 'cover.jpg',
       genre: null,
     });
     expect(page.hasMore).toBe(false);
-    expect(builder.leftJoin).toHaveBeenCalledTimes(3);
+    expect(builder.innerJoin).toHaveBeenCalledTimes(1);
+    expect(builder.leftJoin).toHaveBeenCalledTimes(2);
     expect(builder.getRawMany).toHaveBeenCalledTimes(1);
     expect(builder.addSelect).toHaveBeenCalledTimes(11);
   });
@@ -280,8 +282,10 @@ describe('ActivityHistoryService', () => {
       },
     });
     expect(builder.getRawMany).toHaveBeenCalledTimes(1);
-    expect(builder.leftJoin.mock.calls).toEqual([
+    expect(builder.innerJoin.mock.calls).toEqual([
       ['disc', 'disc', 'disc.id = event.disc_id'],
+    ]);
+    expect(builder.leftJoin.mock.calls).toEqual([
       ['artist', 'artist', 'artist.id = disc."artistId"'],
       ['genre', 'genre', 'genre.id = disc."genreId"'],
     ]);

@@ -96,7 +96,8 @@ integrationSuite('Activity history PostgreSQL integration', () => {
         ('f0000000-0000-4000-8000-000000000003', '40000000-0000-4000-8000-000000000001', '2026-10-29T12:00:00Z', 'set', '30000000-0000-4000-8000-000000000001', NULL, 7),
         ('f0000000-0000-4000-8000-000000000002', '40000000-0000-4000-8000-000000000001', '2026-10-29T12:00:00Z', 'change', '30000000-0000-4000-8000-000000000001', 7, 8),
         ('f0000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '2026-10-29T11:59:59.999999Z', 'change', '30000000-0000-4000-8000-000000000001', 8, 9),
-        ('f0000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000002', '2026-10-29T12:00:00Z', 'change', '30000000-0000-4000-8000-000000000001', 8, 9);`,
+        ('f0000000-0000-4000-8000-000000000000', '40000000-0000-4000-8000-000000000001', '2026-10-29T11:59:59.999998Z', 'set', NULL, NULL, 5),
+        ('f0000000-0000-4000-8000-000000000004', '40000000-0000-4000-8000-000000000002', '2026-10-29T12:00:00Z', 'change', '30000000-0000-4000-8000-000000000001', 8, 9);`,
     );
   });
 
@@ -113,7 +114,6 @@ integrationSuite('Activity history PostgreSQL integration', () => {
     const firstPage = await service.findUserHistory(
       '40000000-0000-4000-8000-000000000001',
       {
-        query: 'Record',
         limit: 1,
       },
     );
@@ -136,7 +136,6 @@ integrationSuite('Activity history PostgreSQL integration', () => {
     const secondPage = await service.findUserHistory(
       '40000000-0000-4000-8000-000000000001',
       {
-        query: 'Record',
         limit: 1,
         continuation: firstPage.nextPosition ?? undefined,
       },
@@ -149,7 +148,6 @@ integrationSuite('Activity history PostgreSQL integration', () => {
     const thirdPage = await service.findUserHistory(
       '40000000-0000-4000-8000-000000000001',
       {
-        query: 'Record',
         limit: 1,
         continuation: secondPage.nextPosition ?? undefined,
       },

@@ -44,7 +44,7 @@ export interface ActivityHistoryItem {
   occurredAt: string;
   previousValue: number | null;
   newValue: number | null;
-  disc: ActivityHistoryDisc | null;
+  disc: ActivityHistoryDisc;
 }
 
 export interface ActivityHistoryPage {

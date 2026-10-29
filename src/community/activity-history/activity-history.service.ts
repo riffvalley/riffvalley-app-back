@@ -17,7 +17,7 @@ interface ActivityHistoryRawRow {
   occurred_at: string;
   previous_value: string | number | null;
   new_value: string | number | null;
-  disc_id: string | null;
+  disc_id: string;
   disc_name: string | null;
   disc_image: string | null;
   artist_id: string | null;
@@ -71,7 +71,7 @@ export class ActivityHistoryService {
   ): SelectQueryBuilder<RateVoteEvent> {
     const query = this.eventRepository
       .createQueryBuilder('event')
-      .leftJoin('disc', 'disc', 'disc.id = event.disc_id')
+      .innerJoin('disc', 'disc', 'disc.id = event.disc_id')
       .leftJoin('artist', 'artist', 'artist.id = disc."artistId"')
       .leftJoin('genre', 'genre', 'genre.id = disc."genreId"')
       .select('event.id', 'event_id')
@@ -172,21 +172,19 @@ function mapActivityHistoryRow(
     occurredAt: row.occurred_at,
     previousValue: toNullableNumber(row.previous_value),
     newValue: toNullableNumber(row.new_value),
-    disc: row.disc_id
-      ? {
-          id: row.disc_id,
-          title: row.disc_name,
-          artist:
-            row.artist_id && row.artist_name !== null
-              ? { id: row.artist_id, name: row.artist_name }
-              : null,
-          coverUrl: row.disc_image,
-          genre:
-            row.genre_id && row.genre_name !== null
-              ? { id: row.genre_id, name: row.genre_name }
-              : null,
-        }
-      : null,
+    disc: {
+      id: row.disc_id,
+      title: row.disc_name,
+      artist:
+        row.artist_id && row.artist_name !== null
+          ? { id: row.artist_id, name: row.artist_name }
+          : null,
+      coverUrl: row.disc_image,
+      genre:
+        row.genre_id && row.genre_name !== null
+          ? { id: row.genre_id, name: row.genre_name }
+          : null,
+    },
   };
 }
 

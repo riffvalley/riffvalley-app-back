@@ -26,7 +26,13 @@ const event = {
   occurredAt: '2026-10-29T09:10:11.123456Z',
   previousValue: null,
   newValue: 8.5,
-  disc: null,
+  disc: {
+    id: 'disc-1',
+    title: 'Record',
+    artist: null,
+    coverUrl: null,
+    genre: null,
+  },
 };
 
 describe('ActivityHistoryController', () => {

@@ -117,7 +117,7 @@ ACT-BE-3 se divide en persistencia temporal (ACT-BE-3a, completada), consulta/pr
 
 Fechas de pared (`YYYY-MM-DD`) son la única forma aceptada de `from`/`to`; no se mezclan timestamps con y sin offset. Así no se interpreta una hora sin zona ni se convierte accidentalmente en UTC. Se rechazan fechas de calendario inválidas, fechas fuera del rango soportado por la API, zonas desconocidas, `from > to`, límites fuera de rango, tipos desconocidos, query vacía/solo espacios y campos extraños según el `ValidationPipe` global (`whitelist` + `forbidNonWhitelisted`). Intervalo sin `from` o sin `to` es válido. Parámetros/cursor malformados producen HTTP 400 con el formato de validación habitual; sesión ausente/inválida produce HTTP 401 con el guard JWT existente. `limit` fuera del rango no se recorta silenciosamente.
 
-`q` solo encuentra eventos cuyo `disc_id` todavía identifica un disco y cuya relación actual permite buscar título o artista. Eventos sin disco identificable permanecen en resultados sin búsqueda, pero no pueden coincidir con `q`. La búsqueda afecta al catálogo actual, no al nombre histórico del día del evento.
+La respuesta solo incluye eventos cuyo `disc_id` resuelve a un disco actual. Los eventos sin disco asociado se excluyen aunque no haya `q`; cuando se usa búsqueda, esta se aplica al catálogo actual, no al nombre histórico del día del evento.
 
 ### Límites de fecha, zonas y agrupación
 
@@ -151,7 +151,7 @@ Fechas de pared (`YYYY-MM-DD`) son la única forma aceptada de `from`/`to`; no s
 }
 ```
 
-`disc` es `null` si `disc_id` es `null` o la relación ya no existe. Cuando hay disco, Artist y Genre son objetos nullable si sus datos relacionados no están disponibles; no se inventan nombres ni IDs. Portada, título, artista y género son datos actuales del catálogo, no snapshots del momento de votar. Valores históricos provienen exclusivamente de `previous_value`/`new_value`; se normalizan como números JSON de 0–10 (hasta dos decimales) o `null` y nunca se sustituyen por `Rate.rate`. Los nulos legacy se preservan explícitamente. Se conserva cada fila; no se eliminan silenciosamente eventos incompletos. `set` no significa primera valoración vitalicia: es una transición capturada de puntuación nula a no nula. `change` es una transición capturada entre valores no nulos distintos. El contrato no afirma registrar portada, repeticiones del mismo valor, borrados, limpiezas a null ni fechas de escucha.
+`disc` siempre representa un disco actual asociado; el evento se excluye si `disc_id` es nulo o la relación ya no existe. Artist y Genre siguen siendo objetos nullable si sus datos relacionados no están disponibles; no se inventan nombres ni IDs. Portada, título, artista y género son datos actuales del catálogo, no snapshots del momento de votar. Valores históricos provienen exclusivamente de `previous_value`/`new_value`; se normalizan como números JSON de 0–10 (hasta dos decimales) o `null` y nunca se sustituyen por `Rate.rate`. Los valores históricos nulos se preservan explícitamente. `set` no significa primera valoración vitalicia: es una transición capturada de puntuación nula a no nula. `change` es una transición capturada entre valores no nulos distintos. El contrato no afirma registrar portada, repeticiones del mismo valor, borrados, limpiezas a null ni fechas de escucha.
 
 La consulta debe seleccionar columnas y hacer joins SQL de una sola página para Disc/Artist/Genre, con proyección explícita que evite relaciones eager ajenas (comentarios, favoritos, pendientes, países) y consultas por elemento. No se devuelve `userId`: el recurso ya es personal y el ID no es necesario para la UI.
 
@@ -198,7 +198,7 @@ La alternativa de asignar secuencias o imponer orden de commits queda fuera de a
 - Se creó `ActivityHistoryModule` en `src/community/activity-history/` y se registró en `AppModule`. Exporta solo `ActivityHistoryService`; no tiene controlador ni servicio de escritura. Identity y `ActivityStatisticsService` no se modificaron. El módulo lee `RateVoteEvent` directamente, sin importar `RatesModule` ni crear un ciclo.
 - `ActivityHistoryService.findUserHistory()` exige `userId` como argumento interno y siempre agrega `event.userId = :userId` a la consulta base. Restringe filas a `set`/`change`, parametriza filtros y no consulta `Rate`. No acepta un usuario desde un filtro ni se agregó endpoint HTTP.
 - La consulta selecciona explícitamente columnas del ledger, disco, artista y género con tres joins de catálogo en SQL. No carga entidades/relaciones eager ni ejecuta consultas por fila. Imagen, título y nombres reflejan el catálogo actual, no un snapshot histórico.
-- `q` reutiliza `buildMusicNameMultiColumnPartialPredicate` y las columnas de búsqueda normalizadas del catálogo, con fallback literal case-insensitive para nombres legacy. Al buscar, eventos sin disco resuelto no coinciden; sin búsqueda, se mantienen en la cronología.
+- `q` reutiliza `buildMusicNameMultiColumnPartialPredicate` y las columnas de búsqueda normalizadas del catálogo, con fallback literal case-insensitive para nombres legacy. Los eventos sin disco resuelto se excluyen con o sin búsqueda.
 
 ### Filtros, fechas y paginación
 
@@ -209,8 +209,8 @@ La alternativa de asignar secuencias o imponer orden de commits queda fuera de a
 
 ### Proyección y datos incompletos
 
-- Cada item contiene ID, tipo, `occurredAt`, valores históricos anterior/nuevo y disco nullable con ID/título/portada actuales, artista y género nullable. Los `decimal` del driver se convierten a número JSON. No se sustituye ningún valor histórico con la Rate actual.
-- Se conservan eventos con `disc_id` nulo, relaciones ya eliminadas y valores anterior/nuevo nulos; campos ausentes se proyectan como `null`. Una relación con disco resuelto pero sin artista o género mantiene el disco y entrega esa relación como `null`.
+- Cada item contiene ID, tipo, `occurredAt`, valores históricos anterior/nuevo y un disco asociado con ID/título/portada actuales; artista y género siguen siendo nullable. Los `decimal` del driver se convierten a número JSON. No se sustituye ningún valor histórico con la Rate actual.
+- Los eventos con `disc_id` nulo o relación de disco ya eliminada se excluyen mediante un `INNER JOIN` al catálogo. Se preservan los valores anterior/nuevo nulos. Un disco actual sin artista o género mantiene su item y entrega esa relación como `null`.
 
 ### Tests y verificaciones
 
@@ -234,7 +234,7 @@ La alternativa de asignar secuencias o imponer orden de commits queda fuera de a
 - `@Auth()` aplica el guard JWT existente y `@GetUser()` aporta el único identificador usado para consultar. No existe parámetro `userId`; el controlador delega en `ActivityHistoryService` y no contiene SQL.
 - `ActivityHistoryQueryDto` valida fechas civiles reales `YYYY-MM-DD`, rango no invertido, zona IANA requerida y válida cuando hay fechas, `type` `set`/`change`, `q` recortada de 1 a 100 caracteres, `limit` entero decimal de 1 a 100 (predeterminado 30) y forma del cursor. El `ValidationPipe` global rechaza propiedades desconocidas, incluido `userId`. `q` se asigna al filtro `query` interno sin cambiar la búsqueda de 3b.
 - Una fecha civil omitida por las reglas históricas de una zona se rechaza como HTTP 400 al resolver el rango existente; la conversión a instantes UTC sigue perteneciendo a `ActivityHistoryService` y su helper de 3b.
-- La respuesta contiene `items`, `nextCursor` y `hasMore`; conserva eventos y puntuaciones legacy nulas, timestamp UTC de seis dígitos fraccionarios, y datos actuales de disco/artista/portada/género de la proyección. No incluye datos privados de Rate o `userId`, y devuelve eventos individuales sin agrupar.
+- La respuesta contiene `items`, `nextCursor` y `hasMore`; conserva puntuaciones legacy nulas, timestamp UTC de seis dígitos fraccionarios, y datos actuales de disco/artista/portada/género de la proyección. Solo incluye eventos con disco asociado; no incluye datos privados de Rate o `userId`, y devuelve eventos individuales sin agrupar.
 
 ### Seguridad y cursores
 
@@ -258,6 +258,7 @@ La alternativa de asignar secuencias o imponer orden de commits queda fuera de a
 
 - `ActivityHistoryModule` vive en `src/community/activity-history/` y se registra desde `AppModule`. Rates conserva las escrituras de `rate_vote_events`; Actividad solo consulta/proyecta ese ledger y no importa `RatesModule`. Identity conserva presencia/estadísticas. El módulo de Actividad no introduce dependencias circulares, consultas duplicadas, fuentes de verdad adicionales ni rutas adicionales al único `GET /api/activity/history`.
 - El controlador de Actividad aplica `@Auth()`, obtiene el único usuario mediante `@GetUser()` y delega en el servicio. La consulta TypeORM filtra por `event.userId = :userId` en la propia consulta antes de filtros, orden y paginación; no acepta `userId` como filtro. El DTO limita fechas, zona IANA, tipo, búsqueda y `limit`; el ValidationPipe global rechaza propiedades desconocidas.
+- La consulta usa `INNER JOIN` para el disco: no devuelve eventos con `disc_id` nulo ni aquellos cuya relación de disco ya no existe. Conserva los valores históricos nulos y los eventos con disco en cualquier fecha; el evento del día 1 que sí tiene disco permanece sujeto a los filtros normales.
 - La revisión detectó que la ruta legacy `GET /api/rates/user/:userId/history` permitía consultar otra cuenta sin autenticación. Se corrigió el defecto crítico en Rates: ahora requiere `@Auth()` y compara el parámetro de ruta con `@GetUser()` antes de llamar al servicio; el dueño conserva la ruta, filtros y respuesta actuales. La prueba del controlador confirma 403 y cero consultas para un ID ajeno.
 
 ### Contract finding
