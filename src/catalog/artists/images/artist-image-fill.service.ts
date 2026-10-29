@@ -246,7 +246,7 @@ export class ArtistImageFillService {
         'artist.needsReview',
       ])
       .where(
-        '(artist.image IS NULL OR BTRIM(artist.image) = \'\') OR artist."needsReview" = true',
+        '((artist.image IS NULL OR BTRIM(artist.image) = \'\') OR artist."needsReview" = true)',
       );
   }
 

@@ -12,7 +12,7 @@ El informe referenciado como `cat-art-4a-auditoria-rellenar-imagenes.md` no est�
 
 ## Recorrido, búsqueda y persistencia
 
-El recorrido ordena por UUID ascendente y usa comparación keyset (`id > after`), más el límite superior capturado al crear el cursor. Selecciona artistas con imagen nula/vacía y artistas con `needsReview=true`, incluidos estos últimos cuando ya tienen imagen. El cursor avanza al último ID seleccionado independientemente de si se actualizó, no hubo candidato, hubo ambigüedad o falló Spotify. Una imagen añadida concurrentemente no altera el orden ni desplaza otros registros como ocurriría con `OFFSET`.
+El recorrido ordena por UUID ascendente y usa comparación keyset (`id > after`), más el límite superior capturado al crear el cursor. Selecciona artistas con imagen nula/vacía y artistas con `needsReview=true`, incluidos estos últimos cuando ya tienen imagen; esta condición OR se agrupa antes de aplicar los límites keyset. El cursor avanza al último ID seleccionado independientemente de si se actualizó, no hubo candidato, hubo ambigüedad o falló Spotify. Una imagen añadida concurrentemente no altera el orden ni desplaza otros registros como ocurriría con `OFFSET`.
 
 El límite superior es el UUID mayor observado, no una marca temporal: los UUID aleatorios no permiten un snapshot de inserciones entre peticiones. Un registro nuevo con ID entre `after` y el límite aún puede aparecer; uno con ID anterior a `after` o superior al límite queda fuera. Si otra operación elimina una imagen de un artista cuyo ID ya pasó, ese artista se recoge en un nuevo preview, no en el cursor actual. No se mantiene una transacción ni una tabla de snapshot entre peticiones.
 

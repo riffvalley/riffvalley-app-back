@@ -214,6 +214,28 @@ describe('ArtistImageFillService', () => {
     await moduleRef.close();
   });
 
+  it('groups image and review eligibility before applying the cursor keyset', async () => {
+    const selectionQuery = makeBuilder({ many: [] });
+    const finished = makeBuilder({ exists: false });
+    const { service, moduleRef } = await makeService(
+      [selectionQuery, finished],
+      { findArtistCandidates: jest.fn() },
+    );
+    const cursor = Buffer.from(
+      JSON.stringify({ version: 1, after: ids[0], upperBound: ids[3] }),
+    ).toString('base64url');
+
+    await service.fill(Object.assign(new FillArtistImagesDto(), { cursor }));
+
+    expect(selectionQuery.where).toHaveBeenCalledWith(
+      '((artist.image IS NULL OR BTRIM(artist.image) = \'\') OR artist."needsReview" = true)',
+    );
+    expect(selectionQuery.andWhere).toHaveBeenCalledWith('artist.id > :after', {
+      after: ids[0],
+    });
+    await moduleRef.close();
+  });
+
   it('reports a conditional write race without overwriting an existing image', async () => {
     const updateQuery = makeBuilder({ affected: 0 });
     const finished = makeBuilder({ exists: false });
