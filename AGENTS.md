@@ -40,7 +40,7 @@ GitHub Actions ejecuta `pnpm run verify` en `push` y `pull_request`, con Node 24
 
 ## Convenciones Git
 
-Nombra las ramas según el tipo de cambio, con prefijos como `feat/`, `fix/`, `chore/`, `docs/` o `refactor/` y una descripción breve. No uses `codex/` como prefijo de rama.
+Antes de editar, parte de `main` y crea una rama con `git switch -c <tipo>/<descripcion-breve-en-kebab-case>`. Elige el tipo según el cambio: `feat/` para funcionalidad, `fix/` para correcciones, `chore/` para mantenimiento, `docs/` para documentación o `refactor/` para refactors. Ejemplo: `git switch -c feat/catalog-work-cat-art-4b`. No uses prefijos de herramienta o persona como `codex/`.
 
 ### Quality Gate de pruebas
 
