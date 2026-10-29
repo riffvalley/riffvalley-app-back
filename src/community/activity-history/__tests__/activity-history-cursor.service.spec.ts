@@ -112,11 +112,19 @@ describe('ActivityHistoryCursorService', () => {
     ).toThrow(BadRequestException);
   });
 
-  it('refuses to sign or verify with a missing or insecure default secret', () => {
+  it('accepts a configured secret regardless of length but rejects missing or default secrets', () => {
     const insecure = new ActivityHistoryCursorService(
       new ConfigService({ JWT_SECRET: 'your_long_random_jwt_secret' }),
     );
     const missing = new ActivityHistoryCursorService(new ConfigService());
+    const short = new ActivityHistoryCursorService(
+      new ConfigService({ JWT_SECRET: 'existing-secret' }),
+    );
+    const shortCursor = short.create(USER_ID, FILTERS, 30, POSITION, now);
+
+    expect(short.verify(shortCursor, USER_ID, FILTERS, 30, now)).toEqual(
+      POSITION,
+    );
     expect(() => insecure.create(USER_ID, FILTERS, 30, POSITION, now)).toThrow(
       /secure JWT_SECRET/u,
     );

@@ -122,7 +122,6 @@ export class ActivityHistoryCursorService {
     const configuredSecret = this.configService.get<string>('JWT_SECRET');
     if (
       !configuredSecret ||
-      configuredSecret.length < 32 ||
       configuredSecret === 'your_long_random_jwt_secret'
     ) {
       throw new Error(
