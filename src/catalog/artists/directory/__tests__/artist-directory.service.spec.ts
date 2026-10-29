@@ -91,6 +91,73 @@ describe('ArtistDirectoryService', () => {
     expect(searchParameters).toEqual([['%the cure%', '%cure%'], '%the cure%']);
   });
 
+  it('combines genre with letter or text search before counting and pagination', async () => {
+    await service.findDirectory({
+      letter: 'T',
+      genreId: 'genre-id',
+      limit: 4,
+      offset: 8,
+    });
+    let [countSql, countParameters] = artistRepository.query.mock.calls[0] as [
+      string,
+      unknown[],
+    ];
+    let [pageSql, pageParameters] = artistRepository.query.mock.calls[1] as [
+      string,
+      unknown[],
+    ];
+    expect(countSql).toContain('EXISTS (SELECT 1 FROM disc genre_disc');
+    expect(countSql).toContain('= $2');
+    expect(countParameters).toEqual(['T', 'genre-id']);
+    expect(pageSql).toContain('EXISTS (SELECT 1 FROM disc genre_disc');
+    expect(pageParameters).toEqual(['T', 'genre-id', 4, 8]);
+
+    artistRepository.query
+      .mockReset()
+      .mockResolvedValueOnce([{ totalItems: 1 }])
+      .mockResolvedValueOnce([
+        { id: 'artist-1', name: 'The Cure', genre: 'Rock', genreColor: '#123' },
+      ]);
+    await service.findDirectory({
+      letter: 'Z',
+      q: 'The Cure',
+      genreId: 'genre-id',
+      limit: 1,
+      offset: 0,
+    });
+    [countSql, countParameters] = artistRepository.query.mock.calls[0] as [
+      string,
+      unknown[],
+    ];
+    [pageSql, pageParameters] = artistRepository.query.mock.calls[1] as [
+      string,
+      unknown[],
+    ];
+    expect(countSql).toContain('LIKE ANY($1::text[])');
+    expect(countSql).toContain('EXISTS (SELECT 1 FROM disc genre_disc');
+    expect(countParameters).toEqual([
+      ['%the cure%', '%cure%'],
+      '%the cure%',
+      'genre-id',
+    ]);
+    expect(pageParameters).toEqual([
+      ['%the cure%', '%cure%'],
+      '%the cure%',
+      'genre-id',
+      1,
+      0,
+    ]);
+  });
+
+  it('does not apply a genre predicate when genreId is omitted', async () => {
+    await service.findDirectory({ letter: 'A' });
+    const [countSql] = artistRepository.query.mock.calls[0] as [
+      string,
+      unknown[],
+    ];
+    expect(countSql).not.toContain('genre_disc');
+  });
+
   it('preserves out-of-range counts and stable page metadata', async () => {
     artistRepository.query
       .mockReset()

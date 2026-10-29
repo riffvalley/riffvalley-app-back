@@ -27,6 +27,7 @@ export class ArtistDirectoryService {
   async findDirectory(query: {
     letter?: string;
     q?: string;
+    genreId?: string;
     limit?: number;
     offset?: number;
   }) {
@@ -51,6 +52,13 @@ export class ArtistDirectoryService {
       const letterParameter = parameters.length;
       conditions.push(
         `CASE WHEN LEFT(BTRIM(artist.name), 1) !~ '^[[:alpha:]]$' THEN '#' WHEN COALESCE(artist.search_name_normalized, artist.name_normalized) ~ '^[a-z]' THEN UPPER(SUBSTRING(COALESCE(artist.search_name_normalized, artist.name_normalized) FROM 1 FOR 1)) ELSE '#' END = $${letterParameter}`,
+      );
+    }
+
+    if (query.genreId) {
+      const genreParameter = parameters.push(query.genreId);
+      conditions.push(
+        `EXISTS (SELECT 1 FROM disc genre_disc WHERE genre_disc."artistId" = artist.id AND genre_disc."genreId" = $${genreParameter})`,
       );
     }
 

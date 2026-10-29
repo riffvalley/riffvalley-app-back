@@ -17,6 +17,7 @@ runPostgres('Artist directory PostgreSQL integration', () => {
   let fixtureGenreName: string;
   let artistIds: string[] = [];
   let genreId: string;
+  let olderGenreId: string;
 
   beforeAll(async () => {
     if (
@@ -77,6 +78,11 @@ runPostgres('Artist directory PostgreSQL integration', () => {
       color: '#abcdef',
     });
     genreId = genre.id;
+    const olderGenre = await dataSource.getRepository(Genre).save({
+      name: `${fixturePrefix.slice(0, 32)} older genre`,
+      color: '#654321',
+    });
+    olderGenreId = olderGenre.id;
     const names = [
       ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         .split('')
@@ -140,6 +146,8 @@ runPostgres('Artist directory PostgreSQL integration', () => {
       }
       if (genreId)
         await dataSource.getRepository(Genre).delete({ id: genreId });
+      if (olderGenreId)
+        await dataSource.getRepository(Genre).delete({ id: olderGenreId });
       await dataSource.destroy();
     }
   });
@@ -203,5 +211,76 @@ runPostgres('Artist directory PostgreSQL integration', () => {
         genreColor: '#abcdef',
       }),
     ]);
+  });
+  it('filters by any related disc genre, keeps latest-disc color, counts unique artists, and paginates', async () => {
+    const target = await dataSource.getRepository(Artist).findOneByOrFail({
+      name: `The ${fixturePrefix}`,
+    });
+    const olderGenre = await dataSource
+      .getRepository(Genre)
+      .findOneByOrFail({ id: olderGenreId });
+    await dataSource.getRepository(Disc).save([
+      {
+        id: randomUUID(),
+        name: `${fixturePrefix} older genre disc one`,
+        artist: target,
+        genre: olderGenre,
+        releaseDate: new Date('1990-01-01'),
+      },
+      {
+        id: randomUUID(),
+        name: `${fixturePrefix} older genre disc two`,
+        artist: target,
+        genre: olderGenre,
+        releaseDate: new Date('1989-01-01'),
+      },
+    ]);
+    const secondTarget = await dataSource.getRepository(Artist).save({
+      name: `The ${fixturePrefix} second`,
+      nameNormalized: normalizeForSearch(`The ${fixturePrefix} second`),
+      searchNameNormalized: normalizeMusicName(`The ${fixturePrefix} second`),
+      needsReview: false,
+    });
+    artistIds.push(secondTarget.id);
+    await dataSource.getRepository(Disc).save({
+      id: randomUUID(),
+      name: `${fixturePrefix} older genre disc three`,
+      artist: secondTarget,
+      genre: olderGenre,
+      releaseDate: new Date('1991-01-01'),
+    });
+
+    const filtered = await service.findDirectory({
+      letter: 'T',
+      q: `The ${fixturePrefix}`,
+      genreId: olderGenreId,
+      limit: 1,
+      offset: 0,
+    });
+    expect(filtered.totalItems).toBe(2);
+    expect(filtered.totalPages).toBe(2);
+    expect(filtered.currentPage).toBe(1);
+    expect(filtered.data).toHaveLength(1);
+    expect(filtered.data[0]).toMatchObject({
+      genre: fixtureGenreName,
+      genreColor: '#abcdef',
+    });
+    const secondPage = await service.findDirectory({
+      letter: 'T',
+      q: `The ${fixturePrefix}`,
+      genreId: olderGenreId,
+      limit: 1,
+      offset: 1,
+    });
+    expect(secondPage.totalItems).toBe(2);
+    expect(secondPage.currentPage).toBe(2);
+    expect(secondPage.data).toHaveLength(1);
+
+    await expect(
+      service.findDirectory({
+        letter: 'T',
+        genreId: '00000000-0000-4000-8000-000000000000',
+      }),
+    ).resolves.toMatchObject({ totalItems: 0, totalPages: 0, data: [] });
   });
 });

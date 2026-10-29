@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 export const ARTIST_DIRECTORY_LETTERS = [
   ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
@@ -14,6 +22,10 @@ export class ArtistDirectoryQueryDto {
   @IsOptional()
   @IsString()
   q?: string;
+
+  @IsOptional()
+  @IsUUID()
+  genreId?: string;
 
   @IsOptional()
   @Type(() => Number)
