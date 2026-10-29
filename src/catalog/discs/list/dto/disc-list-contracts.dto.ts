@@ -277,3 +277,9 @@ export class DiscListQueryDto extends DiscListFiltersDto {
 }
 
 export class DiscListOptionsQueryDto extends DiscListFiltersDto {}
+
+export class DiscListSuggestionsQueryDto {
+  @IsOptional()
+  @IsString()
+  query?: string;
+}

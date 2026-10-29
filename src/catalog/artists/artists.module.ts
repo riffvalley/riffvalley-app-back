@@ -13,6 +13,9 @@ import { ArtistWriteService } from './write/artist-write.service';
 import { ArtistCatalogService } from './catalog/artist-catalog.service';
 import { ArtistSearchService } from './search/artist-search.service';
 import { ArtistDetailsService } from './details/artist-details.service';
+import { ArtistDirectoryService } from './directory/artist-directory.service';
+import { ArtistImageFillService } from './images/artist-image-fill.service';
+import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
 
 @Module({
   controllers: [ArtistsController],
@@ -22,6 +25,8 @@ import { ArtistDetailsService } from './details/artist-details.service';
     ArtistWriteService,
     ArtistSearchService,
     ArtistDetailsService,
+    ArtistDirectoryService,
+    ArtistImageFillService,
     ArtistManagementService,
     ArtistOrphansService,
   ],
@@ -33,6 +38,7 @@ import { ArtistDetailsService } from './details/artist-details.service';
       RiffValleyPlaylistArtist,
     ]),
     AuthorizationModule,
+    SpotifyIntegrationModule,
   ],
   exports: [ArtistCatalogService],
 })

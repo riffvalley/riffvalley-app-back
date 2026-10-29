@@ -8,6 +8,10 @@ import { ArtistManagementService } from './management/artist-management.service'
 import { ArtistOrphansService } from './orphans/artist-orphans.service';
 import { ArtistSearchService } from './search/artist-search.service';
 import { ArtistWriteService } from './write/artist-write.service';
+import { ArtistDirectoryService } from './directory/artist-directory.service';
+import { ArtistDirectoryQueryDto } from './directory/dto/artist-directory-query.dto';
+import { ArtistImageFillService } from './images/artist-image-fill.service';
+import { FillArtistImagesDto } from './images/dto/fill-artist-images.dto';
 
 @Injectable()
 export class ArtistsService {
@@ -18,6 +22,8 @@ export class ArtistsService {
     private readonly artistDetailsService: ArtistDetailsService,
     private readonly artistManagementService: ArtistManagementService,
     private readonly artistOrphansService: ArtistOrphansService,
+    private readonly artistDirectoryService: ArtistDirectoryService,
+    private readonly artistImageFillService: ArtistImageFillService,
   ) {}
 
   create(dto: CreateArtistDto) {
@@ -26,6 +32,18 @@ export class ArtistsService {
 
   findAll(paginationDto: PaginationDto) {
     return this.artistCatalogService.findAll(paginationDto);
+  }
+
+  findDirectory(query: ArtistDirectoryQueryDto) {
+    return this.artistDirectoryService.findDirectory(query);
+  }
+
+  previewImageFill() {
+    return this.artistImageFillService.preview();
+  }
+
+  fillImages(dto: FillArtistImagesDto) {
+    return this.artistImageFillService.fill(dto);
   }
 
   findAllForManagement(

@@ -83,6 +83,27 @@ describe('SpotifyClientCredentialsService', () => {
     });
   });
 
+  it('applies the requested timeout to both token and public API calls', async () => {
+    const timeoutSignal = new AbortController().signal;
+    const timeoutSpy = jest
+      .spyOn(AbortSignal, 'timeout')
+      .mockReturnValue(timeoutSignal);
+    fetchMock
+      .mockResolvedValueOnce(
+        response({ access_token: 'token', expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(response({}));
+
+    await service.request('/artists/artist-id', 1500);
+
+    expect(timeoutSpy).toHaveBeenCalledTimes(2);
+    expect(timeoutSpy).toHaveBeenNthCalledWith(1, 1500);
+    expect(timeoutSpy).toHaveBeenNthCalledWith(2, 1500);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ signal: timeoutSignal });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ signal: timeoutSignal });
+    timeoutSpy.mockRestore();
+  });
+
   it('returns null for optional lookups when Client Credentials are absent', async () => {
     const emptyConfig = new ConfigService();
     emptyConfig.set('SPOTIFY_CLIENT_ID', '');

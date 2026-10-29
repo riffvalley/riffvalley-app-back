@@ -17,6 +17,8 @@ import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { ArtistManagementQueryDto } from '../dto/artist-management-query.dto';
 import { CreateArtistDto } from '../dto/create-artist.dto';
 import { UpdateArtistDto } from '../dto/update-artist.dto';
+import { ArtistDirectoryQueryDto } from '../directory/dto/artist-directory-query.dto';
+import { FillArtistImagesDto } from '../images/dto/fill-artist-images.dto';
 import { ArtistsController } from '../artists.controller';
 import { ArtistsService } from '../artists.service';
 
@@ -25,6 +27,9 @@ describe('ArtistsController contract characterization', () => {
     create: jest.fn(),
     findAll: jest.fn(),
     findAllForManagement: jest.fn(),
+    findDirectory: jest.fn(),
+    previewImageFill: jest.fn(),
+    fillImages: jest.fn(),
     findOne: jest.fn(),
     findOneWithDetails: jest.fn(),
     findByName: jest.fn(),
@@ -89,6 +94,85 @@ describe('ArtistsController contract characterization', () => {
     await expect(controller.findAll(query)).resolves.toBe(response);
     expect(service.findAll).toHaveBeenCalledTimes(1);
     expect(service.findAll).toHaveBeenCalledWith(query);
+  });
+
+  it('exposes the directory as a separate public read route', async () => {
+    const query = Object.assign(new ArtistDirectoryQueryDto(), {
+      letter: 'T',
+      q: 'The Cure',
+      limit: 20,
+      offset: 0,
+    });
+    const response = { totalItems: 1, data: [{ id: 'artist-id' }] };
+    service.findDirectory.mockResolvedValue(response);
+
+    expect(Reflect.getMetadata(PATH_METADATA, route('findDirectory'))).toBe(
+      'directory',
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, route('findDirectory'))).toBe(
+      0,
+    );
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, route('findDirectory'))).toBe(
+      undefined,
+    );
+    await expect(controller.findDirectory(query)).resolves.toBe(response);
+    expect(service.findDirectory).toHaveBeenCalledWith(query);
+  });
+
+  it('restricts image-fill preview and batch processing to superadmin', async () => {
+    const preview = {
+      eligible: 0,
+      batchSize: 10,
+      estimatedBatches: 0,
+      startCursor: null,
+    };
+    const result = {
+      processed: 0,
+      updated: 0,
+      notFound: 0,
+      ambiguous: 0,
+      failed: 0,
+      concurrentUpdates: 0,
+      results: [],
+      nextCursor: null,
+      hasMore: false,
+    };
+    const dto = Object.assign(new FillArtistImagesDto(), {
+      cursor: 'cursor',
+      batchSize: 5,
+    });
+    service.previewImageFill.mockResolvedValue(preview);
+    service.fillImages.mockResolvedValue(result);
+
+    for (const [method, path, verb] of [
+      ['previewImageFill', 'images/fill/preview', 0],
+      ['fillImages', 'images/fill', 1],
+    ] as const) {
+      const handler = route(method);
+      expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
+      expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(verb);
+      expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
+        ValidRoles.superadmin,
+      );
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toContain(
+        UserRoleGuard,
+      );
+    }
+    await expect(controller.previewImageFill()).resolves.toBe(preview);
+    await expect(controller.fillImages(dto)).resolves.toBe(result);
+    expect(service.fillImages).toHaveBeenCalledWith(dto);
+
+    const validationPipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+    await expect(
+      validationPipe.transform(
+        { batchSize: '11' },
+        { type: 'body', metatype: FillArtistImagesDto },
+      ),
+    ).rejects.toThrow();
   });
 
   it('maps GET /artists/management, validates the query DTO, and keeps valid defaults', async () => {

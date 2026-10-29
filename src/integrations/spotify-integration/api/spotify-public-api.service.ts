@@ -92,8 +92,8 @@ export class SpotifyPublicApiService {
     private readonly clientCredentials: SpotifyClientCredentialsService,
   ) {}
 
-  private async request(path: string): Promise<Response> {
-    return this.clientCredentials.request(path);
+  private async request(path: string, timeoutMs?: number): Promise<Response> {
+    return this.clientCredentials.request(path, timeoutMs);
   }
 
   private async get<T>(path: string): Promise<T | null> {
@@ -108,9 +108,10 @@ export class SpotifyPublicApiService {
   private async getRequired<T>(
     path: string,
     notFoundMessage = 'Álbum no encontrado en Spotify',
+    timeoutMs?: number,
   ): Promise<T> {
     try {
-      const res = await this.request(path);
+      const res = await this.request(path, timeoutMs);
 
       if (res.status === 404) {
         throw new NotFoundException(notFoundMessage);
@@ -146,10 +147,15 @@ export class SpotifyPublicApiService {
 
   async findArtistCandidates(
     artistName: string,
+    timeoutMs = 5000,
   ): Promise<SpotifyArtistCandidate[]> {
     const data = await this.getRequired<
       SpotifyApiSearchResponse<SpotifyApiArtist>
-    >(this.artistSearchPath(artistName, 5), 'Artista no encontrado en Spotify');
+    >(
+      this.artistSearchPath(artistName, 5),
+      'Artista no encontrado en Spotify',
+      timeoutMs,
+    );
     const artists = Array.isArray(data?.artists?.items)
       ? data.artists.items.slice(0, 5)
       : [];

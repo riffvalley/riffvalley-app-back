@@ -4,6 +4,7 @@ import {
   DiscListMode,
   DiscListOptionsQueryDto,
   DiscListQueryDto,
+  DiscListSuggestionsQueryDto,
   DiscListSort,
 } from '../dto/disc-list-contracts.dto';
 import {
@@ -35,6 +36,28 @@ describe('DiscList query contracts', () => {
       metatype: DiscListOptionsQueryDto,
     }) as Promise<DiscListOptionsQueryDto>;
   }
+
+  async function validateSuggestions(query: Record<string, unknown>) {
+    return validationPipe.transform(query, {
+      type: 'query',
+      metatype: DiscListSuggestionsQueryDto,
+    }) as Promise<DiscListSuggestionsQueryDto>;
+  }
+
+  it('validates the lightweight suggestions query independently of list pagination and mode', async () => {
+    await expect(validateSuggestions({ query: 'mol' })).resolves.toMatchObject({
+      query: 'mol',
+    });
+    await expect(validateSuggestions({})).resolves.toBeInstanceOf(
+      DiscListSuggestionsQueryDto,
+    );
+    await expect(
+      validateSuggestions({ query: ['mol'] }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      validateSuggestions({ query: 'mol', offset: '20' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 
   it('requires one of the six established modes and defaults listing pagination to 20/0', async () => {
     const result = await validateList({ mode: 'all' });

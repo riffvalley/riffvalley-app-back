@@ -571,12 +571,10 @@ describe('DiscWriteService characterization', () => {
 
       await expect(resolveArtist(artistName)).resolves.toBe(savedArtist);
 
-      expect(artistRepository.find).toHaveBeenCalledWith({
-        where: {
-          name: expect.objectContaining({ type: 'ilike', value: artistName }),
-        },
+      expect(artistRepository.find).toHaveBeenNthCalledWith(1, {
+        where: { name: expect.objectContaining({ type: 'raw' }) },
       });
-      expect(artistRepository.find).toHaveBeenCalledTimes(1);
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
       expect(artistRepository.create).toHaveBeenCalledWith({
         name: artistName,
         nameNormalized: 'arbol de nandu',
@@ -601,9 +599,72 @@ describe('DiscWriteService characterization', () => {
       );
 
       const [query] = artistRepository.find.mock.calls[0];
-      expect(query.where.name.type).toBe('ilike');
-      expect(query.where.name.value).toBe(artistName);
+      expect(query.where.name.type).toBe('raw');
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
+      expect(artistRepository.create).not.toHaveBeenCalled();
+      expect(artistRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('does not reuse an Artist found only by the MEDIA-2 key', async () => {
+      const normalizedCandidate = {
+        id: 'artist-mol',
+        name: 'MØL',
+        nameNormalized: 'møl',
+        searchNameNormalized: 'mol',
+      } as Artist;
+      artistRepository.find
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([normalizedCandidate]);
+
+      await expect(resolveArtist('MOL')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
+      expect(artistRepository.create).not.toHaveBeenCalled();
+      expect(artistRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('does not run a normalized candidate query when the input key is empty', async () => {
+      artistRepository.find.mockResolvedValue([]);
+      artistRepository.create.mockReturnValue({ name: '!!!' });
+      artistRepository.save.mockResolvedValue({ id: 'artist-punctuation' });
+
+      await expect(resolveArtist('!!!')).resolves.toEqual({
+        id: 'artist-punctuation',
+      });
+
       expect(artistRepository.find).toHaveBeenCalledTimes(1);
+      expect(artistRepository.create).toHaveBeenCalledWith({
+        name: '!!!',
+        nameNormalized: '!!!',
+        searchNameNormalized: '',
+      });
+    });
+
+    it('queries the article variants only as candidates and does not auto-associate them', async () => {
+      artistRepository.find.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          id: 'artist-secrets',
+          name: 'The Secrets of Pandora',
+          searchNameNormalized: 'the secrets of pandora',
+        } as Artist,
+      ]);
+
+      await expect(resolveArtist('Secrets of Pandora')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      const [candidateQuery] = artistRepository.find.mock.calls[1];
+      expect(candidateQuery.where[0].searchNameNormalized).toMatchObject({
+        type: 'in',
+        value: [
+          'secrets of pandora',
+          'the secrets of pandora',
+          'a secrets of pandora',
+          'an secrets of pandora',
+        ],
+      });
       expect(artistRepository.create).not.toHaveBeenCalled();
       expect(artistRepository.save).not.toHaveBeenCalled();
     });
@@ -628,7 +689,7 @@ describe('DiscWriteService characterization', () => {
         });
       }
 
-      expect(artistRepository.find).toHaveBeenCalledTimes(1);
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
       expect(artistRepository.create).not.toHaveBeenCalled();
       expect(artistRepository.save).not.toHaveBeenCalled();
     });
@@ -648,7 +709,7 @@ describe('DiscWriteService characterization', () => {
         matchingArtist,
       );
 
-      expect(artistRepository.find).toHaveBeenCalledTimes(1);
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
       expect(artistRepository.create).not.toHaveBeenCalled();
       expect(artistRepository.save).not.toHaveBeenCalled();
     });
@@ -673,7 +734,7 @@ describe('DiscWriteService characterization', () => {
         savedArtist,
       );
 
-      expect(artistRepository.find).toHaveBeenCalledTimes(1);
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
       expect(artistRepository.create).toHaveBeenCalledWith({
         name: artistName,
         nameNormalized: 'muneca',
@@ -726,15 +787,10 @@ describe('DiscWriteService characterization', () => {
 
       const result = await service.createWithArtist(dto);
 
-      expect(artistRepository.find).toHaveBeenCalledWith({
-        where: {
-          name: expect.objectContaining({
-            type: 'ilike',
-            value: dto.artistName,
-          }),
-        },
+      expect(artistRepository.find).toHaveBeenNthCalledWith(1, {
+        where: { name: expect.objectContaining({ type: 'raw' }) },
       });
-      expect(artistRepository.find).toHaveBeenCalledTimes(1);
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
       expect(artistRepository.create).not.toHaveBeenCalled();
       expect(artistRepository.save).not.toHaveBeenCalled();
       expect(discRepository.create).toHaveBeenCalledWith({
@@ -777,6 +833,25 @@ describe('DiscWriteService characterization', () => {
       });
     });
 
+    it('does not associate a homonymous normalized candidate and keeps the input name for creation blocked', async () => {
+      artistRepository.find.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        Object.assign(new Artist(), {
+          id: 'artist-mol',
+          name: 'MØL',
+          nameNormalized: 'møl',
+          searchNameNormalized: 'mol',
+        }),
+      ]);
+
+      await expect(
+        service.createWithArtist({ discName: 'Album', artistName: 'MOL' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(discRepository.create).not.toHaveBeenCalled();
+      expect(discRepository.save).not.toHaveBeenCalled();
+      expect(artistRepository.save).not.toHaveBeenCalled();
+    });
+
     it('maps every DTO field, creates an artist, assigns an optional genre and converts the date', async () => {
       const dto: CreateDiscWithArtistDto = {
         discName: 'Second Album',
@@ -808,7 +883,7 @@ describe('DiscWriteService characterization', () => {
       const result = await service.createWithArtist(dto);
       const createdDisc = discRepository.create.mock.results[0].value as Disc;
 
-      expect(artistRepository.find).toHaveBeenCalledTimes(1);
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
       expect(artistRepository.create).toHaveBeenCalledWith({
         name: 'New Band',
         nameNormalized: 'new band',
@@ -1008,12 +1083,17 @@ describe('DiscWriteService.createWithArtist transaction', () => {
         const stagedArtists = [...committedArtists];
         const stagedDiscs = [...committedDiscs];
         transactionArtistRepository = {
-          find: jest.fn(async ({ where }) =>
-            stagedArtists.filter(
-              ({ name }) =>
-                name.toLowerCase() === where.name.value.toLowerCase(),
-            ),
-          ),
+          find: jest.fn(async ({ where }) => {
+            if (Array.isArray(where)) return [];
+            const requestedName = where.name?.objectLiteralParameters
+              ?.artistName as string | undefined;
+            return requestedName
+              ? stagedArtists.filter(
+                  ({ name }) =>
+                    name.toLowerCase() === requestedName.toLowerCase(),
+                )
+              : [];
+          }),
           create: jest.fn((values: Partial<Artist>) =>
             Object.assign(new Artist(), values),
           ),

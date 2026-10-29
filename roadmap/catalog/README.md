@@ -4,6 +4,14 @@
 
 **Estado:** Catalog completado formalmente por BC-CAT el 2026-10-20. La evolución independiente de DiscList se registra en [Roadmap de Catalog](catalog.md); CAT-DISC-3b define sus contratos y CAT-DISC-3c registra la implementación backend. Las verificaciones de cierre BC-CAT están en [Backend Cleanup — Catalog](../backend-cleanup/catalog.md).
 
+**CAT-DISC-5 — Autocompletado:** CAT-DISC-5a (auditoría documental) y CAT-DISC-5b (backend de sugerencias) completadas el 2026-10-29 en [CAT-DISC-5a/5b](catalog-discs-autocomplete.md). CAT-DISC-5c (frontend) y CAT-DISC-5d (regresión y cierre) siguen pendientes y no se han iniciado.
+
+**CAT-DISC-6 — Filtros guardados:** CAT-DISC-6a completada en el repositorio frontend y CAT-DISC-6b backend completada el 2026-10-29 en [persistencia y API](catalog-discs-saved-filters.md). CAT-DISC-6c (frontend) y 6d (regresión y cierre) siguen pendientes; no iniciadas en esta tarea.
+
+**CAT-ART-2b — Directorio backend:** completada el 2026-10-29 en [contrato, consulta y verificaciones](cat-art-2b-backend-directory.md). CAT-ART-2c/2d y CAT-ART-3/4/5 siguen pendientes; no iniciadas.
+
+**CAT-ART-4b — Relleno por lotes de imágenes:** completada el 2026-10-29 en [contrato, límites y verificaciones](cat-art-4b-rellenar-imagenes-por-lotes.md). CAT-ART-4c y CAT-ART-5 permanecen pendientes y no se iniciaron.
+
 ## Estado de TopDiscs
 
 C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDiscs` devuelve hasta 11 discos. La ruta legacy `/homeDiscs` conserva por separado el comportamiento anterior y su límite de 20 hasta que se retire.
@@ -11,11 +19,15 @@ C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDisc
 ## Documentos actuales
 
 - [Roadmap de Catalog](catalog.md) — ownership, planificación de Artists, Countries, Genres, Import, Last.fm Catalog, Overview y Discs. Conserva decisiones, tareas e historial.
-- [MEDIA — Búsqueda y matching musical](music-search-matching.md) — MEDIA-1, MEDIA-2, MEDIA-3a y MEDIA-3b.1–3b.5 completadas; Catalog y las búsquedas textuales seguras de Community/National Releases usan claves normalizadas con fallback legacy por filas NULL. Pruebas focalizadas y PostgreSQL 17 aislado pasan; medición representativa en MEDIA-3b.7. [Auditoría](music-search-audit.md), [política](music-search-normalization.md), [diseño SQL](music-search-sql-design.md); MEDIA-3b.6–3b.8, MEDIA-4–MEDIA-6 y MEDIA-8 pendientes, MEDIA-7 descartada.
+- [MEDIA — Búsqueda y matching musical](music-search-matching.md) — MEDIA-3b.7 completada: mediciones PostgreSQL aisladas concluyen que no se justifican índices nuevos a la cardinalidad actual. MEDIA-3b.6b completada para Catalog, con P1 de Requests/Excel abiertos y 3b.6 global pendiente; MEDIA-3b.8 pendiente. Véase el [diseño SQL y resultados](music-search-sql-design.md) y la [auditoría de duplicados e identidad](music-search-duplicates-audit.md). MEDIA-4–MEDIA-6/MEDIA-8 pendientes; MEDIA-7 descartada.
 - [CAT-DISC-3b — Contratos de DiscList](cat-disc-3b-contratos-disc-list.md) — arquitectura de fachada, DTOs, tipos, ownership y seguridad.
 - [CAT-DISC-3c — Implementación backend de DiscList](cat-disc-3c-implementacion-disc-list.md) — fachada, endpoint autenticado, lectores propietarios y verificaciones.
 - [CAT-DISC-3d — Opciones dinámicas de DiscList](cat-disc-3d-opciones-disc-list.md) — endpoint autenticado, opciones por modo y usuario, filtros cruzados y validación PostgreSQL aislada.
 - [CAT-DISC-4c.1a — Auditoría de medios y elegibilidad](catalog-discs-media-eligibility-audit.md) — investigación documental de Spotify, Bandcamp, persistencia de portadas/enlaces y la regla OR; CAT-DISC-4c.1b queda como implementación posible posterior.
+- [CAT-DISC-5a/5b — Autocompletado](catalog-discs-autocomplete.md) — auditoría y endpoint backend autenticado de sugerencias concurrentes con la búsqueda en vivo; límites 3/5, relevancia normalizada, contrato ligero y verificaciones. CAT-DISC-5c/5d pendientes.
+- [CAT-DISC-6b — Filtros guardados](catalog-discs-saved-filters.md) — CRUD autenticado, JSONB, límite concurrente de 20, propiedad por usuario, referencias obsoletas y prueba PostgreSQL efímera. CAT-DISC-6c/6d pendientes.
+- [CAT-ART-2b — Backend del directorio](cat-art-2b-backend-directory.md) — endpoint paginado, clave MEDIA-3, proyección del disco reciente, compatibilidad de rutas y estado de verificación. CAT-ART-2c/2d/3/4/5 pendientes.
+- [CAT-ART-4b — Rellenar imágenes por lotes](cat-art-4b-rellenar-imagenes-por-lotes.md) — preview, cursor estable, resultados por artista, búsqueda Spotify acotada, escritura condicional y límites operativos. CAT-ART-4c/5 pendientes.
 - [Regresión de Catalog del 2026-10-15](regression-2026-10-15.md) — registro histórico de pruebas de integración y recomendaciones pre-merge.
 - [Evidencia: selector de archivo bloqueado](regression-evidence/excel-selector-blocked.jpg) — captura asociada al informe de regresión.
 - [C-TOP-8 — Auditoría estadística de TopDiscs](c-top-8-auditoria-estadistica-topdiscs.md) — fórmula, universo estadístico, simulaciones reproducibles y recomendación; sin cambios de producción. Su estado de C-TOP-7 refleja la fecha histórica del informe; la tarea quedó completada después.

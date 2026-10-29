@@ -23,6 +23,8 @@ import { FavoritesDiscListReader } from 'src/community/favorites/disc-list/favor
 import { PendingsDiscListReader } from 'src/community/pendings/disc-list/pendings-disc-list.reader';
 import { RatesDiscListReader } from 'src/community/rates/disc-list/rates-disc-list.reader';
 import { User } from 'src/identity/auth/entities/user.entity';
+import { DiscListSuggestionsService } from '../../suggestions/disc-list-suggestions.service';
+import { DiscListSuggestionsResponse } from '../../suggestions/disc-list-suggestions.types';
 
 type CatalogPage = Awaited<ReturnType<DiscCatalogService['findDiscList']>>;
 type CatalogReaderMock = Pick<
@@ -138,6 +140,12 @@ describe('DiscListService', () => {
   let comments: CommentsReaderMock;
   let favorites: FavoritesReaderMock;
   let pendings: PendingsReaderMock;
+  let suggestions: Pick<DiscListSuggestionsService, 'findSuggestions'> & {
+    findSuggestions: jest.Mock<
+      Promise<DiscListSuggestionsResponse>,
+      Parameters<DiscListSuggestionsService['findSuggestions']>
+    >;
+  };
   let user: User;
 
   beforeEach(() => {
@@ -150,6 +158,7 @@ describe('DiscListService', () => {
     comments = { findByUser: jest.fn(), findOptions: jest.fn() };
     favorites = { findByUser: jest.fn(), findOptions: jest.fn() };
     pendings = { findByUser: jest.fn(), findOptions: jest.fn() };
+    suggestions = { findSuggestions: jest.fn() };
     user = Object.assign(new User(), { id: 'session-user' });
     service = new DiscListService(
       catalog,
@@ -157,7 +166,20 @@ describe('DiscListService', () => {
       comments,
       favorites,
       pendings,
+      suggestions,
     );
+  });
+
+  it('delegates suggestions without invoking or changing the paginated list', async () => {
+    const response: DiscListSuggestionsResponse = {
+      artists: [{ id: 'artist-id', name: 'MØL', image: null }],
+      discs: [],
+    };
+    suggestions.findSuggestions.mockResolvedValue(response);
+
+    await expect(service.findSuggestions('mol')).resolves.toBe(response);
+    expect(suggestions.findSuggestions).toHaveBeenCalledWith('mol');
+    expect(catalog.findDiscList).not.toHaveBeenCalled();
   });
 
   it('delegates all mode to Catalog with the original authenticated user and normalized metadata', async () => {

@@ -13,11 +13,14 @@ export class SpotifyClientCredentialsService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async request(path: string): Promise<Response> {
-    const token = await this.getAccessToken(false);
-    return fetch(`https://api.spotify.com/v1${path}`, {
+  async request(path: string, timeoutMs?: number): Promise<Response> {
+    const token = await this.getAccessToken(false, timeoutMs);
+    const options: RequestInit = {
       headers: { Authorization: `Bearer ${token}` },
-    });
+    };
+    if (timeoutMs !== undefined)
+      options.signal = AbortSignal.timeout(timeoutMs);
+    return fetch(`https://api.spotify.com/v1${path}`, options);
   }
 
   async searchAlbumsByRawQuery(
@@ -42,7 +45,10 @@ export class SpotifyClientCredentialsService {
     return this.getAccessToken(true);
   }
 
-  private async getAccessToken(optional: boolean): Promise<string | null> {
+  private async getAccessToken(
+    optional: boolean,
+    timeoutMs?: number,
+  ): Promise<string | null> {
     if (this.accessToken && Date.now() < this.tokenExpiresAt)
       return this.accessToken;
 
@@ -56,14 +62,20 @@ export class SpotifyClientCredentialsService {
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString(
       'base64',
     );
-    const response = await fetch('https://accounts.spotify.com/api/token', {
+    const options: RequestInit = {
       method: 'POST',
       headers: {
         Authorization: `Basic ${credentials}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: 'grant_type=client_credentials',
-    });
+    };
+    if (timeoutMs !== undefined)
+      options.signal = AbortSignal.timeout(timeoutMs);
+    const response = await fetch(
+      'https://accounts.spotify.com/api/token',
+      options,
+    );
     if (!response.ok)
       throw new Error(`Spotify auth failed: ${response.status}`);
 

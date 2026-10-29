@@ -26,6 +26,7 @@ import { DiscListService } from '../list/disc-list.service';
 import {
   DiscListOptionsQueryDto,
   DiscListQueryDto,
+  DiscListSuggestionsQueryDto,
 } from '../list/dto/disc-list-contracts.dto';
 
 type ServiceMock = {
@@ -70,6 +71,10 @@ type DiscListServiceMock = {
     Promise<unknown>,
     Parameters<DiscListService['findOptions']>
   >;
+  findSuggestions: jest.Mock<
+    Promise<unknown>,
+    Parameters<DiscListService['findSuggestions']>
+  >;
 };
 
 describe('DiscsController baseline', () => {
@@ -93,7 +98,11 @@ describe('DiscsController baseline', () => {
       update: jest.fn(),
       remove: jest.fn(),
     };
-    discListService = { findAll: jest.fn(), findOptions: jest.fn() };
+    discListService = {
+      findAll: jest.fn(),
+      findOptions: jest.fn(),
+      findSuggestions: jest.fn(),
+    };
     moduleRef = await Test.createTestingModule({
       controllers: [DiscsController],
       providers: [
@@ -134,6 +143,27 @@ describe('DiscsController baseline', () => {
     await expect(controller.findDiscList(dto, user)).resolves.toBe(response);
     expect(discListService.findAll).toHaveBeenCalledWith(dto, user);
     expect(discListService.findAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers authenticated suggestions separately from the paginated list contract', async () => {
+    const handler = DiscsController.prototype.findDiscListSuggestions;
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(
+      'list/suggestions',
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(0);
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toHaveLength(2);
+
+    const query = Object.assign(new DiscListSuggestionsQueryDto(), {
+      query: 'mol',
+    });
+    const response = { artists: [], discs: [] };
+    discListService.findSuggestions.mockResolvedValue(response);
+
+    await expect(controller.findDiscListSuggestions(query)).resolves.toBe(
+      response,
+    );
+    expect(discListService.findSuggestions).toHaveBeenCalledWith('mol');
+    expect(discListService.findAll).not.toHaveBeenCalled();
   });
 
   it('registers authenticated DiscList options before the dynamic ID route and derives identity from the session', async () => {

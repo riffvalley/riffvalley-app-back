@@ -20,9 +20,13 @@ import { CommentsModule } from 'src/community/comments/comments.module';
 import { FavoritesModule } from 'src/community/favorites/favorites.module';
 import { PendingsModule } from 'src/community/pendings/pendings.module';
 import { DiscListService } from './list/disc-list.service';
+import { DiscListSuggestionsService } from './suggestions/disc-list-suggestions.service';
+import { SavedDiscFiltersController } from './list/saved-filters/saved-disc-filters.controller';
+import { SavedDiscFiltersService } from './list/saved-filters/saved-disc-filters.service';
+import { SavedDiscFilter } from './list/saved-filters/entities/saved-disc-filter.entity';
 
 @Module({
-  controllers: [DiscsController],
+  controllers: [DiscsController, SavedDiscFiltersController],
   providers: [
     DiscsService,
     DiscCatalogService,
@@ -33,9 +37,11 @@ import { DiscListService } from './list/disc-list.service';
     DiscTopService,
     DiscLinkMaintenanceService,
     DiscListService,
+    DiscListSuggestionsService,
+    SavedDiscFiltersService,
   ],
   imports: [
-    TypeOrmModule.forFeature([Disc, Artist, Genre, Country]),
+    TypeOrmModule.forFeature([Disc, Artist, Genre, Country, SavedDiscFilter]),
     AuthorizationModule,
     SpotifyIntegrationModule,
     RatesModule,

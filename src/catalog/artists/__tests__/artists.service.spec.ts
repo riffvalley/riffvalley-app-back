@@ -9,6 +9,9 @@ import { ArtistManagementService } from '../management/artist-management.service
 import { ArtistOrphansService } from '../orphans/artist-orphans.service';
 import { ArtistSearchService } from '../search/artist-search.service';
 import { ArtistWriteService } from '../write/artist-write.service';
+import { ArtistDirectoryService } from '../directory/artist-directory.service';
+import { ArtistImageFillService } from '../images/artist-image-fill.service';
+import { FillArtistImagesDto } from '../images/dto/fill-artist-images.dto';
 
 describe('ArtistsService facade', () => {
   const artistCatalogService = {
@@ -24,6 +27,8 @@ describe('ArtistsService facade', () => {
   const artistDetailsService = { findOneWithDetails: jest.fn() };
   const artistManagementService = { findAllForManagement: jest.fn() };
   const artistOrphansService = { removeOrphanArtists: jest.fn() };
+  const artistDirectoryService = { findDirectory: jest.fn() };
+  const artistImageFillService = { preview: jest.fn(), fill: jest.fn() };
   let service: ArtistsService;
   let moduleRef: TestingModule;
 
@@ -41,6 +46,8 @@ describe('ArtistsService facade', () => {
           useValue: artistManagementService,
         },
         { provide: ArtistOrphansService, useValue: artistOrphansService },
+        { provide: ArtistDirectoryService, useValue: artistDirectoryService },
+        { provide: ArtistImageFillService, useValue: artistImageFillService },
       ],
     }).compile();
     service = moduleRef.get(ArtistsService);
@@ -56,9 +63,29 @@ describe('ArtistsService facade', () => {
       limit: 5,
       offset: 10,
     });
+    const directoryQuery = { letter: 'B', limit: 10, offset: 20 };
     const updateDto = Object.assign(new UpdateArtistDto(), { name: 'Updated' });
     const artistResponse = { id: 'artist-id' };
     const listResponse = { data: [artistResponse] };
+    const directoryResponse = { data: [artistResponse] };
+    const fillDto = Object.assign(new FillArtistImagesDto(), { batchSize: 2 });
+    const imagePreview = {
+      eligible: 1,
+      batchSize: 10,
+      estimatedBatches: 1,
+      startCursor: 'c',
+    };
+    const imageBatch = {
+      processed: 1,
+      updated: 1,
+      notFound: 0,
+      ambiguous: 0,
+      failed: 0,
+      concurrentUpdates: 0,
+      results: [],
+      nextCursor: null,
+      hasMore: false,
+    };
     const managementResponse = { data: [artistResponse], orphanCount: 0 };
     const searchResponse = [artistResponse];
     const detailsResponse = {
@@ -71,6 +98,9 @@ describe('ArtistsService facade', () => {
 
     artistWriteService.create.mockResolvedValue(artistResponse);
     artistCatalogService.findAll.mockResolvedValue(listResponse);
+    artistDirectoryService.findDirectory.mockResolvedValue(directoryResponse);
+    artistImageFillService.preview.mockResolvedValue(imagePreview);
+    artistImageFillService.fill.mockResolvedValue(imageBatch);
     artistManagementService.findAllForManagement.mockResolvedValue(
       managementResponse,
     );
@@ -83,6 +113,11 @@ describe('ArtistsService facade', () => {
 
     await expect(service.create(dto)).resolves.toBe(artistResponse);
     await expect(service.findAll(pagination)).resolves.toBe(listResponse);
+    await expect(service.findDirectory(directoryQuery)).resolves.toBe(
+      directoryResponse,
+    );
+    await expect(service.previewImageFill()).resolves.toBe(imagePreview);
+    await expect(service.fillImages(fillDto)).resolves.toBe(imageBatch);
     await expect(
       service.findAllForManagement('name', 15, 3, 'genre-id', true),
     ).resolves.toBe(managementResponse);
@@ -99,6 +134,11 @@ describe('ArtistsService facade', () => {
 
     expect(artistWriteService.create).toHaveBeenCalledWith(dto);
     expect(artistCatalogService.findAll).toHaveBeenCalledWith(pagination);
+    expect(artistDirectoryService.findDirectory).toHaveBeenCalledWith(
+      directoryQuery,
+    );
+    expect(artistImageFillService.preview).toHaveBeenCalledWith();
+    expect(artistImageFillService.fill).toHaveBeenCalledWith(fillDto);
     expect(artistManagementService.findAllForManagement).toHaveBeenCalledWith(
       'name',
       15,
