@@ -14,6 +14,7 @@ import { ArtistManagementService } from '../management/artist-management.service
 import { ArtistOrphansService } from '../orphans/artist-orphans.service';
 import { ArtistSearchService } from '../search/artist-search.service';
 import { ArtistWriteService } from '../write/artist-write.service';
+import { ArtistDirectoryService } from '../directory/artist-directory.service';
 import { ArtistsController } from '../artists.controller';
 import { ArtistsModule } from '../artists.module';
 import { ArtistsService } from '../artists.service';
@@ -54,6 +55,7 @@ describe('ArtistsModule dependency injection', () => {
       ArtistSearchService,
       ArtistDetailsService,
       ArtistManagementService,
+      ArtistDirectoryService,
       ArtistOrphansService,
     ]) {
       expect(moduleRef.get(provider)).toBeDefined();
@@ -80,6 +82,9 @@ describe('ArtistsModule dependency injection', () => {
     );
     expect(Reflect.get(facade, 'artistManagementService')).toBe(
       moduleRef.get(ArtistManagementService),
+    );
+    expect(Reflect.get(facade, 'artistDirectoryService')).toBe(
+      moduleRef.get(ArtistDirectoryService),
     );
     expect(Reflect.get(facade, 'artistOrphansService')).toBe(
       moduleRef.get(ArtistOrphansService),

@@ -9,6 +9,7 @@ import { ArtistManagementService } from '../management/artist-management.service
 import { ArtistOrphansService } from '../orphans/artist-orphans.service';
 import { ArtistSearchService } from '../search/artist-search.service';
 import { ArtistWriteService } from '../write/artist-write.service';
+import { ArtistDirectoryService } from '../directory/artist-directory.service';
 
 describe('ArtistsService facade', () => {
   const artistCatalogService = {
@@ -24,6 +25,7 @@ describe('ArtistsService facade', () => {
   const artistDetailsService = { findOneWithDetails: jest.fn() };
   const artistManagementService = { findAllForManagement: jest.fn() };
   const artistOrphansService = { removeOrphanArtists: jest.fn() };
+  const artistDirectoryService = { findDirectory: jest.fn() };
   let service: ArtistsService;
   let moduleRef: TestingModule;
 
@@ -41,6 +43,7 @@ describe('ArtistsService facade', () => {
           useValue: artistManagementService,
         },
         { provide: ArtistOrphansService, useValue: artistOrphansService },
+        { provide: ArtistDirectoryService, useValue: artistDirectoryService },
       ],
     }).compile();
     service = moduleRef.get(ArtistsService);
@@ -56,9 +59,11 @@ describe('ArtistsService facade', () => {
       limit: 5,
       offset: 10,
     });
+    const directoryQuery = { letter: 'B', limit: 10, offset: 20 };
     const updateDto = Object.assign(new UpdateArtistDto(), { name: 'Updated' });
     const artistResponse = { id: 'artist-id' };
     const listResponse = { data: [artistResponse] };
+    const directoryResponse = { data: [artistResponse] };
     const managementResponse = { data: [artistResponse], orphanCount: 0 };
     const searchResponse = [artistResponse];
     const detailsResponse = {
@@ -71,6 +76,7 @@ describe('ArtistsService facade', () => {
 
     artistWriteService.create.mockResolvedValue(artistResponse);
     artistCatalogService.findAll.mockResolvedValue(listResponse);
+    artistDirectoryService.findDirectory.mockResolvedValue(directoryResponse);
     artistManagementService.findAllForManagement.mockResolvedValue(
       managementResponse,
     );
@@ -83,6 +89,9 @@ describe('ArtistsService facade', () => {
 
     await expect(service.create(dto)).resolves.toBe(artistResponse);
     await expect(service.findAll(pagination)).resolves.toBe(listResponse);
+    await expect(service.findDirectory(directoryQuery)).resolves.toBe(
+      directoryResponse,
+    );
     await expect(
       service.findAllForManagement('name', 15, 3, 'genre-id', true),
     ).resolves.toBe(managementResponse);
@@ -99,6 +108,9 @@ describe('ArtistsService facade', () => {
 
     expect(artistWriteService.create).toHaveBeenCalledWith(dto);
     expect(artistCatalogService.findAll).toHaveBeenCalledWith(pagination);
+    expect(artistDirectoryService.findDirectory).toHaveBeenCalledWith(
+      directoryQuery,
+    );
     expect(artistManagementService.findAllForManagement).toHaveBeenCalledWith(
       'name',
       15,

@@ -17,6 +17,7 @@ import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { ArtistManagementQueryDto } from '../dto/artist-management-query.dto';
 import { CreateArtistDto } from '../dto/create-artist.dto';
 import { UpdateArtistDto } from '../dto/update-artist.dto';
+import { ArtistDirectoryQueryDto } from '../directory/dto/artist-directory-query.dto';
 import { ArtistsController } from '../artists.controller';
 import { ArtistsService } from '../artists.service';
 
@@ -25,6 +26,7 @@ describe('ArtistsController contract characterization', () => {
     create: jest.fn(),
     findAll: jest.fn(),
     findAllForManagement: jest.fn(),
+    findDirectory: jest.fn(),
     findOne: jest.fn(),
     findOneWithDetails: jest.fn(),
     findByName: jest.fn(),
@@ -89,6 +91,29 @@ describe('ArtistsController contract characterization', () => {
     await expect(controller.findAll(query)).resolves.toBe(response);
     expect(service.findAll).toHaveBeenCalledTimes(1);
     expect(service.findAll).toHaveBeenCalledWith(query);
+  });
+
+  it('exposes the directory as a separate public read route', async () => {
+    const query = Object.assign(new ArtistDirectoryQueryDto(), {
+      letter: 'T',
+      q: 'The Cure',
+      limit: 20,
+      offset: 0,
+    });
+    const response = { totalItems: 1, data: [{ id: 'artist-id' }] };
+    service.findDirectory.mockResolvedValue(response);
+
+    expect(Reflect.getMetadata(PATH_METADATA, route('findDirectory'))).toBe(
+      'directory',
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, route('findDirectory'))).toBe(
+      0,
+    );
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, route('findDirectory'))).toBe(
+      undefined,
+    );
+    await expect(controller.findDirectory(query)).resolves.toBe(response);
+    expect(service.findDirectory).toHaveBeenCalledWith(query);
   });
 
   it('maps GET /artists/management, validates the query DTO, and keeps valid defaults', async () => {

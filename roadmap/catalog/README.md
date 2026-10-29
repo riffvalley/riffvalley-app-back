@@ -8,6 +8,8 @@
 
 **CAT-DISC-6 — Filtros guardados:** CAT-DISC-6a completada en el repositorio frontend y CAT-DISC-6b backend completada el 2026-10-29 en [persistencia y API](catalog-discs-saved-filters.md). CAT-DISC-6c (frontend) y 6d (regresión y cierre) siguen pendientes; no iniciadas en esta tarea.
 
+**CAT-ART-2b — Directorio backend:** completada el 2026-10-29 en [contrato, consulta y verificaciones](cat-art-2b-backend-directory.md). CAT-ART-2c/2d y CAT-ART-3/4/5 siguen pendientes; no iniciadas.
+
 ## Estado de TopDiscs
 
 C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDiscs` devuelve hasta 11 discos. La ruta legacy `/homeDiscs` conserva por separado el comportamiento anterior y su límite de 20 hasta que se retire.
@@ -22,6 +24,7 @@ C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDisc
 - [CAT-DISC-4c.1a — Auditoría de medios y elegibilidad](catalog-discs-media-eligibility-audit.md) — investigación documental de Spotify, Bandcamp, persistencia de portadas/enlaces y la regla OR; CAT-DISC-4c.1b queda como implementación posible posterior.
 - [CAT-DISC-5a/5b/5b.1 — Autocompletado](catalog-discs-autocomplete.md) — auditoría, endpoint autenticado de sugerencias y filtro exacto por ID en seis modos/opciones; límites 3/5, homónimos con ID, imagen y país, relevancia normalizada y verificaciones PostgreSQL. CAT-DISC-5c/5d pendientes.
 - [CAT-DISC-6b — Filtros guardados](catalog-discs-saved-filters.md) — CRUD autenticado, JSONB, límite concurrente de 20, propiedad por usuario, referencias obsoletas y prueba PostgreSQL efímera. CAT-DISC-6c/6d pendientes.
+- [CAT-ART-2b — Backend del directorio](cat-art-2b-backend-directory.md) — endpoint paginado, clave MEDIA-3, proyección del disco reciente, compatibilidad de rutas y estado de verificación. CAT-ART-2c/2d/3/4/5 pendientes.
 - [Regresión de Catalog del 2026-10-15](regression-2026-10-15.md) — registro histórico de pruebas de integración y recomendaciones pre-merge.
 - [Evidencia: selector de archivo bloqueado](regression-evidence/excel-selector-blocked.jpg) — captura asociada al informe de regresión.
 - [C-TOP-8 — Auditoría estadística de TopDiscs](c-top-8-auditoria-estadistica-topdiscs.md) — fórmula, universo estadístico, simulaciones reproducibles y recomendación; sin cambios de producción. Su estado de C-TOP-7 refleja la fecha histórica del informe; la tarea quedó completada después.
