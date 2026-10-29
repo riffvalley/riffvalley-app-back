@@ -16,6 +16,7 @@ import { ArtistDetailsService } from './details/artist-details.service';
 import { ArtistDirectoryService } from './directory/artist-directory.service';
 import { ArtistImageFillService } from './images/artist-image-fill.service';
 import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
+import { LastfmIntegrationModule } from 'src/integrations/lastfm-integration/lastfm-integration.module';
 
 @Module({
   controllers: [ArtistsController],
@@ -39,6 +40,7 @@ import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/s
     ]),
     AuthorizationModule,
     SpotifyIntegrationModule,
+    LastfmIntegrationModule,
   ],
   exports: [ArtistCatalogService],
 })

@@ -10,6 +10,7 @@ import {
   SpotifyPublicApiService,
 } from 'src/integrations/spotify-integration/api/spotify-public-api.service';
 import { compareNormalizedMusicNames } from 'src/catalog/shared/music-name/normalize-music-name';
+import { LastfmApiService } from 'src/integrations/lastfm-integration/lastfm-api.service';
 import { Artist } from '../entities/artist.entity';
 import { FillArtistImagesDto } from './dto/fill-artist-images.dto';
 import {
@@ -35,6 +36,7 @@ export class ArtistImageFillService {
     @InjectRepository(Artist)
     private readonly artistRepository: Repository<Artist>,
     private readonly spotifyApi: SpotifyPublicApiService,
+    private readonly lastfmApi: LastfmApiService,
   ) {}
 
   async preview(): Promise<ArtistImageFillPreview> {
@@ -113,29 +115,19 @@ export class ArtistImageFillService {
       );
     } catch (error) {
       if (error instanceof NotFoundException) {
+        candidates = [];
+      } else {
         return {
           artistId: artist.id,
-          outcome: 'not_found',
-          reason: 'no_name_match',
+          outcome: 'failed',
+          reason: 'provider_error',
         };
       }
-      return {
-        artistId: artist.id,
-        outcome: 'failed',
-        reason: 'provider_error',
-      };
     }
 
     const matches = candidates.filter((candidate) =>
       compareNormalizedMusicNames(artist.name, candidate.name),
     );
-    if (matches.length === 0) {
-      return {
-        artistId: artist.id,
-        outcome: 'not_found',
-        reason: 'no_name_match',
-      };
-    }
     if (matches.length > 1) {
       return {
         artistId: artist.id,
@@ -144,15 +136,54 @@ export class ArtistImageFillService {
       };
     }
 
-    const image = matches[0].imageUrl;
+    if (matches.length === 1 && matches[0].imageUrl) {
+      return this.persistArtistImage(artist, matches[0].imageUrl, 'spotify');
+    }
+
+    const lastfm = await this.lastfmApi.searchArtistImageCandidates(
+      artist.name,
+    );
+    if (lastfm.status === 'not_configured') {
+      return {
+        artistId: artist.id,
+        outcome: 'not_found',
+        reason: matches.length === 1 ? 'no_image_available' : 'no_name_match',
+      };
+    }
+    if (lastfm.status !== 'found') {
+      return {
+        artistId: artist.id,
+        outcome: 'failed',
+        reason: 'provider_error',
+      };
+    }
+
+    const lastfmMatches = lastfm.candidates.filter((candidate) =>
+      compareNormalizedMusicNames(artist.name, candidate.name),
+    );
+    if (lastfmMatches.length > 1) {
+      return {
+        artistId: artist.id,
+        outcome: 'ambiguous',
+        reason: 'multiple_name_matches',
+      };
+    }
+    const image = lastfmMatches[0]?.imageUrl;
     if (!image) {
       return {
         artistId: artist.id,
         outcome: 'not_found',
-        reason: 'no_image_available',
+        reason: matches.length === 1 ? 'no_image_available' : 'no_name_match',
       };
     }
+    return this.persistArtistImage(artist, image, 'lastfm');
+  }
 
+  private async persistArtistImage(
+    artist: Artist,
+    image: string,
+    source: 'spotify' | 'lastfm',
+  ): Promise<ArtistImageFillResultItem> {
     const updateQuery = this.artistRepository
       .createQueryBuilder()
       .update(Artist)
@@ -165,7 +196,7 @@ export class ArtistImageFillService {
     const updateResult = await updateQuery.execute();
 
     return updateResult.affected === 1
-      ? { artistId: artist.id, outcome: 'updated' }
+      ? { artistId: artist.id, outcome: 'updated', source }
       : {
           artistId: artist.id,
           outcome: 'concurrent_update',

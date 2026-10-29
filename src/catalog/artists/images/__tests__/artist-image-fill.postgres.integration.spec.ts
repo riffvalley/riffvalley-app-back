@@ -6,6 +6,7 @@ import { Artist } from '../../entities/artist.entity';
 import { ArtistImageFillService } from '../artist-image-fill.service';
 import { FillArtistImagesDto } from '../dto/fill-artist-images.dto';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api/spotify-public-api.service';
+import { LastfmApiService } from 'src/integrations/lastfm-integration/lastfm-api.service';
 
 const describePostgres =
   process.env.CATALOG_ARTIST_IMAGE_FILL_PG_TEST === '1'
@@ -124,18 +125,27 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
     );
     const spotify = {
       findArtistCandidates: jest.fn(async (name: string) =>
-        name === 'Verified Artist' || name === 'Existing Artist'
+        name === 'Verified Artist'
           ? [
               {
                 spotifyId: 'spotify-real-id',
                 name,
-                imageUrl:
-                  name === 'Verified Artist' ? 'verified.jpg' : 'corrected.jpg',
+                imageUrl: 'verified.jpg',
                 listenUrl: null,
                 genres: [],
               },
             ]
           : [],
+      ),
+    };
+    const lastfm = {
+      searchArtistImageCandidates: jest.fn(async (name: string) =>
+        name === 'Existing Artist'
+          ? {
+              status: 'found' as const,
+              candidates: [{ name, imageUrl: 'corrected.jpg' }],
+            }
+          : { status: 'found' as const, candidates: [] },
       ),
     };
     const moduleRef = await Test.createTestingModule({
@@ -146,6 +156,7 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
           useValue: dataSource.getRepository(Artist),
         },
         { provide: SpotifyPublicApiService, useValue: spotify },
+        { provide: LastfmApiService, useValue: lastfm },
       ],
     }).compile();
     const service = moduleRef.get(ArtistImageFillService);
@@ -228,6 +239,14 @@ describePostgres('Artist image fill PostgreSQL integration', () => {
           useValue: dataSource.getRepository(Artist),
         },
         { provide: SpotifyPublicApiService, useValue: spotify },
+        {
+          provide: LastfmApiService,
+          useValue: {
+            searchArtistImageCandidates: jest
+              .fn()
+              .mockResolvedValue({ status: 'not_configured' }),
+          },
+        },
       ],
     }).compile();
     const service = moduleRef.get(ArtistImageFillService);

@@ -4,6 +4,7 @@ import { Artist } from '../../entities/artist.entity';
 import { ArtistImageFillService } from '../artist-image-fill.service';
 import { FillArtistImagesDto } from '../dto/fill-artist-images.dto';
 import { SpotifyPublicApiService } from 'src/integrations/spotify-integration/api/spotify-public-api.service';
+import { LastfmApiService } from 'src/integrations/lastfm-integration/lastfm-api.service';
 
 const ids = [
   '00000000-0000-4000-8000-000000000001',
@@ -41,6 +42,11 @@ function makeBuilder<T>(
 async function makeService(
   builders: Array<ReturnType<typeof makeBuilder>>,
   spotify: Pick<SpotifyPublicApiService, 'findArtistCandidates'>,
+  lastfm: Pick<LastfmApiService, 'searchArtistImageCandidates'> = {
+    searchArtistImageCandidates: jest
+      .fn()
+      .mockResolvedValue({ status: 'not_configured' }),
+  },
 ) {
   const repository = {
     createQueryBuilder: jest.fn(() => builders.shift()),
@@ -50,6 +56,7 @@ async function makeService(
       ArtistImageFillService,
       { provide: getRepositoryToken(Artist), useValue: repository },
       { provide: SpotifyPublicApiService, useValue: spotify },
+      { provide: LastfmApiService, useValue: lastfm },
     ],
   }).compile();
   return {
@@ -272,6 +279,85 @@ describe('ArtistImageFillService', () => {
       { selectedImage: 'old.jpg' },
     );
     expect(updateQuery.andWhere).toHaveBeenCalledWith('"needsReview" = true');
+    await moduleRef.close();
+  });
+
+  it('uses an exact, unambiguous Last.fm image when Spotify has no match', async () => {
+    const updateQuery = makeBuilder({ affected: 1 });
+    const finished = makeBuilder({ exists: false });
+    const spotify = { findArtistCandidates: jest.fn().mockResolvedValue([]) };
+    const lastfm = {
+      searchArtistImageCandidates: jest.fn().mockResolvedValue({
+        status: 'found',
+        candidates: [{ name: 'The Artist', imageUrl: 'lastfm.jpg' }],
+      }),
+    };
+    const { service, moduleRef } = await makeService(
+      [
+        makeBuilder({ many: [artist(ids[0], 'The Artist')] }),
+        updateQuery,
+        finished,
+      ],
+      spotify,
+      lastfm,
+    );
+    const cursor = Buffer.from(
+      JSON.stringify({ version: 1, after: null, upperBound: ids[0] }),
+    ).toString('base64url');
+
+    const result = await service.fill(
+      Object.assign(new FillArtistImagesDto(), { cursor }),
+    );
+
+    expect(result).toMatchObject({
+      processed: 1,
+      updated: 1,
+      results: [{ artistId: ids[0], outcome: 'updated', source: 'lastfm' }],
+    });
+    expect(lastfm.searchArtistImageCandidates).toHaveBeenCalledWith(
+      'The Artist',
+    );
+    expect(updateQuery.set).toHaveBeenCalledWith({
+      image: 'lastfm.jpg',
+      needsReview: false,
+    });
+    await moduleRef.close();
+  });
+
+  it('does not choose between multiple exact Last.fm homonyms', async () => {
+    const spotify = { findArtistCandidates: jest.fn().mockResolvedValue([]) };
+    const lastfm = {
+      searchArtistImageCandidates: jest.fn().mockResolvedValue({
+        status: 'found',
+        candidates: [
+          { name: 'Twin', imageUrl: 'one.jpg' },
+          { name: 'Twin', imageUrl: 'two.jpg' },
+        ],
+      }),
+    };
+    const { service, moduleRef } = await makeService(
+      [makeBuilder({ many: [artist(ids[0], 'Twin')] }), makeBuilder()],
+      spotify,
+      lastfm,
+    );
+    const cursor = Buffer.from(
+      JSON.stringify({ version: 1, after: null, upperBound: ids[0] }),
+    ).toString('base64url');
+
+    const result = await service.fill(
+      Object.assign(new FillArtistImagesDto(), { cursor }),
+    );
+
+    expect(result).toMatchObject({
+      ambiguous: 1,
+      results: [
+        {
+          artistId: ids[0],
+          outcome: 'ambiguous',
+          reason: 'multiple_name_matches',
+        },
+      ],
+    });
     await moduleRef.close();
   });
 

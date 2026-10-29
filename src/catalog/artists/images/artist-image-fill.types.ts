@@ -8,6 +8,7 @@ export type ArtistImageFillOutcome =
 export interface ArtistImageFillResultItem {
   artistId: string;
   outcome: ArtistImageFillOutcome;
+  source?: 'spotify' | 'lastfm';
   reason?:
     | 'no_name_match'
     | 'multiple_name_matches'

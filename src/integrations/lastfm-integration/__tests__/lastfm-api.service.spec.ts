@@ -1,4 +1,7 @@
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { LastfmApiService } from '../lastfm-api.service';
 
 describe('LastfmApiService', () => {
@@ -23,7 +26,10 @@ describe('LastfmApiService', () => {
 
   it('builds artist.getinfo requests and returns the provider artist payload', async () => {
     const artist = { name: 'AC/DC' };
-    fetchMock.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue({ artist }) });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ artist }),
+    });
 
     await expect(service.getArtistInfo('AC/DC & You')).resolves.toBe(artist);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -39,7 +45,9 @@ describe('LastfmApiService', () => {
 
     fetchMock.mockResolvedValue({
       ok: true,
-      json: jest.fn().mockResolvedValue({ error: 6, message: 'Artist not found' }),
+      json: jest
+        .fn()
+        .mockResolvedValue({ error: 6, message: 'Artist not found' }),
     });
     await expect(service.getArtistInfo('Artist')).rejects.toThrow(
       new BadRequestException('Artist not found'),
@@ -89,6 +97,66 @@ describe('LastfmApiService', () => {
       expect.stringContaining('method=artist.getinfo&artist=Artist'),
       { signal: expect.any(AbortSignal) },
     );
+  });
+
+  it('searches timed Last.fm artist candidates and extracts a usable image', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        results: {
+          artistmatches: {
+            artist: [
+              {
+                name: 'Artist',
+                image: 'https://lastfm.test/artist.jpg',
+                image_small: 'https://lastfm.test/artist-small.jpg',
+              },
+              {
+                name: 'Placeholder Artist',
+                image: [
+                  {
+                    '#text':
+                      'https://lastfm.test/2a96cbd8b46e442fc41c2b86b821562f.png',
+                    size: 'large',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    });
+
+    await expect(
+      service.searchArtistImageCandidates('Artist & Friends'),
+    ).resolves.toEqual({
+      status: 'found',
+      candidates: [
+        { name: 'Artist', imageUrl: 'https://lastfm.test/artist.jpg' },
+        { name: 'Placeholder Artist', imageUrl: null },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'method=artist.search&artist=Artist%20%26%20Friends&limit=5',
+      ),
+      { signal: expect.any(AbortSignal) },
+    );
+  });
+
+  it('classifies Last.fm artist image search provider failures', async () => {
+    fetchMock.mockRejectedValue(new Error('provider timed out'));
+    await expect(
+      service.searchArtistImageCandidates('Artist'),
+    ).resolves.toEqual({ status: 'unavailable' });
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ results: {} }),
+    });
+    await expect(
+      service.searchArtistImageCandidates('Artist'),
+    ).resolves.toEqual({ status: 'invalid_response' });
   });
 
   it.each([
@@ -158,9 +226,15 @@ describe('LastfmApiService', () => {
     ['provider error', { error: 6 }],
     ['missing album', {}],
     ['missing images', { album: {} }],
-    ['no preferred image', { album: { image: [{ size: 'small', '#text': 'small' }] } }],
+    [
+      'no preferred image',
+      { album: { image: [{ size: 'small', '#text': 'small' }] } },
+    ],
   ])('returns null for %s album responses', async (_label, body) => {
-    fetchMock.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue(body) });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue(body),
+    });
     await expect(service.getAlbumImage('Artist', 'Album')).resolves.toBeNull();
   });
 

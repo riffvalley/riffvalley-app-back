@@ -8,9 +8,12 @@ import {
   LastfmArtistProfile,
   LastfmArtistProfileLookup,
   LastfmArtistResponse,
+  LastfmArtistImageCandidate,
+  LastfmArtistImageSearch,
 } from './types/lastfm-api.types';
 
 const LASTFM_BASE = 'https://ws.audioscrobbler.com/2.0/';
+const ARTIST_IMAGE_SEARCH_TIMEOUT_MS = 1_000;
 
 @Injectable()
 export class LastfmApiService {
@@ -28,7 +31,9 @@ export class LastfmApiService {
     const url = this.buildUrl('artist.getinfo', { artist });
     const response = await fetch(url);
     if (!response.ok) {
-      throw new BadRequestException(`Last.fm responded with ${response.status}`);
+      throw new BadRequestException(
+        `Last.fm responded with ${response.status}`,
+      );
     }
 
     const data = (await response.json()) as LastfmArtistResponse;
@@ -72,6 +77,53 @@ export class LastfmApiService {
       : { status: 'invalid_response' };
   }
 
+  async searchArtistImageCandidates(
+    artist: string,
+  ): Promise<LastfmArtistImageSearch> {
+    if (!this.apiKey) return { status: 'not_configured' };
+
+    let response: Response;
+    try {
+      response = await fetch(
+        this.buildUrl('artist.search', { artist, limit: '5' }),
+        { signal: AbortSignal.timeout(ARTIST_IMAGE_SEARCH_TIMEOUT_MS) },
+      );
+    } catch {
+      return { status: 'unavailable' };
+    }
+    if (!response.ok) return { status: 'unavailable' };
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      return { status: 'invalid_response' };
+    }
+
+    const root = asRecord(payload);
+    if (!root || root.error !== undefined) return { status: 'unavailable' };
+    const results = asRecord(root.results);
+    const matches = asRecord(results?.artistmatches);
+    if (!matches) return { status: 'invalid_response' };
+    const rawCandidates = matches.artist;
+    if (rawCandidates === undefined) {
+      return { status: 'found', candidates: [] };
+    }
+    const values = Array.isArray(rawCandidates)
+      ? rawCandidates
+      : [rawCandidates];
+    const candidates: LastfmArtistImageCandidate[] = [];
+    for (const value of values) {
+      const candidate = asRecord(value);
+      if (!candidate || typeof candidate.name !== 'string') continue;
+      candidates.push({
+        name: candidate.name.trim(),
+        imageUrl: parseArtistSearchImage(candidate),
+      });
+    }
+    return { status: 'found', candidates };
+  }
+
   async getAlbumImage(artist: string, album: string): Promise<string | null> {
     this.assertConfigured();
 
@@ -96,10 +148,7 @@ export class LastfmApiService {
     }
   }
 
-  private buildUrl(
-    method: string,
-    params: Record<string, string>,
-  ): string {
+  private buildUrl(method: string, params: Record<string, string>): string {
     const query = [
       `method=${method}`,
       ...Object.entries(params).map(
@@ -161,4 +210,39 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function parseArtistSearchImage(
+  candidate: Record<string, unknown>,
+): string | null {
+  const imageValue = candidate.image;
+  const imageObjects = Array.isArray(imageValue)
+    ? imageValue
+    : imageValue === undefined
+      ? []
+      : [imageValue];
+  const sizedImage = imageObjects
+    .map((value) => asRecord(value))
+    .filter((value): value is Record<string, unknown> => value !== null)
+    .sort((left, right) => imageSizeRank(right.size) - imageSizeRank(left.size))
+    .map((value) => nonEmptyString(value['#text']))
+    .find((url) => isUsableLastfmImage(url));
+  const directImage = nonEmptyString(candidate.image);
+  const smallImage = nonEmptyString(candidate.image_small);
+  return (
+    [sizedImage, directImage, smallImage].find(isUsableLastfmImage) ?? null
+  );
+}
+
+function imageSizeRank(size: unknown): number {
+  if (size === 'mega') return 5;
+  if (size === 'extralarge') return 4;
+  if (size === 'large') return 3;
+  if (size === 'medium') return 2;
+  return size === 'small' ? 1 : 0;
+}
+
+function isUsableLastfmImage(url: string | null): url is string {
+  if (!url || url.includes('2a96cbd8b46e442fc41c2b86b821562f')) return false;
+  return /^https?:\/\//i.test(url);
 }

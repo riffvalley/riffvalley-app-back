@@ -22,6 +22,17 @@ export type LastfmArtistProfileLookup =
   | { status: 'not_configured' }
   | { status: 'invalid_response' };
 
+export interface LastfmArtistImageCandidate {
+  name: string;
+  imageUrl: string | null;
+}
+
+export type LastfmArtistImageSearch =
+  | { status: 'found'; candidates: LastfmArtistImageCandidate[] }
+  | { status: 'not_configured' }
+  | { status: 'unavailable' }
+  | { status: 'invalid_response' };
+
 export interface LastfmAlbumResponse {
   error?: number;
   album?: {
