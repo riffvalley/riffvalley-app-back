@@ -2,7 +2,7 @@
 
 **Alcance:** historial personal cronológico de valoraciones y cambios de puntuación. Este plan es exclusivo del backend. Actividad es una capacidad de lectura independiente de Estadísticas; Rates conserva las escrituras y las reglas de valoración.
 
-**Estado:** ACT-BE-1, ACT-BE-2, ACT-BE-3a, ACT-BE-3b, ACT-BE-3c y ACT-BE-4 completadas el 2026-10-29. Backend de Actividad completado y cerrado para el alcance acordado, condicionado a la verificación PostgreSQL aislada pendiente. No se inició trabajo de frontend.
+**Estado:** ACT-BE-1, ACT-BE-2, ACT-BE-3a, ACT-BE-3b, ACT-BE-3c y ACT-BE-4 completadas el 2026-10-29. El backend se cerró para ese alcance; ACT-BE-5 es una ampliación independiente posterior. No se inició trabajo de frontend.
 
 ## ACT-BE-1 — Auditoría de Rates y eventos
 
@@ -294,3 +294,26 @@ La alternativa de asignar secuencias o imponer orden de commits queda fuera de a
 - `git diff --check` pasó para los cambios versionados revisados. Las referencias Markdown de la documentación de Actividad apuntan a los artefactos existentes. No se ejecutaron `verify`, Jest completo, E2E, build/typecheck repetidos ni migraciones.
 - Los límites aceptados del ledger siguen vigentes: `set` no demuestra primera valoración vitalicia; `change` solo refleja transiciones entre puntuaciones no nulas; borrar Rate o repetir valor no garantiza evento; filas legacy pueden carecer de disco/puntuaciones; los eventos previos a la captura no se reconstruyen y el timestamp no demuestra cuándo se escuchó el disco. No se inventaron eventos ni se realizó backfill.
 - La proyección usa el catálogo actual, no snapshots históricos. La cobertura temporal real depende de la activación de captura y del esquema/filas de cada entorno, que no se consultaron. La integración SQL real y el rendimiento permanecen como limitaciones expresas para una verificación posterior en una base aislada autorizada.
+
+## ACT-BE-5 — Contadores diarios de votos (`set`)
+
+**Estado:** completada el 2026-10-29. Ampliación independiente posterior al cierre de ACT-BE-1 a ACT-BE-4; no reabre ni cambia sus estados históricos.
+
+### Contrato y semántica
+
+- `GET /api/activity/history` añade `dailySetCounts: Record<YYYY-MM-DD, number>` junto a `items`, `nextCursor` y `hasMore`. Incluye una clave por fecha local distinta de los eventos que sí aparecen en `items`, con enteros no negativos; un día sin `set` devuelve `0` y una página vacía devuelve `{}`. Los items no se agrupan ni se alteran.
+- El total cuenta únicamente filas persistidas del ledger con `event_type = 'set'`. Incluye transiciones `set` repetidas en días distintos y filas legacy sin disco; no cuenta `change`, discos únicos, rates actuales ni eventos no persistidos. `set` conserva la semántica de transición desde puntuación nula a no nula, no implica primera valoración vitalicia.
+- La zona IANA explícita de `timeZone` gobierna las claves y la agregación SQL. Cuando se omite, como ya se permite sin filtros de fecha, se usa UTC para no romper clientes existentes. No se presupone una zona común; los clientes que agrupen con otra zona deben enviarla para alinear cabeceras. Si se proporciona, `timeZone` sigue validándose y queda vinculada al cursor mediante la huella de filtros.
+
+### Independencia de páginas y filtros
+
+- El servicio primero recupera la página existente y obtiene sus fechas locales distintas. Una única consulta agregada calcula el total completo del usuario para esos días, sin límite, cursor, posición, ancla, filtro `type` ni búsqueda `q`. Los filtros existentes solo determinan qué eventos/fechas forman la página. No se crea snapshot entre peticiones; cada página puede reflejar nuevos eventos persistidos.
+- La consulta aplica `user_id = $1` y `event_type = 'set'`, agrupa por `(occurred_at AT TIME ZONE $2)::date` y usa `COUNT(*)`. Acota `occurred_at` por los inicios civiles inclusivos/exclusivos de la primera y última fecha mediante las reglas IANA existentes, y conserva la lista exacta de días con `ANY($5::date[])`; así puede aprovechar el índice existente `(user_id, occurred_at)` aunque las fechas de la página no sean contiguas. No se añadieron índices, tablas ni consultas por día.
+- La agregación consulta `rate_vote_events` directamente, sin joins al catálogo: los eventos legacy sin disco pueden incrementar el contador de un día aunque no sean elegibles para aparecer en `items`.
+
+### Implementación, pruebas y límites
+
+- Implementación en [ActivityHistoryService](../src/community/activity-history/activity-history.service.ts), resolución de día local en [local-date.ts](../src/community/activity-history/helpers/local-date.ts), contrato HTTP en [ActivityHistoryController](../src/community/activity-history/activity-history.controller.ts) y tipos de respuesta en `types/activity-history.types.ts`.
+- Tests unitarios focalizados cubren días múltiples y únicos, página vacía, totales superiores a la página, repetición entre páginas, cero cuando solo hay `change`, exclusión de `change`, independencia ante filtros `type`/`q`/intervalo/cursor, aislamiento por usuario, fallback UTC, validación de zona, medianoche, DST de primavera/otoño y correspondencia de claves locales. La [suite PostgreSQL opt-in](../src/community/activity-history/__tests__/activity-history.postgres.integration.spec.ts) prepara ejecución real para agregación, filtros, aislamiento, legacy sin disco y fechas IANA; no se considera que los mocks prueben SQL real.
+- Verificación ejecutada: 36 tests focalizados aprobados; la suite PostgreSQL opt-in quedó omitida con sus 3 pruebas sin ejecutar. Typecheck terminó con cero diagnósticos; build, ESLint focalizado sin autocorrección, `git diff --check` y comprobación de enlaces Markdown pasaron. La integración PostgreSQL opt-in no se ejecutó; no se afirma compatibilidad SQL real ni rendimiento medido. No se ejecutaron suites completas, E2E, migraciones ni consultas a producción.
+- Riesgos y límites: sin `timeZone`, la zona semántica es UTC y puede diferir de una agrupación cliente local; se debe enviar una zona IANA para mantener coherencia. Los totales pueden variar entre peticiones por eventos nuevos y reflejan la cobertura efectiva del ledger, incluidas sus filas legacy y la fecha de inicio de captura. El rango UTC usa los límites civiles calculados por reglas IANA, sin duraciones fijas de 24 horas. La eficiencia SQL y el uso real del índice aún requieren medición con PostgreSQL aislado y datos representativos.

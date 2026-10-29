@@ -74,6 +74,7 @@ describe('ActivityHistoryController', () => {
       items: [event],
       hasMore: false,
       nextPosition: null,
+      dailySetCounts: { '2026-10-29': 1 },
     };
     service.findUserHistory.mockResolvedValue(page);
 
@@ -99,6 +100,7 @@ describe('ActivityHistoryController', () => {
       items: [event],
       nextCursor: null,
       hasMore: false,
+      dailySetCounts: { '2026-10-29': 1 },
     });
   });
 
@@ -106,6 +108,7 @@ describe('ActivityHistoryController', () => {
     const page: ActivityHistoryPage = {
       items: [event],
       hasMore: true,
+      dailySetCounts: { '2026-10-29': 2 },
       nextPosition: {
         after: {
           occurredAt: event.occurredAt,
@@ -121,6 +124,7 @@ describe('ActivityHistoryController', () => {
       items: [{ ...event, id: 'event-2' }],
       hasMore: false,
       nextPosition: null,
+      dailySetCounts: { '2026-10-29': 2 },
     });
     const first = await controller.getHistory(user, {
       from: undefined,
@@ -157,6 +161,7 @@ describe('ActivityHistoryController', () => {
       items: [{ ...event, id: 'event-2' }],
       nextCursor: null,
       hasMore: false,
+      dailySetCounts: { '2026-10-29': 2 },
     });
   });
 });
@@ -182,6 +187,9 @@ describe('ActivityHistoryQueryDto', () => {
     );
     await expect(validate({ limit: '100' })).resolves.toEqual(
       expect.objectContaining({ limit: 100 }),
+    );
+    await expect(validate({ timeZone: 'America/New_York' })).resolves.toEqual(
+      expect.objectContaining({ timeZone: 'America/New_York' }),
     );
   });
 
@@ -234,6 +242,7 @@ describe('ActivityHistory HTTP authentication', () => {
       items: [event],
       hasMore: false,
       nextPosition: null,
+      dailySetCounts: { '2026-10-29': 1 },
     });
     moduleRef = await Test.createTestingModule({
       controllers: [ActivityHistoryController],
@@ -286,7 +295,12 @@ describe('ActivityHistory HTTP authentication', () => {
     sessionUserId = '123e4567-e89b-42d3-a456-426614174111';
     await request(app.getHttpServer())
       .get('/api/activity/history?type=set&limit=30')
-      .expect(200, { items: [event], nextCursor: null, hasMore: false });
+      .expect(200, {
+        items: [event],
+        nextCursor: null,
+        hasMore: false,
+        dailySetCounts: { '2026-10-29': 1 },
+      });
     expect(service.findUserHistory).toHaveBeenCalledWith(
       sessionUserId,
       expect.objectContaining({ type: 'set', limit: 30 }),

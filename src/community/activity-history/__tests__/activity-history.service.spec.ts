@@ -93,6 +93,8 @@ function eventRow(
 
 function createService(rows: RawRow[]) {
   const builder = createQueryBuilder(rows);
+  const aggregateRows: { local_date: string; set_count: string | number }[] =
+    [];
   const repository = Object.assign(
     new Repository<RateVoteEvent>(
       RateVoteEvent,
@@ -102,20 +104,39 @@ function createService(rows: RawRow[]) {
     ),
     {
       createQueryBuilder: jest.fn().mockReturnValue(builder),
+      query: jest
+        .fn()
+        .mockImplementation(async (_sql: string, parameters: unknown[]) => {
+          const dates = parameters[4];
+          return aggregateRows.filter(
+            (row) => Array.isArray(dates) && dates.includes(row.local_date),
+          );
+        }),
     },
   );
-  return { service: new ActivityHistoryService(repository), builder };
+  return {
+    service: new ActivityHistoryService(repository),
+    builder,
+    repository,
+    aggregateRows,
+  };
 }
 
 describe('ActivityHistoryService', () => {
   const occurredAt = '2026-10-29T12:00:00.000000Z';
 
   it('requires the user in the base predicate and orders by timestamp then UUID descending', async () => {
-    const { service, builder } = createService([]);
+    const { service, builder, repository } = createService([]);
 
     const page = await service.findUserHistory('user-1');
 
-    expect(page).toEqual({ items: [], hasMore: false, nextPosition: null });
+    expect(page).toEqual({
+      items: [],
+      hasMore: false,
+      nextPosition: null,
+      dailySetCounts: {},
+    });
+    expect(repository.query).not.toHaveBeenCalled();
     expect(builder.where).toHaveBeenCalledWith('event.userId = :userId', {
       userId: 'user-1',
     });
@@ -291,6 +312,121 @@ describe('ActivityHistoryService', () => {
     ]);
   });
 
+  it('counts all set events for the local dates on a page in one user-scoped query', async () => {
+    const rows = [
+      eventRow('event-1', '2026-10-29T23:30:00.000000Z', { event_type: 'set' }),
+      eventRow('event-2', '2026-10-28T23:30:00.000000Z', { event_type: 'set' }),
+      eventRow('event-3', '2026-10-28T10:00:00.000000Z', {
+        event_type: 'change',
+      }),
+    ];
+    const { service, repository, aggregateRows } = createService(rows);
+    aggregateRows.push(
+      { local_date: '2026-10-30', set_count: '35' },
+      { local_date: '2026-10-29', set_count: '11' },
+    );
+
+    const page = await service.findUserHistory('user-1', {
+      limit: 3,
+      timeZone: 'Europe/Madrid',
+    });
+
+    expect(page.dailySetCounts).toEqual({
+      '2026-10-30': 35,
+      '2026-10-29': 11,
+      '2026-10-28': 0,
+    });
+    expect(repository.query).toHaveBeenCalledTimes(1);
+    const [sql, parameters] = repository.query.mock.calls[0] as [
+      string,
+      unknown[],
+    ];
+    expect(sql).toContain('COUNT(*)');
+    expect(sql).toContain("event_type = 'set'");
+    expect(sql).toContain('user_id = $1');
+    expect(sql).toContain('AT TIME ZONE $2');
+    expect(parameters[0]).toBe('user-1');
+    expect(parameters[1]).toBe('Europe/Madrid');
+    expect(parameters[2]).toEqual(new Date('2026-10-27T23:00:00.000Z'));
+    expect(parameters[3]).toEqual(new Date('2026-10-30T23:00:00.000Z'));
+    expect(parameters[4]).toEqual(['2026-10-28', '2026-10-29', '2026-10-30']);
+  });
+
+  it('returns zero for days with only changes and keeps totals independent of page boundaries', async () => {
+    const { service, aggregateRows } = createService([
+      eventRow('event-1', occurredAt, { event_type: 'change' }),
+    ]);
+    const localDate = '2026-10-29';
+    aggregateRows.push({ local_date: localDate, set_count: 4 });
+
+    const firstPage = await service.findUserHistory('user-1', {
+      limit: 1,
+      timeZone: 'UTC',
+    });
+    expect(firstPage.dailySetCounts).toEqual({ [localDate]: 4 });
+    const nextPage = await service.findUserHistory('user-1', {
+      limit: 1,
+      timeZone: 'UTC',
+      continuation: {
+        after: { occurredAt, id: 'event-1' },
+        anchor: { occurredAt, id: 'event-9' },
+      },
+    });
+    expect(nextPage.dailySetCounts).toEqual({ [localDate]: 4 });
+
+    const { service: emptyAggregateService } = createService([
+      eventRow('event-2', occurredAt, { event_type: 'change' }),
+    ]);
+    await expect(
+      emptyAggregateService.findUserHistory('user-1', { timeZone: 'UTC' }),
+    ).resolves.toMatchObject({ dailySetCounts: { [localDate]: 0 } });
+  });
+
+  it('counts dates for filtered pages without applying type, search, date-range, cursor or anchor filters to totals', async () => {
+    const { service, repository } = createService([
+      eventRow('event-1', occurredAt, { event_type: 'change' }),
+    ]);
+    await service.findUserHistory('user-1', {
+      type: 'change',
+      query: 'artist',
+      from: '2026-10-29',
+      to: '2026-10-29',
+      timeZone: 'Europe/Madrid',
+      limit: 1,
+      continuation: {
+        after: { occurredAt, id: 'event-0' },
+        anchor: { occurredAt, id: 'event-9' },
+      },
+    });
+
+    const [sql, parameters] = repository.query.mock.calls[0] as [
+      string,
+      unknown[],
+    ];
+    expect(parameters[0]).toBe('user-1');
+    expect(parameters[1]).toBe('Europe/Madrid');
+    expect(parameters[4]).toEqual(['2026-10-29']);
+    expect(sql).not.toContain('event_type = $');
+    expect(sql).not.toContain('disc');
+    expect(sql).toContain('occurred_at >= $3');
+    expect(sql).toContain('occurred_at < $4');
+    expect(sql).not.toContain('LIMIT');
+  });
+
+  it('uses UTC without requiring timeZone and includes legacy set rows regardless of disk association', async () => {
+    const { service, repository, aggregateRows } = createService([
+      eventRow('event-1', '2026-10-29T00:30:00.000000Z', { event_type: 'set' }),
+    ]);
+    aggregateRows.push({ local_date: '2026-10-29', set_count: '1' });
+
+    const page = await service.findUserHistory('user-1');
+
+    expect(page.dailySetCounts).toEqual({ '2026-10-29': 1 });
+    expect(repository.query.mock.calls[0][1][0]).toBe('user-1');
+    expect(repository.query.mock.calls[0][1][1]).toBe('UTC');
+    expect(repository.query.mock.calls[0][1][4]).toEqual(['2026-10-29']);
+  });
+
   it('rejects invalid page sizes and returns no continuation for an empty page', async () => {
     const { service } = createService([]);
 
@@ -306,6 +442,7 @@ describe('ActivityHistoryService', () => {
       items: [],
       hasMore: false,
       nextPosition: null,
+      dailySetCounts: {},
     });
   });
 });

@@ -2,6 +2,7 @@ import { EntitySchema, QueryRunner } from 'typeorm';
 import { DataSource } from 'typeorm';
 import { RateVoteEvent } from '../../rates/entities/rate-vote-event.entity';
 import { ActivityHistoryService } from '../activity-history.service';
+import { createLocalDateResolver } from '../helpers/local-date';
 
 const enabled = process.env.ACTIVITY_HISTORY_PG_INTEGRATION === '1';
 const integrationSuite = enabled ? describe : describe.skip;
@@ -132,6 +133,7 @@ integrationSuite('Activity history PostgreSQL integration', () => {
       coverUrl: 'cover.jpg',
       genre: { id: '20000000-0000-4000-8000-000000000001', name: 'Rock' },
     });
+    expect(firstPage.dailySetCounts).toEqual({ '2026-10-29': 2 });
 
     const secondPage = await service.findUserHistory(
       '40000000-0000-4000-8000-000000000001',
@@ -157,5 +159,61 @@ integrationSuite('Activity history PostgreSQL integration', () => {
     ]);
     expect(thirdPage.items[0].occurredAt).toBe('2026-10-29T11:59:59.999999Z');
     expect(thirdPage.hasMore).toBe(false);
+    expect(thirdPage.dailySetCounts).toEqual({ '2026-10-29': 2 });
+  });
+
+  it('counts all set rows for filtered local dates and isolates users, including legacy rows without a disc', async () => {
+    const repository = queryRunner.manager.getRepository(RateVoteEvent);
+    const service = new ActivityHistoryService(repository);
+    const filteredChanges = await service.findUserHistory(
+      '40000000-0000-4000-8000-000000000001',
+      {
+        type: 'change',
+        query: 'record',
+        from: '2026-10-29',
+        to: '2026-10-29',
+        timeZone: 'UTC',
+        limit: 1,
+      },
+    );
+    expect(filteredChanges.items).toHaveLength(1);
+    expect(filteredChanges.dailySetCounts).toEqual({ '2026-10-29': 2 });
+
+    const otherUser = await service.findUserHistory(
+      '40000000-0000-4000-8000-000000000002',
+    );
+    expect(otherUser.dailySetCounts).toEqual({ '2026-10-29': 0 });
+  });
+
+  it('groups events by IANA local dates across midnight and both DST transitions', async () => {
+    await queryRunner.query(`
+      INSERT INTO rate_vote_events (id, user_id, occurred_at, event_type, disc_id, previous_value, new_value) VALUES
+        ('f0000000-0000-4000-8000-000000000010', '40000000-0000-4000-8000-000000000001', '2026-03-28T23:30:00Z', 'set', '30000000-0000-4000-8000-000000000001', NULL, 5),
+        ('f0000000-0000-4000-8000-000000000011', '40000000-0000-4000-8000-000000000001', '2026-03-29T00:59:59.999999Z', 'set', '30000000-0000-4000-8000-000000000001', NULL, 5),
+        ('f0000000-0000-4000-8000-000000000012', '40000000-0000-4000-8000-000000000001', '2026-03-29T01:00:00Z', 'set', '30000000-0000-4000-8000-000000000001', NULL, 5),
+        ('f0000000-0000-4000-8000-000000000013', '40000000-0000-4000-8000-000000000001', '2026-10-25T00:30:00Z', 'set', '30000000-0000-4000-8000-000000000001', NULL, 5),
+        ('f0000000-0000-4000-8000-000000000014', '40000000-0000-4000-8000-000000000001', '2026-10-25T01:30:00Z', 'set', '30000000-0000-4000-8000-000000000001', NULL, 5);
+    `);
+    const service = new ActivityHistoryService(
+      queryRunner.manager.getRepository(RateVoteEvent),
+    );
+
+    const page = await service.findUserHistory(
+      '40000000-0000-4000-8000-000000000001',
+      { timeZone: 'Europe/Madrid', limit: 10 },
+    );
+    expect(page.dailySetCounts).toMatchObject({
+      '2026-03-29': 3,
+      '2026-10-25': 2,
+    });
+    const localDateFor = createLocalDateResolver('Europe/Madrid');
+    expect(
+      page.items.every((item) =>
+        Object.prototype.hasOwnProperty.call(
+          page.dailySetCounts,
+          localDateFor(item.occurredAt),
+        ),
+      ),
+    ).toBe(true);
   });
 });

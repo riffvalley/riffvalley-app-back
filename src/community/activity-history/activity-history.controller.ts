@@ -65,6 +65,7 @@ export class ActivityHistoryController {
         items: page.items,
         nextCursor,
         hasMore: page.hasMore,
+        dailySetCounts: page.dailySetCounts,
       };
     } catch (error) {
       if (

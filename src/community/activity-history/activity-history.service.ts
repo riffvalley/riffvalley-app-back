@@ -10,6 +10,7 @@ import {
   ActivityHistoryPosition,
 } from './types/activity-history.types';
 import { resolveLocalDateRange } from './helpers/local-date-range';
+import { createLocalDateResolver } from './helpers/local-date';
 
 interface ActivityHistoryRawRow {
   event_id: string;
@@ -24,6 +25,11 @@ interface ActivityHistoryRawRow {
   artist_name: string | null;
   genre_id: string | null;
   genre_name: string | null;
+}
+
+interface DailySetCountRawRow {
+  local_date: string;
+  set_count: string | number;
 }
 
 const DEFAULT_LIMIT = 30;
@@ -50,6 +56,14 @@ export class ActivityHistoryService {
     const rows = await query.getRawMany<ActivityHistoryRawRow>();
     const hasMore = rows.length > limit;
     const items = rows.slice(0, limit).map(mapActivityHistoryRow);
+    const timeZone = filters.timeZone ?? 'UTC';
+    const localDateFor = createLocalDateResolver(timeZone);
+    const localDates = [
+      ...new Set(items.map((item) => localDateFor(item.occurredAt))),
+    ];
+    const dailySetCounts = localDates.length
+      ? await this.findDailySetCounts(userId, timeZone, localDates)
+      : {};
     const lastItem = items.at(-1);
 
     const nextPosition =
@@ -60,7 +74,47 @@ export class ActivityHistoryService {
           }
         : null;
 
-    return { items, hasMore, nextPosition };
+    return { items, hasMore, nextPosition, dailySetCounts };
+  }
+
+  private async findDailySetCounts(
+    userId: string,
+    timeZone: string,
+    localDates: string[],
+  ): Promise<Record<string, number>> {
+    const sortedDates = [...localDates].sort();
+    const bounds = resolveLocalDateRange(
+      sortedDates[0],
+      sortedDates.at(-1),
+      timeZone,
+    );
+    if (!bounds.fromInstant || !bounds.toExclusiveInstant) {
+      throw new Error('Daily set count dates require a complete local range.');
+    }
+    const rows: DailySetCountRawRow[] = await this.eventRepository.query(
+      `SELECT to_char((occurred_at AT TIME ZONE $2)::date, 'YYYY-MM-DD') AS local_date,
+              COUNT(*) AS set_count
+       FROM rate_vote_events
+       WHERE user_id = $1
+         AND event_type = 'set'
+         AND occurred_at >= $3
+         AND occurred_at < $4
+         AND (occurred_at AT TIME ZONE $2)::date = ANY($5::date[])
+       GROUP BY (occurred_at AT TIME ZONE $2)::date`,
+      [
+        userId,
+        timeZone,
+        bounds.fromInstant,
+        bounds.toExclusiveInstant,
+        sortedDates,
+      ],
+    );
+    const counts = new Map(
+      rows.map((row) => [row.local_date, Number(row.set_count)]),
+    );
+    return Object.fromEntries(
+      localDates.map((date) => [date, counts.get(date) ?? 0]),
+    );
   }
 
   private createProjectionQuery(

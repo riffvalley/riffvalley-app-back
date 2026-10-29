@@ -51,4 +51,5 @@ export interface ActivityHistoryPage {
   items: ActivityHistoryItem[];
   hasMore: boolean;
   nextPosition: ActivityHistoryContinuation | null;
+  dailySetCounts: Record<string, number>;
 }
