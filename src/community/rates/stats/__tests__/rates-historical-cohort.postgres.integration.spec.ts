@@ -61,7 +61,10 @@ integrationSuite('Rates historical cohort PostgreSQL integration', () => {
       'CREATE TABLE "genre" ("id" uuid PRIMARY KEY, "name" text NOT NULL)',
     );
     await dataSource.query(
-      'CREATE TABLE "disc" ("id" uuid PRIMARY KEY, "releaseDate" date, "genreId" uuid)',
+      'CREATE TABLE "artist" ("id" uuid PRIMARY KEY, "name" text NOT NULL)',
+    );
+    await dataSource.query(
+      'CREATE TABLE "disc" ("id" uuid PRIMARY KEY, "name" text NOT NULL DEFAULT \'Test album\', "releaseDate" date, "genreId" uuid, "artistId" uuid)',
     );
     await dataSource.query(`
       CREATE TABLE "rate" (
@@ -90,6 +93,7 @@ integrationSuite('Rates historical cohort PostgreSQL integration', () => {
     if (ownsFixtureTables) {
       await dataSource.query('DROP TABLE IF EXISTS "rate"');
       await dataSource.query('DROP TABLE IF EXISTS "disc"');
+      await dataSource.query('DROP TABLE IF EXISTS "artist"');
       await dataSource.query('DROP TABLE IF EXISTS "genre"');
     }
     await dataSource.destroy();
@@ -281,10 +285,10 @@ integrationSuite('Rates historical cohort PostgreSQL integration', () => {
       ),
     ).toBe(activity2025.activityCount);
     expect(activity2025.activityByDay).toEqual([
-      { date: '2025-01-01', activityCount: 1 },
-      { date: '2025-06-01', activityCount: 1 },
-      { date: '2025-07-01', activityCount: 2 },
-      { date: '2025-12-31', activityCount: 1 },
+      expect.objectContaining({ date: '2025-01-01', activityCount: 1 }),
+      expect.objectContaining({ date: '2025-06-01', activityCount: 1 }),
+      expect.objectContaining({ date: '2025-07-01', activityCount: 2 }),
+      expect.objectContaining({ date: '2025-12-31', activityCount: 1 }),
     ]);
     expect(
       activity2025.activityByDay.reduce(
@@ -347,7 +351,9 @@ integrationSuite('Rates historical cohort PostgreSQL integration', () => {
       activityByMonth: expect.arrayContaining([
         { month: '2025-01', activityCount: 1 },
       ]),
-      activityByDay: [{ date: '2025-01-01', activityCount: 1 }],
+      activityByDay: [
+        expect.objectContaining({ date: '2025-01-01', activityCount: 1 }),
+      ],
     });
   });
 });

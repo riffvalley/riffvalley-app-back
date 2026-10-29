@@ -9,16 +9,37 @@ type AggregateRow = {
   activityCount: number | string;
 };
 
-function createService(rows: AggregateRow[] = []) {
+function createService(
+  rows: AggregateRow[] = [],
+  dailyAssignmentOverride?: Array<{
+    date: string;
+    discId: string;
+    title: string;
+    artist: string | null;
+    rate: number | string | null;
+  }>,
+) {
+  const dailyAssignments = dailyAssignmentOverride ?? rows.flatMap((row) =>
+    row.aggregation === 'day' && row.period
+      ? Array.from({ length: Number(row.activityCount) }, (_, index) => ({
+          date: row.period as string,
+          discId: `disc-${index + 1}`,
+          title: 'Album',
+          artist: null,
+          rate: null,
+        }))
+      : [],
+  );
   const repository = new Repository<RateVoteEvent>(
     RateVoteEvent,
     new EntityManager(
       new DataSource({ type: 'postgres', database: 'event-set-aggregations' }),
     ),
   );
-  const query = jest
-    .fn<Promise<AggregateRow[]>, [string, unknown[]?]>()
-    .mockResolvedValue(rows);
+  const query = jest.fn<Promise<unknown[]>, [string, unknown[]?]>(
+    async (sql) =>
+      sql.includes('ranked_current_rates') ? dailyAssignments : rows,
+  );
   Object.assign(repository, { query });
   return { service: new RatesEventSetAggregationsService(repository), query };
 }
@@ -51,8 +72,22 @@ describe('RatesEventSetAggregationsService', () => {
         { month: '2027-12', activityCount: 2 },
       ],
       activityByDay: [
-        { date: '2027-01-01', activityCount: 2 },
-        { date: '2027-12-31', activityCount: 2 },
+        {
+          date: '2027-01-01',
+          activityCount: 2,
+          assignments: [
+            { discId: 'disc-1', title: 'Album', artist: null, rate: null, date: '2027-01-01' },
+            { discId: 'disc-2', title: 'Album', artist: null, rate: null, date: '2027-01-01' },
+          ],
+        },
+        {
+          date: '2027-12-31',
+          activityCount: 2,
+          assignments: [
+            { discId: 'disc-1', title: 'Album', artist: null, rate: null, date: '2027-12-31' },
+            { discId: 'disc-2', title: 'Album', artist: null, rate: null, date: '2027-12-31' },
+          ],
+        },
       ],
       activityByGenre: [
         { genre: 'Black Metal', activityCount: 3 },
@@ -60,7 +95,7 @@ describe('RatesEventSetAggregationsService', () => {
       ],
       activityWithoutGenre: 0,
     });
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[0][0]).toContain("event.event_type = 'set'");
     expect(query.mock.calls[0][0]).toContain('event.previous_value IS NULL');
     expect(query.mock.calls[0][0]).toContain('event.new_value IS NOT NULL');
@@ -76,6 +111,8 @@ describe('RatesEventSetAggregationsService', () => {
     expect(query.mock.calls[0][0]).toContain('COUNT("eventId")');
     expect(query.mock.calls[0][0]).not.toContain('rate.createdAt');
     expect(query.mock.calls[0][0]).not.toContain("event.event_type = 'change'");
+    expect(query.mock.calls[1][0]).toContain('LEFT JOIN current_scores');
+    expect(query.mock.calls[1][0]).toContain('event."eventId"');
     expect(query.mock.calls[0][1]).toEqual([
       'user-id',
       '2027-01-01',
@@ -130,6 +167,52 @@ describe('RatesEventSetAggregationsService', () => {
       result.activityByMonth.every((month) => month.activityCount === 0),
     ).toBe(true);
     expect(result.activityByDay).toEqual([]);
+  });
+
+  it('preserves repeated set events for the same disc and their current score', async () => {
+    const { service } = createService(
+      [
+        { aggregation: 'year', period: null, activityCount: 2 },
+        { aggregation: 'month', period: '2027-05', activityCount: 2 },
+        { aggregation: 'day', period: '2027-05-09', activityCount: 2 },
+        { aggregation: 'withoutGenre', period: null, activityCount: 2 },
+      ],
+      [
+        {
+          date: '2027-05-09',
+          discId: 'same-disc',
+          title: 'Album',
+          artist: 'Artist',
+          rate: '8.75',
+        },
+        {
+          date: '2027-05-09',
+          discId: 'same-disc',
+          title: 'Album',
+          artist: 'Artist',
+          rate: '8.75',
+        },
+      ],
+    );
+
+    const result = await service.aggregateActivityForUser('user-id', 2027);
+
+    expect(result.activityByDay[0].assignments).toEqual([
+      {
+        discId: 'same-disc',
+        title: 'Album',
+        artist: 'Artist',
+        rate: 8.75,
+        date: '2027-05-09',
+      },
+      {
+        discId: 'same-disc',
+        title: 'Album',
+        artist: 'Artist',
+        rate: 8.75,
+        date: '2027-05-09',
+      },
+    ]);
   });
 
   it.each([2025, 2026])(

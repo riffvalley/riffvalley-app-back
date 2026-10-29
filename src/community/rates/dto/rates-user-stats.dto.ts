@@ -35,6 +35,16 @@ export interface RatesStatsRatedDiscDto {
   genre: { name: string; color: string | null } | null;
 }
 
+export interface RatesStatsDailyAssignmentDto {
+  discId: string;
+  title: string;
+  artist: string | null;
+  /** Current personal score, null when the disc has no valid current score. */
+  rate: number | null;
+  /** Local civil date of this assignment. */
+  date: string;
+}
+
 export interface RatesStatsMonthlyActivityDto {
   /** Local calendar month, YYYY-MM. */
   month: string;
@@ -56,6 +66,7 @@ export interface RatesStatsDailyActivityDto {
   date: string;
   /** Eligible activity assignments/events on this date. */
   activityCount: number;
+  assignments: RatesStatsDailyAssignmentDto[];
 }
 
 export interface RatesStatsScoreDistributionDto {
@@ -80,6 +91,8 @@ export interface RatesUserStatsResponseDto {
   mean: number | null;
   /** Current personal score median, in Rate points; null when no scores exist. */
   median: number | null;
+  /** Population standard deviation of current valid personal scores, in Rate points. */
+  standardDeviation: number | null;
   activityByGenre: RatesStatsGenreActivityDto[];
   activityByMonth: RatesStatsMonthlyActivityDto[];
   scoreDistribution: RatesStatsScoreDistributionDto[];

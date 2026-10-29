@@ -9,12 +9,14 @@ interface AggregateRow {
   scoredDiscCount: number | string;
   mean: string | number | null;
   median: string | number | null;
+  standardDeviation: string | number | null;
 }
 
 function createRows(options: {
   scoredDiscs: number;
   mean: string | null;
   median: string | null;
+  standardDeviation?: string | null;
   buckets?: number[];
 }): AggregateRow[] {
   const counts = options.buckets ?? Array.from({ length: 11 }, () => 0);
@@ -25,6 +27,7 @@ function createRows(options: {
       scoredDiscCount: options.scoredDiscs,
       mean: options.mean,
       median: options.median,
+      standardDeviation: options.standardDeviation ?? null,
     },
     ...counts.map(
       (scoredDiscCount, score): AggregateRow => ({
@@ -33,6 +36,7 @@ function createRows(options: {
         scoredDiscCount,
         mean: null,
         median: null,
+        standardDeviation: null,
       }),
     ),
   ];
@@ -43,6 +47,7 @@ function createService(
     scoredDiscs: 0,
     mean: null,
     median: null,
+    standardDeviation: null,
   }),
 ): {
   service: RatesCurrentScoresService;
@@ -89,6 +94,7 @@ describe('RatesCurrentScoresService', () => {
         scoredDiscs: 1,
         mean: '0.00',
         median: '0.00',
+        standardDeviation: '0.00',
         buckets: [1, ...Array(10).fill(0)],
       }),
     );
@@ -105,6 +111,7 @@ describe('RatesCurrentScoresService', () => {
     );
     expect(sql).toContain('WHERE current_position = 1');
     expect(sql).toContain('"currentRate" IS NOT NULL');
+    expect(sql).toContain('STDDEV_POP(score) AS "standardDeviation"');
     expect(rateQuery.mock.calls[0][1]).toEqual([
       'user-id',
       '2026-01-01',
@@ -147,6 +154,7 @@ describe('RatesCurrentScoresService', () => {
       scoredDiscs: 0,
       mean: null,
       median: null,
+      standardDeviation: null,
       scoreDistribution: Array.from({ length: 11 }, (_, score) => ({
         score,
         scoredDiscCount: 0,
@@ -159,7 +167,13 @@ describe('RatesCurrentScoresService', () => {
       score === 8 ? 1 : 0,
     );
     const { service } = createService(
-      createRows({ scoredDiscs: 1, mean: '8.25', median: '8.25', buckets }),
+      createRows({
+        scoredDiscs: 1,
+        mean: '8.25',
+        median: '8.25',
+        standardDeviation: '0',
+        buckets,
+      }),
     );
 
     await expect(
@@ -168,13 +182,20 @@ describe('RatesCurrentScoresService', () => {
       scoredDiscs: 1,
       mean: 8.25,
       median: 8.25,
+      standardDeviation: 0,
     });
   });
 
   it('preserves decimal mean and median and assigns the exact boundaries to floor buckets', async () => {
     const buckets = [1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1];
     const { service } = createService(
-      createRows({ scoredDiscs: 4, mean: '4.63', median: '4.50', buckets }),
+      createRows({
+        scoredDiscs: 4,
+        mean: '4.63',
+        median: '4.50',
+        standardDeviation: '3.54',
+        buckets,
+      }),
     );
 
     const result = await service.aggregateForUser('user-id', 2027);
@@ -183,6 +204,7 @@ describe('RatesCurrentScoresService', () => {
       scoredDiscs: 4,
       mean: 4.63,
       median: 4.5,
+      standardDeviation: 3.54,
       scoreDistribution: buckets.map((scoredDiscCount, score) => ({
         score,
         scoredDiscCount,

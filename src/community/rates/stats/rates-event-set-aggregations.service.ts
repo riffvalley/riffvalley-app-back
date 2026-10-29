@@ -3,11 +3,20 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RateVoteEvent } from '../entities/rate-vote-event.entity';
 import { getEventSetCohortQuery } from './helpers/event-set-cohort-query';
+import { RatesStatsDailyAssignmentDto } from '../dto/rates-user-stats.dto';
 
 interface EventSetActivityAggregateRow {
   aggregation: 'year' | 'month' | 'day' | 'genre' | 'withoutGenre';
   period: string | null;
   activityCount: number | string;
+}
+
+interface EventSetDailyAssignmentRow {
+  date: string;
+  discId: string;
+  title: string;
+  artist: string | null;
+  rate: number | string | null;
 }
 
 export interface EventSetMonthlyActivity {
@@ -18,6 +27,7 @@ export interface EventSetMonthlyActivity {
 export interface EventSetDailyActivity {
   date: string;
   activityCount: number;
+  assignments: RatesStatsDailyAssignmentDto[];
 }
 
 export interface EventSetGenreActivity {
@@ -90,6 +100,35 @@ export class RatesEventSetAggregationsService {
       ORDER BY aggregation, period NULLS FIRST`,
       [...query.parameters, query.timeZone],
     );
+    const assignmentRows = await this.eventRepository.query<
+      EventSetDailyAssignmentRow[]
+    >(
+      `WITH ${query.eligibleSetEventsCte}, eligible_discs AS (
+        SELECT "discId", MAX("occurredAt") AS "eligibleAt"
+        FROM eligible_set_events GROUP BY "discId"
+      ), ranked_current_rates AS (
+        SELECT rate."discId", rate.rate AS "currentRate",
+          ROW_NUMBER() OVER (
+            PARTITION BY rate."discId"
+            ORDER BY rate."editedAt" DESC NULLS LAST, rate."createdAt" DESC, rate.id DESC
+          ) AS current_position
+        FROM eligible_discs
+        INNER JOIN rate ON rate."discId" = eligible_discs."discId"
+        WHERE rate."userId" = $7
+      ), current_scores AS (
+        SELECT "discId", "currentRate" FROM ranked_current_rates
+        WHERE current_position = 1 AND "currentRate" BETWEEN 0 AND 10
+      )
+      SELECT TO_CHAR(event."occurredAt" AT TIME ZONE $6, 'YYYY-MM-DD') AS date,
+        event."discId" AS "discId", disc.name AS title,
+        artist.name AS artist, current_scores."currentRate" AS rate
+      FROM eligible_set_events event
+      INNER JOIN disc ON disc.id = event."discId"
+      LEFT JOIN artist ON artist.id = disc."artistId"
+      LEFT JOIN current_scores ON current_scores."discId" = event."discId"
+      ORDER BY event."occurredAt", event."eventId"`,
+      [...query.parameters, query.timeZone, userId],
+    );
 
     const annualRow = rows.find((row) => row.aggregation === 'year');
     if (!annualRow) {
@@ -122,9 +161,27 @@ export class RatesEventSetAggregationsService {
       const month = `${query.year}-${String(monthIndex + 1).padStart(2, '0')}`;
       return { month, activityCount: monthCounts.get(month) ?? 0 };
     });
+    const assignmentsByDay = new Map<string, RatesStatsDailyAssignmentDto[]>();
+    for (const row of assignmentRows) {
+      const assignments = assignmentsByDay.get(row.date) ?? [];
+      assignments.push({
+        discId: row.discId,
+        title: row.title,
+        artist: row.artist,
+        rate: row.rate === null ? null : toNullableScore(row.rate),
+        date: row.date,
+      });
+      assignmentsByDay.set(row.date, assignments);
+    }
     const activityByDay = [...dayCounts]
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([date, count]) => ({ date, activityCount: count }));
+      .map(([date, count]) => {
+        const assignments = assignmentsByDay.get(date) ?? [];
+        if (assignments.length !== count) {
+          throw new Error('Event set daily assignment details do not match activity counts.');
+        }
+        return { date, activityCount: count, assignments };
+      });
     const attributedActivityCount =
       sum(activityByGenre.map((row) => row.activityCount)) +
       activityWithoutGenre;
@@ -136,6 +193,11 @@ export class RatesEventSetAggregationsService {
     ) {
       throw new Error(
         'Event set activity aggregate totals are inconsistent across periods.',
+      );
+    }
+    if (assignmentRows.length !== activityCount) {
+      throw new Error(
+        'Event set daily assignment details do not match annual activity count.',
       );
     }
 
@@ -163,4 +225,12 @@ function toNonNegativeInteger(value: number | string): number {
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
+}
+
+function toNullableScore(value: number | string): number {
+  const score = Number(value);
+  if (!Number.isFinite(score) || score < 0 || score > 10) {
+    throw new Error('Event set current score must be a valid Rate score.');
+  }
+  return score;
 }

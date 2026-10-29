@@ -16,6 +16,7 @@ export interface RatesCurrentScoreStatistics {
   scoredDiscs: number;
   mean: number | null;
   median: number | null;
+  standardDeviation: number | null;
   scoreDistribution: RatesCurrentScoreDistributionBucket[];
 }
 
@@ -25,6 +26,7 @@ interface CurrentScoreAggregateRow {
   scoredDiscCount: number | string;
   mean: string | number | null;
   median: string | number | null;
+  standardDeviation: string | number | null;
 }
 
 @Injectable()
@@ -59,6 +61,7 @@ export class RatesCurrentScoresService {
       summary AS (
         SELECT COUNT(*) AS "scoredDiscCount",
           AVG(score) AS mean,
+          STDDEV_POP(score) AS "standardDeviation",
           AVG(score) FILTER (
             WHERE score_position IN (FLOOR((score_count + 1) / 2.0), FLOOR((score_count + 2) / 2.0))
           ) AS median
@@ -70,12 +73,13 @@ export class RatesCurrentScoresService {
         GROUP BY FLOOR(score)::integer
       )
       SELECT 'summary'::text AS aggregation, NULL::integer AS score,
-        "scoredDiscCount", mean, median
+        "scoredDiscCount", mean, median, "standardDeviation"
       FROM summary
       UNION ALL
       SELECT 'bucket'::text AS aggregation, buckets.score,
         COALESCE(bucket_counts."scoredDiscCount", 0) AS "scoredDiscCount",
-        NULL::numeric AS mean, NULL::numeric AS median
+        NULL::numeric AS mean, NULL::numeric AS median,
+        NULL::numeric AS "standardDeviation"
       FROM generate_series(0, 10) AS buckets(score)
       LEFT JOIN bucket_counts ON bucket_counts.score = buckets.score
       ORDER BY aggregation, score NULLS FIRST`,
@@ -125,6 +129,7 @@ function toStatistics(
     scoredDiscs,
     mean: toNullableFiniteNumber(summary.mean),
     median: toNullableFiniteNumber(summary.median),
+    standardDeviation: toNullableFiniteNumber(summary.standardDeviation),
     scoreDistribution,
   };
 }
