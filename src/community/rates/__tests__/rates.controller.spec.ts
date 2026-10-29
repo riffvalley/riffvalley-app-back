@@ -21,11 +21,13 @@ import { Rate } from '../entities/rate.entity';
 import { RatesController } from '../rates.controller';
 import { RatesService } from '../rates.service';
 import { RatesStatsService } from '../stats/rates-stats.service';
+import { RatesAnnualStatisticsService } from '../stats/rates-annual-statistics.service';
 import { RatesHistoryService } from '../history/rates-history.service';
 import { RatesDashboardSummaryService } from '../stats/rates-dashboard-summary.service';
 import { RatesHistoryQueryDto } from '../dto/rates-history-query.dto';
 import { RatesArtistSummaryQueryDto } from '../dto/rates-artist-summary-query.dto';
 import { RatesArtistsTopQueryDto } from '../dto/rates-artists-top-query.dto';
+import { RatesStatsQueryDto } from '../dto/rates-stats-query.dto';
 
 async function validateHistoryQuery(
   query: Record<string, unknown>,
@@ -194,14 +196,20 @@ describe('RatesController home insights route', () => {
       createRateRepository(),
       createUsersService(),
     );
-    const getRatedDiscs = jest
-      .spyOn(stats, 'getUserRatedDiscs')
-      .mockResolvedValue([]);
+    const getRatedDiscs = jest.fn().mockResolvedValue([]);
+    const annualStatistics = {
+      getUserStats: jest.fn(),
+      getRatedDiscs,
+    } satisfies Pick<
+      RatesAnnualStatisticsService,
+      'getUserStats' | 'getRatedDiscs'
+    >;
     const controller = new RatesController(
       new RatesService(createRateRepository()),
       stats,
       new RatesHistoryService(createRateRepository()),
       new RatesDashboardSummaryService(createRateRepository()),
+      annualStatistics,
     );
     const user = Object.assign(new User(), { id: 'identity-from-session' });
     const handler = RatesController.prototype.getUserRatedDiscs;
@@ -224,8 +232,52 @@ describe('RatesController home insights route', () => {
       expect.objectContaining({ index: 0, data: undefined }),
     );
 
-    await controller.getUserRatedDiscs(user, '2024');
-    expect(getRatedDiscs).toHaveBeenCalledWith(user, '2024');
+    const query = Object.assign(new RatesStatsQueryDto(), {
+      year: '2026',
+      timeZone: 'Europe/Madrid',
+    });
+    await controller.getUserRatedDiscs(user, query);
+    expect(getRatedDiscs).toHaveBeenCalledWith(user.id, 2026, 'Europe/Madrid');
+  });
+
+  it('registers authenticated GET /rates/stats with session identity and the shared query DTO', async () => {
+    const stats = new RatesStatsService(
+      createRateRepository(),
+      createUsersService(),
+    );
+    const getStats = jest.fn().mockResolvedValue({});
+    const annualStatistics = {
+      getUserStats: getStats,
+      getRatedDiscs: jest.fn(),
+    } satisfies Pick<
+      RatesAnnualStatisticsService,
+      'getUserStats' | 'getRatedDiscs'
+    >;
+    const controller = new RatesController(
+      new RatesService(createRateRepository()),
+      stats,
+      new RatesHistoryService(createRateRepository()),
+      new RatesDashboardSummaryService(createRateRepository()),
+      annualStatistics,
+    );
+    const user = Object.assign(new User(), { id: 'identity-from-session' });
+    const query = Object.assign(new RatesStatsQueryDto(), {
+      year: '2026',
+      timeZone: 'UTC',
+    });
+    const handler = RatesController.prototype.getUserStats;
+    const guards = Reflect.getMetadata(
+      GUARDS_METADATA,
+      handler,
+    ) as Type<unknown>[];
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('stats');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(
+      RequestMethod.GET,
+    );
+    expect(guards).toContain(UserRoleGuard);
+    await controller.getUserStats(user, query);
+    expect(getStats).toHaveBeenCalledWith(user.id, 2026, 'UTC');
   });
 
   it('registers both authenticated geography routes with session identity only', async () => {

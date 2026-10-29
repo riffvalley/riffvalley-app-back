@@ -10,6 +10,7 @@ import {
   ForbiddenException,
   ParseUUIDPipe,
   Query,
+  Optional,
 } from '@nestjs/common';
 import { RatesService } from './rates.service';
 import { RatesStatsService } from './stats/rates-stats.service';
@@ -20,6 +21,8 @@ import { UpdateRateDto } from './dto/update-rates.dto';
 import { RatesHistoryQueryDto } from './dto/rates-history-query.dto';
 import { RatesArtistSummaryQueryDto } from './dto/rates-artist-summary-query.dto';
 import { RatesArtistsTopQueryDto } from './dto/rates-artists-top-query.dto';
+import { RatesStatsQueryDto } from './dto/rates-stats-query.dto';
+import { RatesAnnualStatisticsService } from './stats/rates-annual-statistics.service';
 import { CommunityListQueryDto } from '../common/dto/community-list-query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
@@ -32,6 +35,11 @@ export class RatesController {
     private readonly ratesStatsService: RatesStatsService,
     private readonly ratesHistoryService: RatesHistoryService,
     private readonly ratesDashboardSummaryService: RatesDashboardSummaryService,
+    @Optional()
+    private readonly annualStatisticsService?: Pick<
+      RatesAnnualStatisticsService,
+      'getUserStats' | 'getRatedDiscs'
+    >,
   ) {}
 
   // ==========================================
@@ -40,14 +48,28 @@ export class RatesController {
 
   @Get('stats')
   @Auth()
-  getUserStats(@GetUser() user: User, @Query('year') year?: string) {
-    return this.ratesStatsService.getUserStats(user, year);
+  getUserStats(@GetUser() user: User, @Query() query: RatesStatsQueryDto) {
+    if (!this.annualStatisticsService) {
+      throw new Error('Annual statistics service is not configured.');
+    }
+    return this.annualStatisticsService.getUserStats(
+      user.id,
+      Number(query.year),
+      typeof query.timeZone === 'string' ? query.timeZone : 'UTC',
+    );
   }
 
   @Get('stats/discs')
   @Auth()
-  getUserRatedDiscs(@GetUser() user: User, @Query('year') year?: string) {
-    return this.ratesStatsService.getUserRatedDiscs(user, year);
+  getUserRatedDiscs(@GetUser() user: User, @Query() query: RatesStatsQueryDto) {
+    if (!this.annualStatisticsService) {
+      throw new Error('Annual statistics service is not configured.');
+    }
+    return this.annualStatisticsService.getRatedDiscs(
+      user.id,
+      Number(query.year),
+      typeof query.timeZone === 'string' ? query.timeZone : 'UTC',
+    );
   }
 
   @Get('home-insights')
