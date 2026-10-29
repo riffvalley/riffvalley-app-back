@@ -1,10 +1,12 @@
 # Roadmap de búsqueda y matching musical
 
-**Estado:** MEDIA-1 completada como auditoría documental; MEDIA-2 completada; MEDIA-3a y MEDIA-3b.1–3b.5 completadas el 2026-10-28. MEDIA-3b.6–3b.8 y MEDIA-4–MEDIA-6/MEDIA-8 continúan pendientes. MEDIA-7 descartada por decisión del usuario.
+**Estado:** MEDIA-1 completada como auditoría documental; MEDIA-2 completada; MEDIA-3a, MEDIA-3b.1–3b.6a completadas el 2026-10-28. MEDIA-3b.6b completada el 2026-10-29 para las protecciones de Catalog aprobadas; quedan P1 fuera de alcance en Requests y Excel, por lo que MEDIA-3b.6 global no se cierra. MEDIA-3b.7 completada el 2026-10-29 sin índices adicionales; MEDIA-3b.8 sigue pendiente. MEDIA-4–MEDIA-6/MEDIA-8 continúan pendientes. MEDIA-7 descartada por decisión del usuario.
 
 **Alcance:** búsqueda interna de artistas y discos, matching de candidatos Spotify/Bandcamp y revisión segura de enlaces históricos.
 
 **Límite vigente:** MEDIA-3b.4 integra los readers principales de Catalog y MEDIA-3b.5 los filtros de búsqueda de candidatos en Community y National Releases, conservando ownership y contratos. Imports/resolución de identidad, reglas de duplicados, elegibilidad CAT-DISC-4c, sincronizaciones y reparación automática de datos permanecen independientes.
+
+**Duplicados e identidad:** MEDIA-3b.6a completó la auditoría documental. MEDIA-3b.6b añadió protecciones en `DiscWriteService.createWithArtist` y el import manual de Catalog, sin cambiar contratos ni reglas editoriales. Los P1 de resolución ambigua en Requests y Excel siguen abiertos; la [auditoría de duplicados](music-search-duplicates-audit.md) registra evidencia, cambios y límites. No se cierra MEDIA-3b.6 global hasta tratar esos riesgos en sus dominios.
 
 ## Objetivo
 
@@ -82,13 +84,16 @@ Estados convencionales: **Pendiente**, **En curso**, **Bloqueada** y **Completad
 ### MEDIA-3 — Búsqueda interna normalizada
 
 - **Tamaño:** M.
-- **Estado:** En curso; MEDIA-3a y MEDIA-3b.1–3b.5 completadas (2026-10-28); MEDIA-3b.6–3b.8 pendientes.
+- **Estado:** En curso; MEDIA-3a, MEDIA-3b.1–3b.6a completadas (2026-10-28); MEDIA-3b.6b completada para Catalog (2026-10-29), con P1 de Requests y Excel aún abiertos; MEDIA-3b.6 global no cerrada. MEDIA-3b.7 completada (2026-10-29), MEDIA-3b.8 pendiente.
 - **Objetivo:** aplicar la política aprobada solo a lectores internos autorizados por MEDIA-1.
 - **Criterios:** nombres originales sin cambios; coincidencia normalizada exacta diferenciada de parcial; evitar normalizadores duplicados; resultados y contratos actuales preservados salvo cambio aprobado; no ampliar resultados irrelevantes; latencia y query plan medidos.
 - **Evaluar:** `unaccent`, índices funcionales, trigramas, campos normalizados ya existentes u otra solución concreta, según la evidencia de MEDIA-1/2. Cualquier extensión, columna o migración necesita tarea/decisión separada con evaluación `up`/`down` y despliegue.
 - **Diseño y avance MEDIA-3b:** [music-search-sql-design.md](music-search-sql-design.md). MEDIA-3b.2 creó las columnas nullable y añadió dual-write; MEDIA-3b.3 aplicó/verificó el backfill en `spammusic-back` con cero claves NULL o discrepantes. MEDIA-3b.4 integró Artist Search/Management/Orphans/exact lookup y Disc Catalog/Calendar. MEDIA-3b.5 adaptó los filtros de candidatos de Community DiscList y la sugerencia revisable de National Releases; la matriz incluye las lecturas que permanecen intactas y los casos diferidos. Fallback legacy solo para claves NULL, sin cambiar nombres, metadatos, decisiones de identidad ni `Artist.nameNormalized`.
 - **MEDIA-3b.5:** auditoría y adaptación completadas; Calendar ya estaba cubierto. Requests e Imports de escritura permanecen intactos; comparaciones de duplicados se difieren a MEDIA-3b.6. Sugerencias de National Releases no escriben asociaciones. PostgreSQL 17 aislado, 4 pruebas; 7 suites focalizadas, 63 tests; typecheck, build, ESLint/Prettier focalizados y `git diff --check` aprobados. Los gates arquitectónico y de tipado no detectaron hallazgos nuevos (9 y 5 históricos respectivamente).
-- **Siguiente paso:** MEDIA-3b.6, reglas de duplicados; no iniciada aquí.
+- **MEDIA-3b.6a:** auditoría documental completada; véase [auditoría de duplicados e identidad](music-search-duplicates-audit.md).
+- **MEDIA-3b.6b:** protecciones de Catalog completadas el 2026-10-29. `createWithArtist` ya no interpreta comodines ni asocia candidatos normalizados sin confirmación; el import manual no escoge Artist ambiguo y distingue álbum/EP al comprobar títulos literales. Requests y Excel siguen con resolución ambigua y requieren trabajo de sus dominios. MEDIA-3b.6 global permanece abierta.
+- **MEDIA-3b.7:** medición PostgreSQL 17 aislada con 7.200 Artist y 7.400 Disc. Equality exacta, partial/contains, artículos opcionales y join Disc/Artist compararon baseline, B-tree y GIN mediante `EXPLAIN (ANALYZE, BUFFERS)` y pgbench. Las latencias fueron bajas a esta escala; GIN no se usa con el `OR` de fallback NULL y B-tree solo acelera equality ya submilisegunda. No se recomiendan índices ni cambios SQL; resultados completos en [diseño SQL](music-search-sql-design.md).
+- **Siguiente estado:** MEDIA-3b.6 global conserva P1 de Requests/Excel. MEDIA-3b.8 permanece pendiente y no se inicia en esta tarea.
 - **Pruebas:** casos de matriz, Unicode y límites de entrada; consultas de PostgreSQL aislado con datos representativos y `EXPLAIN (ANALYZE, BUFFERS)` antes/después cuando se cambie estrategia SQL.
 - **Dependencias:** MEDIA-1 y MEDIA-2.
 
@@ -177,4 +182,4 @@ MEDIA-3 puede avanzar en paralelo con MEDIA-4 una vez aprobada la política, por
 
 ## Registro de esta ejecución
 
-MEDIA-1 se completó como auditoría documental; MEDIA-2 definió e implementó la política; MEDIA-3a y MEDIA-3b.1–3b.5 están completadas. El inventario, adaptaciones, compatibilidad NULL y pruebas están en [music-search-sql-design.md](music-search-sql-design.md). MEDIA-3b.6–3b.8, MEDIA-4–MEDIA-6 y MEDIA-8 siguen pendientes; MEDIA-7 fue descartada por decisión del usuario.
+MEDIA-1 se completó como auditoría documental; MEDIA-2 definió e implementó la política; MEDIA-3a, MEDIA-3b.1–3b.6a están completadas. MEDIA-3b.6b completó las protecciones aprobadas de Catalog el 2026-10-29, pero los P1 de Requests y Excel siguen abiertos y MEDIA-3b.6 global no se cierra. MEDIA-3b.7 midió consultas con PostgreSQL aislado y concluyó que no se justifican nuevos índices a la cardinalidad actual; véase [music-search-sql-design.md](music-search-sql-design.md). La [auditoría de duplicados](music-search-duplicates-audit.md) conserva los riesgos abiertos. MEDIA-3b.8, MEDIA-4–MEDIA-6 y MEDIA-8 siguen pendientes; MEDIA-7 fue descartada por decisión del usuario.

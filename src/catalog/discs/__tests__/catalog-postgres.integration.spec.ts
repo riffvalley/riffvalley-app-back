@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as ExcelJS from 'exceljs';
 import { PassThrough, Writable } from 'stream';
 import { randomUUID } from 'node:crypto';
+import { BadRequestException } from '@nestjs/common';
 import { CatalogImportController } from '../../import/manual/controller/catalog-import.controller';
 import { CatalogImportService } from '../../import/manual/import/catalog-import.service';
 import { ManualImportLogger } from '../../import/manual/logging/manual-import-logger';
@@ -18,6 +19,8 @@ import { Artist } from '../../artists/entities/artist.entity';
 import { Country } from '../../countries/entities/country.entity';
 import { Disc } from '../entities/disc.entity';
 import { Genre } from '../../genres/entities/genre.entity';
+import { normalizeForSearch } from '../../artists/helpers/normalize-for-search';
+import { normalizeMusicName } from '../../shared/music-name/normalize-music-name';
 
 const describePostgres =
   process.env.CATALOG_POSTGRES_INTEGRATION === '1' ? describe : describe.skip;
@@ -256,6 +259,126 @@ describePostgres('Catalog persistence with PostgreSQL', () => {
       ),
     ).rejects.toThrow();
     expect(await artistCountByName(existingArtistName)).toBe(1);
+  });
+
+  it('uses normalized names as candidates only, rejects ambiguity, and treats wildcard characters literally', async () => {
+    const molArtist = await dataSource.getRepository(Artist).save({
+      name: 'MØL',
+      nameNormalized: normalizeForSearch('MØL'),
+      searchNameNormalized: normalizeMusicName('MØL'),
+      countryId: country.id,
+    });
+    fixtureArtists.push(molArtist.id);
+
+    await expect(
+      discWriteService.createWithArtist(
+        Object.assign(new CreateDiscWithArtistDto(), {
+          artistName: 'MOL',
+          discName: `${fixturePrefix} Candidate Only Disc`,
+          countryId: country.id,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      await dataSource.getRepository(Disc).countBy({
+        name: `${fixturePrefix} Candidate Only Disc`,
+      }),
+    ).toBe(0);
+
+    const wildcardCases = [
+      [`${fixturePrefix} PercentXBand`, `${fixturePrefix} Percent%Band`],
+      [`${fixturePrefix} UnderXscore`, `${fixturePrefix} Under_score`],
+    ] as const;
+    for (const [existingName, literalName] of wildcardCases) {
+      const wildcardCandidate = await dataSource.getRepository(Artist).save({
+        name: existingName,
+        nameNormalized: existingName.toLowerCase(),
+        searchNameNormalized: normalizeMusicName(existingName),
+        countryId: country.id,
+      });
+      fixtureArtists.push(wildcardCandidate.id);
+
+      const created = await discWriteService.createWithArtist(
+        Object.assign(new CreateDiscWithArtistDto(), {
+          artistName: literalName,
+          discName: `${literalName} Disc`,
+          countryId: country.id,
+        }),
+      );
+
+      expect(created.artist.name).toBe(literalName);
+      expect(created.artist.id).not.toBe(wildcardCandidate.id);
+      fixtureArtists.push(created.artist.id);
+    }
+  });
+
+  it('uses the legacy key only to flag NULL-key candidates and never associates them automatically', async () => {
+    const legacyArtist = await dataSource.getRepository(Artist).save({
+      name: 'Björk',
+      nameNormalized: normalizeForSearch('Björk'),
+      searchNameNormalized: null,
+      countryId: country.id,
+    });
+    fixtureArtists.push(legacyArtist.id);
+
+    await expect(
+      discWriteService.createWithArtist(
+        Object.assign(new CreateDiscWithArtistDto(), {
+          artistName: 'Bjork',
+          discName: `${fixturePrefix} Legacy Candidate Disc`,
+          countryId: country.id,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      await dataSource.getRepository(Disc).countBy({
+        name: `${fixturePrefix} Legacy Candidate Disc`,
+      }),
+    ).toBe(0);
+  });
+
+  it('keeps manual import identity literal, distinguishes EP from album, and ignores release-date differences for duplicate identity', async () => {
+    const artistName = `${fixturePrefix} Manual Identity Artist`;
+    const title = `${fixturePrefix} Same Title`;
+    const initial = await manualService.processManualData({
+      date: 'October 4, 2026',
+      albums: [{ line: `${artistName} - ${title}`, ep: true }],
+    });
+    const initialResult = initial.results[0];
+    if (initialResult.status !== 'imported') {
+      throw new Error('Expected initial EP import to succeed');
+    }
+    fixtureArtists.push(initialResult.artistId);
+
+    const album = await manualService.processManualData({
+      date: 'October 4, 2026',
+      albums: [{ line: `${artistName} - ${title}`, ep: false }],
+    });
+    expect(album.results[0].status).toBe('imported');
+
+    const sameAlbumLaterDate = await manualService.processManualData({
+      date: 'October 4, 2025',
+      albums: [{ line: `${artistName} - ${title}`, ep: false }],
+    });
+    expect(sameAlbumLaterDate.results[0].status).toBe('duplicate');
+
+    const wildcardTitles = [
+      [`${fixturePrefix} PercentXBand`, `${fixturePrefix} Percent%Band`],
+      [`${fixturePrefix} UnderXscore`, `${fixturePrefix} Under_score`],
+    ] as const;
+    for (const [existingTitle, literalTitle] of wildcardTitles) {
+      await dataSource.getRepository(Disc).save({
+        name: existingTitle,
+        searchNameNormalized: normalizeMusicName(existingTitle),
+        artist: { id: initialResult.artistId },
+        ep: false,
+      });
+      const result = await manualService.processManualData({
+        date: 'October 4, 2026',
+        albums: [{ line: `${artistName} - ${literalTitle}`, ep: false }],
+      });
+      expect(result.results[0].status).toBe('imported');
+    }
   });
 
   it('imports Manual rows partially, returns data.results, preserves earlier success and rolls back a failed new Artist', async () => {

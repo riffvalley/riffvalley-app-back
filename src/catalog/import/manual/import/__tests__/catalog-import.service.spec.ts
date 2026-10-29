@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ILike, QueryFailedError } from 'typeorm';
+import { QueryFailedError } from 'typeorm';
 import { AlbumItemDto } from '../../dto/process-manual-data.dto';
 import { Artist } from '../../../../artists/entities/artist.entity';
 import { Country } from '../../../../countries/entities/country.entity';
@@ -30,6 +30,7 @@ describe('CatalogImportService characterization', () => {
   let moduleRef: TestingModule;
   let artistRepository: {
     findOne: jest.Mock;
+    find: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
   };
@@ -60,6 +61,7 @@ describe('CatalogImportService characterization', () => {
 
     artistRepository = {
       findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
       create: jest.fn((artist) => artist),
       save: jest.fn(async (artist) => ({ ...artist, id: 'artist-1' })),
     };
@@ -128,7 +130,7 @@ describe('CatalogImportService characterization', () => {
     expect(countryRepository.findOne).toHaveBeenCalledWith({
       where: { name: 'Sin pais' },
     });
-    expect(artistRepository.findOne).toHaveBeenCalledWith({
+    expect(artistRepository.find).toHaveBeenCalledWith({
       where: { nameNormalized: 'arbol' },
     });
     expect(artistRepository.create).toHaveBeenCalledWith({
@@ -140,9 +142,11 @@ describe('CatalogImportService characterization', () => {
       country: undefined,
     });
     expect(artistRepository.save).toHaveBeenCalledTimes(1);
-    expect(discRepository.findOne).toHaveBeenCalledWith({
-      where: { name: ILike('Album'), artist: { id: 'artist-1' } },
-    });
+    const [duplicateQuery] = discRepository.findOne.mock.calls[0];
+    expect(duplicateQuery.where).toHaveLength(1);
+    expect(duplicateQuery.where[0].name.type).toBe('raw');
+    expect(duplicateQuery.where[0].artist).toEqual({ id: 'artist-1' });
+    expect(duplicateQuery.where[0].ep).toBe(true);
     expect(discRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Album',
@@ -258,8 +262,8 @@ describe('CatalogImportService characterization', () => {
 
   it('uses an existing artist and reports an existing disc without updating either record', async () => {
     const artist = { id: 'artist-existing', name: 'Artist' } as Artist;
-    const disc = { id: 'disc-existing', name: 'Album' } as Disc;
-    artistRepository.findOne.mockResolvedValue(artist);
+    const disc = { id: 'disc-existing', name: 'Album', ep: true } as Disc;
+    artistRepository.find.mockResolvedValue([artist]);
     discRepository.findOne.mockResolvedValue(disc);
 
     const report = await service.processManualData({
@@ -283,7 +287,7 @@ describe('CatalogImportService characterization', () => {
         message: 'El disco ya existe y se ha omitido.',
       },
     ]);
-    expect(artistRepository.findOne).toHaveBeenCalledWith({
+    expect(artistRepository.find).toHaveBeenCalledWith({
       where: { nameNormalized: 'artist' },
     });
     expect(writeLog).toHaveBeenCalledWith(
@@ -291,13 +295,19 @@ describe('CatalogImportService characterization', () => {
         'Already exists: Artist "Artist" => Disc "Album"',
       ),
     );
+    const [duplicateQuery] = discRepository.findOne.mock.calls[0];
+    expect(duplicateQuery.where[0].name.type).toBe('raw');
+    expect(duplicateQuery.where[0].ep).toBe(true);
   });
 
   it('keeps imported and duplicate results interleaved in original order, including repeated titles', async () => {
-    artistRepository.findOne
-      .mockResolvedValueOnce({ id: 'artist-a', name: 'Artist A' })
-      .mockResolvedValueOnce({ id: 'artist-b', name: 'Artist B' })
-      .mockResolvedValueOnce({ id: 'artist-c', name: 'Artist C' });
+    artistRepository.find
+      .mockResolvedValueOnce([{ id: 'artist-a', name: 'Artist A' } as Artist])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'artist-b', name: 'Artist B' } as Artist])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'artist-c', name: 'Artist C' } as Artist])
+      .mockResolvedValueOnce([]);
     discRepository.findOne
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'disc-existing', name: 'Same Title' })
@@ -329,6 +339,143 @@ describe('CatalogImportService characterization', () => {
     ]);
   });
 
+  it('does not choose one of several legacy Artist matches without an explicit country', async () => {
+    const artists = [
+      { id: 'artist-one', name: 'Same Name', countryId: 'country-one' },
+      { id: 'artist-two', name: 'Same Name', countryId: 'country-two' },
+    ] as Artist[];
+    artistRepository.find
+      .mockResolvedValueOnce(artists)
+      .mockResolvedValueOnce(artists);
+
+    const { results } = await service.processManualData({
+      date: 'October 4, 2026',
+      albums: [{ line: 'Same Name - Album' }],
+    });
+
+    expect(results[0]).toMatchObject({
+      status: 'failed',
+      reasonCode: 'INVALID_INPUT',
+      artistName: 'Same Name',
+      discName: 'Album',
+      message: expect.stringContaining('de forma inequívoca'),
+    });
+    expect(artistRepository.save).not.toHaveBeenCalled();
+    expect(discRepository.findOne).not.toHaveBeenCalled();
+    expect(discRepository.save).not.toHaveBeenCalled();
+    expect(queryRunners[0].rollbackTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses an explicit country only when it identifies one matching Artist', async () => {
+    const countryId = '44444444-4444-4444-8444-444444444444';
+    const country = { id: countryId, name: 'Country two' } as Country;
+    const artists = [
+      { id: 'artist-one', name: 'Same Name', countryId: 'country-one' },
+      { id: 'artist-two', name: 'Same Name', countryId },
+    ] as Artist[];
+    countryRepository.findOne.mockResolvedValue(country);
+    artistRepository.find
+      .mockResolvedValueOnce(artists)
+      .mockResolvedValueOnce(artists);
+
+    const { results } = await service.processManualData({
+      date: 'October 4, 2026',
+      albums: [{ line: 'Same Name - Album', countryId }],
+    });
+
+    expect(results[0]).toMatchObject({
+      status: 'imported',
+      artistId: 'artist-two',
+    });
+    expect(discRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ artist: artists[1] }),
+    );
+  });
+
+  it('does not reuse or create an Artist from a MEDIA-2-only candidate', async () => {
+    const normalizedCandidate = {
+      id: 'artist-mol',
+      name: 'MØL',
+      nameNormalized: 'møl',
+      searchNameNormalized: 'mol',
+    } as Artist;
+    artistRepository.find
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([normalizedCandidate]);
+
+    const { results } = await service.processManualData({
+      date: 'October 4, 2026',
+      albums: [{ line: 'MOL - Album' }],
+    });
+
+    expect(results[0]).toMatchObject({
+      status: 'failed',
+      reasonCode: 'INVALID_INPUT',
+      message: expect.stringContaining('de forma inequívoca'),
+    });
+    expect(artistRepository.create).not.toHaveBeenCalled();
+    expect(artistRepository.save).not.toHaveBeenCalled();
+    expect(discRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('does not classify an album and an EP with the same title as duplicates', async () => {
+    artistRepository.find.mockResolvedValue([
+      { id: 'artist-one', name: 'Artist' } as Artist,
+    ]);
+    discRepository.findOne.mockResolvedValue(null);
+
+    const { results } = await service.processManualData({
+      date: 'October 4, 2026',
+      albums: [{ line: 'Artist - Same Title', ep: true }],
+    });
+
+    expect(results[0].status).toBe('imported');
+    const [duplicateQuery] = discRepository.findOne.mock.calls[0];
+    expect(duplicateQuery.where[0].ep).toBe(true);
+    expect(duplicateQuery.where[0].name.type).toBe('raw');
+  });
+
+  it('continues to treat a same-format exact title as duplicate when release dates differ', async () => {
+    artistRepository.find.mockResolvedValue([
+      { id: 'artist-one', name: 'Artist' } as Artist,
+    ]);
+    discRepository.findOne.mockResolvedValue({
+      id: 'disc-existing',
+      name: 'Same Title',
+      ep: true,
+      releaseDate: new Date('2020-01-01'),
+    } as Disc);
+
+    const { results } = await service.processManualData({
+      date: 'October 4, 2026',
+      albums: [{ line: 'Artist - Same Title', ep: true }],
+    });
+
+    expect(results[0].status).toBe('duplicate');
+    const [duplicateQuery] = discRepository.findOne.mock.calls[0];
+    expect(duplicateQuery.where[0]).not.toHaveProperty('releaseDate');
+    expect(duplicateQuery.where[0].ep).toBe(true);
+  });
+
+  it('uses equality-based title matching so percent and underscore are not SQL wildcards', async () => {
+    artistRepository.find.mockResolvedValue([
+      { id: 'artist-one', name: 'Artist' } as Artist,
+    ]);
+    discRepository.findOne.mockResolvedValue(null);
+
+    const { results } = await service.processManualData({
+      date: 'October 4, 2026',
+      albums: [{ line: 'Artist - 100%_Real' }],
+    });
+
+    expect(results[0].status).toBe('imported');
+    const [duplicateQuery] = discRepository.findOne.mock.calls[0];
+    expect(duplicateQuery.where[0].name.type).toBe('raw');
+    expect(discRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '100%_Real' }),
+    );
+  });
+
   it.each([
     ['Björk', 'bjork'],
     ['Björk + Co', 'bjork co'],
@@ -345,7 +492,7 @@ describe('CatalogImportService characterization', () => {
         albums: [{ line: `${visibleArtist} - Album` }],
       });
 
-      expect(artistRepository.findOne).toHaveBeenCalledWith({
+      expect(artistRepository.find).toHaveBeenCalledWith({
         where: { nameNormalized: normalizedKey },
       });
       expect(artistRepository.create).toHaveBeenCalledWith(
@@ -369,14 +516,14 @@ describe('CatalogImportService characterization', () => {
       name: 'Björk + Co',
       nameNormalized: 'bjork co',
     } as Artist;
-    artistRepository.findOne.mockResolvedValue(existingArtist);
+    artistRepository.find.mockResolvedValue([existingArtist]);
 
     await service.processManualData({
       date: 'October 4, 2026',
       albums: [{ line: 'Bjork  +  Co - Album' }],
     });
 
-    expect(artistRepository.findOne).toHaveBeenCalledWith({
+    expect(artistRepository.find).toHaveBeenCalledWith({
       where: { nameNormalized: 'bjork co' },
     });
     expect(artistRepository.create).not.toHaveBeenCalled();
@@ -394,10 +541,10 @@ describe('CatalogImportService characterization', () => {
       albums: [{ line: 'First – Album' }, { line: 'Second - Album' }],
     });
 
-    expect(artistRepository.findOne).toHaveBeenNthCalledWith(1, {
+    expect(artistRepository.find).toHaveBeenNthCalledWith(1, {
       where: { nameNormalized: 'first' },
     });
-    expect(artistRepository.findOne).toHaveBeenNthCalledWith(2, {
+    expect(artistRepository.find).toHaveBeenNthCalledWith(3, {
       where: { nameNormalized: 'second' },
     });
     expect(
@@ -482,7 +629,7 @@ describe('CatalogImportService characterization', () => {
       { inputIndex: 1, status: 'failed', reasonCode: 'INVALID_INPUT' },
       { inputIndex: 2, status: 'imported', reasonCode: undefined },
     ]);
-    expect(artistRepository.findOne).toHaveBeenCalledTimes(1);
+    expect(artistRepository.find).toHaveBeenCalledTimes(2);
   });
 
   it('shares logging across concurrent imports and orders entries by their actual write calls', async () => {
@@ -542,7 +689,7 @@ describe('CatalogImportService characterization', () => {
         error: 'Bad Request',
       });
       expect(countryRepository.findOne).not.toHaveBeenCalled();
-      expect(artistRepository.findOne).not.toHaveBeenCalled();
+      expect(artistRepository.find).not.toHaveBeenCalled();
       expect(discRepository.save).not.toHaveBeenCalled();
     },
   );
@@ -584,7 +731,7 @@ describe('CatalogImportService characterization', () => {
         { status: 'imported', reasonCode: undefined },
       ]);
       expect(repository.findOne).toHaveBeenCalledTimes(expectedCallCount);
-      expect(artistRepository.findOne).toHaveBeenCalledTimes(1);
+      expect(artistRepository.find).toHaveBeenCalledTimes(2);
     },
   );
 
@@ -716,7 +863,7 @@ describe('CatalogImportService characterization', () => {
 
     expect(error).toBeInstanceOf(InternalServerErrorException);
     expect(dataSource.createQueryRunner).toHaveBeenCalledTimes(1);
-    expect(artistRepository.findOne).toHaveBeenCalledTimes(1);
+    expect(artistRepository.find).toHaveBeenCalledTimes(2);
     expect(queryRunners[0].rollbackTransaction).toHaveBeenCalledTimes(1);
   });
 
@@ -812,10 +959,12 @@ describe('CatalogImportService characterization', () => {
   });
 
   it('does not write to or remove a preexisting Artist when its Disc save fails', async () => {
-    artistRepository.findOne.mockResolvedValue({
-      id: 'artist-existing',
-      name: 'Artist',
-    });
+    artistRepository.find.mockResolvedValue([
+      {
+        id: 'artist-existing',
+        name: 'Artist',
+      } as Artist,
+    ]);
     discRepository.save.mockRejectedValueOnce(new Error('disc save failed'));
 
     await expect(
