@@ -79,6 +79,8 @@ describe('ArtistImageFillService', () => {
         JSON.stringify({ version: 1, after: null, upperBound: ids[3] }),
       ).toString('base64url'),
     });
+    expect(maxQuery.orderBy).toHaveBeenCalledWith('artist.id', 'DESC');
+    expect(maxQuery.take).toHaveBeenCalledWith(1);
     await moduleRef.close();
   });
 

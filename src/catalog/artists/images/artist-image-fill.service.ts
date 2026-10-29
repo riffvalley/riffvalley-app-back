@@ -180,7 +180,9 @@ export class ArtistImageFillService {
   private async highWatermark(): Promise<string | null> {
     const raw = await this.artistRepository
       .createQueryBuilder('artist')
-      .select('MAX(artist.id)', 'maxId')
+      .select('artist.id', 'maxId')
+      .orderBy('artist.id', 'DESC')
+      .take(1)
       .getRawOne<{ maxId: string | null }>();
     return raw?.maxId ?? null;
   }
