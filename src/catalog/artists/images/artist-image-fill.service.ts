@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -32,6 +33,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 @Injectable()
 export class ArtistImageFillService {
+  private readonly logger = new Logger(ArtistImageFillService.name);
+
   constructor(
     @InjectRepository(Artist)
     private readonly artistRepository: Repository<Artist>,
@@ -75,7 +78,18 @@ export class ArtistImageFillService {
       ...cursor,
       after: lastId,
     };
-    const hasMore = lastId !== null && (await this.hasMore(nextCursor));
+    let hasMore = false;
+    if (artists.length > 0 && lastId !== null) {
+      hasMore = await this.hasMore(nextCursor);
+    } else if (cursor.after && (await this.hasMore(cursor))) {
+      this.logger.error(
+        JSON.stringify({
+          event: 'artist_image_fill_empty_page_with_remaining_eligible',
+          processed: 0,
+          eligibleAfterCursor: true,
+        }),
+      );
+    }
     const counts = results.reduce(
       (summary, result) => {
         if (result.outcome === 'updated') summary.updated += 1;
@@ -95,13 +109,31 @@ export class ArtistImageFillService {
       },
     );
 
-    return {
+    const response: ArtistImageFillBatchResult = {
       processed: results.length,
       ...counts,
       results,
       nextCursor: hasMore ? this.encodeCursor(nextCursor) : null,
       hasMore,
     };
+    const cursorInvariantValid = response.hasMore
+      ? Boolean(
+          response.nextCursor &&
+            response.nextCursor !== (dto.cursor ?? null) &&
+            response.processed > 0,
+        )
+      : response.nextCursor === null;
+    if (!cursorInvariantValid) {
+      this.logger.error(
+        JSON.stringify({
+          event: 'artist_image_fill_cursor_invariant_failed',
+          processed: response.processed,
+          hasMore: response.hasMore,
+          nextCursorPresent: response.nextCursor !== null,
+        }),
+      );
+    }
+    return response;
   }
 
   private async processArtist(

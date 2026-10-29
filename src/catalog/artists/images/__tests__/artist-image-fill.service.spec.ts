@@ -1,4 +1,5 @@
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Artist } from '../../entities/artist.entity';
 import { ArtistImageFillService } from '../artist-image-fill.service';
@@ -180,6 +181,36 @@ describe('ArtistImageFillService', () => {
       'No Match',
       1500,
     );
+    await moduleRef.close();
+  });
+
+  it('ends the walk when a page selects nothing despite a concurrent new eligible row', async () => {
+    const raceQuery = makeBuilder({ exists: true });
+    const errorLog = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    const { service, moduleRef } = await makeService(
+      [makeBuilder({ many: [] }), raceQuery],
+      { findArtistCandidates: jest.fn() },
+    );
+    const cursor = Buffer.from(
+      JSON.stringify({ version: 1, after: ids[0], upperBound: ids[3] }),
+    ).toString('base64url');
+
+    const result = await service.fill(
+      Object.assign(new FillArtistImagesDto(), { cursor }),
+    );
+
+    expect(result).toMatchObject({
+      processed: 0,
+      hasMore: false,
+      nextCursor: null,
+    });
+    expect(raceQuery.getExists).toHaveBeenCalled();
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'artist_image_fill_empty_page_with_remaining_eligible',
+      ),
+    );
+    errorLog.mockRestore();
     await moduleRef.close();
   });
 
