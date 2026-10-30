@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RateVoteEvent } from '../entities/rate-vote-event.entity';
 import { getEventSetCohortQuery } from './helpers/event-set-cohort-query';
-import { RatesStatsDailyAssignmentDto } from '../dto/rates-user-stats.dto';
+import { RatesStatsDailyDiscDto } from '../dto/rates-user-stats.dto';
 
 interface EventSetActivityAggregateRow {
   aggregation: 'year' | 'month' | 'day' | 'genre' | 'withoutGenre';
@@ -11,7 +11,7 @@ interface EventSetActivityAggregateRow {
   activityCount: number | string;
 }
 
-interface EventSetDailyAssignmentRow {
+interface EventSetDailyDiscRow {
   date: string;
   discId: string;
   title: string;
@@ -27,7 +27,7 @@ export interface EventSetMonthlyActivity {
 export interface EventSetDailyActivity {
   date: string;
   activityCount: number;
-  assignments: RatesStatsDailyAssignmentDto[];
+  discs: RatesStatsDailyDiscDto[];
 }
 
 export interface EventSetGenreActivity {
@@ -69,7 +69,7 @@ export class RatesEventSetAggregationsService {
         FROM eligible_set_events
       )
       SELECT 'year'::text AS aggregation, NULL::text AS period,
-        COUNT("eventId") AS "activityCount"
+        COUNT(DISTINCT "discId") AS "activityCount"
       FROM eligible_set_events_local
       UNION ALL
       SELECT 'month'::text AS aggregation,
@@ -80,7 +80,7 @@ export class RatesEventSetAggregationsService {
       UNION ALL
       SELECT 'day'::text AS aggregation,
         TO_CHAR("localDate", 'YYYY-MM-DD') AS period,
-        COUNT("eventId") AS "activityCount"
+        COUNT(DISTINCT "discId") AS "activityCount"
       FROM eligible_set_events_local
       GROUP BY "localDate"
       UNION ALL
@@ -100,8 +100,8 @@ export class RatesEventSetAggregationsService {
       ORDER BY aggregation, period NULLS FIRST`,
       [...query.parameters, query.timeZone],
     );
-    const assignmentRows = await this.eventRepository.query<
-      EventSetDailyAssignmentRow[]
+    const dailyDiscRows = await this.eventRepository.query<
+      EventSetDailyDiscRow[]
     >(
       `WITH ${query.eligibleSetEventsCte}, eligible_discs AS (
         SELECT "discId", MAX("occurredAt") AS "eligibleAt"
@@ -118,15 +118,21 @@ export class RatesEventSetAggregationsService {
       ), current_scores AS (
         SELECT "discId", "currentRate" FROM ranked_current_rates
         WHERE current_position = 1 AND "currentRate" BETWEEN 0 AND 10
+      ), eligible_set_events_local AS (
+        SELECT "eventId", "discId", "occurredAt",
+          ("occurredAt" AT TIME ZONE $6)::date AS "localDate"
+        FROM eligible_set_events
       )
-      SELECT TO_CHAR(event."occurredAt" AT TIME ZONE $6, 'YYYY-MM-DD') AS date,
+      SELECT DISTINCT ON (event."localDate", event."discId")
+        TO_CHAR(event."localDate", 'YYYY-MM-DD') AS date,
         event."discId" AS "discId", disc.name AS title,
         artist.name AS artist, current_scores."currentRate" AS rate
-      FROM eligible_set_events event
+      FROM eligible_set_events_local event
       INNER JOIN disc ON disc.id = event."discId"
       LEFT JOIN artist ON artist.id = disc."artistId"
       LEFT JOIN current_scores ON current_scores."discId" = event."discId"
-      ORDER BY event."occurredAt", event."eventId"`,
+      ORDER BY event."localDate", event."discId",
+        event."occurredAt" DESC, event."eventId" DESC`,
       [...query.parameters, query.timeZone, userId],
     );
 
@@ -161,45 +167,50 @@ export class RatesEventSetAggregationsService {
       const month = `${query.year}-${String(monthIndex + 1).padStart(2, '0')}`;
       return { month, activityCount: monthCounts.get(month) ?? 0 };
     });
-    const assignmentsByDay = new Map<string, RatesStatsDailyAssignmentDto[]>();
-    for (const row of assignmentRows) {
-      const assignments = assignmentsByDay.get(row.date) ?? [];
-      assignments.push({
+    const discsByDay = new Map<string, RatesStatsDailyDiscDto[]>();
+    for (const row of dailyDiscRows) {
+      const discs = discsByDay.get(row.date) ?? [];
+      discs.push({
         discId: row.discId,
         title: row.title,
         artist: row.artist,
         rate: row.rate === null ? null : toNullableScore(row.rate),
         date: row.date,
       });
-      assignmentsByDay.set(row.date, assignments);
+      discsByDay.set(row.date, discs);
     }
     const activityByDay = [...dayCounts]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([date, count]) => {
-        const assignments = assignmentsByDay.get(date) ?? [];
-        if (assignments.length !== count) {
+        const discs = discsByDay.get(date) ?? [];
+        if (discs.length !== count) {
           throw new Error(
-            'Event set daily assignment details do not match activity counts.',
+            'Event set daily disc details do not match activity counts.',
           );
         }
-        return { date, activityCount: count, assignments };
+        return { date, activityCount: count, discs };
       });
     const attributedActivityCount =
       sum(activityByGenre.map((row) => row.activityCount)) +
       activityWithoutGenre;
+    const monthlyActivityCount = sum(
+      activityByMonth.map((row) => row.activityCount),
+    );
 
     if (
-      sum(activityByMonth.map((row) => row.activityCount)) !== activityCount ||
-      sum(activityByDay.map((row) => row.activityCount)) !== activityCount ||
-      attributedActivityCount < activityCount
+      activityCount > monthlyActivityCount ||
+      attributedActivityCount !== monthlyActivityCount
     ) {
       throw new Error(
         'Event set activity aggregate totals are inconsistent across periods.',
       );
     }
-    if (assignmentRows.length !== activityCount) {
+    if (
+      dailyDiscRows.length !==
+      sum(activityByDay.map((row) => row.activityCount))
+    ) {
       throw new Error(
-        'Event set daily assignment details do not match annual activity count.',
+        'Event set daily disc details do not match daily activity counts.',
       );
     }
 

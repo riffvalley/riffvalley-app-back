@@ -85,7 +85,7 @@ export class RatesAnnualStatisticsService {
         (item): RatesStatsDailyActivityDto => ({
           date: item.date,
           activityCount: item.activityCount,
-          assignments: item.assignments,
+          discs: item.discs,
         }),
       ),
       activityWithoutGenre: activity.activityWithoutGenre,

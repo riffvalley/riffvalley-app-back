@@ -47,9 +47,9 @@ function createService(
 }
 
 describe('RatesEventSetAggregationsService', () => {
-  it('counts repeated set events by event identity and returns consistent month/day totals', async () => {
+  it('counts annual discs once while preserving monthly event and daily disc totals', async () => {
     const { service, query } = createService([
-      { aggregation: 'year', period: null, activityCount: '4' },
+      { aggregation: 'year', period: null, activityCount: '2' },
       { aggregation: 'month', period: '2027-01', activityCount: 2 },
       { aggregation: 'month', period: '2027-12', activityCount: 2 },
       { aggregation: 'day', period: '2027-01-01', activityCount: 2 },
@@ -64,7 +64,7 @@ describe('RatesEventSetAggregationsService', () => {
     expect(result).toEqual({
       year: 2027,
       timeZone: 'UTC',
-      activityCount: 4,
+      activityCount: 2,
       activityByMonth: [
         { month: '2027-01', activityCount: 2 },
         ...Array.from({ length: 10 }, (_, index) => ({
@@ -77,7 +77,7 @@ describe('RatesEventSetAggregationsService', () => {
         {
           date: '2027-01-01',
           activityCount: 2,
-          assignments: [
+          discs: [
             {
               discId: 'disc-1',
               title: 'Album',
@@ -97,7 +97,7 @@ describe('RatesEventSetAggregationsService', () => {
         {
           date: '2027-12-31',
           activityCount: 2,
-          assignments: [
+          discs: [
             {
               discId: 'disc-1',
               title: 'Album',
@@ -135,10 +135,14 @@ describe('RatesEventSetAggregationsService', () => {
     expect(query.mock.calls[0][0]).toContain('"occurredAt" AT TIME ZONE $6');
     expect(query.mock.calls[0][0]).toContain('SELECT "eventId", "discId"');
     expect(query.mock.calls[0][0]).toContain('COUNT("eventId")');
+    expect(
+      query.mock.calls[0][0].match(/COUNT\(DISTINCT "discId"\)/gu) ?? [],
+    ).toHaveLength(2);
     expect(query.mock.calls[0][0]).not.toContain('rate.createdAt');
     expect(query.mock.calls[0][0]).not.toContain("event.event_type = 'change'");
     expect(query.mock.calls[1][0]).toContain('LEFT JOIN current_scores');
     expect(query.mock.calls[1][0]).toContain('event."eventId"');
+    expect(query.mock.calls[1][0]).toContain('SELECT DISTINCT ON');
     expect(query.mock.calls[0][1]).toEqual([
       'user-id',
       '2027-01-01',
@@ -195,22 +199,15 @@ describe('RatesEventSetAggregationsService', () => {
     expect(result.activityByDay).toEqual([]);
   });
 
-  it('preserves repeated set events for the same disc and their current score', async () => {
+  it('counts a repeated set disc once per date and returns one scored disc detail', async () => {
     const { service } = createService(
       [
-        { aggregation: 'year', period: null, activityCount: 2 },
+        { aggregation: 'year', period: null, activityCount: 1 },
         { aggregation: 'month', period: '2027-05', activityCount: 2 },
-        { aggregation: 'day', period: '2027-05-09', activityCount: 2 },
+        { aggregation: 'day', period: '2027-05-09', activityCount: 1 },
         { aggregation: 'withoutGenre', period: null, activityCount: 2 },
       ],
       [
-        {
-          date: '2027-05-09',
-          discId: 'same-disc',
-          title: 'Album',
-          artist: 'Artist',
-          rate: '8.75',
-        },
         {
           date: '2027-05-09',
           discId: 'same-disc',
@@ -223,22 +220,20 @@ describe('RatesEventSetAggregationsService', () => {
 
     const result = await service.aggregateActivityForUser('user-id', 2027);
 
-    expect(result.activityByDay[0].assignments).toEqual([
-      {
-        discId: 'same-disc',
-        title: 'Album',
-        artist: 'Artist',
-        rate: 8.75,
-        date: '2027-05-09',
-      },
-      {
-        discId: 'same-disc',
-        title: 'Album',
-        artist: 'Artist',
-        rate: 8.75,
-        date: '2027-05-09',
-      },
-    ]);
+    expect(result.activityCount).toBe(1);
+    expect(result.activityByDay[0]).toEqual({
+      date: '2027-05-09',
+      activityCount: 1,
+      discs: [
+        {
+          discId: 'same-disc',
+          title: 'Album',
+          artist: 'Artist',
+          rate: 8.75,
+          date: '2027-05-09',
+        },
+      ],
+    });
   });
 
   it.each([2025, 2026])(
@@ -269,18 +264,22 @@ describe('RatesEventSetAggregationsService', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('fails when the database month or day totals disagree with the annual total', async () => {
+  it('allows monthly event counts to exceed annual distinct disc counts', async () => {
     const { service } = createService([
-      { aggregation: 'year', period: null, activityCount: 2 },
-      { aggregation: 'month', period: '2027-01', activityCount: 1 },
+      { aggregation: 'year', period: null, activityCount: 1 },
+      { aggregation: 'month', period: '2027-01', activityCount: 2 },
       { aggregation: 'day', period: '2027-01-01', activityCount: 1 },
+      { aggregation: 'withoutGenre', period: null, activityCount: 2 },
     ]);
 
     await expect(
       service.aggregateActivityForUser('user-id', 2027),
-    ).rejects.toThrow(
-      'Event set activity aggregate totals are inconsistent across periods.',
-    );
+    ).resolves.toMatchObject({
+      activityCount: 1,
+      activityByMonth: expect.arrayContaining([
+        { month: '2027-01', activityCount: 2 },
+      ]),
+    });
   });
 
   it('fails if genre attribution does not account for every eligible set event', async () => {
@@ -302,7 +301,7 @@ describe('RatesEventSetAggregationsService', () => {
   it('keeps full counts for each genre even when their sum exceeds annual activity', async () => {
     const { service } = createService([
       { aggregation: 'year', period: null, activityCount: 2 },
-      { aggregation: 'month', period: '2027-01', activityCount: 2 },
+      { aggregation: 'month', period: '2027-01', activityCount: 3 },
       { aggregation: 'day', period: '2027-01-01', activityCount: 2 },
       { aggregation: 'genre', period: 'Black Metal', activityCount: 2 },
       { aggregation: 'genre', period: 'Post-Metal', activityCount: 1 },

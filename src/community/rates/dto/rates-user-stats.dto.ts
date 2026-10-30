@@ -35,13 +35,13 @@ export interface RatesStatsRatedDiscDto {
   genre: { name: string; color: string | null } | null;
 }
 
-export interface RatesStatsDailyAssignmentDto {
+export interface RatesStatsDailyDiscDto {
   discId: string;
   title: string;
   artist: string | null;
   /** Current personal score, null when the disc has no valid current score. */
   rate: number | null;
-  /** Local civil date of this assignment. */
+  /** Local civil date on which the disc had eligible activity. */
   date: string;
 }
 
@@ -64,9 +64,9 @@ export interface RatesStatsGenreActivityDto {
 export interface RatesStatsDailyActivityDto {
   /** Local calendar date, YYYY-MM-DD. */
   date: string;
-  /** Eligible activity assignments/events on this date. */
+  /** Distinct discs with eligible activity on this date. */
   activityCount: number;
-  assignments: RatesStatsDailyAssignmentDto[];
+  discs: RatesStatsDailyDiscDto[];
 }
 
 export interface RatesStatsScoreDistributionDto {
@@ -79,11 +79,11 @@ export interface RatesStatsScoreDistributionDto {
 export interface RatesUserStatsResponseDto {
   year: number;
   timeZone: string;
-  /** Source used to count eligible activity assignments/events. */
+  /** Source used to identify discs with eligible annual activity. */
   activityBasis: RatesStatsActivityBasis;
   /** Coverage of activity records for this period. */
   activityCoverage: RatesStatsActivityCoverage;
-  /** Rate rows (2025–26 estimate) or set events (2027 onward); not unique discs. */
+  /** Distinct discs with eligible annual activity, including those without a current score. */
   activityCount: number;
   /** Eligible discs with a current valid personal score. */
   scoredDiscs: number;

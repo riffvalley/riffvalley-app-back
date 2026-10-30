@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Rate } from '../entities/rate.entity';
 import { getHistoricalRateCohortQuery } from './helpers/historical-rate-cohort-query';
-import { RatesStatsDailyAssignmentDto } from '../dto/rates-user-stats.dto';
+import { RatesStatsDailyDiscDto } from '../dto/rates-user-stats.dto';
 
 interface HistoricalActivityAggregateRow {
   aggregation: 'year' | 'month' | 'day' | 'genre' | 'withoutGenre';
@@ -11,7 +11,7 @@ interface HistoricalActivityAggregateRow {
   activityCount: number | string;
 }
 
-interface HistoricalDailyAssignmentRow {
+interface HistoricalDailyDiscRow {
   date: string;
   discId: string;
   title: string;
@@ -27,7 +27,7 @@ export interface HistoricalMonthlyActivity {
 export interface HistoricalDailyActivity {
   date: string;
   activityCount: number;
-  assignments: RatesStatsDailyAssignmentDto[];
+  discs: RatesStatsDailyDiscDto[];
 }
 
 export interface HistoricalGenreActivity {
@@ -63,7 +63,7 @@ export class RatesHistoricalAggregationsService {
       `
       WITH ${query.eligibleRateRowsCte}
       SELECT 'year'::text AS aggregation, NULL::text AS period,
-        COUNT(*)::int AS "activityCount"
+        COUNT(DISTINCT "discId")::int AS "activityCount"
       FROM eligible_rate_rows
       UNION ALL
       SELECT 'month'::text AS aggregation,
@@ -74,7 +74,7 @@ export class RatesHistoricalAggregationsService {
       UNION ALL
       SELECT 'day'::text AS aggregation,
         TO_CHAR("createdAtLocal"::date, 'YYYY-MM-DD') AS period,
-        COUNT(*)::int AS "activityCount"
+        COUNT(DISTINCT "discId")::int AS "activityCount"
       FROM eligible_rate_rows
       GROUP BY "createdAtLocal"::date
       UNION ALL
@@ -95,8 +95,8 @@ export class RatesHistoricalAggregationsService {
       `,
       query.parameters,
     );
-    const assignmentRows = await this.rateRepository.query<
-      HistoricalDailyAssignmentRow[]
+    const dailyDiscRows = await this.rateRepository.query<
+      HistoricalDailyDiscRow[]
     >(
       `WITH ${query.eligibleRateRowsCte}, ranked_current_rates AS (
         SELECT "discId", "currentRate",
@@ -109,14 +109,20 @@ export class RatesHistoricalAggregationsService {
         SELECT "discId", "currentRate" FROM ranked_current_rates
         WHERE current_position = 1 AND "currentRate" BETWEEN 0 AND 10
       )
-      SELECT TO_CHAR(eligible_rate_rows."createdAtLocal"::date, 'YYYY-MM-DD') AS date,
+      SELECT DISTINCT ON (
+          eligible_rate_rows."createdAtLocal"::date,
+          eligible_rate_rows."discId"
+        )
+        TO_CHAR(eligible_rate_rows."createdAtLocal"::date, 'YYYY-MM-DD') AS date,
         eligible_rate_rows."discId" AS "discId", disc.name AS title,
         artist.name AS artist, current_scores."currentRate" AS rate
       FROM eligible_rate_rows
       INNER JOIN disc ON disc.id = eligible_rate_rows."discId"
       LEFT JOIN artist ON artist.id = disc."artistId"
       LEFT JOIN current_scores ON current_scores."discId" = eligible_rate_rows."discId"
-      ORDER BY eligible_rate_rows."createdAtLocal", eligible_rate_rows."rateId"`,
+      ORDER BY eligible_rate_rows."createdAtLocal"::date,
+        eligible_rate_rows."discId", eligible_rate_rows."createdAtLocal" DESC,
+        eligible_rate_rows."rateId" DESC`,
       query.parameters,
     );
     const annualRow = rows.find((row) => row.aggregation === 'year');
@@ -150,45 +156,50 @@ export class RatesHistoricalAggregationsService {
       const month = `${query.year}-${String(monthIndex + 1).padStart(2, '0')}`;
       return { month, activityCount: monthCounts.get(month) ?? 0 };
     });
-    const assignmentsByDay = new Map<string, RatesStatsDailyAssignmentDto[]>();
-    for (const row of assignmentRows) {
-      const assignments = assignmentsByDay.get(row.date) ?? [];
-      assignments.push({
+    const discsByDay = new Map<string, RatesStatsDailyDiscDto[]>();
+    for (const row of dailyDiscRows) {
+      const discs = discsByDay.get(row.date) ?? [];
+      discs.push({
         discId: row.discId,
         title: row.title,
         artist: row.artist,
         rate: row.rate === null ? null : toNullableScore(row.rate),
         date: row.date,
       });
-      assignmentsByDay.set(row.date, assignments);
+      discsByDay.set(row.date, discs);
     }
     const activityByDay = [...dayCounts]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([date, count]) => {
-        const assignments = assignmentsByDay.get(date) ?? [];
-        if (assignments.length !== count) {
+        const discs = discsByDay.get(date) ?? [];
+        if (discs.length !== count) {
           throw new Error(
-            'Historical daily assignment details do not match activity counts.',
+            'Historical daily disc details do not match activity counts.',
           );
         }
-        return { date, activityCount: count, assignments };
+        return { date, activityCount: count, discs };
       });
     const attributedActivityCount =
       sum(activityByGenre.map((row) => row.activityCount)) +
       activityWithoutGenre;
+    const monthlyActivityCount = sum(
+      activityByMonth.map((row) => row.activityCount),
+    );
 
     if (
-      sum(activityByMonth.map((row) => row.activityCount)) !== activityCount ||
-      sum(activityByDay.map((row) => row.activityCount)) !== activityCount ||
-      attributedActivityCount < activityCount
+      activityCount > monthlyActivityCount ||
+      attributedActivityCount !== monthlyActivityCount
     ) {
       throw new Error(
         'Historical activity aggregate totals are inconsistent across periods.',
       );
     }
-    if (assignmentRows.length !== activityCount) {
+    if (
+      dailyDiscRows.length !==
+      sum(activityByDay.map((row) => row.activityCount))
+    ) {
       throw new Error(
-        'Historical daily assignment details do not match annual activity count.',
+        'Historical daily disc details do not match daily activity counts.',
       );
     }
 

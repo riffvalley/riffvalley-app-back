@@ -242,22 +242,15 @@ describe('RatesAnnualStatisticsService', () => {
     const setup = createService();
     setup.historical.aggregateActivityForUser.mockResolvedValueOnce({
       ...activity(2026),
-      activityCount: 2,
+      activityCount: 1,
       activityByMonth: activity(2026).activityByMonth.map((item, index) =>
         index === 2 ? { ...item, activityCount: 2 } : item,
       ),
       activityByDay: [
         {
           date: '2026-03-14',
-          activityCount: 2,
-          assignments: [
-            {
-              discId: 'disc-1',
-              title: 'Album one',
-              artist: null,
-              rate: null,
-              date: '2026-03-14',
-            },
+          activityCount: 1,
+          discs: [
             {
               discId: 'disc-1',
               title: 'Album one',
@@ -279,18 +272,15 @@ describe('RatesAnnualStatisticsService', () => {
     );
 
     expect(result).toMatchObject({
-      activityCount: 2,
+      activityCount: 1,
       activityByMonth: expect.arrayContaining([
         { month: '2026-03', activityCount: 2, topDisc: null },
       ]),
       activityByDay: [
         {
           date: '2026-03-14',
-          activityCount: 2,
-          assignments: expect.arrayContaining([
-            expect.objectContaining({ discId: 'disc-1', rate: null }),
-            expect.objectContaining({ discId: 'disc-1', rate: null }),
-          ]),
+          activityCount: 1,
+          discs: [expect.objectContaining({ discId: 'disc-1', rate: null })],
         },
       ],
       activityByGenre: [{ genre: 'Rock', activityCount: 1, topDisc: null }],

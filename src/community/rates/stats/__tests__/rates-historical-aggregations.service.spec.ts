@@ -47,9 +47,9 @@ function createService(
 }
 
 describe('RatesHistoricalAggregationsService', () => {
-  it('returns a year total, all months, and active days from the same counts', async () => {
+  it('returns distinct annual discs, monthly Rate counts, and active days', async () => {
     const { service, query } = createService([
-      { aggregation: 'year', period: null, activityCount: '4' },
+      { aggregation: 'year', period: null, activityCount: '3' },
       { aggregation: 'month', period: '2025-01', activityCount: 1 },
       { aggregation: 'month', period: '2025-12', activityCount: 3 },
       { aggregation: 'day', period: '2025-01-01', activityCount: 1 },
@@ -63,7 +63,7 @@ describe('RatesHistoricalAggregationsService', () => {
 
     expect(result).toEqual({
       year: 2025,
-      activityCount: 4,
+      activityCount: 3,
       activityByMonth: [
         { month: '2025-01', activityCount: 1 },
         ...Array.from({ length: 10 }, (_, index) => ({
@@ -76,7 +76,7 @@ describe('RatesHistoricalAggregationsService', () => {
         {
           date: '2025-01-01',
           activityCount: 1,
-          assignments: [
+          discs: [
             {
               discId: 'disc-1',
               title: 'Album',
@@ -89,7 +89,7 @@ describe('RatesHistoricalAggregationsService', () => {
         {
           date: '2025-12-31',
           activityCount: 3,
-          assignments: [
+          discs: [
             {
               discId: 'disc-1',
               title: 'Album',
@@ -125,10 +125,11 @@ describe('RatesHistoricalAggregationsService', () => {
     expect(query.mock.calls[0][0]).toContain('rate."userId" = $1');
     expect(query.mock.calls[0][0]).toContain('disc."releaseDate" >= $2::date');
     expect(query.mock.calls[0][0]).toContain('genre.id = disc."genreId"');
+    expect(
+      query.mock.calls[0][0].match(/COUNT\(DISTINCT "discId"\)/gu) ?? [],
+    ).toHaveLength(2);
     expect(query.mock.calls[1][0]).toContain('LEFT JOIN current_scores');
-    expect(query.mock.calls[1][0]).toContain(
-      'ORDER BY eligible_rate_rows."createdAtLocal", eligible_rate_rows."rateId"',
-    );
+    expect(query.mock.calls[1][0]).toContain('DISTINCT ON');
   });
 
   it('returns zero and twelve zero months when the historical source is empty', async () => {
@@ -146,12 +147,12 @@ describe('RatesHistoricalAggregationsService', () => {
     expect(result.activityByDay).toEqual([]);
   });
 
-  it('preserves repeated historical assignments for one disc and leaves missing current notes null', async () => {
+  it('counts one disc per day despite repeated historical rows and keeps missing notes null', async () => {
     const { service } = createService(
       [
-        { aggregation: 'year', period: null, activityCount: 2 },
+        { aggregation: 'year', period: null, activityCount: 1 },
         { aggregation: 'month', period: '2025-04', activityCount: 2 },
-        { aggregation: 'day', period: '2025-04-02', activityCount: 2 },
+        { aggregation: 'day', period: '2025-04-02', activityCount: 1 },
         { aggregation: 'withoutGenre', period: null, activityCount: 2 },
       ],
       [
@@ -162,13 +163,6 @@ describe('RatesHistoricalAggregationsService', () => {
           artist: null,
           rate: null,
         },
-        {
-          date: '2025-04-02',
-          discId: 'same-disc',
-          title: 'Album',
-          artist: 'Artist',
-          rate: null,
-        },
       ],
     );
 
@@ -176,19 +170,12 @@ describe('RatesHistoricalAggregationsService', () => {
 
     expect(result.activityByDay[0]).toEqual({
       date: '2025-04-02',
-      activityCount: 2,
-      assignments: [
+      activityCount: 1,
+      discs: [
         {
           discId: 'same-disc',
           title: 'Album',
           artist: null,
-          rate: null,
-          date: '2025-04-02',
-        },
-        {
-          discId: 'same-disc',
-          title: 'Album',
-          artist: 'Artist',
           rate: null,
           date: '2025-04-02',
         },
@@ -205,16 +192,22 @@ describe('RatesHistoricalAggregationsService', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('fails if database period totals do not match the annual total', async () => {
+  it('allows monthly Rate counts to exceed annual distinct disc counts', async () => {
     const { service } = createService([
-      { aggregation: 'year', period: null, activityCount: 2 },
-      { aggregation: 'month', period: '2025-01', activityCount: 1 },
+      { aggregation: 'year', period: null, activityCount: 1 },
+      { aggregation: 'month', period: '2025-01', activityCount: 2 },
       { aggregation: 'day', period: '2025-01-01', activityCount: 1 },
+      { aggregation: 'withoutGenre', period: null, activityCount: 2 },
     ]);
 
     await expect(
       service.aggregateActivityForUser('user-id', 2025),
-    ).rejects.toThrow('Historical activity aggregate totals are inconsistent');
+    ).resolves.toMatchObject({
+      activityCount: 1,
+      activityByMonth: expect.arrayContaining([
+        { month: '2025-01', activityCount: 2 },
+      ]),
+    });
   });
 
   it('fails if genre attribution does not account for every eligible Rate', async () => {
@@ -234,7 +227,7 @@ describe('RatesHistoricalAggregationsService', () => {
   it('keeps full counts for each genre even when their sum exceeds annual activity', async () => {
     const { service } = createService([
       { aggregation: 'year', period: null, activityCount: 2 },
-      { aggregation: 'month', period: '2025-01', activityCount: 2 },
+      { aggregation: 'month', period: '2025-01', activityCount: 3 },
       { aggregation: 'day', period: '2025-01-01', activityCount: 2 },
       { aggregation: 'genre', period: 'Black Metal', activityCount: 2 },
       { aggregation: 'genre', period: 'Post-Metal', activityCount: 1 },
