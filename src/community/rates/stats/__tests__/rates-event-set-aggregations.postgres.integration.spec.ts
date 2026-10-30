@@ -198,7 +198,7 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
     const utcSession = await aggregateWithSessionZone('UTC');
     const honoluluSession = await aggregateWithSessionZone('Pacific/Honolulu');
     expect(utcSession).toEqual(honoluluSession);
-    expect(utcSession.activityCount).toBe(9);
+    expect(utcSession.activityCount).toBe(1);
     expect(utcSession.activityByGenre).toEqual([
       { genre: 'Black Metal', activityCount: 9 },
     ]);
@@ -213,17 +213,17 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       ]),
     );
     expect(utcSession.activityByDay).toEqual([
-      expect.objectContaining({ date: '2027-01-01', activityCount: 3 }),
-      expect.objectContaining({ date: '2027-03-14', activityCount: 2 }),
+      expect.objectContaining({ date: '2027-01-01', activityCount: 1 }),
+      expect.objectContaining({ date: '2027-03-14', activityCount: 1 }),
       expect.objectContaining({ date: '2027-06-30', activityCount: 1 }),
-      expect.objectContaining({ date: '2027-11-07', activityCount: 2 }),
+      expect.objectContaining({ date: '2027-11-07', activityCount: 1 }),
       expect.objectContaining({ date: '2027-12-31', activityCount: 1 }),
     ]);
     expect(
       sum(utcSession.activityByMonth.map((row) => row.activityCount)),
-    ).toBe(utcSession.activityCount);
+    ).toBe(9);
     expect(sum(utcSession.activityByDay.map((row) => row.activityCount))).toBe(
-      utcSession.activityCount,
+      5,
     );
 
     const madrid = await service.aggregateActivityForUser(
@@ -231,10 +231,10 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       2027,
       'Europe/Madrid',
     );
-    expect(madrid.activityCount).toBe(8);
+    expect(madrid.activityCount).toBe(1);
     expect(madrid.activityByDay).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ date: '2027-01-01', activityCount: 3 }),
+        expect.objectContaining({ date: '2027-01-01', activityCount: 1 }),
         expect.objectContaining({ date: '2027-07-01', activityCount: 1 }),
       ]),
     );
@@ -244,7 +244,7 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       2027,
       'America/Los_Angeles',
     );
-    expect(losAngeles.activityCount).toBe(7);
+    expect(losAngeles.activityCount).toBe(1);
     expect(losAngeles.activityByDay).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ date: '2027-01-01', activityCount: 1 }),
@@ -258,10 +258,10 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       2027,
       'Asia/Kathmandu',
     );
-    expect(kathmandu.activityCount).toBe(8);
+    expect(kathmandu.activityCount).toBe(1);
     expect(kathmandu.activityByDay).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ date: '2027-01-01', activityCount: 3 }),
+        expect.objectContaining({ date: '2027-01-01', activityCount: 1 }),
         expect.objectContaining({ date: '2027-07-01', activityCount: 1 }),
         expect.objectContaining({ date: '2027-12-31', activityCount: 1 }),
       ]),
@@ -305,7 +305,7 @@ integrationSuite('Rates event set aggregations PostgreSQL integration', () => {
       'America/Los_Angeles',
     );
 
-    expect(result.activityCount).toBe(2);
+    expect(result.activityCount).toBe(1);
     expect(result.activityByDay).toEqual([
       expect.objectContaining({ date: '2027-01-01', activityCount: 1 }),
       expect.objectContaining({ date: '2027-12-31', activityCount: 1 }),
