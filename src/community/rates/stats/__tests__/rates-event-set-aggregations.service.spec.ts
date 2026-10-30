@@ -47,7 +47,7 @@ function createService(
 }
 
 describe('RatesEventSetAggregationsService', () => {
-  it('counts annual discs once while preserving monthly event and daily disc totals', async () => {
+  it('counts distinct annual discs, set events by month, and distinct daily discs', async () => {
     const { service, query } = createService([
       { aggregation: 'year', period: null, activityCount: '2' },
       { aggregation: 'month', period: '2027-01', activityCount: 2 },
@@ -199,7 +199,7 @@ describe('RatesEventSetAggregationsService', () => {
     expect(result.activityByDay).toEqual([]);
   });
 
-  it('counts a repeated set disc once per date and returns one scored disc detail', async () => {
+  it('counts a repeated set disc once annually while listing it once per date', async () => {
     const { service } = createService(
       [
         { aggregation: 'year', period: null, activityCount: 1 },
@@ -298,7 +298,7 @@ describe('RatesEventSetAggregationsService', () => {
     );
   });
 
-  it('keeps full counts for each genre even when their sum exceeds annual activity', async () => {
+  it('attributes each eligible set event to the current genre exactly once', async () => {
     const { service } = createService([
       { aggregation: 'year', period: null, activityCount: 2 },
       { aggregation: 'month', period: '2027-01', activityCount: 3 },

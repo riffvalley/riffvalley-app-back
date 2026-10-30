@@ -265,17 +265,15 @@ integrationSuite('Rates historical cohort PostgreSQL integration', () => {
       2025,
     );
     await dataSource.query('SET TIME ZONE DEFAULT');
-    expect(activity2025.activityCount).toBe(4);
+    expect(activity2025.activityCount).toBe(2);
     expect(activity2025.activityByGenre).toEqual([
-      { genre: 'Black Metal', activityCount: 3 },
+      { genre: 'Black Metal', activityCount: 2 },
     ]);
-    expect(activity2025.activityWithoutGenre).toBe(2);
+    expect(activity2025.activityWithoutGenre).toBe(0);
     expect(activity2025.activityByMonth).toEqual(
       expect.arrayContaining([
         { month: '2025-01', activityCount: 1 },
-        { month: '2025-06', activityCount: 1 },
-        { month: '2025-07', activityCount: 2 },
-        { month: '2025-12', activityCount: 1 },
+        { month: '2025-07', activityCount: 1 },
       ]),
     );
     expect(
@@ -283,12 +281,10 @@ integrationSuite('Rates historical cohort PostgreSQL integration', () => {
         (total, row) => total + row.activityCount,
         0,
       ),
-    ).toBe(5);
+    ).toBe(2);
     expect(activity2025.activityByDay).toEqual([
       expect.objectContaining({ date: '2025-01-01', activityCount: 1 }),
-      expect.objectContaining({ date: '2025-06-01', activityCount: 1 }),
       expect.objectContaining({ date: '2025-07-01', activityCount: 1 }),
-      expect.objectContaining({ date: '2025-12-31', activityCount: 1 }),
     ]);
     expect(
       activity2025.activityByDay.reduce(

@@ -196,7 +196,6 @@ export class RatesEventSetAggregationsService {
     const monthlyActivityCount = sum(
       activityByMonth.map((row) => row.activityCount),
     );
-
     if (
       activityCount > monthlyActivityCount ||
       attributedActivityCount !== monthlyActivityCount
