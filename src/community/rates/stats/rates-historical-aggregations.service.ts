@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Rate } from '../entities/rate.entity';
-import { getHistoricalRateCohortQuery } from './helpers/historical-rate-cohort-query';
+import { getCurrentScorePopulationQuery } from './helpers/current-score-population-query';
 import { RatesStatsDailyDiscDto } from '../dto/rates-user-stats.dto';
 
 interface HistoricalActivityAggregateRow {
@@ -39,7 +39,7 @@ export interface RatesHistoricalActivityAggregations {
   year: number;
   activityCount: number;
   activityByMonth: HistoricalMonthlyActivity[];
-  /** Contains active dates only; a missing date means no eligible Rate row in the available source. */
+  /** Contains active dates only; missing dates have no eligible activity in the available source. */
   activityByDay: HistoricalDailyActivity[];
   activityByGenre: HistoricalGenreActivity[];
   activityWithoutGenre: number;
@@ -56,39 +56,52 @@ export class RatesHistoricalAggregationsService {
     userId: string,
     year: number,
   ): Promise<RatesHistoricalActivityAggregations> {
-    const query = getHistoricalRateCohortQuery(userId, year);
+    if (year !== 2025 && year !== 2026) {
+      throw new BadRequestException(
+        'Historical Rate cohorts support only 2025 and 2026.',
+      );
+    }
+    const query = getCurrentScorePopulationQuery(userId, year);
     const rows = await this.rateRepository.query<
       HistoricalActivityAggregateRow[]
     >(
       `
-      WITH ${query.eligibleRateRowsCte}
+      WITH ${query.ctes}, scored_discs AS (
+        SELECT "discId" FROM current_scores
+        WHERE "currentRate" IS NOT NULL AND "currentRate" BETWEEN 0 AND 10
+      ), eligible_scored_rows AS (
+        SELECT eligible_rate_rows."discId", eligible_rate_rows."createdAtLocal"
+        FROM eligible_rate_rows
+        INNER JOIN scored_discs
+          ON scored_discs."discId" = eligible_rate_rows."discId"
+      )
       SELECT 'year'::text AS aggregation, NULL::text AS period,
-        COUNT(DISTINCT "discId")::int AS "activityCount"
-      FROM eligible_rate_rows
+        COUNT(*)::int AS "activityCount"
+      FROM scored_discs
       UNION ALL
       SELECT 'month'::text AS aggregation,
         TO_CHAR(DATE_TRUNC('month', "createdAtLocal"), 'YYYY-MM') AS period,
-        COUNT(*)::int AS "activityCount"
-      FROM eligible_rate_rows
+        COUNT(DISTINCT "discId")::int AS "activityCount"
+      FROM eligible_scored_rows
       GROUP BY DATE_TRUNC('month', "createdAtLocal")
       UNION ALL
       SELECT 'day'::text AS aggregation,
         TO_CHAR("createdAtLocal"::date, 'YYYY-MM-DD') AS period,
         COUNT(DISTINCT "discId")::int AS "activityCount"
-      FROM eligible_rate_rows
+      FROM eligible_scored_rows
       GROUP BY "createdAtLocal"::date
       UNION ALL
       SELECT 'genre'::text AS aggregation, genre.name AS period,
         COUNT(*)::int AS "activityCount"
-      FROM eligible_rate_rows
-      INNER JOIN disc ON disc.id = eligible_rate_rows."discId"
+      FROM scored_discs
+      INNER JOIN disc ON disc.id = scored_discs."discId"
       INNER JOIN genre ON genre.id = disc."genreId"
       GROUP BY genre.name
       UNION ALL
       SELECT 'withoutGenre'::text AS aggregation, NULL::text AS period,
         COUNT(*)::int AS "activityCount"
-      FROM eligible_rate_rows
-      LEFT JOIN disc ON disc.id = eligible_rate_rows."discId"
+      FROM scored_discs
+      INNER JOIN disc ON disc.id = scored_discs."discId"
       LEFT JOIN genre ON genre.id = disc."genreId"
       WHERE genre.id IS NULL
       ORDER BY aggregation, period NULLS FIRST
@@ -98,31 +111,30 @@ export class RatesHistoricalAggregationsService {
     const dailyDiscRows = await this.rateRepository.query<
       HistoricalDailyDiscRow[]
     >(
-      `WITH ${query.eligibleRateRowsCte}, ranked_current_rates AS (
-        SELECT "discId", "currentRate",
-          ROW_NUMBER() OVER (
-            PARTITION BY "discId"
-            ORDER BY "editedAt" DESC NULLS LAST, "createdAt" DESC, "rateId" DESC
-          ) AS current_position
+      `WITH ${query.ctes}, scored_discs AS (
+        SELECT "discId", "currentRate" FROM current_scores
+        WHERE "currentRate" IS NOT NULL AND "currentRate" BETWEEN 0 AND 10
+      ), eligible_scored_rows AS (
+        SELECT eligible_rate_rows."createdAtLocal", eligible_rate_rows."rateId",
+          scored_discs."discId", scored_discs."currentRate"
         FROM eligible_rate_rows
-      ), current_scores AS (
-        SELECT "discId", "currentRate" FROM ranked_current_rates
-        WHERE current_position = 1 AND "currentRate" BETWEEN 0 AND 10
+        INNER JOIN scored_discs
+          ON scored_discs."discId" = eligible_rate_rows."discId"
       )
       SELECT DISTINCT ON (
-          eligible_rate_rows."createdAtLocal"::date,
-          eligible_rate_rows."discId"
+          eligible_scored_rows."createdAtLocal"::date,
+          eligible_scored_rows."discId"
         )
-        TO_CHAR(eligible_rate_rows."createdAtLocal"::date, 'YYYY-MM-DD') AS date,
-        eligible_rate_rows."discId" AS "discId", disc.name AS title,
-        artist.name AS artist, current_scores."currentRate" AS rate
-      FROM eligible_rate_rows
-      INNER JOIN disc ON disc.id = eligible_rate_rows."discId"
+        TO_CHAR(eligible_scored_rows."createdAtLocal"::date, 'YYYY-MM-DD') AS date,
+        eligible_scored_rows."discId" AS "discId", disc.name AS title,
+        artist.name AS artist, eligible_scored_rows."currentRate" AS rate
+      FROM eligible_scored_rows
+      INNER JOIN disc ON disc.id = eligible_scored_rows."discId"
       LEFT JOIN artist ON artist.id = disc."artistId"
-      LEFT JOIN current_scores ON current_scores."discId" = eligible_rate_rows."discId"
-      ORDER BY eligible_rate_rows."createdAtLocal"::date,
-        eligible_rate_rows."discId", eligible_rate_rows."createdAtLocal" DESC,
-        eligible_rate_rows."rateId" DESC`,
+      ORDER BY eligible_scored_rows."createdAtLocal"::date,
+        eligible_scored_rows."discId",
+        eligible_scored_rows."createdAtLocal" DESC,
+        eligible_scored_rows."rateId" DESC`,
       query.parameters,
     );
     const annualRow = rows.find((row) => row.aggregation === 'year');
@@ -153,7 +165,7 @@ export class RatesHistoricalAggregationsService {
     }
 
     const activityByMonth = Array.from({ length: 12 }, (_, monthIndex) => {
-      const month = `${query.year}-${String(monthIndex + 1).padStart(2, '0')}`;
+      const month = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
       return { month, activityCount: monthCounts.get(month) ?? 0 };
     });
     const discsByDay = new Map<string, RatesStatsDailyDiscDto[]>();
@@ -188,7 +200,7 @@ export class RatesHistoricalAggregationsService {
 
     if (
       activityCount > monthlyActivityCount ||
-      attributedActivityCount !== monthlyActivityCount
+      attributedActivityCount !== activityCount
     ) {
       throw new Error(
         'Historical activity aggregate totals are inconsistent across periods.',
@@ -204,7 +216,7 @@ export class RatesHistoricalAggregationsService {
     }
 
     return {
-      year: query.year,
+      year,
       activityCount,
       activityByMonth,
       activityByDay,

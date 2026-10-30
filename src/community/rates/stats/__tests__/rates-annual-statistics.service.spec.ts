@@ -238,31 +238,10 @@ describe('RatesAnnualStatisticsService', () => {
     });
   });
 
-  it('keeps activity when the cohort has no current scored discs', async () => {
+  it('excludes historical activity without a valid current scored disc', async () => {
     const setup = createService();
     setup.historical.aggregateActivityForUser.mockResolvedValueOnce({
       ...activity(2026),
-      activityCount: 1,
-      activityByMonth: activity(2026).activityByMonth.map((item, index) =>
-        index === 2 ? { ...item, activityCount: 2 } : item,
-      ),
-      activityByDay: [
-        {
-          date: '2026-03-14',
-          activityCount: 1,
-          discs: [
-            {
-              discId: 'disc-1',
-              title: 'Album one',
-              artist: null,
-              rate: null,
-              date: '2026-03-14',
-            },
-          ],
-        },
-      ],
-      activityByGenre: [{ genre: 'Rock', activityCount: 1 }],
-      activityWithoutGenre: 1,
     });
 
     const result = await setup.service.getUserStats(
@@ -272,19 +251,13 @@ describe('RatesAnnualStatisticsService', () => {
     );
 
     expect(result).toMatchObject({
-      activityCount: 1,
+      activityCount: 0,
       activityByMonth: expect.arrayContaining([
-        { month: '2026-03', activityCount: 2, topDisc: null },
+        { month: '2026-03', activityCount: 0, topDisc: null },
       ]),
-      activityByDay: [
-        {
-          date: '2026-03-14',
-          activityCount: 1,
-          discs: [expect.objectContaining({ discId: 'disc-1', rate: null })],
-        },
-      ],
-      activityByGenre: [{ genre: 'Rock', activityCount: 1, topDisc: null }],
-      activityWithoutGenre: 1,
+      activityByDay: [],
+      activityByGenre: [],
+      activityWithoutGenre: 0,
       scoredDiscs: 0,
       mean: null,
       median: null,

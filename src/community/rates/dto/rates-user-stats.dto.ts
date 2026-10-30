@@ -39,7 +39,7 @@ export interface RatesStatsDailyDiscDto {
   discId: string;
   title: string;
   artist: string | null;
-  /** Current personal score, null when the disc has no valid current score. */
+  /** Current personal score; null when no valid current score exists (possible from 2027). */
   rate: number | null;
   /** Local civil date on which the disc had eligible activity. */
   date: string;
@@ -48,7 +48,7 @@ export interface RatesStatsDailyDiscDto {
 export interface RatesStatsMonthlyActivityDto {
   /** Local calendar month, YYYY-MM. */
   month: string;
-  /** Eligible activity assignments/events in this month. */
+  /** 2025–26: distinct currently scored discs; 2027 onward: eligible set events. */
   activityCount: number;
   /** Highest current personal score among eligible discs with a current score. */
   topDisc: RatesStatsDiscDto | null;
@@ -56,7 +56,7 @@ export interface RatesStatsMonthlyActivityDto {
 
 export interface RatesStatsGenreActivityDto {
   genre: string;
-  /** Eligible activity assignments attributed to this current genre. */
+  /** 2025–26: currently scored discs; 2027 onward: eligible set events. */
   activityCount: number;
   topDisc: RatesStatsDiscDto | null;
 }
@@ -64,7 +64,7 @@ export interface RatesStatsGenreActivityDto {
 export interface RatesStatsDailyActivityDto {
   /** Local calendar date, YYYY-MM-DD. */
   date: string;
-  /** Distinct discs with eligible activity on this date. */
+  /** 2025–26: currently scored discs; 2027 onward: distinct discs with eligible set activity. */
   activityCount: number;
   discs: RatesStatsDailyDiscDto[];
 }
@@ -83,7 +83,7 @@ export interface RatesUserStatsResponseDto {
   activityBasis: RatesStatsActivityBasis;
   /** Coverage of activity records for this period. */
   activityCoverage: RatesStatsActivityCoverage;
-  /** Distinct discs with eligible annual activity, including those without a current score. */
+  /** 2025–26: current scored discs; 2027 onward: distinct eligible annual discs. */
   activityCount: number;
   /** Eligible discs with a current valid personal score. */
   scoredDiscs: number;
@@ -99,6 +99,6 @@ export interface RatesUserStatsResponseDto {
   topDiscOverall: RatesStatsDiscDto | null;
   mostControversial: RatesStatsControversialDiscDto[];
   activityByDay: RatesStatsDailyActivityDto[];
-  /** Eligible activity assignments on discs with no current genre. */
+  /** 2025–26: scored discs without a current genre; 2027 onward: set events without one. */
   activityWithoutGenre: number;
 }
