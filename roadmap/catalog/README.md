@@ -14,7 +14,7 @@
 
 ## Estado de TopDiscs
 
-C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDiscs` devuelve hasta 11 discos. La ruta legacy `/homeDiscs` conserva por separado el comportamiento anterior y su límite de 20 hasta que se retire.
+C-TOP-7, C-TOP-A1 y C-TOP-B1 completadas. La ruta oficial `/topDiscs` devuelve hasta 11 discos elegibles por Rate vigente válida o `pinned`; prioriza todos los votados, y para pinned sin votos devuelve `voteCount: 0`, `averageRate: null` y `weightedScore: null`. Las opciones oficiales usan la misma elegibilidad. `/homeDiscs` conserva su comportamiento legacy y límite de 20. Las regresiones PostgreSQL se actualizaron pero quedaron omitidas, no aprobadas; falta validación en una base aislada autorizada. C-TOP-F1 sigue pendiente para la presentación visual, en especial cuando hay menos de tres discos votados. Véase [la auditoría backend C-TOP-A1 y su resolución](c-top-a1-auditoria-pinned-topdiscs.md).
 
 ## Documentos actuales
 
@@ -34,6 +34,8 @@ C-TOP-7 completada; TopDiscs **COMPLETADO Y CERRADO**. La ruta oficial `/topDisc
 - [C-TOP-9 — Evaluación de un modelo bayesiano estable](c-top-9-validacion-bayesiana.md) — comparación de priors y k, simulación con aserciones y propuesta de validación; sin cambios productivos.
 - [C-TOP-10 — Implementación bayesiana estable de TopDiscs](c-top-10-implementacion-bayesiana-topdiscs.md) — modelo aprobado con prior por voto, `k = 4`, deduplicación determinista y elegibilidad estadística separada de `pinned`.
 - [C-TOP-11 — Validación PostgreSQL del modelo bayesiano TopDiscs](c-top-11-validacion-postgresql-topdiscs.md) — pruebas SQL sobre PostgreSQL 17.10 aislado en Docker, verificación del ranking oficial, filtros y planes con fixtures sintéticos. La nota de corrección registra la restauración independiente de `/homeDiscs`.
+- [C-TOP-A1 — Auditoría backend de pinned en Top Discs](c-top-a1-auditoria-pinned-topdiscs.md) — elegibilidad actual por endpoint, Rates vigentes, puntuación y orden, filtros/opciones, límites y cobertura existente. Sin cambios funcionales ni ejecución de suites.
+- **C-TOP-B1 — Elegibilidad de pinned sin votos:** implementación en el endpoint y opciones oficiales; contrato nullable para `averageRate`/`weightedScore`, grupo de pinned sin votos posterior y límite 11. La auditoría C-TOP-A1 registra la resolución, pruebas focalizadas y validaciones pendientes.
 
 ## Destinos previstos
 

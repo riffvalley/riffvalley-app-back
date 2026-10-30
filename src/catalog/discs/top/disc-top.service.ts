@@ -196,7 +196,7 @@ export class DiscTopService {
         CROSS JOIN global_prior gp
         ${homeDiscFilters.mainWhere}
           AND ${buildTopDiscEligibilityPredicate('d')}
-          AND gp."globalAvgRate" IS NOT NULL
+          AND (gp."globalAvgRate" IS NOT NULL OR d."pinned" = true)
       ),
       disc_rate_stats AS (
         SELECT
@@ -222,7 +222,7 @@ export class DiscTopService {
         g.name AS "genreName",
         g.color AS "genreColor",
         COALESCE(drs."voteCount", 0) AS "voteCount",
-        COALESCE(drs."averageRate", 0) AS "averageRate",
+        drs."averageRate" AS "averageRate",
         COALESCE(ars."averageCover", 0) AS "averageCover",
         user_rate.id AS "userRateId",
         (SELECT f.id FROM favorite f WHERE f."discId" = d.id AND f."userId" = $1 LIMIT 1) AS "userFavoriteId",
@@ -230,20 +230,26 @@ export class DiscTopService {
         user_rate.rate AS "userRate",
         user_rate.cover AS "userCover",
         (SELECT COUNT(c.id) FROM comment c WHERE c."discId" = d.id) AS "commentCount",
-        (
-          (drs."averageRate" * drs."voteCount")
-          + (gp."globalAvgRate" * ${TOP_DISCS_PRIOR_STRENGTH})
-        ) / (drs."voteCount" + ${TOP_DISCS_PRIOR_STRENGTH}) AS "weightedScore"
+        CASE
+          WHEN COALESCE(drs."voteCount", 0) = 0 THEN NULL
+          ELSE (
+            (drs."averageRate" * drs."voteCount")
+            + (gp."globalAvgRate" * ${TOP_DISCS_PRIOR_STRENGTH})
+          ) / (drs."voteCount" + ${TOP_DISCS_PRIOR_STRENGTH})
+        END AS "weightedScore"
       FROM candidate_discs candidate
       INNER JOIN disc d ON d.id = candidate.id
       LEFT JOIN artist a ON d."artistId" = a.id
       LEFT JOIN country c ON a."countryId" = c.id
       LEFT JOIN genre g ON d."genreId" = g.id
-      INNER JOIN disc_rate_stats drs ON drs."discId" = d.id
+      LEFT JOIN disc_rate_stats drs ON drs."discId" = d.id
       LEFT JOIN all_rate_stats ars ON ars."discId" = d.id
       LEFT JOIN current_rates user_rate ON user_rate."discId" = d.id AND user_rate."userId" = $1
       CROSS JOIN global_prior gp
-      ORDER BY "weightedScore" DESC, d.id ASC
+      ORDER BY
+        CASE WHEN COALESCE(drs."voteCount", 0) > 0 THEN 0 ELSE 1 END ASC,
+        "weightedScore" DESC NULLS LAST,
+        d.id ASC
       LIMIT ${resultLimit};
     `;
 

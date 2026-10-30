@@ -51,7 +51,7 @@ describe('mapHomeRankedDisc', () => {
     });
   });
 
-  it('keeps optional relation fields and personal state null and converts null metrics to zero', () => {
+  it('keeps the average and score null for a disc without votes', () => {
     const row = {
       id: 'disc-2',
       name: 'Pinned',
@@ -70,7 +70,7 @@ describe('mapHomeRankedDisc', () => {
       averageCover: null,
       voteCount: '0',
       commentCount: null,
-      weightedScore: '0',
+      weightedScore: null,
     };
 
     expect(mapHomeRankedDisc(row)).toEqual({
@@ -83,10 +83,11 @@ describe('mapHomeRankedDisc', () => {
       userRate: null,
       favoriteId: null,
       pendingId: null,
-      averageRate: 0,
+      averageRate: null,
       averageCover: 0,
       voteCount: 0,
       commentCount: 0,
+      weightedScore: null,
     });
   });
 
@@ -118,6 +119,22 @@ describe('mapHomeRankedDisc', () => {
       voteCount: 0,
       commentCount: 0,
       artist: { country: { id: null, name: null, isoCode: null } },
+    });
+  });
+
+  it('preserves a valid observed zero average separately from no votes', () => {
+    expect(
+      mapHomeRankedDisc({
+        id: 'disc-zero',
+        voteCount: '1',
+        averageRate: '0',
+        averageCover: '0',
+        weightedScore: '0.5',
+      }),
+    ).toMatchObject({
+      voteCount: 1,
+      averageRate: 0,
+      weightedScore: '0.5',
     });
   });
 });

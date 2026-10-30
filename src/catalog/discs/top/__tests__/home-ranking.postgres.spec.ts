@@ -244,24 +244,30 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     }
   }
 
-  it('includes only validly rated discs, ignores NULL votes, uses an unfiltered prior, and orders by weightedScore', async () => {
+  it('includes voted discs and pinned discs without valid votes, with votes first', async () => {
     await seedBaseFixtures();
     await getClient().query(
       `INSERT INTO rate (id, "discId", "userId", rate)
        VALUES ('00000000-0000-4000-8000-000000000115', $1, NULL, 10)`,
       [DISC_IDS[2]],
     );
+    await getClient().query(
+      `INSERT INTO rate (id, "discId", "userId", rate, "editedAt") VALUES
+        ('00000000-0000-4000-8000-000000000118', $1, '00000000-0000-4000-8000-000000000119', 6, TIMESTAMP '2024-01-01'),
+        ('00000000-0000-4000-8000-000000000119', $1, '00000000-0000-4000-8000-000000000119', 11, TIMESTAMP '2024-02-01')`,
+      [DISC_IDS[8]],
+    );
     const { result, main, queries } = await runHomeDiscs('2024-12-31');
     const rows = main.rows!;
     const ids = rows.map(({ id }) => id);
     const byId = new Map(rows.map((row) => [row.id, row]));
 
-    expect(ids).toHaveLength(1);
-    expect(new Set(ids).size).toBe(1);
+    expect(ids).toHaveLength(4);
+    expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain(DISC_IDS[0]);
-    expect(ids).not.toContain(DISC_IDS[1]);
-    expect(ids).not.toContain(DISC_IDS[4]);
-    expect(ids).not.toContain(DISC_IDS[8]);
+    expect(ids).toContain(DISC_IDS[1]);
+    expect(ids).toContain(DISC_IDS[4]);
+    expect(ids).toContain(DISC_IDS[8]);
     expect(ids).not.toContain(DISC_IDS[2]);
     expect(ids).not.toContain(DISC_IDS[3]);
     expect(ids).not.toContain(DISC_IDS[5]);
@@ -271,7 +277,17 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     expect(Number(byId.get(DISC_IDS[0]).voteCount)).toBe(2);
     expect(Number(byId.get(DISC_IDS[0]).averageRate)).toBe(3);
     expect(Number(byId.get(DISC_IDS[0]).weightedScore)).toBeCloseTo(22 / 6);
+    for (const pinnedId of [DISC_IDS[1], DISC_IDS[4], DISC_IDS[8]]) {
+      expect(Number(byId.get(pinnedId).voteCount)).toBe(0);
+      expect(byId.get(pinnedId).averageRate).toBeNull();
+      expect(byId.get(pinnedId).weightedScore).toBeNull();
+    }
+    expect(ids[0]).toBe(DISC_IDS[0]);
+    expect(ids.slice(1)).toEqual([DISC_IDS[1], DISC_IDS[4], DISC_IDS[8]]);
     expect(result.discs.map(({ id }) => id)).toEqual(ids);
+    expect(
+      result.discs.slice(1).every(({ averageRate }) => averageRate === null),
+    ).toBe(true);
 
     expect(
       queries.filter(({ sql }) => sql.includes('AS "weightedScore"')),
@@ -283,15 +299,15 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     expect(main.sql).toContain('LEFT JOIN country c ON a."countryId" = c.id');
     expect(main.sql).toContain('LEFT JOIN genre g ON d."genreId" = g.id');
     expect(main.sql).toContain(
-      'INNER JOIN disc_rate_stats drs ON drs."discId" = d.id',
+      'LEFT JOIN disc_rate_stats drs ON drs."discId" = d.id',
     );
     expect(main.sql).toContain('valid_current_rates vr');
     expect(main.sql).toContain('valid_current_rates eligible_rate');
-    expect(main.sql).not.toContain('d."pinned"');
+    expect(main.sql).toContain('d."pinned" = true OR EXISTS');
     expect(main.sql).toContain('prior_disc."releaseDate" <= $7');
     expect(main.sql).not.toContain('HAVING');
     expect(main.sql).toContain(
-      'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 11;',
+      'CASE WHEN COALESCE(drs."voteCount", 0) > 0 THEN 0 ELSE 1 END ASC,\n        "weightedScore" DESC NULLS LAST,\n        d.id ASC\n      LIMIT 11;',
     );
     expect(main.sql).not.toContain('LEFT JOIN favorite');
     expect(main.sql).not.toContain('LEFT JOIN pending');
@@ -338,7 +354,9 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     expect(legacyIds).toContain(DISC_IDS[8]);
     expect(legacyIds).not.toContain(DISC_IDS[2]);
     expect(legacyIds).not.toContain(DISC_IDS[5]);
-    expect(officialIds).not.toContain(DISC_IDS[1]);
+    expect(officialIds).toContain(DISC_IDS[1]);
+    expect(officialIds).toContain(DISC_IDS[4]);
+    expect(officialIds).toContain(DISC_IDS[8]);
     expect(globalQuery?.sql).toContain('PERCENTILE_CONT(0.5)');
     expect(globalQuery?.sql).toContain('d."genreId" = $4 AND c.name = $5');
     expect(globalQuery?.sql).not.toContain('valid_current_rates');
@@ -378,6 +396,35 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     expect(Number(narrowDisc.weightedScore)).toBeCloseTo(
       Number(broadDisc.weightedScore),
     );
+  });
+
+  it('keeps every voted disc ahead of pinned-only discs before applying the 11-result limit', async () => {
+    await seedBaseFixtures();
+    await getClient().query(
+      `INSERT INTO rate (id, "discId", "userId", rate) VALUES
+        ('00000000-0000-4000-8000-000000000118', $1, '00000000-0000-4000-8000-000000000119', 0),
+        ('00000000-0000-4000-8000-000000000119', $2, '00000000-0000-4000-8000-000000000120', 1)`,
+      [DISC_IDS[2], DISC_IDS[3]],
+    );
+
+    const { main } = await runHomeDiscs('2024-12-31');
+    const rows = main.rows!;
+    const votedRows = rows.filter(({ voteCount }) => Number(voteCount) > 0);
+    const pinnedOnlyRows = rows.filter(
+      ({ voteCount }) => Number(voteCount) === 0,
+    );
+
+    expect(votedRows).toHaveLength(3);
+    expect(
+      rows.slice(0, 3).every(({ voteCount }) => Number(voteCount) > 0),
+    ).toBe(true);
+    expect(pinnedOnlyRows.map(({ id }) => id)).toEqual([
+      DISC_IDS[1],
+      DISC_IDS[4],
+      DISC_IDS[8],
+    ]);
+    expect(rows).toHaveLength(6);
+    expect(main.sql).toContain('LIMIT 11;');
   });
 
   it('keeps one disc score identical across week, month, year, all, country, and genre filters', async () => {
@@ -472,13 +519,25 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
     expect(rows.get(DISC_IDS[4])!.pinned).toBe(true);
   });
 
-  it('returns an empty ranking when no valid published global votes exist', async () => {
+  it('returns pinned discs without a score when no valid published votes exist', async () => {
     await seedBaseFixtures();
     await getClient().query('DELETE FROM rate');
 
     const { main } = await runHomeDiscs('2024-12-31');
 
-    expect(main.rows).toEqual([]);
+    expect(main.rows!.map(({ id }) => id)).toEqual([
+      DISC_IDS[1],
+      DISC_IDS[4],
+      DISC_IDS[8],
+    ]);
+    expect(
+      main.rows!.every(
+        ({ voteCount, averageRate, weightedScore }) =>
+          Number(voteCount) === 0 &&
+          averageRate === null &&
+          weightedScore === null,
+      ),
+    ).toBe(true);
   });
 
   it('applies independent 11-disc official and 20-disc legacy limits', async () => {
@@ -528,7 +587,7 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
       ),
     );
     expect(main.sql).toContain(
-      'ORDER BY "weightedScore" DESC, d.id ASC\n      LIMIT 11;',
+      'CASE WHEN COALESCE(drs."voteCount", 0) > 0 THEN 0 ELSE 1 END ASC,\n        "weightedScore" DESC NULLS LAST,\n        d.id ASC\n      LIMIT 11;',
     );
 
     const legacy = await runHomeDiscs(
@@ -658,23 +717,25 @@ describePostgres('home disc ranking with PostgreSQL fixtures', () => {
       expect(allOptions.countries.map(({ id }) => id)).toEqual([
         COUNTRY_ID,
         OTHER_COUNTRY_ID,
+        pinnedOnlyCountryId,
         zeroCountryId,
       ]);
       expect(allOptions.genres.map(({ id }) => id)).toEqual([
         GENRE_ID,
         OTHER_GENRE_ID,
+        pinnedOnlyGenreId,
         zeroGenreId,
       ]);
       expect(allOptions.countries.map(({ name }) => name)).not.toContain(
         'Unrated Country',
       );
-      expect(allOptions.countries.map(({ id }) => id)).not.toContain(
+      expect(allOptions.countries.map(({ id }) => id)).toContain(
         pinnedOnlyCountryId,
       );
       expect(allOptions.genres.map(({ name }) => name)).not.toContain(
         'Unrated Genre',
       );
-      expect(allOptions.genres.map(({ id }) => id)).not.toContain(
+      expect(allOptions.genres.map(({ id }) => id)).toContain(
         pinnedOnlyGenreId,
       );
 

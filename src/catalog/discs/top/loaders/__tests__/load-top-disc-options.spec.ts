@@ -28,7 +28,7 @@ describe('buildTopDiscOptionsQuery', () => {
       'd."releaseDate" BETWEEN $1 AND $2 AND d."releaseDate" <= $3',
     );
     expect(query.sql).toContain('valid_current_rates eligible_rate');
-    expect(query.sql).not.toContain('d."pinned"');
+    expect(query.sql).toContain('d."pinned" = true OR EXISTS');
     expect(query.sql).toContain('DISTINCT ON (r."discId", r."userId")');
     expect(query.sql).toContain('WHERE ed."genreId" = $4');
     expect(query.sql).toContain('WHERE c.id = $5');

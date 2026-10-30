@@ -18,11 +18,11 @@ export interface HomeRankedDisc extends Record<string, unknown> {
   } | null;
   favoriteId: string | number | null;
   pendingId: string | number | null;
-  averageRate: number;
+  averageRate: number | null;
   averageCover: number;
   voteCount: number;
   commentCount: number;
-  weightedScore?: unknown;
+  weightedScore: string | number | null;
 }
 
 function scalarId(value: unknown): string | number | null {
@@ -61,14 +61,19 @@ export function mapHomeRankedDisc(
     },
     ...mapHomePersonalState(personalState),
     averageRate:
-      disc.averageRate !== null
-        ? Number.parseFloat(String(disc.averageRate))
-        : 0,
+      disc.averageRate === null || disc.averageRate === undefined
+        ? null
+        : Number.parseFloat(String(disc.averageRate)),
     averageCover:
       disc.averageCover !== null
         ? Number.parseFloat(String(disc.averageCover))
         : 0,
     voteCount: Number.parseInt(String(disc.voteCount), 10) || 0,
     commentCount: Number.parseInt(String(disc.commentCount), 10) || 0,
+    weightedScore:
+      typeof disc.weightedScore === 'string' ||
+      typeof disc.weightedScore === 'number'
+        ? disc.weightedScore
+        : null,
   };
 }

@@ -156,7 +156,7 @@ describe('getTopDiscs response', () => {
         countryIsoCode: null,
         genreName: null,
         genreColor: null,
-        voteCount: '1',
+        voteCount: '0',
         averageRate: null,
         averageCover: null,
         userRateId: null,
@@ -165,7 +165,7 @@ describe('getTopDiscs response', () => {
         userRate: null,
         userCover: null,
         commentCount: null,
-        weightedScore: '0.75',
+        weightedScore: null,
       },
     ];
     const rawResults: Record<string, Record<string, unknown>[]> = {
@@ -222,9 +222,9 @@ describe('getTopDiscs response', () => {
           userRate: null,
           favoriteId: null,
           pendingId: null,
-          averageRate: 0,
+          averageRate: null,
           averageCover: 0,
-          voteCount: 1,
+          voteCount: 0,
           commentCount: 0,
         },
       ],
@@ -264,8 +264,11 @@ describe('getTopDiscs response', () => {
       '(SELECT COUNT(c.id) FROM comment c WHERE c."discId" = d.id) AS "commentCount"',
     );
     expect(discQuery).toContain('valid_current_rates eligible_rate');
-    expect(discQuery).not.toContain('d."pinned"');
-    expect(discQuery).toContain('ORDER BY "weightedScore" DESC, d.id ASC');
+    expect(discQuery).toContain('d."pinned" = true OR EXISTS');
+    expect(discQuery).toContain(
+      'CASE WHEN COALESCE(drs."voteCount", 0) > 0 THEN 0 ELSE 1 END ASC',
+    );
+    expect(discQuery).toContain('ORDER BY');
     expect(discQuery).toContain('LIMIT 11');
     expect(discQuery).toContain('drs."averageRate" * drs."voteCount"');
     expect(discQuery).toContain('gp."globalAvgRate" * 4');
