@@ -12,6 +12,7 @@ export const AUTH_HTTP_CORS_ORIGINS = [
   'http://localhost:4322',
   'https://spammusic.netlify.app',
   'https://app.riffvalley.es',
+  'https://beta.riffvalley.es',
   'https://www.riffvalley.es',
   'https://riffvalley.es',
   'https://wiki.riffvalley.es',

@@ -7,9 +7,11 @@ import {
 describe('auth HTTP CORS policy', () => {
   it('keeps exact configured origins and rejects arbitrary or malformed origins', () => {
     expect(AUTH_HTTP_CORS_ORIGINS).toContain('https://app.riffvalley.es');
+    expect(AUTH_HTTP_CORS_ORIGINS).toContain('https://beta.riffvalley.es');
     expect(AUTH_HTTP_CORS_ORIGINS).toContain('https://wiki.riffvalley.es');
     expect(AUTH_HTTP_CORS_ORIGINS).not.toContain('*');
     expect(isAllowedAuthHttpOrigin('https://app.riffvalley.es')).toBe(true);
+    expect(isAllowedAuthHttpOrigin('https://beta.riffvalley.es')).toBe(true);
     expect(isAllowedAuthHttpOrigin('https://wiki.riffvalley.es')).toBe(true);
     expect(isAllowedAuthHttpOrigin('https://evil.example')).toBe(false);
     expect(isAllowedAuthHttpOrigin('https://app.riffvalley.es/')).toBe(false);
