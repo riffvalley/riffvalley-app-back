@@ -17,6 +17,7 @@ import {
 
 const origins = {
   app: 'https://app.riffvalley.es',
+  betaApp: 'https://beta.riffvalley.es',
   wiki: 'https://wiki.riffvalley.es',
 };
 const edgeSecret = Buffer.alloc(32, 42).toString('base64url');
@@ -246,6 +247,7 @@ describe('session HTTP security helpers', () => {
   describe('resolveSessionClientFromOrigin', () => {
     it.each([
       [origins.app, 'app'],
+      [origins.betaApp, 'app'],
       [origins.wiki, 'wiki'],
       [LOCAL_SESSION_APP_ORIGIN, 'app'],
     ] as const)('maps the exact origin %s to %s', (origin, client) => {
@@ -274,6 +276,13 @@ describe('session HTTP security helpers', () => {
       expect(
         resolveSessionClientFromOrigin(origins.app, {
           app: 'http://app.riffvalley.es',
+          wiki: origins.wiki,
+        }),
+      ).toBeNull();
+      expect(
+        resolveSessionClientFromOrigin(origins.app, {
+          app: origins.app,
+          betaApp: origins.wiki,
           wiki: origins.wiki,
         }),
       ).toBeNull();

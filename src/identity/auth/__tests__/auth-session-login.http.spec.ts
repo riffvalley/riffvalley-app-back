@@ -20,6 +20,7 @@ import {
 } from '../session-http/session-http-csrf';
 
 const appOrigin = 'https://app.riffvalley.es';
+const betaAppOrigin = 'https://beta.riffvalley.es';
 const wikiOrigin = 'https://wiki.riffvalley.es';
 const localAppOrigin = 'http://localhost:5173';
 const edgeSecret = Buffer.alloc(32, 9).toString('base64url');
@@ -106,6 +107,7 @@ describe('renewable login HTTP contract', () => {
     configService = new ConfigService({
       AUTH_SESSION_MODE_ENABLED: 'true',
       AUTH_SESSION_APP_ORIGIN: appOrigin,
+      AUTH_SESSION_BETA_APP_ORIGIN: betaAppOrigin,
       AUTH_SESSION_WIKI_ORIGIN: wikiOrigin,
       AUTH_SESSION_EDGE_SECRET: edgeSecret,
       JWT_SECRET: jwtSecret,
@@ -373,6 +375,23 @@ describe('renewable login HTTP contract', () => {
     expect(authService.loginWithSession).toHaveBeenCalledWith(
       { username: 'listener', password: 'Password1' },
       { mode: AUTH_SESSION_MODE, origin: wikiOrigin },
+    );
+  });
+
+  it('allows the beta app origin to bootstrap CSRF and log in as the app client', async () => {
+    const bootstrap = await getBootstrap(betaAppOrigin);
+    const response = await postLogin(bootstrap.csrfToken, bootstrap.cookie, {
+      Origin: betaAppOrigin,
+    });
+
+    expect(response.status).toBe(200);
+    expect(authService.resolveSessionLoginClient).toHaveBeenCalledWith({
+      mode: AUTH_SESSION_MODE,
+      origin: betaAppOrigin,
+    });
+    expect(authService.loginWithSession).toHaveBeenCalledWith(
+      { username: 'listener', password: 'Password1' },
+      { mode: AUTH_SESSION_MODE, origin: betaAppOrigin },
     );
   });
 

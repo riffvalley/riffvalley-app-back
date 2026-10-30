@@ -7,6 +7,7 @@ import { SessionClientType } from '../../sessions/entities/auth-session.entity';
 
 export interface SessionClientOrigins {
   app: string | undefined;
+  betaApp?: string | undefined;
   wiki: string | undefined;
 }
 
@@ -204,16 +205,19 @@ export function resolveSessionClientFromOrigin(
   origin: string | undefined,
   configuredOrigins: SessionClientOrigins,
 ): SessionClientType | null {
+  const { app, betaApp, wiki } = configuredOrigins;
   if (
-    !isCanonicalHttpsOrigin(configuredOrigins.app) ||
-    !isCanonicalHttpsOrigin(configuredOrigins.wiki) ||
-    configuredOrigins.app === configuredOrigins.wiki
+    !isCanonicalHttpsOrigin(app) ||
+    !isCanonicalHttpsOrigin(wiki) ||
+    app === wiki ||
+    (betaApp !== undefined &&
+      (!isCanonicalHttpsOrigin(betaApp) || betaApp === app || betaApp === wiki))
   ) {
     return null;
   }
 
-  if (origin === configuredOrigins.app) return 'app';
-  if (origin === configuredOrigins.wiki) return 'wiki';
+  if (origin === app || origin === betaApp) return 'app';
+  if (origin === wiki) return 'wiki';
   if (origin === LOCAL_SESSION_APP_ORIGIN) return 'app';
   return null;
 }

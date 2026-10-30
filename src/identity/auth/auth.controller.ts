@@ -605,6 +605,7 @@ export class AuthController {
   private sessionOrigins(): SessionClientOrigins {
     return {
       app: this.configService.get<string>('AUTH_SESSION_APP_ORIGIN'),
+      betaApp: this.configService.get<string>('AUTH_SESSION_BETA_APP_ORIGIN'),
       wiki: this.configService.get<string>('AUTH_SESSION_WIKI_ORIGIN'),
     };
   }
