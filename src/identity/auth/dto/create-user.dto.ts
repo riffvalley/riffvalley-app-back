@@ -10,6 +10,12 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_POLICY_MESSAGE,
+  PASSWORD_POLICY_PATTERN,
+} from '../passwords/password-policy';
 
 export class DashboardModuleConfigDto {
   @IsString()
@@ -25,12 +31,9 @@ export class CreateUserDto {
   email: string;
 
   @IsString()
-  @MinLength(6)
-  @MaxLength(50)
-  @Matches(/(?:(?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message:
-      'The password must have a Uppercase, lowercase letter and a number',
-  })
+  @MinLength(PASSWORD_MIN_LENGTH)
+  @MaxLength(PASSWORD_MAX_LENGTH)
+  @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE })
   password: string;
 
   @IsString()

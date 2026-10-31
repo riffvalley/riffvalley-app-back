@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { DataSource, Logger as TypeOrmLogger } from 'typeorm';
+import { DataSource, EntityManager, Logger as TypeOrmLogger } from 'typeorm';
 import { CreateAuthSessionPersistence1791950000000 } from '../../../migrations/1791950000000-CreateAuthSessionPersistence';
 import { AddRefreshOperationFingerprint1791960000000 } from '../../../migrations/1791960000000-AddRefreshOperationFingerprint';
 import { AddSessionCleanupIndex1791970000000 } from '../../../migrations/1791970000000-AddSessionCleanupIndex';
@@ -101,6 +101,16 @@ class RefreshLookupBarrier implements SessionsPersistence {
       retentionCutoff,
       tokenBatchSize,
       sessionBatchSize,
+    );
+  }
+
+  revokeAllSessionsForUserInTransaction(
+    userId: string,
+    manager: EntityManager,
+  ): Promise<number> {
+    return this.persistence.revokeAllSessionsForUserInTransaction(
+      userId,
+      manager,
     );
   }
 }

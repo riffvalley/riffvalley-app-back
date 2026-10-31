@@ -380,6 +380,7 @@ describe('UsersService account and user flows', () => {
         dashboardConfig: true,
         mobileDashboardConfig: true,
         dashboardButtonsEnabled: true,
+        credentialVersion: true,
       },
     });
   });
@@ -424,6 +425,7 @@ describe('UsersService account and user flows', () => {
         dashboardConfig: true,
         mobileDashboardConfig: true,
         dashboardButtonsEnabled: true,
+        credentialVersion: true,
       },
     });
   });

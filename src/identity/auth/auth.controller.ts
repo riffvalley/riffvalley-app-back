@@ -5,6 +5,10 @@ import {
   ForbiddenException,
   HttpException,
   HttpStatus,
+  HttpCode,
+  Header,
+  UseGuards,
+  SetMetadata,
   Get,
   Post,
   Body,
@@ -68,6 +72,14 @@ import {
   resolveAuthRateLimitClientAddress,
   SESSION_EDGE_SECRET_CONFIG_KEY,
 } from './session-http/session-http-security';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { PasswordResetService } from './password-reset/password-reset.service';
+import { createPasswordResetLink } from './password-reset/password-reset-url';
+import {
+  PASSWORD_RESET_IP_RATE_LIMIT_SCOPE,
+  PasswordResetIpRateLimitGuard,
+} from './rate-limiting/password-reset-ip-rate-limit.guard';
 
 const REFRESH_OPERATION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -85,7 +97,65 @@ export class AuthController {
     private readonly configService: ConfigService,
     private readonly sessionsService: SessionsService,
     private readonly authRateLimitService: AuthRateLimitService,
+    private readonly passwordResetService: PasswordResetService,
   ) {}
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Header('Cache-Control', 'no-store')
+  @Header('Pragma', 'no-cache')
+  @SetMetadata(PASSWORD_RESET_IP_RATE_LIMIT_SCOPE, 'password_reset_request_ip')
+  @UseGuards(PasswordResetIpRateLimitGuard)
+  async forgotPassword(
+    @Body() body: ForgotPasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ message: string }> {
+    this.setNoStoreHeaders(response);
+    this.passwordResetService.assertConfigured();
+    createPasswordResetLink(
+      this.configService.get<string>('AUTH_PASSWORD_RESET_URL'),
+      this.configService.get<string>('STAGE'),
+      'A'.repeat(43),
+    );
+    const normalizedEmail = body.email.trim().toLocaleLowerCase('en-US');
+    await this.enforceRateLimit(
+      [
+        {
+          scope: 'password_reset_request_email',
+          subject: normalizedEmail,
+          limit: AUTH_RATE_LIMIT_POLICY.passwordResetRequestEmail.limit,
+          windowSeconds:
+            AUTH_RATE_LIMIT_POLICY.passwordResetRequestEmail.windowSeconds,
+        },
+      ],
+      response,
+    );
+
+    const target =
+      await this.usersService.findPasswordResetTargetByEmail(normalizedEmail);
+    if (target?.isActive) {
+      try {
+        await this.passwordResetService.createPendingRequest(target.id);
+      } catch {
+        this.logger.warn('security_event=password_reset_enqueue_failed');
+      }
+    }
+    return { message: 'Si la cuenta existe, recibirás instrucciones.' };
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Header('Cache-Control', 'no-store')
+  @Header('Pragma', 'no-cache')
+  @SetMetadata(PASSWORD_RESET_IP_RATE_LIMIT_SCOPE, 'password_reset_attempt_ip')
+  @UseGuards(PasswordResetIpRateLimitGuard)
+  async resetPassword(
+    @Body() body: ResetPasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    this.setNoStoreHeaders(response);
+    await this.passwordResetService.resetPassword(body.token, body.password);
+  }
 
   @Post('register')
   create(@Body() createUserDto: CreateUserDto) {

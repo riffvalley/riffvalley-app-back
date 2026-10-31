@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import type { EntityManager } from 'typeorm';
 import { User } from '../../auth/entities/user.entity';
 import { AuthRefreshToken } from '../entities/auth-refresh-token.entity';
 import { AuthSession } from '../entities/auth-session.entity';
@@ -114,6 +115,24 @@ class MemorySessionsPersistence
       refreshTokensDeleted: oldTokens.length,
       sessionsDeleted: sessionsToDelete.length,
     };
+  }
+
+  async revokeAllSessionsForUserInTransaction(
+    userId: string,
+    manager: EntityManager,
+  ): Promise<number> {
+    void manager;
+    const sessions = await this.lockActiveSessionsForUser(userId);
+    const now = new Date();
+    for (const session of sessions) {
+      session.revokedAt = now;
+      await this.saveSession(session);
+    }
+    await this.invalidateActiveRefreshTokens(
+      sessions.map((session) => session.id),
+      now,
+    );
+    return sessions.length;
   }
 
   async findUserState(

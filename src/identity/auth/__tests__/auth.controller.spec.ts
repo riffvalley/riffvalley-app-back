@@ -93,6 +93,7 @@ describe('AuthController role contract', () => {
         { get: jest.fn() } as never,
         {} as never,
         {} as never,
+        {} as never,
       );
 
       expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
@@ -140,6 +141,7 @@ describe('AuthController role contract', () => {
       usersService as never,
       activityService as never,
       { get: jest.fn() } as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -196,6 +198,7 @@ describe('AuthController role contract', () => {
       { get: jest.fn() } as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await expect(
@@ -219,6 +222,7 @@ describe('AuthController role contract', () => {
       {} as never,
       {} as never,
       { get: jest.fn() } as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -302,6 +306,7 @@ describe('AuthController refresh rejection diagnostics', () => {
         }),
       } as never,
       { consume: jest.fn().mockResolvedValue(null) } as never,
+      {} as never,
     );
     const warn = jest
       .spyOn(Logger.prototype, 'warn')

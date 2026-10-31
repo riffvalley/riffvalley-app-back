@@ -50,6 +50,10 @@ export interface SessionsPersistence {
     tokenBatchSize: number,
     sessionBatchSize: number,
   ): Promise<{ refreshTokensDeleted: number; sessionsDeleted: number }>;
+  revokeAllSessionsForUserInTransaction(
+    userId: string,
+    manager: EntityManager,
+  ): Promise<number>;
 }
 
 export const SESSIONS_PERSISTENCE = Symbol('SESSIONS_PERSISTENCE');
@@ -64,6 +68,26 @@ export class TypeOrmSessionsPersistence implements SessionsPersistence {
     return this.dataSource.transaction((manager) =>
       operation(new TypeOrmSessionsUnitOfWork(manager)),
     );
+  }
+
+  async revokeAllSessionsForUserInTransaction(
+    userId: string,
+    manager: EntityManager,
+  ): Promise<number> {
+    const unitOfWork = new TypeOrmSessionsUnitOfWork(manager);
+    const sessions = await unitOfWork.lockActiveSessionsForUser(userId);
+    if (sessions.length === 0) return 0;
+
+    const now = new Date();
+    for (const session of sessions) {
+      session.revokedAt = now;
+      await unitOfWork.saveSession(session);
+    }
+    await unitOfWork.invalidateActiveRefreshTokens(
+      sessions.map((session) => session.id),
+      now,
+    );
+    return sessions.length;
   }
 
   purgeExpiredSessions(

@@ -13,6 +13,8 @@ import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
 import { AUTH_SESSION_MODE } from '../dto/session-auth-contract.dto';
 import { AuthRateLimitService } from '../rate-limiting/auth-rate-limit.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
+import { PasswordResetIpRateLimitGuard } from '../rate-limiting/password-reset-ip-rate-limit.guard';
 import { SessionsService } from '../../sessions/sessions.service';
 import {
   createSessionCsrfToken,
@@ -125,6 +127,15 @@ describe('renewable login HTTP contract', () => {
           provide: AuthRateLimitService,
           useValue: authRateLimitService,
         },
+        {
+          provide: PasswordResetService,
+          useValue: {
+            assertConfigured: jest.fn(),
+            createPendingRequest: jest.fn(),
+            resetPassword: jest.fn(),
+          },
+        },
+        PasswordResetIpRateLimitGuard,
       ],
     }).compile();
 

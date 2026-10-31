@@ -10,11 +10,55 @@ export interface NationalReleaseNotification {
   link?: string;
 }
 
+export function escapeMailHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const escaped: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return escaped[character] ?? character;
+  });
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
 
   constructor(private readonly smtpTransport: SmtpTransportService) {}
+
+  async sendPasswordReset(email: string, resetUrl: string): Promise<void> {
+    const safeUrl = escapeMailHtml(resetUrl);
+    const result = await this.smtpTransport.sendMail({
+      from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+      to: email,
+      subject: 'Recupera tu contraseña de Riff Valley',
+      text: [
+        'Riff Valley',
+        '',
+        'Hemos recibido una solicitud para cambiar la contraseña de tu cuenta.',
+        `Recupérala aquí: ${resetUrl}`,
+        'El enlace caduca 30 minutos después de que se active tras la aceptación del correo.',
+        'Si no solicitaste este cambio, ignora este mensaje.',
+        'Riff Valley nunca te pedirá tu contraseña por correo electrónico.',
+      ].join('\n'),
+      html: `
+        <main>
+          <h1>Riff Valley</h1>
+          <p>Hemos recibido una solicitud para cambiar la contraseña de tu cuenta.</p>
+          <p><a href="${safeUrl}">Recuperar contraseña</a></p>
+          <p>El enlace caduca 30 minutos después de que se active tras la aceptación del correo.</p>
+          <p>Si no solicitaste este cambio, ignora este mensaje.</p>
+          <p>Riff Valley nunca te pedirá tu contraseña por correo electrónico.</p>
+        </main>
+      `,
+    });
+    if (result.accepted.length === 0) {
+      throw new Error('Password reset email was not accepted by SMTP');
+    }
+  }
 
   async sendAccessRequestNotification(
     email: string,

@@ -26,6 +26,8 @@ import {
   AUTH_RATE_LIMIT_INCREMENT_SQL,
   AuthRateLimitService,
 } from '../rate-limiting/auth-rate-limit.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
+import { PasswordResetIpRateLimitGuard } from '../rate-limiting/password-reset-ip-rate-limit.guard';
 import { CreateAuthRateLimitWindows1791980000000 } from '../../../migrations/1791980000000-CreateAuthRateLimitWindows';
 
 const enabled = process.env.AUTH_SESSION_HTTP_PG_INTEGRATION === '1';
@@ -253,6 +255,15 @@ integrationSuite(
           },
           { provide: ConfigService, useValue: configService },
           AuthRateLimitService,
+          PasswordResetIpRateLimitGuard,
+          {
+            provide: PasswordResetService,
+            useValue: {
+              assertConfigured: jest.fn(),
+              createPendingRequest: jest.fn(),
+              resetPassword: jest.fn(),
+            },
+          },
         ],
       }).compile();
 

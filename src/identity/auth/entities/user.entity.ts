@@ -32,6 +32,9 @@ export class User {
   @Column('text', { select: false })
   password: string;
 
+  @Column('integer', { name: 'credential_version', default: 0 })
+  credentialVersion: number;
+
   @Column('text', { unique: true })
   username: string;
 

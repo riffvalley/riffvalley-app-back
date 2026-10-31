@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { AuthSession, SessionClientType } from './entities/auth-session.entity';
 import {
   InvalidSessionClientError,
@@ -406,6 +407,16 @@ export class SessionsService {
       );
     }
     return count;
+  }
+
+  async revokeAllSessionsForUserInTransaction(
+    userId: string,
+    manager: EntityManager,
+  ): Promise<number> {
+    return this.persistence.revokeAllSessionsForUserInTransaction(
+      userId,
+      manager,
+    );
   }
 
   private async cleanupExpiredSessionsIfDue(): Promise<void> {

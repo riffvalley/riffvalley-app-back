@@ -103,6 +103,7 @@ describe('AuthService authentication', () => {
       username: 'listener',
       id: 'user-1',
       role: ValidRoles.user,
+      credentialVersion: 0,
     });
   });
 
@@ -149,6 +150,7 @@ describe('AuthService authentication', () => {
         id: 'user-1',
         role: ValidRoles.user,
         clientType: 'app',
+        credentialVersion: 0,
       },
       { expiresIn: '15m' },
     );
@@ -287,6 +289,7 @@ describe('AuthService authentication', () => {
         id: 'user-1',
         role: ValidRoles.user,
         clientType: 'wiki',
+        credentialVersion: 0,
       },
       { expiresIn: '15m' },
     );

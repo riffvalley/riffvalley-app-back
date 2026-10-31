@@ -11,6 +11,7 @@ import { UsersModule } from '../../users/users.module';
 import { AuthController } from '../auth.controller';
 import { AuthModule } from '../auth.module';
 import { AuthService } from '../auth.service';
+import { MailModule } from 'src/communications/mail/mail.module';
 import { User } from '../entities/user.entity';
 import { UserAccessLog } from '../entities/user-access-log.entity';
 import { UserAppDailyActivity } from '../../activity/entities/user-app-daily-activity.entity';
@@ -64,6 +65,7 @@ describe('AuthModule composition', () => {
         ActivityModule,
         AuthorizationModule,
         SessionsModule,
+        MailModule,
       ]),
     );
     expect(imports).toContainEqual(

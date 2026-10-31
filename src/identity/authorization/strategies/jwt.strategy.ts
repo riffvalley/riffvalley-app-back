@@ -28,6 +28,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         'User is inactive, talk with an administrator',
       );
 
+    const currentVersion = user.credentialVersion ?? 0;
+    if (
+      (payload.credentialVersion ?? 0) !== currentVersion ||
+      (payload.credentialVersion === undefined && currentVersion !== 0)
+    ) {
+      throw new UnauthorizedException('Token not valid');
+    }
+
     Object.defineProperty(user, 'clientType', {
       value: payload.clientType,
       configurable: true,

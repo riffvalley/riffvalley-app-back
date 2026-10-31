@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { EntityManager, Repository, ILike } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../auth/entities/user.entity';
 import { CreateUserDto } from '../auth/dto/create-user.dto';
@@ -15,12 +15,14 @@ import {
   roleMeetsMinimum,
   ValidRoles,
 } from '../authorization/interfaces/valid-roles';
+import { isPasswordValid } from '../auth/passwords/password-policy';
 
 export type UserWithoutPassword = Omit<
   User,
   'password' | 'checkFieldsBeforeInsert' | 'checkFieldsBeforeUpdate'
 >;
 export type UserIdentity = Pick<User, 'id' | 'role' | 'isActive'>;
+export type PasswordResetTarget = Pick<User, 'id' | 'email' | 'isActive'>;
 
 @Injectable()
 export class UsersService {
@@ -81,12 +83,60 @@ export class UsersService {
         dashboardConfig: true,
         mobileDashboardConfig: true,
         dashboardButtonsEnabled: true,
+        credentialVersion: true,
       },
     });
   }
 
   findById(id: string): Promise<User | null> {
     return this.userRepository.findOneBy({ id });
+  }
+
+  findPasswordResetTargetByEmail(
+    email: string,
+  ): Promise<PasswordResetTarget | null> {
+    return this.userRepository.findOne({
+      where: { email: email.trim().toLocaleLowerCase('en-US') },
+      select: { id: true, email: true, isActive: true },
+    });
+  }
+
+  async lockPasswordResetOwner(
+    userId: string,
+    manager: EntityManager,
+  ): Promise<Pick<User, 'id' | 'isActive' | 'credentialVersion'> | null> {
+    const rows = (await manager.query(
+      `SELECT id, "isActive", credential_version AS "credentialVersion"
+       FROM users WHERE id = $1 FOR UPDATE`,
+      [userId],
+    )) as Array<Pick<User, 'id' | 'isActive' | 'credentialVersion'>>;
+    return rows[0] ?? null;
+  }
+
+  hashPasswordForReset(password: string): string {
+    if (!isPasswordValid(password)) {
+      throw new BadRequestException('Password is not valid');
+    }
+    return bcrypt.hashSync(password, 10);
+  }
+
+  async changePasswordForResetInTransaction(
+    userId: string,
+    passwordHash: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    await manager.query(
+      `UPDATE users
+       SET password = $2, credential_version = credential_version + 1
+       WHERE id = $1`,
+      [userId, passwordHash],
+    );
+    const rows = (await manager.query('SELECT id FROM users WHERE id = $1', [
+      userId,
+    ])) as Array<{ id: string }>;
+    if (rows.length !== 1) {
+      throw new Error('Password reset owner is unavailable');
+    }
   }
 
   findSessionProfileById(id: string): Promise<User | null> {
@@ -101,6 +151,7 @@ export class UsersService {
         dashboardConfig: true,
         mobileDashboardConfig: true,
         dashboardButtonsEnabled: true,
+        credentialVersion: true,
       },
     });
   }

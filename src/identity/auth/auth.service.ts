@@ -64,6 +64,7 @@ export class AuthService {
         username: user.username,
         id: user.id,
         role: user.role,
+        credentialVersion: user.credentialVersion ?? 0,
       }),
     };
   }
@@ -102,6 +103,7 @@ export class AuthService {
           id: user.id,
           role: user.role,
           clientType: refreshCredential.clientType,
+          credentialVersion: user.credentialVersion ?? 0,
         }),
         refreshCredential,
       };
@@ -156,6 +158,7 @@ export class AuthService {
         id: user.id,
         role: user.role,
         clientType: refreshCredential.clientType,
+        credentialVersion: user.credentialVersion ?? 0,
       }),
       refreshCredential,
     };

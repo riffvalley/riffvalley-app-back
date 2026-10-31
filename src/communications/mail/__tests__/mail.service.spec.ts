@@ -53,6 +53,39 @@ describe('MailService', () => {
     expect(sendMail.mock.calls[0][0].html).toContain('<td>NewUser</td>');
   });
 
+  it('sends password reset in escaped HTML and plain text without swallowing SMTP errors', async () => {
+    const resetUrl = 'https://app.riffvalley.es/reset-password#token=a&b';
+    sendMail.mockResolvedValueOnce({
+      accepted: ['listener@test.invalid'],
+    } as never);
+    await service.sendPasswordReset('listener@test.invalid', resetUrl);
+
+    const [{ html, text, subject, to }] = sendMail.mock.calls[0];
+    expect(to).toBe('listener@test.invalid');
+    expect(subject).toBe('Recupera tu contraseña de Riff Valley');
+    expect(html).toContain('Riff Valley');
+    expect(html).toContain(
+      'href="https://app.riffvalley.es/reset-password#token=a&amp;b"',
+    );
+    expect(text).toContain(resetUrl);
+    expect(text).toContain('30 minutos');
+    expect(html).toContain('ignora este mensaje');
+    expect(html).toContain(
+      'nunca te pedirá tu contraseña por correo electrónico',
+    );
+
+    sendMail.mockResolvedValueOnce({ accepted: [] } as never);
+    await expect(
+      service.sendPasswordReset('listener@test.invalid', resetUrl),
+    ).rejects.toThrow('Password reset email was not accepted by SMTP');
+
+    const error = new Error('SMTP unavailable');
+    sendMail.mockRejectedValueOnce(error);
+    await expect(
+      service.sendPasswordReset('listener@test.invalid', resetUrl),
+    ).rejects.toBe(error);
+  });
+
   it('composes national release fields including the optional link', async () => {
     await service.sendNationalReleaseNotification(nationalRelease);
 

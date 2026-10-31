@@ -5,4 +5,5 @@ export interface JwtPayload {
   id: string;
   role: ValidRoles;
   clientType?: 'app' | 'wiki';
+  credentialVersion?: number;
 }
