@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { SmtpTransportService } from 'src/integrations/smtp-integration/smtp-transport.service';
 import { MailService } from '../mail.service';
 import type { NationalReleaseNotification } from '../mail.service';
+import { MailSenderService } from '../senders/mail-sender.service';
 
 describe('MailService', () => {
   const originalEnv = { ...process.env };
@@ -21,12 +22,15 @@ describe('MailService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     process.env.MAIL_USER = 'mailer@test.invalid';
+    process.env.MAIL_FROM_DEFAULT = 'contact@test.invalid';
+    process.env.MAIL_FROM_NO_REPLY = 'no-reply@test.invalid';
     process.env.MAIL_TO = 'notifications@test.invalid';
     delete process.env.SPOTIFY_REAUTH_NOTIFICATION_EMAIL;
     delete process.env.TIKTOK_REAUTH_NOTIFICATION_EMAIL;
     const module = await Test.createTestingModule({
       providers: [
         MailService,
+        MailSenderService,
         { provide: SmtpTransportService, useValue: { sendMail } },
       ],
     }).compile();
@@ -45,7 +49,8 @@ describe('MailService', () => {
       service.sendAccessRequestNotification('new@test.invalid', 'NewUser'),
     ).rejects.toBe(error);
     expect(sendMail).toHaveBeenCalledWith({
-      from: '"Riff Valley" <mailer@test.invalid>',
+      from: '"Riff Valley" <contact@test.invalid>',
+      replyTo: 'new@test.invalid',
       to: 'contacto@riffvalley.es',
       subject: 'Solicitud de acceso de nuevo usuario',
       html: expect.stringContaining('<td>new@test.invalid</td>'),
@@ -60,7 +65,9 @@ describe('MailService', () => {
     } as never);
     await service.sendPasswordReset('listener@test.invalid', resetUrl);
 
-    const [{ html, text, subject, to }] = sendMail.mock.calls[0];
+    const [{ from, html, text, subject, to, replyTo }] = sendMail.mock.calls[0];
+    expect(from).toBe('"Riff Valley" <no-reply@test.invalid>');
+    expect(replyTo).toBeUndefined();
     expect(to).toBe('listener@test.invalid');
     expect(subject).toBe('Recupera tu contraseña de Riff Valley');
     expect(html).toContain('Riff Valley');
@@ -90,7 +97,8 @@ describe('MailService', () => {
     await service.sendNationalReleaseNotification(nationalRelease);
 
     expect(sendMail).toHaveBeenCalledWith({
-      from: '"Riff Valley" <mailer@test.invalid>',
+      from: '"Riff Valley" <contact@test.invalid>',
+      replyTo: 'contact@test.invalid',
       to: 'notifications@test.invalid',
       subject: 'Nueva novedad nacional: Artist - Album',
       html: expect.stringContaining(
@@ -129,7 +137,8 @@ describe('MailService', () => {
     ).resolves.toBe(true);
 
     expect(sendMail).toHaveBeenCalledWith({
-      from: '"Riff Valley" <mailer@test.invalid>',
+      from: '"Riff Valley" <contact@test.invalid>',
+      replyTo: 'contact@test.invalid',
       to: 'notifications@test.invalid',
       subject: 'La autorización de Spotify caduca en 3 días',
       html: expect.stringContaining('Festival'),
@@ -148,7 +157,8 @@ describe('MailService', () => {
     ).resolves.toBe(true);
 
     expect(sendMail).toHaveBeenCalledWith({
-      from: '"Riff Valley" <mailer@test.invalid>',
+      from: '"Riff Valley" <contact@test.invalid>',
+      replyTo: 'contact@test.invalid',
       to: 'tiktok@test.invalid',
       subject: 'La autorización de TikTok necesita renovarse',
       html: expect.stringContaining('Cuenta oficial de Riff Valley'),
@@ -161,6 +171,41 @@ describe('MailService', () => {
     await expect(
       service.sendSpotifyReauthorizationReminder(null, new Date(), 1),
     ).resolves.toBe(false);
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('keeps the legacy SMTP user as the default sender when MAIL_FROM_DEFAULT is absent', async () => {
+    delete process.env.MAIL_FROM_DEFAULT;
+    await service.sendAccessRequestNotification('new@test.invalid', 'NewUser');
+
+    expect(sendMail.mock.calls[0][0]).toMatchObject({
+      from: '"Riff Valley" <mailer@test.invalid>',
+      replyTo: 'new@test.invalid',
+    });
+  });
+
+  it('rejects absent or invalid sender settings before invoking SMTP', async () => {
+    delete process.env.MAIL_FROM_NO_REPLY;
+    await expect(
+      service.sendPasswordReset(
+        'listener@test.invalid',
+        'https://app.test/reset#token=x',
+      ),
+    ).rejects.toThrow('MAIL_FROM_NO_REPLY must be configured');
+
+    process.env.MAIL_FROM_NO_REPLY = 'not-an-email';
+    await expect(
+      service.sendPasswordReset(
+        'listener@test.invalid',
+        'https://app.test/reset#token=x',
+      ),
+    ).rejects.toThrow('MAIL_FROM_NO_REPLY must be configured');
+    expect(sendMail).not.toHaveBeenCalled();
+
+    process.env.MAIL_FROM_DEFAULT = 'bad-address';
+    await expect(
+      service.sendAccessRequestNotification('new@test.invalid', 'NewUser'),
+    ).rejects.toThrow('MAIL_FROM_DEFAULT must be configured');
     expect(sendMail).not.toHaveBeenCalled();
   });
 });

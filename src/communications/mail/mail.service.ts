@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SmtpTransportService } from 'src/integrations/smtp-integration/smtp-transport.service';
+import { MailSenderService } from './senders/mail-sender.service';
 
 export interface NationalReleaseNotification {
   artistName: string;
@@ -27,12 +28,15 @@ export function escapeMailHtml(value: string): string {
 export class MailService {
   private readonly logger = new Logger(MailService.name);
 
-  constructor(private readonly smtpTransport: SmtpTransportService) {}
+  constructor(
+    private readonly smtpTransport: SmtpTransportService,
+    private readonly mailSender: MailSenderService,
+  ) {}
 
   async sendPasswordReset(email: string, resetUrl: string): Promise<void> {
     const safeUrl = escapeMailHtml(resetUrl);
     const result = await this.smtpTransport.sendMail({
-      from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+      ...this.mailSender.getHeaders('password-reset'),
       to: email,
       subject: 'Recupera tu contraseña de Riff Valley',
       text: [
@@ -76,7 +80,7 @@ export class MailService {
 
     try {
       await this.smtpTransport.sendMail({
-        from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+        ...this.mailSender.getHeaders('contact-notification', email),
         to: 'contacto@riffvalley.es',
         subject,
         html,
@@ -106,7 +110,7 @@ export class MailService {
 
     try {
       await this.smtpTransport.sendMail({
-        from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+        ...this.mailSender.getHeaders('administrative-notification'),
         to: process.env.MAIL_TO,
         subject,
         html,
@@ -145,7 +149,7 @@ export class MailService {
     `;
 
     await this.smtpTransport.sendMail({
-      from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+      ...this.mailSender.getHeaders('administrative-notification'),
       to: recipient,
       subject,
       html,
@@ -182,7 +186,7 @@ export class MailService {
     `;
 
     await this.smtpTransport.sendMail({
-      from: `"Riff Valley" <${process.env.MAIL_USER}>`,
+      ...this.mailSender.getHeaders('administrative-notification'),
       to: recipient,
       subject,
       html,
