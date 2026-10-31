@@ -56,20 +56,22 @@ const DASHBOARD_SUMMARY_SQL = `
       AND last_activity < bounds.week_start
   ), current_metrics AS (
     SELECT
-      (SELECT COUNT(*)::int
+      (SELECT COUNT(DISTINCT event.disc_id)::int
        FROM rate_vote_events event
        WHERE event.user_id = $1::uuid
          AND event.event_type = 'set'
+         AND event.disc_id IS NOT NULL
          AND event.occurred_at >= $2::timestamptz
          AND event.occurred_at < $3::timestamptz) AS active_rates,
       AVG(musical_rate) AS average_musical_rate,
       COUNT(DISTINCT genre_id)::int AS distinct_genres
     FROM current_week CROSS JOIN bounds
   ), previous_metrics AS (
-    SELECT COUNT(*)::int AS previous_rates
+    SELECT COUNT(DISTINCT event.disc_id)::int AS previous_rates
     FROM rate_vote_events event CROSS JOIN bounds
     WHERE event.user_id = $1::uuid
       AND event.event_type = 'set'
+      AND event.disc_id IS NOT NULL
       AND event.occurred_at >= $4::timestamptz
       AND event.occurred_at < $2::timestamptz
   ), best_disc AS (

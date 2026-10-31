@@ -156,6 +156,8 @@ describe('RatesDashboardSummaryService', () => {
     expect(sql).toContain('last_activity < bounds.week_start');
     expect(sql).toContain("event.event_type = 'set'");
     expect(sql).toContain('event.user_id = $1::uuid');
+    expect(sql).toContain('COUNT(DISTINCT event.disc_id)::int');
+    expect(sql.match(/event\.disc_id IS NOT NULL/gu)).toHaveLength(2);
     expect(sql).toContain('event.occurred_at >= $2::timestamptz');
     expect(sql).toContain('event.occurred_at < $3::timestamptz');
     expect(sql).toContain('event.occurred_at >= $4::timestamptz');
