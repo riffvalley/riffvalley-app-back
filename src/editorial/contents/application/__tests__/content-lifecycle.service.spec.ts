@@ -13,10 +13,15 @@ import { Content, ContentType } from '../../entities/content.entity';
 import { UpdateContentDto } from '../../dto/update-content.dto';
 import { ContentLifecycleService } from '../content-lifecycle.service';
 import { List, ListType } from 'src/editorial/lists/entities/list.entity';
+import { Asignation } from 'src/editorial/lists/asignations/entities/asignations.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Reunion } from 'src/editorial/reunions/entities/reunion.entity';
 import { ContentQueryService } from '../content-query.service';
+import { Video } from 'src/editorial/videos/entities/video.entity';
+import { Article } from 'src/editorial/articles/entities/article.entity';
+import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
+import { Point } from 'src/editorial/reunions/points/entities/point.entity';
 
 describe('ContentLifecycleService', () => {
   type TransactionState = {
@@ -141,7 +146,10 @@ describe('ContentLifecycleService', () => {
       });
     const contentTxRemove = jest
       .spyOn(contentTxRepository, 'remove')
-      .mockImplementation(async (value) => value);
+      .mockImplementation(async (value) => {
+        manager.pendingWrites.push(value);
+        return value;
+      });
     const userFindOne = jest
       .spyOn(userRepository, 'findOne')
       .mockResolvedValue(Object.assign(new User(), { id: 'author-id' }));
@@ -425,10 +433,8 @@ describe('ContentLifecycleService', () => {
     await fixture.testingModule.close();
   });
 
-  it('removes Content, List and Reunion in one transaction with the loaded cascade relations', async () => {
-    const content = makeContent({
-      reunion: Object.assign(new Reunion(), { id: 'reunion-id' }),
-    });
+  it('removes Content and List in one transaction with the loaded List relation', async () => {
+    const content = makeContent();
     const fixture = await makeFixture(content);
     await fixture.service.remove('content-id');
 
@@ -442,10 +448,173 @@ describe('ContentLifecycleService', () => {
       'list-id',
       fixture.manager,
     );
+    expect(fixture.txReunionRepository.delete).not.toHaveBeenCalled();
+    expect(fixture.contentRepository.remove).not.toHaveBeenCalled();
+    await fixture.testingModule.close();
+  });
+
+  it('removes Reunion Content and Reunion in one transaction without a List', async () => {
+    const content = makeContent({
+      type: ContentType.REUNION,
+      list: undefined,
+      reunion: Object.assign(new Reunion(), { id: 'reunion-id' }),
+    });
+    const fixture = await makeFixture(content);
+
+    await fixture.service.remove('content-id');
+
+    expect(fixture.transaction.transactionCalls).toBe(1);
+    expect(fixture.txContentRepository.remove).toHaveBeenCalledWith(content);
     expect(fixture.txReunionRepository.delete).toHaveBeenCalledWith(
       'reunion-id',
     );
-    expect(fixture.contentRepository.remove).not.toHaveBeenCalled();
+    expect(fixture.listsService.removeList).not.toHaveBeenCalled();
+    expect(fixture.committedWrites).toContain(content);
+    await fixture.testingModule.close();
+  });
+
+  it('removes Video Content while preserving Video, its List, assignments and local tracking', async () => {
+    const fixture = await makeFixture(
+      makeContent({
+        type: ContentType.VIDEO,
+        video: Object.assign(new Video(), { id: 'video-id' }),
+      }),
+    );
+    fixture.content.video!.list = fixture.list;
+    fixture.list.wpPostId = 912;
+    fixture.list.wpPostUrl = 'https://example.test/list/912';
+    fixture.list.wpPublishedDiscs = [
+      { discId: 'disc-id', artist: 'Band', name: 'Album' },
+    ];
+    fixture.list.asignations = [
+      Object.assign(new Asignation(), {
+        id: 'asignation-id',
+        list: fixture.list,
+      }),
+    ];
+
+    await fixture.service.remove('content-id');
+
+    expect(fixture.transaction.transactionCalls).toBe(1);
+    expect(fixture.txContentRepository.remove).toHaveBeenCalledWith(
+      fixture.content,
+    );
+    expect(fixture.listsService.removeList).not.toHaveBeenCalled();
+    expect(fixture.content.video).toMatchObject({
+      id: 'video-id',
+      list: { id: 'list-id' },
+    });
+    expect(fixture.list).toMatchObject({
+      id: 'list-id',
+      wpPostId: 912,
+      wpPostUrl: 'https://example.test/list/912',
+      wpPublishedDiscs: [{ discId: 'disc-id', artist: 'Band', name: 'Album' }],
+      asignations: [{ id: 'asignation-id' }],
+    });
+    expect(fixture.committedWrites).toEqual([fixture.content]);
+    await fixture.testingModule.close();
+  });
+
+  it('removes Video Content without a List directly and leaves Video untouched', async () => {
+    const video = Object.assign(new Video(), { id: 'video-id' });
+    const fixture = await makeFixture(
+      makeContent({
+        type: ContentType.VIDEO,
+        list: undefined,
+        video,
+      }),
+    );
+
+    await fixture.service.remove('content-id');
+
+    expect(fixture.transaction.transactionCalls).toBe(0);
+    expect(fixture.contentRepository.remove).toHaveBeenCalledWith(
+      fixture.content,
+    );
+    expect(fixture.listsService.removeList).not.toHaveBeenCalled();
+    expect(fixture.content.video).toBe(video);
+    await fixture.testingModule.close();
+  });
+
+  it.each([ContentType.RADAR, ContentType.BEST])(
+    'continues removing the List with Content type %s',
+    async (type) => {
+      const fixture = await makeFixture(makeContent({ type }));
+
+      await fixture.service.remove('content-id');
+
+      expect(fixture.transaction.transactionCalls).toBe(1);
+      expect(fixture.listsService.removeList).toHaveBeenCalledWith(
+        'list-id',
+        fixture.manager,
+      );
+      expect(fixture.txContentRepository.remove).toHaveBeenCalledWith(
+        fixture.content,
+      );
+      await fixture.testingModule.close();
+    },
+  );
+
+  it('removes Article Content while leaving Article untouched', async () => {
+    const article = Object.assign(new Article(), { id: 'article-id' });
+    const fixture = await makeFixture(
+      makeContent({
+        type: ContentType.ARTICLE,
+        list: undefined,
+        reunion: undefined,
+        article,
+      }),
+    );
+
+    await fixture.service.remove('content-id');
+
+    expect(fixture.contentRepository.remove).toHaveBeenCalledWith(
+      fixture.content,
+    );
+    expect(fixture.content.article).toBe(article);
+    expect(fixture.listsService.removeList).not.toHaveBeenCalled();
+    await fixture.testingModule.close();
+  });
+
+  it('removes Photos Content without requesting external resource cleanup', async () => {
+    const fixture = await makeFixture(
+      makeContent({
+        type: ContentType.PHOTOS,
+        list: undefined,
+        reunion: undefined,
+      }),
+    );
+
+    await fixture.service.remove('content-id');
+
+    expect(fixture.contentRepository.remove).toHaveBeenCalledWith(
+      fixture.content,
+    );
+    expect(fixture.transaction.transactionCalls).toBe(0);
+    expect(fixture.listsService.removeList).not.toHaveBeenCalled();
+    await fixture.testingModule.close();
+  });
+
+  it('removes Playlist Content while leaving Playlist untouched', async () => {
+    const playlist = Object.assign(new RiffValleyPlaylist(), {
+      id: 'playlist-id',
+    });
+    const fixture = await makeFixture(
+      makeContent({
+        type: ContentType.RIFF_VALLEY_PLAYLIST,
+        list: undefined,
+        reunion: undefined,
+        riffValleyPlaylist: playlist,
+      }),
+    );
+
+    await fixture.service.remove('content-id');
+
+    expect(fixture.contentRepository.remove).toHaveBeenCalledWith(
+      fixture.content,
+    );
+    expect(fixture.content.riffValleyPlaylist).toBe(playlist);
+    expect(fixture.listsService.removeList).not.toHaveBeenCalled();
     await fixture.testingModule.close();
   });
 
@@ -458,9 +627,16 @@ describe('ContentLifecycleService', () => {
     );
     expect(listFixture.committedWrites).toEqual([]);
 
+    const point = Object.assign(new Point(), { id: 'point-id' });
+    const reunion = Object.assign(new Reunion(), {
+      id: 'reunion-id',
+      points: [point],
+    });
     const reunionFixture = await makeFixture(
       makeContent({
-        reunion: Object.assign(new Reunion(), { id: 'reunion-id' }),
+        type: ContentType.REUNION,
+        list: undefined,
+        reunion,
       }),
     );
     const reunionError = new Error('reunion delete failed');
@@ -470,7 +646,17 @@ describe('ContentLifecycleService', () => {
     await expect(reunionFixture.service.remove('content-id')).rejects.toBe(
       reunionError,
     );
+    expect(reunionFixture.transaction.transactionCalls).toBe(1);
+    expect(reunionFixture.txContentRepository.remove).toHaveBeenCalledWith(
+      reunionFixture.content,
+    );
+    expect(reunionFixture.txReunionRepository.delete).toHaveBeenCalledWith(
+      'reunion-id',
+    );
+    expect(reunionFixture.transaction.pendingWrites).toEqual([]);
     expect(reunionFixture.committedWrites).toEqual([]);
+    expect(reunionFixture.content.reunion).toBe(reunion);
+    expect(reunion.points).toEqual([point]);
     expect(reunionFixture.contentRepository.remove).not.toHaveBeenCalled();
     await listFixture.testingModule.close();
     await reunionFixture.testingModule.close();
