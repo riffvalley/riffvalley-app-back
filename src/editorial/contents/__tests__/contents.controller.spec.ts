@@ -136,6 +136,31 @@ describe('ContentsController daily link update authorization', () => {
       true,
     );
   });
+
+  it('preserves the protected DELETE route and forwards the id and void response', async () => {
+    const contentsService = {
+      remove: jest
+        .fn<
+          ReturnType<ContentsService['remove']>,
+          Parameters<ContentsService['remove']>
+        >()
+        .mockResolvedValue(undefined),
+    };
+    const { controller, module } = await makeController(contentsService);
+    const handler = ContentsController.prototype.remove;
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(':id');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(3);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
+      ValidRoles.riffvalley,
+    );
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toContain(
+      UserRoleGuard,
+    );
+    await expect(controller.remove('content-id')).resolves.toBeUndefined();
+    expect(contentsService.remove).toHaveBeenCalledWith('content-id');
+    await module.close();
+  });
 });
 
 describe('ContentsController monthly agenda', () => {

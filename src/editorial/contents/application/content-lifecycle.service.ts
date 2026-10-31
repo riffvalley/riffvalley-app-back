@@ -302,7 +302,9 @@ export class ContentLifecycleService {
     if (listId || content.reunion) {
       await this.contentRepo.manager.transaction(async (manager) => {
         await manager.getRepository(Content).remove(content);
-        if (listId) await this.listsService.removeList(listId, manager);
+        if (listId && content.type !== ContentType.VIDEO) {
+          await this.listsService.removeList(listId, manager);
+        }
         if (content.reunion) {
           await manager.getRepository(Reunion).delete(content.reunion.id);
         }
