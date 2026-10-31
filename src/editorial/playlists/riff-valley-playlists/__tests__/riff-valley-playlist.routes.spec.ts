@@ -78,19 +78,33 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
     if (app) await app.close();
   });
 
-  it('preserves user, content, and playlistArtistsCount in list responses', async () => {
+  it('keeps the linked Content identity while omitting editorial planning fields', async () => {
     const playlist = {
       id: 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783',
       name: 'Festival',
       user: { id: testUser.id },
-      content: { id: 'content-id' },
+      content: {
+        id: 'content-id',
+        name: 'Unpublished plan',
+        notes: 'Internal notes',
+        publicationDate: '2026-10-30T00:00:00.000Z',
+        closeDate: '2026-11-01T00:00:00.000Z',
+        ready: true,
+        backlog: true,
+        author: { id: 'author-id' },
+      },
       playlistArtistsCount: 3,
     };
     service.findAll.mockResolvedValue([playlist]);
 
     await request(app.getHttpServer())
       .get('/api/riff-valley-playlists')
-      .expect(200, [playlist]);
+      .expect(200, [
+        {
+          ...playlist,
+          content: { id: 'content-id' },
+        },
+      ]);
   });
 
   it('rejects an expired JWT before invoking a protected handler', async () => {

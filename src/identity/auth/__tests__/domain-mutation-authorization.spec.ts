@@ -89,6 +89,9 @@ const mutationRows: readonly MutationRow[] = [
   [GenresController, 'update', ':id', 4, riffvalley],
   [GenresController, 'remove', ':id', 3, riffvalley],
   [ContentsController, 'create', '/', 1, riffvalley],
+  [ContentsController, 'findAll', '/', 0, riffvalley],
+  [ContentsController, 'findOne', ':id', 0, riffvalley],
+  [ContentsController, 'findByMonth', 'by-month', 0, riffvalley],
   [ContentsController, 'update', ':id', 4, riffvalley],
   [ContentsController, 'remove', ':id', 3, riffvalley],
   [ListsController, 'create', '/', 1, riffvalley],
@@ -166,6 +169,12 @@ describe('domain mutation authorization', () => {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toContain(
         UserRoleGuard,
       );
+      if (
+        mutation.controller === ContentsController &&
+        mutation.httpMethod === 0
+      ) {
+        expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toHaveLength(2);
+      }
     },
   );
 

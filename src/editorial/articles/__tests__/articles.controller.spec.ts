@@ -451,13 +451,24 @@ describe('ArticlesController validation', () => {
   });
 
   describe('GET /articles', () => {
-    it('returns the service result unchanged when no filters are provided', async () => {
+    it('preserves article fields while reducing associated Content to its identity', async () => {
       const rows = [article()];
+      rows[0].content = Object.assign(new Content(), {
+        id: 'content-id',
+        name: 'Unpublished plan',
+        notes: 'Internal notes',
+        publicationDate: new Date('2026-10-30T00:00:00.000Z'),
+        closeDate: new Date('2026-11-01T00:00:00.000Z'),
+        ready: true,
+        backlog: true,
+        author: { id: 'author-id' },
+      });
       repository.find = jest.fn().mockResolvedValue(rows);
 
       const response = await list();
 
-      expect(response).toBe(rows);
+      expect(response).toEqual([{ ...rows[0], content: { id: 'content-id' } }]);
+      expect(response[0].content).toEqual({ id: 'content-id' });
       expect(repository.find).toHaveBeenCalledWith(
         expect.objectContaining({ take: 50, skip: 0 }),
       );
