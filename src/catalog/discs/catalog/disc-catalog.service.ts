@@ -297,11 +297,10 @@ export class DiscCatalogService {
           ? paginationDto.genreId
           : undefined,
       voted:
-        paginationDto.eligibility === DiscListEligibility.ALL
-          ? undefined
-          : paginationDto.eligibility
-            ? false
-            : undefined,
+        paginationDto.eligibility === DiscListEligibility.UNVOTED_RATE ||
+        paginationDto.eligibility === DiscListEligibility.UNVOTED_COVER
+          ? false
+          : undefined,
       votedType:
         paginationDto.eligibility === DiscListEligibility.UNVOTED_COVER
           ? 'cover'
@@ -316,6 +315,7 @@ export class DiscCatalogService {
       stableTieBreak: true,
       genreIds: paginationDto.genreIds,
       artistId: paginationDto.artistId,
+      eligibility: paginationDto.eligibility,
     });
   }
 
@@ -360,6 +360,7 @@ export class DiscCatalogService {
           criteria.eligibility === DiscListEligibility.UNVOTED_COVER
             ? 'cover'
             : 'rate',
+        eligibility: criteria.eligibility,
       });
       return query;
     };
@@ -424,6 +425,7 @@ export class DiscCatalogService {
       stableTieBreak: boolean;
       genreIds?: string[];
       artistId?: string;
+      eligibility?: DiscListEligibility;
     },
   ) {
     const {
@@ -528,6 +530,7 @@ export class DiscCatalogService {
       endDate,
       voted,
       votedType,
+      eligibility: options?.eligibility,
     };
     this.applyFindAllFilters(queryBuilder, filterOptions);
     this.applyFindAllFilters(totalItemsQueryBuilder, filterOptions);
@@ -610,6 +613,7 @@ export class DiscCatalogService {
       voted?: string | boolean;
       votedType?: string;
       artistId?: string;
+      eligibility?: DiscListEligibility;
     },
   ): void {
     const {
@@ -622,6 +626,7 @@ export class DiscCatalogService {
       endDate,
       voted,
       votedType,
+      eligibility,
     } = filters;
 
     applyDiscListArtistIdFilter(queryBuilder, artistId);
@@ -683,6 +688,12 @@ export class DiscCatalogService {
         votedType === 'cover'
           ? 'rate.cover IS NOT NULL'
           : 'rate.rate IS NOT NULL',
+      );
+    }
+
+    if (eligibility === DiscListEligibility.NO_RATES) {
+      queryBuilder.andWhere(
+        'NOT EXISTS (SELECT 1 FROM rate r WHERE r."discId" = disc.id AND r.rate IS NOT NULL)',
       );
     }
   }

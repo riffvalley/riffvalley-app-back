@@ -7,6 +7,11 @@ import { Disc } from '../../entities/disc.entity';
 import { OptionsQueryDto } from '../../dto/options-query.dto';
 import { RandomQueryDto } from '../../dto/random-query.dto';
 import { DiscCatalogService } from '../disc-catalog.service';
+import {
+  DiscListEligibility,
+  DiscListMode,
+  DiscListQueryDto,
+} from '../../list/dto/disc-list-contracts.dto';
 import { RatesRandomSelectionService } from 'src/community/rates/random-selection/rates-random-selection.service';
 
 type ChainMock<Args extends unknown[]> = jest.Mock<QueryBuilderMock, Args>;
@@ -445,6 +450,34 @@ describe('DiscCatalogService.findAll', () => {
       limit: 2,
     });
     expect(response.data).toHaveLength(2);
+  });
+
+  it('filters out every disc with a musical rating while allowing cover-only votes', async () => {
+    await service.findDiscList(
+      Object.assign(new DiscListQueryDto(), {
+        mode: DiscListMode.ALL,
+        eligibility: DiscListEligibility.NO_RATES,
+        limit: 20,
+        offset: 0,
+      }),
+      createUserFixture('user-id'),
+    );
+    const builders = queryBuilders;
+    const noMusicalRatings = {
+      condition:
+        'NOT EXISTS (SELECT 1 FROM rate r WHERE r."discId" = disc.id AND r.rate IS NOT NULL)',
+      parameters: undefined,
+    };
+
+    expect(filtersFor(builders[0])).toContainEqual(noMusicalRatings);
+    expect(filtersFor(builders[1])).toContainEqual(noMusicalRatings);
+    expect(filtersFor(builders[0])).toEqual(filtersFor(builders[1]));
+    expect(builders[1].leftJoin).not.toHaveBeenCalledWith(
+      'disc.rates',
+      'rate',
+      'rate.userId = :userId',
+      { userId: 'user-id' },
+    );
   });
 
   it.each<[string, string]>([

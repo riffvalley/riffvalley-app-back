@@ -188,6 +188,10 @@ describe('DiscList query contracts', () => {
     ).resolves.toMatchObject({ eligibility: DiscListEligibility.UNVOTED_RATE });
 
     await expect(
+      validateList({ mode: 'all', eligibility: DiscListEligibility.NO_RATES }),
+    ).resolves.toMatchObject({ eligibility: DiscListEligibility.NO_RATES });
+
+    await expect(
       validateList({
         mode: 'rates',
         eligibility: DiscListEligibility.UNVOTED_RATE,

@@ -29,6 +29,7 @@ export enum DiscListEligibility {
   ALL = 'all',
   UNVOTED_RATE = 'unvotedRate',
   UNVOTED_COVER = 'unvotedCover',
+  NO_RATES = 'noRates',
 }
 
 export enum DiscListSort {
