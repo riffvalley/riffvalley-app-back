@@ -17,6 +17,7 @@ import { UpdateVideoDto } from './dto/update-video.dto';
 import { ListVideoQueryDto } from './dto/list-video.query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
+import { toPublicContentReference } from 'src/editorial/contents/serialization/public-content-reference';
 
 @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 @Controller('videos')
@@ -26,12 +27,16 @@ export class VideosController {
   @Post()
   @Auth(ValidRoles.riffvalley)
   create(@Body() createVideoDto: CreateVideoDto) {
-    return this.videosService.create(createVideoDto);
+    return this.videosService
+      .create(createVideoDto)
+      .then(toPublicContentReference);
   }
 
   @Get()
   findAll(@Query() query: ListVideoQueryDto) {
-    return this.videosService.findAll(query);
+    return this.videosService
+      .findAll(query)
+      .then((videos) => videos.map(toPublicContentReference));
   }
 
   @Post(':id/list')
@@ -45,12 +50,14 @@ export class VideosController {
   @Post(':id/content')
   @Auth(ValidRoles.riffvalley)
   createContent(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
-    return this.videosService.createContentForVideo(id);
+    return this.videosService
+      .createContentForVideo(id)
+      .then(toPublicContentReference);
   }
 
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
-    return this.videosService.findOne(id);
+    return this.videosService.findOne(id).then(toPublicContentReference);
   }
 
   @Patch(':id')
@@ -59,7 +66,9 @@ export class VideosController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() updateVideoDto: UpdateVideoDto,
   ) {
-    return this.videosService.update(id, updateVideoDto);
+    return this.videosService
+      .update(id, updateVideoDto)
+      .then(toPublicContentReference);
   }
 
   @Delete(':id')

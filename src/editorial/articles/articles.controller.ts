@@ -15,6 +15,7 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
+import { toPublicContentReference } from 'src/editorial/contents/serialization/public-content-reference';
 
 @Controller('articles')
 export class ArticlesController {
@@ -23,17 +24,21 @@ export class ArticlesController {
   @Post()
   @Auth(ValidRoles.riffvalley)
   create(@Body() createArticleDto: CreateArticleDto) {
-    return this.articlesService.create(createArticleDto);
+    return this.articlesService
+      .create(createArticleDto)
+      .then(toPublicContentReference);
   }
 
   @Get()
   findAll(@Query() query: FindArticlesQueryDto) {
-    return this.articlesService.findAll(query);
+    return this.articlesService
+      .findAll(query)
+      .then((articles) => articles.map(toPublicContentReference));
   }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.articlesService.findOne(id);
+    return this.articlesService.findOne(id).then(toPublicContentReference);
   }
 
   // Manual "create content" button: creates a backlog Content linked to
@@ -41,7 +46,9 @@ export class ArticlesController {
   @Post(':id/content')
   @Auth(ValidRoles.riffvalley)
   createContent(@Param('id', ParseUUIDPipe) id: string) {
-    return this.articlesService.createContentForArticle(id);
+    return this.articlesService
+      .createContentForArticle(id)
+      .then(toPublicContentReference);
   }
 
   @Patch(':id')
@@ -50,7 +57,9 @@ export class ArticlesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateArticleDto: UpdateArticleDto,
   ) {
-    return this.articlesService.update(id, updateArticleDto);
+    return this.articlesService
+      .update(id, updateArticleDto)
+      .then(toPublicContentReference);
   }
 
   @Delete(':id')

@@ -139,7 +139,7 @@ describe('ContentsController daily link update authorization', () => {
 });
 
 describe('ContentsController monthly agenda', () => {
-  it('keeps the public route and forwards validated year and month unchanged', async () => {
+  it('keeps the protected route and forwards validated year and month unchanged', async () => {
     const result = [Object.assign(new Content(), { id: 'content-id' })];
     const contentsService = {
       findByMonth: jest
@@ -169,7 +169,12 @@ describe('ContentsController monthly agenda', () => {
 
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('by-month');
     expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(0);
-    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
+      ValidRoles.riffvalley,
+    );
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toContain(
+      UserRoleGuard,
+    );
 
     await expect(
       controller.findByMonth(

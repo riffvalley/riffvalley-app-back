@@ -38,11 +38,13 @@ export class ContentsController {
   }
 
   @Get('by-month')
+  @Auth(ValidRoles.riffvalley)
   findByMonth(@Query() query: FindContentByMonthQueryDto) {
     return this.contentsService.findByMonth(query.year, query.month);
   }
 
   @Get()
+  @Auth(ValidRoles.riffvalley)
   findAll(@Query('ready') ready?: string, @Query('backlog') backlog?: string) {
     const isReady =
       ready === 'true' ? true : ready === 'false' ? false : undefined;
@@ -52,6 +54,7 @@ export class ContentsController {
   }
 
   @Get(':id')
+  @Auth(ValidRoles.riffvalley)
   findOne(@Param('id') id: string) {
     return this.contentsService.findOne(id);
   }
