@@ -115,7 +115,7 @@ describe('RatesDashboardSummaryService', () => {
     expect(query.mock.calls[0][1]?.[0]).toBe('session-user');
   });
 
-  it('builds a single user-scoped, read-only PostgreSQL aggregation without vote events', async () => {
+  it('counts set events for weekly rate activity while keeping score stats scoped to recently active rates', async () => {
     const query = jest.fn().mockResolvedValue([
       {
         activeRates: 1,
@@ -154,11 +154,16 @@ describe('RatesDashboardSummaryService', () => {
     expect(sql).toContain('ORDER BY last_activity DESC, rate_id ASC');
     expect(sql).toContain('last_activity >= bounds.previous_week_start');
     expect(sql).toContain('last_activity < bounds.week_start');
+    expect(sql).toContain("event.event_type = 'set'");
+    expect(sql).toContain('event.user_id = $1::uuid');
+    expect(sql).toContain('event.occurred_at >= $2::timestamptz');
+    expect(sql).toContain('event.occurred_at < $3::timestamptz');
+    expect(sql).toContain('event.occurred_at >= $4::timestamptz');
+    expect(sql).toContain('event.occurred_at < $2::timestamptz');
     expect(sql).toContain('LEFT JOIN disc d ON d.id = r."discId"');
     expect(sql).toContain('LEFT JOIN artist a ON a.id = d."artistId"');
     expect(sql).toContain('LEFT JOIN genre g ON g.id = d."genreId"');
     expect(sql).toContain('LIMIT 5');
-    expect(sql).not.toContain('rate_vote_events');
     expect(sql).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
     expect(query).toHaveBeenCalledTimes(1);
   });
