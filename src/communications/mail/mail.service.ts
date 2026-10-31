@@ -34,13 +34,14 @@ export class MailService {
   ) {}
 
   async sendPasswordReset(email: string, resetUrl: string): Promise<void> {
+    const logoUrl = 'https://app.riffvalley.es/LOGO-RIFF-VALLEY.svg';
     const safeUrl = escapeMailHtml(resetUrl);
     const result = await this.smtpTransport.sendMail({
       ...this.mailSender.getHeaders('password-reset'),
       to: email,
-      subject: 'Recupera tu contraseña de Riff Valley',
+      subject: 'Recupera tu contraseña de Riff Valley App',
       text: [
-        'Riff Valley',
+        'Riff Valley App',
         '',
         'Hemos recibido una solicitud para cambiar la contraseña de tu cuenta.',
         `Recupérala aquí: ${resetUrl}`,
@@ -49,13 +50,30 @@ export class MailService {
         'Riff Valley nunca te pedirá tu contraseña por correo electrónico.',
       ].join('\n'),
       html: `
-        <main>
-          <h1>Riff Valley</h1>
-          <p>Hemos recibido una solicitud para cambiar la contraseña de tu cuenta.</p>
-          <p><a href="${safeUrl}">Recuperar contraseña</a></p>
-          <p>El enlace caduca 30 minutos después de que se active tras la aceptación del correo.</p>
-          <p>Si no solicitaste este cambio, ignora este mensaje.</p>
-          <p>Riff Valley nunca te pedirá tu contraseña por correo electrónico.</p>
+        <main style="margin:0;background-color:#f3f4f6;padding:32px 12px;font-family:Arial,Helvetica,sans-serif;color:#172554;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;border-collapse:separate;border-spacing:0;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td align="center" style="padding:28px 24px;background-color:#172554;color:#ffffff;">
+                <img src="${logoUrl}" alt="Riff Valley App" width="64" height="64" style="display:block;width:64px;height:64px;margin:0 auto 12px;border:0;" />
+                <h1 style="margin:0;font-size:24px;line-height:1.25;font-weight:700;color:#ffffff;">Riff Valley App</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px 28px 16px;font-size:16px;line-height:1.6;color:#374151;">
+                <p style="margin:0 0 20px;">Hemos recibido una solicitud para cambiar la contraseña de tu cuenta.</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto 24px;">
+                  <tr>
+                    <td align="center" bgcolor="#f4a7bb" style="border-radius:10px;">
+                      <a href="${safeUrl}" style="display:inline-block;padding:14px 24px;border:1px solid #f4a7bb;border-radius:10px;color:#172554;text-decoration:none;font-weight:700;">Recuperar contraseña</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 16px;">El enlace caduca 30 minutos después de que se active tras la aceptación del correo.</p>
+                <p style="margin:0 0 16px;">Si no solicitaste este cambio, ignora este mensaje.</p>
+                <p style="margin:0;font-size:14px;color:#6b7280;">Riff Valley App nunca te pedirá tu contraseña por correo electrónico.</p>
+              </td>
+            </tr>
+          </table>
         </main>
       `,
     });

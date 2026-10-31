@@ -69,8 +69,14 @@ describe('MailService', () => {
     expect(from).toBe('"Riff Valley" <no-reply@test.invalid>');
     expect(replyTo).toBeUndefined();
     expect(to).toBe('listener@test.invalid');
-    expect(subject).toBe('Recupera tu contraseña de Riff Valley');
-    expect(html).toContain('Riff Valley');
+    expect(subject).toBe('Recupera tu contraseña de Riff Valley App');
+    expect(text).toContain('Riff Valley App');
+    expect(html).toContain(
+      'src="https://app.riffvalley.es/LOGO-RIFF-VALLEY.svg"',
+    );
+    expect(html).toContain(
+      '<h1 style="margin:0;font-size:24px;line-height:1.25;font-weight:700;color:#ffffff;">Riff Valley App</h1>',
+    );
     expect(html).toContain(
       'href="https://app.riffvalley.es/reset-password#token=a&amp;b"',
     );
