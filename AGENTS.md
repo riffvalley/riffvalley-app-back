@@ -42,6 +42,14 @@ GitHub Actions ejecuta `pnpm run verify` en `push` y `pull_request`, con Node 24
 
 Antes de editar, parte de `main` y crea una rama con `git switch -c <tipo>/<descripcion-breve-en-kebab-case>`. Elige el tipo según el cambio: `feat/` para funcionalidad, `fix/` para correcciones, `chore/` para mantenimiento, `docs/` para documentación o `refactor/` para refactors. Ejemplo: `git switch -c feat/catalog-work-cat-art-4b`. No uses prefijos de herramienta o persona como `codex/`.
 
+### Flujo obligatorio de publicación
+
+Antes de publicar cambios, comprueba con `git status -sb` y `git branch --show-current` que todos los cambios previstos están en una rama de trabajo distinta de `main` y `origin/main`. La rama debe partir de `origin/main` actualizado y contener únicamente los cambios previstos para el PR. Si estás en `main` o `origin/main`, crea o cambia a una rama de trabajo antes de continuar; conserva los cambios locales existentes.
+
+Publica la rama de trabajo en `origin` y abre un pull request con destino `main`. Comprueba que el PR incluye la rama y los cambios esperados, revisa el resultado de CI y resuelve cualquier fallo o conflicto. Cuando el PR esté listo y autorizado para integrarse, haz el merge mediante GitHub/`gh pr merge` y confirma que `origin/main` contiene el resultado.
+
+No publiques cambios directamente en `main`: no uses `git push origin main`, `git push origin HEAD:main` ni un push equivalente. No sustituyas el PR y su merge por un push directo, aunque sea fast-forward. Si no se puede crear o completar el PR por permisos, conflictos, checks fallidos u otro bloqueo, conserva la rama y comunica el impedimento; no cambies a un push directo.
+
 ### Quality Gate de pruebas
 
 `pnpm run test:unit` ejecuta las suites unitarias de `src/` usando la configuración Jest de `package.json`; `pnpm run test:e2e` ejecuta únicamente los specs `*.e2e-spec.ts` mediante `test/jest-e2e.json`. Ambos comandos propagan el resultado de Jest: cualquier test fallido termina con código distinto de cero. No hay baseline de tests. `pnpm run test:quality-tests` comprueba esa conducta con un fixture Jest aprobado y otro que falla una expectativa. Las reglas y pruebas unitarias son obligatorias para código nuevo y `pnpm run test:unit` forma parte de `pnpm run verify`. E2E queda fuera del control estándar; ejecútalo solo cuando el entorno esté aislado y autorizado. No conectes tests a PostgreSQL ni servicios reales por defecto.
