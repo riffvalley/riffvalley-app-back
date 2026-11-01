@@ -6,6 +6,7 @@ import { AsignationsService } from '../asignations.service';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
 import { CreateAsignationDto } from '../dto/create-asignations.dto';
 import { UpdateAsignationDto } from '../dto/update-asignations.dto';
+import { User } from 'src/identity/auth/entities/user.entity';
 
 jest.mock('sanitize-html', () => jest.fn((value: string) => value));
 
@@ -77,10 +78,13 @@ describe('AsignationsController position validation', () => {
 
     expect(service.create).toHaveBeenCalledWith(
       expect.objectContaining({ position: 3 }),
+      undefined,
     );
-    expect(service.update).toHaveBeenCalledWith(asignationId, {
-      position: -1,
-    });
+    expect(service.update).toHaveBeenCalledWith(
+      asignationId,
+      { position: -1 },
+      undefined,
+    );
   });
 
   it('preserves optional and nullable behavior', async () => {
@@ -92,15 +96,58 @@ describe('AsignationsController position validation', () => {
     expect(service.create).toHaveBeenNthCalledWith(
       1,
       expect.not.objectContaining({ position: expect.anything() }),
+      undefined,
     );
     expect(service.create).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ position: null }),
+      undefined,
     );
-    expect(service.update).toHaveBeenNthCalledWith(1, asignationId, {});
-    expect(service.update).toHaveBeenNthCalledWith(2, asignationId, {
-      position: null,
+    expect(service.update).toHaveBeenNthCalledWith(
+      1,
+      asignationId,
+      {},
+      undefined,
+    );
+    expect(service.update).toHaveBeenNthCalledWith(
+      2,
+      asignationId,
+      { position: null },
+      undefined,
+    );
+  });
+
+  it('rejects actorId in the public body rather than trusting a caller identity', async () => {
+    await expect(
+      create({ listId, actorId: 'caller-controlled-id' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
+  it('passes the authenticated actor and only a valid UUID source header', () => {
+    const user = Object.assign(new User(), {
+      id: 'actor-id',
+      username: 'Editora',
     });
+    controller.create(new CreateAsignationDto(), user, 'not-a-uuid');
+    expect(service.create).toHaveBeenCalledWith(new CreateAsignationDto(), {
+      actor: { kind: 'user', id: 'actor-id', displayName: 'Editora' },
+    });
+
+    controller.update(
+      asignationId,
+      new UpdateAsignationDto(),
+      user,
+      '29975434-5c45-4a8f-a197-bcb73e215830',
+    );
+    expect(service.update).toHaveBeenCalledWith(
+      asignationId,
+      expect.any(Object),
+      {
+        actor: { kind: 'user', id: 'actor-id', displayName: 'Editora' },
+        sourceId: '29975434-5c45-4a8f-a197-bcb73e215830',
+      },
+    );
   });
 
   it.each([

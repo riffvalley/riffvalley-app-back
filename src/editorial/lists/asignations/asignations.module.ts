@@ -8,6 +8,7 @@ import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { List } from 'src/editorial/lists/entities/list.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { ListsModule } from 'src/editorial/lists/list.module';
+import { ListsRealtimeModule } from '../realtime/lists-realtime.module';
 
 @Module({
   controllers: [AsignationsController], // Controladores que gestionan las rutas
@@ -16,6 +17,7 @@ import { ListsModule } from 'src/editorial/lists/list.module';
     TypeOrmModule.forFeature([Asignation, Disc, List, User]),
     AuthorizationModule,
     ListsModule,
+    ListsRealtimeModule,
   ], // Registro de la entidad Asignation en TypeORM
 })
 export class AsignationsModule {}

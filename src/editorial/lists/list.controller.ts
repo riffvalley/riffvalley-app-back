@@ -9,7 +9,10 @@ import {
   ParseUUIDPipe,
   Query,
   Headers,
+  Req,
+  Res,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { ListsService } from './list.service';
 import { CreateListDto } from './dto/create-list.dto';
 import { CreateWeeklyListDto } from './dto/create-weekly-list.dto';
@@ -25,10 +28,20 @@ import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { GetUser } from 'src/identity/authorization/decorators/get-user.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { contentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
+import { ListsStreamService } from './realtime/lists-stream.service';
 
 @Controller('lists')
 export class ListsController {
-  constructor(private readonly listsServices: ListsService) {}
+  constructor(
+    private readonly listsServices: ListsService,
+    private readonly listsStreamService: ListsStreamService,
+  ) {}
+
+  @Get('events')
+  @Auth(ValidRoles.riffvalley)
+  openEvents(@Req() request: Request, @Res() response: Response): void {
+    this.listsStreamService.open(request, response);
+  }
 
   @Post()
   @Auth(ValidRoles.riffvalley)

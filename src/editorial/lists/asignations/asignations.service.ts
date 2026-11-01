@@ -15,6 +15,8 @@ import { List, ListType } from 'src/editorial/lists/entities/list.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
+import { ListsEventPublisher } from '../realtime/lists-event-publisher.service';
+import { ListsMutationContext } from '../realtime/contracts/lists-event.contract';
 import sanitizeHtml = require('sanitize-html');
 
 const MAX_RADAR_DISCS_PER_GROUP = 4;
@@ -65,10 +67,15 @@ export class AsignationsService {
 
     private readonly listsService: ListsService,
 
+    private readonly eventPublisher: ListsEventPublisher,
+
     // private readonly discRespository: Repository<Disc>,
   ) {}
 
-  async create(createAsignationDto: CreateAsignationDto) {
+  async create(
+    createAsignationDto: CreateAsignationDto,
+    context?: ListsMutationContext,
+  ) {
     const {
       userId,
       discId,
@@ -119,31 +126,53 @@ export class AsignationsService {
         list,
       });
 
-      await this.asignationRepository.manager.transaction(async (manager) => {
-        await this.lockListType(manager, listId);
-        const transactionalList = await manager
-          .getRepository(List)
-          .findOneBy({ id: listId });
-        if (!transactionalList)
-          throw new NotFoundException(`List with id ${listId} not found`);
-        asignation.list = transactionalList;
+      const committed = await this.asignationRepository.manager.transaction(
+        async (manager) => {
+          await this.lockListType(manager, listId);
+          const transactionalList = await manager
+            .getRepository(List)
+            .findOneBy({ id: listId });
+          if (!transactionalList)
+            throw new NotFoundException(`List with id ${listId} not found`);
+          asignation.list = transactionalList;
 
-        if (
-          disc &&
-          transactionalList.type === ListType.WEEK &&
-          asignation.position != null &&
-          asignation.position !== 0
-        ) {
-          await this.lockRadarGroup(manager, listId, asignation.position);
-          const count = await this.countDiscsInGroup(
-            manager.getRepository(Asignation),
-            listId,
-            asignation.position,
-          );
-          this.assertRadarGroupCapacity(count);
-        }
-        await manager.getRepository(Asignation).save(asignation);
-      });
+          if (
+            disc &&
+            transactionalList.type === ListType.WEEK &&
+            asignation.position != null &&
+            asignation.position !== 0
+          ) {
+            await this.lockRadarGroup(manager, listId, asignation.position);
+            const count = await this.countDiscsInGroup(
+              manager.getRepository(Asignation),
+              listId,
+              asignation.position,
+            );
+            this.assertRadarGroupCapacity(count);
+          }
+          const savedAsignation = await manager
+            .getRepository(Asignation)
+            .save(asignation);
+          return { asignation: savedAsignation, list: transactionalList };
+        },
+      );
+
+      if (
+        committed.asignation.disc &&
+        (committed.list.type === ListType.WEEK ||
+          committed.list.type === ListType.MONTH)
+      ) {
+        this.eventPublisher.publishChangeSafely(
+          () =>
+            this.eventPublisher.createAssignmentEvent(
+              committed.asignation,
+              committed.list,
+              context,
+              'assignment.created',
+            ),
+          { id: committed.list.id, type: committed.list.type },
+        );
+      }
 
       return asignation;
     } catch (error) {
@@ -180,7 +209,11 @@ export class AsignationsService {
     return asignation;
   }
 
-  async update(id: string, updateAsignationDto: UpdateAsignationDto) {
+  async update(
+    id: string,
+    updateAsignationDto: UpdateAsignationDto,
+    context?: ListsMutationContext,
+  ) {
     // Sacamos genreId aparte
     const {
       userId,
@@ -192,7 +225,7 @@ export class AsignationsService {
     } = updateAsignationDto;
 
     try {
-      const asignation = await this.asignationRepository.manager.transaction(
+      const committed = await this.asignationRepository.manager.transaction(
         async (manager) => {
           const asignationRepo = manager.getRepository(Asignation);
           const existing = await asignationRepo.findOne({
@@ -312,9 +345,77 @@ export class AsignationsService {
             throw new NotFoundException(`Asignation with id ${id} not found`);
 
           await asignationRepo.save(nextAsignation);
-          return nextAsignation;
+          const eligibleForRadarPositionEvent =
+            currentList.id === targetList.id &&
+            currentList.type === ListType.WEEK &&
+            targetList.type === ListType.WEEK &&
+            !!existing.disc &&
+            hasDisc;
+          const positionAction = eligibleForRadarPositionEvent
+            ? this.classifyRadarPositionChange(
+                existing.position,
+                targetPosition,
+              )
+            : undefined;
+          const eventAsignation =
+            positionAction && (userId || restDto.discId)
+              ? Object.assign(new Asignation(), nextAsignation)
+              : nextAsignation;
+          return {
+            asignation: nextAsignation,
+            eventAsignation,
+            list: currentList,
+            previousPosition: existing.position,
+            newPosition: targetPosition,
+            positionAction,
+          };
         },
       );
+
+      if (committed.positionAction) {
+        let descriptiveMetadataAvailable = true;
+        if (
+          userId &&
+          (committed.eventAsignation.user?.id !== userId ||
+            !committed.eventAsignation.user.username?.trim())
+        ) {
+          try {
+            committed.eventAsignation.user =
+              (await this.userRepository.findOneBy({ id: userId })) ?? null;
+          } catch {
+            descriptiveMetadataAvailable = false;
+          }
+        }
+        if (
+          restDto.discId &&
+          (committed.eventAsignation.disc?.id !== restDto.discId ||
+            !committed.eventAsignation.disc.artist?.name?.trim())
+        ) {
+          try {
+            committed.eventAsignation.disc =
+              (await this.discRepository.findOneBy({ id: restDto.discId })) ??
+              null;
+          } catch {
+            descriptiveMetadataAvailable = false;
+          }
+        }
+        this.eventPublisher.publishChangeSafely(
+          () => {
+            if (!descriptiveMetadataAvailable) {
+              throw new Error('lists_event_metadata_unavailable');
+            }
+            return this.eventPublisher.createPositionEvent({
+              assignment: committed.eventAsignation,
+              list: committed.list,
+              context,
+              action: committed.positionAction,
+              previousPosition: committed.previousPosition,
+              newPosition: committed.newPosition,
+            });
+          },
+          { id: committed.list.id, type: ListType.WEEK },
+        );
+      }
 
       // Si se ha tocado el texto, las bandas similares o la canción, y
       // esta asignación pertenece a una lista mensual que ya tiene post en
@@ -336,10 +437,44 @@ export class AsignationsService {
         }
       }
 
-      return asignation;
+      return committed.asignation;
     } catch (error) {
       this.handleDbExceptions(error);
     }
+  }
+
+  private classifyRadarPositionChange(
+    previousPosition: number | null | undefined,
+    newPosition: number | null | undefined,
+  ):
+    | 'assignment.placed'
+    | 'assignment.moved'
+    | 'assignment.unplaced'
+    | undefined {
+    if (previousPosition === newPosition) return undefined;
+    if (
+      previousPosition === 0 &&
+      typeof newPosition === 'number' &&
+      newPosition > 0
+    ) {
+      return 'assignment.placed';
+    }
+    if (
+      typeof previousPosition === 'number' &&
+      previousPosition > 0 &&
+      newPosition === 0
+    ) {
+      return 'assignment.unplaced';
+    }
+    if (
+      typeof previousPosition === 'number' &&
+      previousPosition > 0 &&
+      typeof newPosition === 'number' &&
+      newPosition > 0
+    ) {
+      return 'assignment.moved';
+    }
+    return undefined;
   }
 
   private async lockRadarGroup(
