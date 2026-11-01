@@ -212,7 +212,7 @@ describe('ContentLifecycleService', () => {
       findOne: jest.fn().mockResolvedValue(content),
     };
     const eventPublisher = {
-      publishInvalidationSafely: jest.fn(),
+      publishChangeSafely: jest.fn(),
     };
 
     const testingModule: TestingModule = await Test.createTestingModule({
@@ -284,9 +284,7 @@ describe('ContentLifecycleService', () => {
       new Date('2026-11-01T00:00:00.000Z'),
     );
     expect(fixture.list.closeDate).toBeNull();
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).toHaveBeenCalledTimes(1);
+    expect(fixture.eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(1);
     expect(fixture.list.listDate).toBeNull();
     expect(fixture.content.ready).toBe(false);
     await fixture.testingModule.close();
@@ -297,14 +295,12 @@ describe('ContentLifecycleService', () => {
 
     await fixture.service.update('content-id', { name: 'Monthly list' });
 
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).not.toHaveBeenCalled();
+    expect(fixture.eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
   });
 
   it('publishes once after an update transaction commits', async () => {
     const fixture = await makeFixture();
-    fixture.eventPublisher.publishInvalidationSafely.mockImplementation(() => {
+    fixture.eventPublisher.publishChangeSafely.mockImplementation(() => {
       expect(fixture.committedWrites.length).toBeGreaterThan(0);
     });
 
@@ -312,9 +308,7 @@ describe('ContentLifecycleService', () => {
       publicationDate: '2026-11-01T00:00:00.000Z',
     });
 
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).toHaveBeenCalledTimes(1);
+    expect(fixture.eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(1);
   });
 
   it('publishes once when scheduling backlog Content on the calendar', async () => {
@@ -333,9 +327,7 @@ describe('ContentLifecycleService', () => {
       backlog: false,
     });
 
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).toHaveBeenCalledTimes(1);
+    expect(fixture.eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(1);
     await fixture.testingModule.close();
   });
 
@@ -353,9 +345,7 @@ describe('ContentLifecycleService', () => {
       backlog: true,
     });
 
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).toHaveBeenCalledTimes(1);
+    expect(fixture.eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(1);
     await fixture.testingModule.close();
   });
 
@@ -452,9 +442,7 @@ describe('ContentLifecycleService', () => {
     expect(fixture.manager.repositoryTargets).toContain(Reunion);
     expect(fixture.committedWrites).toEqual([]);
     expect(fixture.contentRepository.save).not.toHaveBeenCalled();
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).not.toHaveBeenCalled();
+    expect(fixture.eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
     await fixture.testingModule.close();
   });
 
@@ -492,9 +480,7 @@ describe('ContentLifecycleService', () => {
     );
     expect(fixture.committedWrites).toEqual([]);
     expect(fixture.contentRepository.save).not.toHaveBeenCalled();
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).not.toHaveBeenCalled();
+    expect(fixture.eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
     await fixture.testingModule.close();
   });
 
@@ -532,9 +518,7 @@ describe('ContentLifecycleService', () => {
     );
     expect(fixture.txReunionRepository.delete).not.toHaveBeenCalled();
     expect(fixture.contentRepository.remove).not.toHaveBeenCalled();
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).toHaveBeenCalledTimes(1);
+    expect(fixture.eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(1);
     await fixture.testingModule.close();
   });
 
@@ -712,7 +696,7 @@ describe('ContentLifecycleService', () => {
     );
     expect(listFixture.committedWrites).toEqual([]);
     expect(
-      listFixture.eventPublisher.publishInvalidationSafely,
+      listFixture.eventPublisher.publishChangeSafely,
     ).not.toHaveBeenCalled();
 
     const point = Object.assign(new Point(), { id: 'point-id' });
@@ -747,7 +731,7 @@ describe('ContentLifecycleService', () => {
     expect(reunion.points).toEqual([point]);
     expect(reunionFixture.contentRepository.remove).not.toHaveBeenCalled();
     expect(
-      reunionFixture.eventPublisher.publishInvalidationSafely,
+      reunionFixture.eventPublisher.publishChangeSafely,
     ).not.toHaveBeenCalled();
     await listFixture.testingModule.close();
     await reunionFixture.testingModule.close();
@@ -771,7 +755,7 @@ describe('ContentLifecycleService', () => {
       plainContent,
     );
     expect(
-      plainFixture.eventPublisher.publishInvalidationSafely,
+      plainFixture.eventPublisher.publishChangeSafely,
     ).toHaveBeenCalledTimes(1);
     await missingFixture.testingModule.close();
     await plainFixture.testingModule.close();

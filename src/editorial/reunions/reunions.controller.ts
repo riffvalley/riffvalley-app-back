@@ -6,12 +6,16 @@ import {
   Param,
   Body,
   Patch,
+  Headers,
 } from '@nestjs/common';
 import { ReunionService } from './reunions.service';
 import { CreateReunionDto } from './dto/create-reunion.dto';
 import { UpdateReunionDto } from './dto/update-reunion.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
+import { GetUser } from 'src/identity/authorization/decorators/get-user.decorator';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { contentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 
 @Controller('reunions')
 export class ReunionController {
@@ -41,7 +45,14 @@ export class ReunionController {
 
   @Delete(':id')
   @Auth(ValidRoles.riffvalley)
-  async remove(@Param('id') id: string) {
-    return this.reunionService.deleteReunion(id);
+  async remove(
+    @Param('id') id: string,
+    @GetUser() user?: User,
+    @Headers('x-content-calendar-client-id') sourceId?: string,
+  ) {
+    return this.reunionService.deleteReunion(
+      id,
+      contentCalendarMutationContext(user, sourceId),
+    );
   }
 }

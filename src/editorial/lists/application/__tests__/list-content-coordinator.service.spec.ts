@@ -166,7 +166,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     });
 
     const eventPublisher = new ContentCalendarEventPublisher();
-    jest.spyOn(eventPublisher, 'publishInvalidationSafely');
+    jest.spyOn(eventPublisher, 'publishChangeSafely');
     const service = new ListContentCoordinator(
       listRepository,
       contentRepository,
@@ -235,7 +235,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     );
     expect(content.closeDate).toBeNull();
     expect(content.listDate).toBeNull();
-    expect(eventPublisher.publishInvalidationSafely).toHaveBeenCalledTimes(1);
+    expect(eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(1);
   });
 
   it('publishes nothing when a List update does not change linked Content', async () => {
@@ -246,7 +246,7 @@ describe('ListContentCoordinator List/Content writes', () => {
       updateWithDate('releaseDate', '2026-10-01T00:00:00.000Z'),
     );
 
-    expect(eventPublisher.publishInvalidationSafely).not.toHaveBeenCalled();
+    expect(eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
   });
 
   it('leaves all synchronized dates unchanged when date fields are omitted', async () => {
@@ -446,7 +446,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     expect(txContentRepository.remove).toHaveBeenCalledTimes(1);
     expect(content.deleted).toBeUndefined();
     expect(list.deleted).toBeUndefined();
-    expect(eventPublisher.publishInvalidationSafely).not.toHaveBeenCalled();
+    expect(eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
   });
 
   it('commits the related Content and List deletion through one manager', async () => {
@@ -458,7 +458,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(content.deleted).toBe(true);
     expect(list.deleted).toBe(true);
-    expect(eventPublisher.publishInvalidationSafely).toHaveBeenCalledTimes(1);
+    expect(eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(1);
   });
 
   it('deletes an unlinked List directly without opening a transaction', async () => {
@@ -469,7 +469,7 @@ describe('ListContentCoordinator List/Content writes', () => {
 
     expect(transaction).not.toHaveBeenCalled();
     expect(listRepository.remove).toHaveBeenCalledTimes(1);
-    expect(eventPublisher.publishInvalidationSafely).not.toHaveBeenCalled();
+    expect(eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
   });
 
   it('uses a manager supplied by the caller without opening a nested transaction', async () => {
@@ -487,7 +487,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     expect(transaction).not.toHaveBeenCalled();
     expect(txContentRepository.remove).toHaveBeenCalledTimes(1);
     expect(txListRepository.remove).toHaveBeenCalledTimes(1);
-    expect(eventPublisher.publishInvalidationSafely).not.toHaveBeenCalled();
+    expect(eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
   });
 
   it('does not delete List when deleting linked Content fails', async () => {

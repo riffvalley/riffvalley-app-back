@@ -10,6 +10,7 @@ import {
   ValidationPipe,
   ParseUUIDPipe,
   Query,
+  Headers,
 } from '@nestjs/common';
 import { RiffValleyPlaylistService } from './riff-valley-playlist.service';
 import { CreateRiffValleyPlaylistDto } from './dto/create-riff-valley-playlist.dto';
@@ -18,6 +19,9 @@ import { ListRiffValleyPlaylistsQueryDto } from './dto/list-riff-valley-playlist
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { toPublicContentReference } from 'src/editorial/contents/serialization/public-content-reference';
+import { GetUser } from 'src/identity/authorization/decorators/get-user.decorator';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { contentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 
 @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 @Controller('riff-valley-playlists')
@@ -71,9 +75,16 @@ export class RiffValleyPlaylistController {
   // this local playlist item. The playlist and Content stay independent from then on.
   @Post(':id/content')
   @Auth(ValidRoles.riffvalley)
-  createContent(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+  createContent(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @GetUser() user?: User,
+    @Headers('x-content-calendar-client-id') sourceId?: string,
+  ) {
     return this.riffValleyPlaylistService
-      .createContentForRiffValleyPlaylist(id)
+      .createContentForRiffValleyPlaylist(
+        id,
+        contentCalendarMutationContext(user, sourceId),
+      )
       .then(toPublicContentReference);
   }
 

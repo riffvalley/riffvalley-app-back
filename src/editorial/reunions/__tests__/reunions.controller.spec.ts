@@ -158,7 +158,10 @@ describe('ReunionController', () => {
       'reunion-id',
       updateDto,
     );
-    expect(reunionService.deleteReunion).toHaveBeenCalledWith('reunion-id');
+    expect(reunionService.deleteReunion).toHaveBeenCalledWith(
+      'reunion-id',
+      undefined,
+    );
   });
 
   it('validates partial PATCH fields with UpdateReunionDto at runtime', async () => {

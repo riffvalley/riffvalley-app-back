@@ -175,7 +175,7 @@ describe('ContentCreationService', () => {
       createMonthlyList: jest.fn().mockResolvedValue(list),
     };
     const eventPublisher = {
-      publishInvalidationSafely: jest.fn(),
+      publishChangeSafely: jest.fn(),
     };
 
     const testingModule: TestingModule = await Test.createTestingModule({
@@ -255,15 +255,15 @@ describe('ContentCreationService', () => {
       expect(result[relation]).toEqual(
         expect.objectContaining({ id: 'saved-id' }),
       );
-      expect(
-        fixture.eventPublisher.publishInvalidationSafely,
-      ).toHaveBeenCalledTimes(1);
+      expect(fixture.eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(
+        1,
+      );
     },
   );
 
   it('publishes only after the Content creation transaction commits', async () => {
     const fixture = await makeFixture();
-    fixture.eventPublisher.publishInvalidationSafely.mockImplementation(() => {
+    fixture.eventPublisher.publishChangeSafely.mockImplementation(() => {
       expect(fixture.committedWrites).toHaveLength(1);
     });
 
@@ -273,9 +273,7 @@ describe('ContentCreationService', () => {
       authorId: 'author-id',
     });
 
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).toHaveBeenCalledTimes(1);
+    expect(fixture.eventPublisher.publishChangeSafely).toHaveBeenCalledTimes(1);
   });
 
   it('does not publish when an auxiliary save fails and the transaction rolls back', async () => {
@@ -291,9 +289,7 @@ describe('ContentCreationService', () => {
     ).rejects.toThrow('article save failed');
 
     expect(fixture.committedWrites).toHaveLength(0);
-    expect(
-      fixture.eventPublisher.publishInvalidationSafely,
-    ).not.toHaveBeenCalled();
+    expect(fixture.eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
   });
 
   it('creates RADAR and BEST lists through the Content transaction manager', async () => {

@@ -6,6 +6,7 @@ import { CreateReunionDto } from './dto/create-reunion.dto';
 import { UpdateReunionDto } from './dto/update-reunion.dto';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
+import { ContentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 
 @Injectable()
 export class ReunionService {
@@ -49,7 +50,10 @@ export class ReunionService {
     return this.reunionRepository.save(reunion);
   }
 
-  async deleteReunion(id: string): Promise<void> {
+  async deleteReunion(
+    id: string,
+    context?: ContentCalendarMutationContext,
+  ): Promise<void> {
     // Check if there is associated content
     const content = await this.contentRepository.findOne({
       where: { reunionId: id },
@@ -57,7 +61,8 @@ export class ReunionService {
 
     if (content) {
       // If content exists, remove content (which will cascade remove this reunion)
-      await this.contentsService.remove(content.id);
+      if (context) await this.contentsService.remove(content.id, context);
+      else await this.contentsService.remove(content.id);
     } else {
       // If no content, just remove reunion
       const result = await this.reunionRepository.delete(id);

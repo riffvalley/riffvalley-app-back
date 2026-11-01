@@ -5,7 +5,10 @@ import {
   CONTENT_CALENDAR_MAX_STREAM_DURATION_MS,
   ContentCalendarStreamService,
 } from '../content-calendar-stream.service';
-import { encodeContentCalendarInvalidation } from '../contracts/content-calendar-event.contract';
+import {
+  CONTENT_CALENDAR_GENERIC_CHANGE,
+  encodeContentCalendarEvent,
+} from '../contracts/content-calendar-event.contract';
 
 class FakeRequest extends EventEmitter {
   constructor(readonly httpVersionMajor = 1) {
@@ -83,9 +86,11 @@ describe('ContentCalendarStreamService', () => {
     );
     expect(response.headers.get('connection')).toBe('keep-alive');
     expect(response.headers.get('x-accel-buffering')).toBe('no');
-    expect(response.chunks).toEqual([encodeContentCalendarInvalidation()]);
+    expect(response.chunks).toEqual([
+      'event: contents.invalidate\ndata: {"type":"contents.invalidate","version":2,"reason":"initial"}\n\n',
+    ]);
     expect(response.chunks[0]).toBe(
-      'event: contents.invalidate\ndata: {"type":"contents.invalidate","version":1}\n\n',
+      'event: contents.invalidate\ndata: {"type":"contents.invalidate","version":2,"reason":"initial"}\n\n',
     );
     expect(response.chunks[0]).not.toContain('id:');
     expect(response.chunks[0]).not.toMatch(
@@ -116,11 +121,11 @@ describe('ContentCalendarStreamService', () => {
   it('delivers publisher invalidations to current streams only', () => {
     const { response } = openConnection();
 
-    publisher.publishInvalidation();
+    publisher.publish(CONTENT_CALENDAR_GENERIC_CHANGE);
 
     expect(response.chunks).toEqual([
-      encodeContentCalendarInvalidation(),
-      encodeContentCalendarInvalidation(),
+      'event: contents.invalidate\ndata: {"type":"contents.invalidate","version":2,"reason":"initial"}\n\n',
+      encodeContentCalendarEvent(CONTENT_CALENDAR_GENERIC_CHANGE),
     ]);
   });
 

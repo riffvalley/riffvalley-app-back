@@ -5,6 +5,7 @@ import { Content } from './entities/content.entity';
 import { ContentQueryService } from './application/content-query.service';
 import { ContentCreationService } from './application/content-creation.service';
 import { ContentLifecycleService } from './application/content-lifecycle.service';
+import { ContentCalendarMutationContext } from './realtime/contracts/content-calendar-event.contract';
 
 @Injectable()
 export class ContentsService {
@@ -14,8 +15,13 @@ export class ContentsService {
     private readonly contentLifecycleService: ContentLifecycleService,
   ) {}
 
-  async create(createContentDto: CreateContentDto): Promise<Content> {
-    return this.contentCreationService.create(createContentDto);
+  async create(
+    createContentDto: CreateContentDto,
+    context?: ContentCalendarMutationContext,
+  ): Promise<Content> {
+    return context
+      ? this.contentCreationService.create(createContentDto, context)
+      : this.contentCreationService.create(createContentDto);
   }
 
   async findAll(ready?: boolean, backlog?: boolean): Promise<Content[]> {
@@ -29,12 +35,20 @@ export class ContentsService {
   async update(
     id: string,
     updateContentDto: UpdateContentDto,
+    context?: ContentCalendarMutationContext,
   ): Promise<Content> {
-    return this.contentLifecycleService.update(id, updateContentDto);
+    return context
+      ? this.contentLifecycleService.update(id, updateContentDto, context)
+      : this.contentLifecycleService.update(id, updateContentDto);
   }
 
-  async remove(id: string): Promise<void> {
-    return this.contentLifecycleService.remove(id);
+  async remove(
+    id: string,
+    context?: ContentCalendarMutationContext,
+  ): Promise<void> {
+    return context
+      ? this.contentLifecycleService.remove(id, context)
+      : this.contentLifecycleService.remove(id);
   }
 
   async findByMonth(year: number, month: number): Promise<Content[]> {

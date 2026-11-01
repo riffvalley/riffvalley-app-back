@@ -1,6 +1,15 @@
 import { BeforeApplicationShutdown, Injectable, Logger } from '@nestjs/common';
 import { ContentCalendarEventPublisher } from './content-calendar-event-publisher.service';
-import { encodeContentCalendarInvalidation } from './contracts/content-calendar-event.contract';
+import {
+  CONTENT_CALENDAR_INVALIDATE_EVENT,
+  encodeContentCalendarEvent,
+} from './contracts/content-calendar-event.contract';
+
+const INITIAL_SYNC_EVENT = {
+  type: CONTENT_CALENDAR_INVALIDATE_EVENT,
+  version: 2,
+  reason: 'initial',
+} as const;
 
 export const CONTENT_CALENDAR_HEARTBEAT_INTERVAL_MS = 25_000;
 export const CONTENT_CALENDAR_MAX_STREAM_DURATION_MS = 10 * 60_000;
@@ -76,8 +85,8 @@ export class ContentCalendarStreamService implements BeforeApplicationShutdown {
       this.closeStream(stream, 'write_error', true);
     };
 
-    const unsubscribe = this.publisher.subscribe(() => {
-      if (stream) this.write(stream, encodeContentCalendarInvalidation());
+    const unsubscribe = this.publisher.subscribe((event) => {
+      if (stream) this.write(stream, encodeContentCalendarEvent(event));
     });
 
     const activeStream: ActiveStream = {
@@ -114,7 +123,7 @@ export class ContentCalendarStreamService implements BeforeApplicationShutdown {
         () => this.closeStream(activeStream, 'max_duration', true),
         CONTENT_CALENDAR_MAX_STREAM_DURATION_MS,
       );
-      this.write(activeStream, encodeContentCalendarInvalidation());
+      this.write(activeStream, encodeContentCalendarEvent(INITIAL_SYNC_EVENT));
       if (!activeStream.closed) {
         this.logger.log(
           `event=content_calendar_sse_connected active=${this.streams.size}`,

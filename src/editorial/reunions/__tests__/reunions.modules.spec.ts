@@ -185,7 +185,7 @@ describe('Reunions and Points NestJS wiring', () => {
         { provide: ContentQueryService, useValue: {} },
         {
           provide: ContentCalendarEventPublisher,
-          useValue: { publishInvalidationSafely: jest.fn() },
+          useValue: { publishChangeSafely: jest.fn() },
         },
       ],
     }).compile();

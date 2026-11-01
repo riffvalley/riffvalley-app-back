@@ -29,7 +29,15 @@ import {
 } from 'src/editorial/videos/entities/video.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
 import { isValidDateValue } from 'src/editorial/lists/domain/list-date-rules';
-import { ContentCalendarEventPublisher } from '../realtime/content-calendar-event-publisher.service';
+import {
+  ContentCalendarEventPublisher,
+  createContentCalendarEvent,
+} from '../realtime/content-calendar-event-publisher.service';
+import {
+  CONTENT_CALENDAR_GENERIC_CHANGE,
+  CONTENT_CALENDAR_SYSTEM_ACTOR,
+  ContentCalendarMutationContext,
+} from '../realtime/contracts/content-calendar-event.contract';
 
 @Injectable()
 export class ContentCreationService {
@@ -51,7 +59,10 @@ export class ContentCreationService {
     private readonly eventPublisher: ContentCalendarEventPublisher,
   ) {}
 
-  async create(createContentDto: CreateContentDto): Promise<Content> {
+  async create(
+    createContentDto: CreateContentDto,
+    context?: ContentCalendarMutationContext,
+  ): Promise<Content> {
     const {
       authorId,
       publicationDate,
@@ -288,7 +299,17 @@ export class ContentCreationService {
       },
     );
 
-    this.eventPublisher.publishInvalidationSafely();
+    const mutation = context ?? { actor: CONTENT_CALENDAR_SYSTEM_ACTOR };
+    this.eventPublisher.publishChangeSafely(
+      () =>
+        createContentCalendarEvent({
+          action: 'created',
+          content: savedContent,
+          actor: mutation.actor,
+          sourceId: mutation.sourceId,
+        }),
+      CONTENT_CALENDAR_GENERIC_CHANGE,
+    );
     return savedContent;
   }
 }

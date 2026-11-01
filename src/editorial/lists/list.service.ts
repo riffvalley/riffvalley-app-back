@@ -6,6 +6,7 @@ import { ListQueryDto } from './dto/list-query.dto';
 import { List, ListType } from './entities/list.entity';
 import { ListCalendarService } from './application/list-calendar.service';
 import { ListContentCoordinator } from './application/list-content-coordinator.service';
+import { ContentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 import { ListCrudService } from './application/list-crud.service';
 import { WeeklyListPublisherService } from './wordpress/weekly-list-publisher.service';
 import { MonthlyListPublisherService } from './wordpress/monthly-list-publisher.service';
@@ -39,12 +40,24 @@ export class ListsService {
     return this.listCrudService.findOne(id);
   }
 
-  update(id: string, updateListDto: UpdateListDto) {
-    return this.listContentCoordinator.update(id, updateListDto);
+  update(
+    id: string,
+    updateListDto: UpdateListDto,
+    context?: ContentCalendarMutationContext,
+  ) {
+    return context
+      ? this.listContentCoordinator.update(id, updateListDto, context)
+      : this.listContentCoordinator.update(id, updateListDto);
   }
 
-  removeList(id: string, manager?: EntityManager) {
-    return this.listContentCoordinator.removeList(id, manager);
+  removeList(
+    id: string,
+    manager?: EntityManager,
+    context?: ContentCalendarMutationContext,
+  ) {
+    return context
+      ? this.listContentCoordinator.removeList(id, manager, context)
+      : this.listContentCoordinator.removeList(id, manager);
   }
 
   findUpcoming() {

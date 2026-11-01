@@ -296,7 +296,7 @@ describe('ContentsService creation facade compatibility', () => {
         { provide: ContentLifecycleService, useValue: lifecycleService },
         {
           provide: ContentCalendarEventPublisher,
-          useValue: { publishInvalidationSafely: jest.fn() },
+          useValue: { publishChangeSafely: jest.fn() },
         },
         { provide: ListsService, useValue: listsService },
         { provide: getRepositoryToken(Content), useValue: contentRepository },

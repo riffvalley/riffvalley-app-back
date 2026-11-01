@@ -1,13 +1,14 @@
 # SSE — Sincronización en tiempo real de Content Calendar
 
-Roadmap backend para sincronizar entre editores los cambios de **Content Calendar** mediante Server-Sent Events (SSE). SSE solo avisa de que el conjunto de Contents puede haber cambiado; los registros se consultan mediante los endpoints HTTP actuales. El alcance no incluye notificaciones generales, logros ni otras capacidades.
+Roadmap backend para sincronizar entre editores los cambios de **Content Calendar** mediante Server-Sent Events (SSE). SSE invalida las consultas y, desde v2, adjunta descriptores editoriales efímeros; los registros completos se consultan mediante los endpoints HTTP actuales. El alcance no incluye notificaciones generales, logros ni otras capacidades.
 
 ## Estado y alcance
 
 - `SSE-1`: auditoría y decisiones arquitectónicas — **documentado**.
 - `SSE-2`: conexión SSE, autenticación y heartbeat — **completada el 2026-11-01**; endpoint, publisher en memoria, ciclo de vida, permisos, pruebas y documentación implementados.
 - `SSE-3`: emisión después de mutaciones confirmadas — **completada el 2026-11-01**; cubre creación, actualización y eliminación de Content y los cambios de Lists que persisten/eliminan Content.
-- `SSE-4`: cliente TanStack Query — pendiente en `riffvalley-app-front`; tarea cross-repo independiente, no incluida en este roadmap backend.
+- `SSE-4`: cliente TanStack Query — consumidor v1 implementado en `riffvalley-app-front`; pendiente adaptar y aceptar el contrato descriptivo v2 en una tarea frontend independiente.
+- `SSE-6a-BE`: contrato editorial descriptivo v2 — **completada el 2026-11-01**; sustituye el envelope v1 sin compatibilidad.
 - `SSE-5`: validación de sincronización, reconexión y carga — pendiente; sin pruebas contra producción.
 
 SSE-2 y SSE-3 son cambios backend; SSE-4 se implementa solo en frontend. SSE-5 requiere la integración de ambos. No se reabre el roadmap E-CC.
@@ -203,10 +204,53 @@ El umbral no se fija con números inventados: primero obtener línea base sin SS
 
 **Verificaciones:** suites focalizadas de creación/lifecycle/Lists/publisher: 68 pruebas pasaron; wiring Nest/Lists/SSE: 35 pruebas pasaron. `pnpm run verify`: 272 suites pasaron y 2.654 pruebas pasaron; 31 suites y 165 pruebas omitidas por configuración. Typecheck: 0 errores; build y gate de dependencias runtime aprobados; ESLint: 0 hallazgos nuevos (832 históricos baselined); estructura: 0 infracciones nuevas (9 históricas baselined). `git diff --check` aprobado. Los archivos tocados se formatearon con Prettier.
 
+### SSE-6a-BE — Contrato descriptivo v2 para Content Calendar
+
+**Completada el 2026-11-01.** Esta tarea reemplaza el envelope v1 sin negociación ni adaptador legacy. Mantiene `GET /api/contents/events`, `contents.invalidate`, el publisher RxJS en memoria, Bearer JWT, rol mínimo `riffvalley`, heartbeat de 25 s y cierre máximo de 10 minutos.
+
+El evento editorial tiene `type: "contents.invalidate"`, `version: 2`, `reason: "change"`, `action`, `actor`, `content` y `changes`; `sourceId` es opcional. La unión discriminada fija los campos por acción:
+
+```json
+{
+  "type": "contents.invalidate",
+  "version": 2,
+  "reason": "change",
+  "action": "moved",
+  "actor": { "kind": "user", "id": "user-uuid", "displayName": "María" },
+  "content": { "id": "content-uuid", "title": "Radar semanal" },
+  "changes": { "previousDate": "2026-10-30", "newDate": "2026-11-01" },
+  "sourceId": "calendar-tab-1"
+}
+```
+
+| Acción        | Transición persistida                      | `changes`                                                    |
+| ------------- | ------------------------------------------ | ------------------------------------------------------------ |
+| `created`     | Nuevo Content                              | `newDate` (fecha civil o `null`)                             |
+| `updated`     | Cambios relevantes sin transición de fecha | `fields`, solo nombres de campos sin sus valores editoriales |
+| `scheduled`   | Sin fecha → con fecha                      | `newDate`                                                    |
+| `moved`       | Una fecha → otra fecha                     | `previousDate`, `newDate`                                    |
+| `unscheduled` | Con fecha → sin fecha                      | `previousDate`                                               |
+| `deleted`     | Content eliminado                          | `previousDate` (fecha civil o `null`)                        |
+
+La sincronización inicial es `{"type":"contents.invalidate","version":2,"reason":"initial"}`; no lleva actor, contenido ni acción. Si falla la resolución descriptiva después del commit, se envía la invalidación genérica v2 `reason: "change"`, sin inventar una acción. Los errores de publicación se registran con un código sin identidad ni datos editoriales y no alteran la respuesta de la mutación.
+
+El actor procede de `@GetUser()` sobre la identidad validada: ID y `User.username` público. Las operaciones automáticas usan la identidad explícita `system` (“Proceso automático”). Las delegaciones de Articles, Videos, Riff Valley Playlists, Reunion y Lists conservan el contexto de la petición cuando la ruta lo tiene. El actor nunca se toma del DTO ni del autor del Content.
+
+Los títulos vienen del `Content.name`, único campo que muestra el calendario en sus eventos de todos los tipos. En los Contents delegados, Article, Video y Riff Valley Playlist copian su `name`; Photos, Radar y Best usan el nombre del propio Content. Reunion persiste además `Reunion.titulo`, que el ciclo de Content sincroniza desde el nombre del Content; el calendario sigue mostrando `Content.name`. La resolución central recorta espacios y, si no hay nombre, usa una etiqueta legible del tipo (o “Contenido editorial”). No consulta relaciones ni añade lecturas. El borrado conserva ID, nombre, tipo y fecha antes de borrar; el evento posterior al commit solo serializa ID y descriptor.
+
+Las fechas del envelope son civiles `YYYY-MM-DD`, extraídas del prefijo de la fecha ISO que ya consume Content Calendar; no se interpreta la hora ni se desplaza a otra zona. Los cambios `publicationDate` determinan las transiciones; las reglas actuales que exigen fecha para Radar, Best y Reunion permanecen intactas. Lists publica únicamente si guardó un Content sincronizado o si eliminó el Content asociado; el cambio de una List sin efecto en Content no emite. La rama con `EntityManager` externo no emite; el llamador publica al terminar la operación lógica.
+
+`X-Content-Calendar-Client-Id` es un identificador efímero opcional generado por la instancia cliente, validado por formato y propagado como `sourceId`. No identifica ni autoriza al usuario. Se permite en CORS para que las mutaciones cross-origin puedan incluirlo. El consumidor frontend lo compara para silenciar el aviso de la pestaña que inició la operación. No se modifica Axios de forma general.
+
+SSE-6a-BE no cambia persistencia, reglas editoriales, autenticación del stream, heartbeat ni duración; no añade migraciones, Redis, colas, Web Push ni notificaciones persistentes. El cambio v1→v2 es inmediato; los tests solo aceptan v2. La adaptación del consumidor frontend v2 y la aceptación final permanecen pendientes.
+
+**Pruebas y gates:** cobertura del publisher, stream HTTP, creación/lifecycle de Contents, Lists, rutas de delegación y CORS; incluye acciones, actor usuario/sistema, títulos por tipo, fecha civil, `sourceId`, ausencia de campos sensibles, commit/rollback, emisión única y fallback genérico. `pnpm run verify` aprobado: 272 suites y 2.672 tests pasaron; 31 suites y 165 tests omitidos por configuración. Después se repitió el test del publisher actualizado: 23 tests pasaron. Typecheck: 0 errores; build/runtime dependencies aprobados; ESLint: 0 hallazgos nuevos (832 históricos baselined); estructura: 0 infracciones nuevas (9 históricas baselined). Prettier focalizado y `git diff --check` aprobados. No se ejecutó E2E porque la tarea no requiere servicios externos.
+
 ### SSE-4 — Contrato y adaptación frontend (cross-repo)
 
 - Mantener tarea en el roadmap frontend, separada de este repositorio backend.
-- Usar Fetch ReadableStream con Bearer existente; validar envelope/tipo/versión.
+- Usar Fetch ReadableStream con Bearer existente; validar envelope/tipo/versión v2 y distinguir `reason: "initial"` de los cambios editoriales.
+- Comparar `sourceId` para silenciar el aviso de la instancia cliente que originó la mutación.
 - Debounce e invalidar query root de calendario; cerrar/reabrir según usuario, generación, rol, logout y ciclo de vida de vista.
 - Tras abrir/reabrir, consultar mes/backlog HTTP. No introducir otro estado remoto ni sobrescribir modales/borradores.
 - Compartir mecanismo de refresh actual en lugar de duplicarlo para Axios/SSE.

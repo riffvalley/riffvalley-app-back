@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, ILike, QueryFailedError, Repository } from 'typeorm';
 import { Article, ArticleStatus } from './entities/article.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
+import { ContentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 import { ContentType } from 'src/editorial/contents/entities/content.entity';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
@@ -226,7 +227,10 @@ export class ArticlesService {
    * publicationDate) linked to this Article and stops there — Article and
    * Content stay fully independent afterwards, no further sync happens.
    */
-  async createContentForArticle(id: string): Promise<Article> {
+  async createContentForArticle(
+    id: string,
+    context?: ContentCalendarMutationContext,
+  ): Promise<Article> {
     const article = await this.findOne(id);
 
     if (article.content) {
@@ -240,13 +244,15 @@ export class ArticlesService {
       );
     }
 
-    await this.contentsService.create({
+    const contentDto = {
       name: article.name,
       type: ContentType.ARTICLE,
       authorId: article.user.id,
       articleId: article.id,
       backlog: true,
-    });
+    };
+    if (context) await this.contentsService.create(contentDto, context);
+    else await this.contentsService.create(contentDto);
 
     return this.findOne(id);
   }
