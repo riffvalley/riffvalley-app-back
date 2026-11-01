@@ -149,13 +149,26 @@ describe('PointController', () => {
     await expect(controller.update('point-id', updateDto)).resolves.toBe(point);
     await expect(controller.remove('point-id')).resolves.toBeUndefined();
 
-    expect(pointService.createPoint).toHaveBeenCalledWith(dto);
+    expect(pointService.createPoint).toHaveBeenCalledWith(
+      dto,
+      expect.objectContaining({
+        actor: { kind: 'system', displayName: 'Proceso automático' },
+      }),
+    );
     expect(pointService.findOne).toHaveBeenCalledWith('point-id');
     expect(pointService.updatePoint).toHaveBeenCalledWith(
       'point-id',
       updateDto,
+      expect.objectContaining({
+        actor: { kind: 'system', displayName: 'Proceso automático' },
+      }),
     );
-    expect(pointService.deletePoint).toHaveBeenCalledWith('point-id');
+    expect(pointService.deletePoint).toHaveBeenCalledWith(
+      'point-id',
+      expect.objectContaining({
+        actor: { kind: 'system', displayName: 'Proceso automático' },
+      }),
+    );
   });
 
   it('validates partial PATCH fields with UpdatePointDto at runtime', async () => {
@@ -208,6 +221,9 @@ describe('PointController', () => {
     expect(pointService.updatePoint).toHaveBeenCalledWith(
       'point-id',
       validated,
+      expect.objectContaining({
+        actor: { kind: 'system', displayName: 'Proceso automático' },
+      }),
     );
 
     for (const invalidBody of [

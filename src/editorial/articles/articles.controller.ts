@@ -52,12 +52,13 @@ export class ArticlesController {
   createContent(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.articlesService
       .createContentForArticle(
         id,
-        contentCalendarMutationContext(user, sourceId),
+        contentCalendarMutationContext(user, sourceId ?? legacySourceId),
       )
       .then(toPublicContentReference);
   }

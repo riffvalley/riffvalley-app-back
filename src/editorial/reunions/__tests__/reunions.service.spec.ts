@@ -15,6 +15,10 @@ import { UpdateReunionDto } from '../dto/update-reunion.dto';
 import { Point } from '../points/entities/point.entity';
 import { ReunionService } from '../reunions.service';
 import { ReunionsEventPublisher } from '../realtime/reunions-event-publisher.service';
+import {
+  REUNIONS_GENERIC_CHANGE_EVENT,
+  ReunionsEvent,
+} from '../realtime/contracts/reunions-event.contract';
 
 type ReunionRepositoryMock = {
   create: jest.Mock<Reunion, [DeepPartial<Reunion>]>;
@@ -72,7 +76,20 @@ describe('ReunionService', () => {
     const contentsService: ContentsServiceMock = {
       remove: jest.fn<Promise<void>, [string]>(),
     };
-    const reunionsEventPublisher = { publishChangeSafely: jest.fn() };
+    const publishedEvents: ReunionsEvent[] = [];
+    const reunionsEventPublisher = {
+      publishChangeSafely: jest.fn(
+        (
+          createEvent:
+            | ReunionsEvent
+            | (() => ReunionsEvent) = REUNIONS_GENERIC_CHANGE_EVENT,
+        ) => {
+          publishedEvents.push(
+            typeof createEvent === 'function' ? createEvent() : createEvent,
+          );
+        },
+      ),
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         ReunionService,
@@ -95,6 +112,7 @@ describe('ReunionService', () => {
       contentRepository,
       contentsService,
       reunionsEventPublisher,
+      publishedEvents,
       moduleRef,
     };
   };
@@ -116,6 +134,11 @@ describe('ReunionService', () => {
     expect(
       fixture.reunionsEventPublisher.publishChangeSafely,
     ).toHaveBeenCalledTimes(1);
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'reunion.created',
+      actor: { kind: 'system', displayName: 'Proceso automático' },
+      reunion: { id: saved.id, title: saved.titulo },
+    });
     await fixture.moduleRef.close();
   });
 
@@ -168,6 +191,10 @@ describe('ReunionService', () => {
     expect(
       fixture.reunionsEventPublisher.publishChangeSafely,
     ).toHaveBeenCalledTimes(1);
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'reunion.updated',
+      reunion: { title: 'New title' },
+    });
     await fixture.moduleRef.close();
   });
 
@@ -190,10 +217,12 @@ describe('ReunionService', () => {
 
   it('delegates linked Content deletion to ContentsService', async () => {
     const fixture = await makeFixture();
+    jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(makeReunion());
     fixture.contentRepository.findOne.mockResolvedValueOnce({
       id: 'content-id',
       reunionId: 'reunion-id',
     });
+    fixture.reunionRepository.findOne.mockResolvedValueOnce(makeReunion());
 
     await expect(
       fixture.service.deleteReunion('reunion-id'),
@@ -211,6 +240,11 @@ describe('ReunionService', () => {
 
   it('deletes an unlinked Reunion and returns 404 when none was deleted', async () => {
     const fixture = await makeFixture();
+    fixture.reunionRepository.findOne.mockResolvedValueOnce(makeReunion());
+    jest
+      .spyOn(fixture.service, 'findOne')
+      .mockResolvedValueOnce(makeReunion())
+      .mockResolvedValueOnce(makeReunion());
     fixture.contentRepository.findOne.mockResolvedValue(null);
     fixture.reunionRepository.delete
       .mockResolvedValueOnce({ affected: 1, raw: [] })
@@ -226,6 +260,10 @@ describe('ReunionService', () => {
       1,
       'reunion-id',
     );
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'reunion.deleted',
+      reunion: { id: 'reunion-id', title: 'Weekly reunion' },
+    });
     await expect(fixture.service.deleteReunion('missing-id')).rejects.toThrow(
       new NotFoundException('Reunion with ID missing-id not found'),
     );
@@ -237,6 +275,7 @@ describe('ReunionService', () => {
       'foreign key constraint: Reunion is referenced by another Content',
     );
     const fixture = await makeFixture();
+    jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(makeReunion());
     fixture.contentRepository.findOne.mockResolvedValueOnce({
       id: 'first-content-id',
       reunionId: 'reunion-id',

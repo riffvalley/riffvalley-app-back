@@ -202,7 +202,7 @@ describe('Content Calendar SSE HTTP endpoint', () => {
         Origin: 'https://app.riffvalley.es',
         'Access-Control-Request-Method': 'GET',
         'Access-Control-Request-Headers':
-          'authorization,x-content-calendar-client-id',
+          'authorization,x-content-calendar-client-id,x-riff-valley-client-id',
       },
     });
 
@@ -215,6 +215,9 @@ describe('Content Calendar SSE HTTP endpoint', () => {
     );
     expect(response.headers.get('access-control-allow-headers')).toContain(
       'X-Content-Calendar-Client-Id',
+    );
+    expect(response.headers.get('access-control-allow-headers')).toContain(
+      'X-Riff-Valley-Client-Id',
     );
   });
 

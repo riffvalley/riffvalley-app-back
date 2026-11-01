@@ -24,6 +24,7 @@ import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlist
 import { Point } from 'src/editorial/reunions/points/entities/point.entity';
 import { ContentCalendarEventPublisher } from '../../realtime/content-calendar-event-publisher.service';
 import { ReunionsEventPublisher } from 'src/editorial/reunions/realtime/reunions-event-publisher.service';
+import type { ReunionsEvent } from 'src/editorial/reunions/realtime/contracts/reunions-event.contract';
 
 describe('ContentLifecycleService', () => {
   type TransactionState = {
@@ -215,7 +216,16 @@ describe('ContentLifecycleService', () => {
     const eventPublisher = {
       publishChangeSafely: jest.fn(),
     };
-    const reunionsEventPublisher = { publishChangeSafely: jest.fn() };
+    const publishedReunionsEvents: ReunionsEvent[] = [];
+    const reunionsEventPublisher = {
+      publishChangeSafely: jest.fn(
+        (event: ReunionsEvent | (() => ReunionsEvent)) => {
+          publishedReunionsEvents.push(
+            typeof event === 'function' ? event() : event,
+          );
+        },
+      ),
+    };
 
     const testingModule: TestingModule = await Test.createTestingModule({
       providers: [
@@ -247,6 +257,7 @@ describe('ContentLifecycleService', () => {
       contentQueryService,
       eventPublisher,
       reunionsEventPublisher,
+      publishedReunionsEvents,
       txContentRepository: {
         save: contentTxSave,
         remove: contentTxRemove,
@@ -549,6 +560,12 @@ describe('ContentLifecycleService', () => {
     expect(
       fixture.reunionsEventPublisher.publishChangeSafely,
     ).toHaveBeenCalledTimes(1);
+    expect(fixture.publishedReunionsEvents).toHaveLength(1);
+    expect(fixture.publishedReunionsEvents[0]).toMatchObject({
+      action: 'reunion.deleted',
+      actor: { kind: 'system', displayName: 'Proceso automático' },
+      reunion: { id: 'reunion-id', title: 'Reunión sin título' },
+    });
     await fixture.testingModule.close();
   });
 

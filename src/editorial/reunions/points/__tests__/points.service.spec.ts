@@ -12,6 +12,10 @@ import { Point } from '../entities/point.entity';
 import { CreatePointDto } from '../dto/create-points.dto';
 import { UpdatePointDto } from '../dto/update-point.dto';
 import { PointService } from '../points.service';
+import {
+  REUNIONS_GENERIC_CHANGE_EVENT,
+  ReunionsEvent,
+} from '../../realtime/contracts/reunions-event.contract';
 import { ReunionsEventPublisher } from '../../realtime/reunions-event-publisher.service';
 
 type PointRepositoryMock = {
@@ -60,7 +64,20 @@ describe('PointService', () => {
     const reunionRepository: ReunionRepositoryMock = {
       findOne: jest.fn<Promise<Reunion | null>, [FindOneOptions<Reunion>]>(),
     };
-    const reunionsEventPublisher = { publishChangeSafely: jest.fn() };
+    const publishedEvents: ReunionsEvent[] = [];
+    const reunionsEventPublisher = {
+      publishChangeSafely: jest.fn(
+        (
+          createEvent:
+            | ReunionsEvent
+            | (() => ReunionsEvent) = REUNIONS_GENERIC_CHANGE_EVENT,
+        ) => {
+          publishedEvents.push(
+            typeof createEvent === 'function' ? createEvent() : createEvent,
+          );
+        },
+      ),
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         PointService,
@@ -75,6 +92,7 @@ describe('PointService', () => {
       pointRepository,
       reunionRepository,
       reunionsEventPublisher,
+      publishedEvents,
       moduleRef,
     };
   };
@@ -109,6 +127,13 @@ describe('PointService', () => {
     expect(
       fixture.reunionsEventPublisher.publishChangeSafely,
     ).toHaveBeenCalledTimes(1);
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'point.created',
+      actor: { kind: 'system', displayName: 'Proceso automático' },
+      reunion: { id: reunion.id, title: reunion.titulo },
+      point: { id: saved.id, title: saved.titulo },
+    });
+    expect(fixture.publishedEvents[0]).not.toHaveProperty('point.content');
     await fixture.moduleRef.close();
   });
 
@@ -164,9 +189,12 @@ describe('PointService', () => {
     const update: UpdatePointDto = { titulo: 'New title' };
     jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
 
-    await expect(fixture.service.updatePoint('point-id', update)).resolves.toBe(
-      point,
-    );
+    await expect(
+      fixture.service.updatePoint('point-id', update, {
+        actor: { kind: 'user', id: 'actor-id', displayName: 'María' },
+        sourceId: '6f9619ff-8b86-4d11-b42d-00cf4fc964ff',
+      }),
+    ).resolves.toBe(point);
 
     expect(point.titulo).toBe('New title');
     expect(point.reunion).toBe(originalReunion);
@@ -175,6 +203,12 @@ describe('PointService', () => {
     expect(
       fixture.reunionsEventPublisher.publishChangeSafely,
     ).toHaveBeenCalledTimes(1);
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'point.updated',
+      actor: { kind: 'user', id: 'actor-id', displayName: 'María' },
+      sourceId: '6f9619ff-8b86-4d11-b42d-00cf4fc964ff',
+      point: { title: 'New title' },
+    });
     await fixture.moduleRef.close();
   });
 
@@ -200,6 +234,9 @@ describe('PointService', () => {
       expect(
         fixture.reunionsEventPublisher.publishChangeSafely,
       ).toHaveBeenCalledTimes(1);
+      expect(fixture.publishedEvents[0]).toMatchObject({
+        action: field === 'done' ? 'point.completed' : 'point.updated',
+      });
       await fixture.moduleRef.close();
     },
   );
@@ -246,6 +283,50 @@ describe('PointService', () => {
     expect(point.reunion).toBe(destination);
     expect(result.reunion).toBe(destination);
     expect(result).not.toHaveProperty('reunionId');
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'point.moved',
+      previousReunion: {
+        id: originalReunion.id,
+        title: originalReunion.titulo,
+      },
+      reunion: { id: destination.id, title: destination.titulo },
+      point: { id: result.id, title: result.titulo },
+    });
+    await fixture.moduleRef.close();
+  });
+
+  it('uses reopened for a true-to-null transition and prioritizes move over status changes', async () => {
+    const fixture = await makeFixture();
+    const source = makeReunion('source-id');
+    const point = makePoint({ done: true }, source);
+    jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
+    fixture.pointRepository.save.mockResolvedValueOnce(
+      makePoint({ done: null }, source),
+    );
+
+    await fixture.service.updatePoint('point-id', { done: null });
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'point.reopened',
+    });
+
+    fixture.publishedEvents.length = 0;
+    const movingPoint = makePoint({ done: false }, source);
+    jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(movingPoint);
+    const destination = makeReunion('destination-id');
+    fixture.reunionRepository.findOne.mockResolvedValueOnce(destination);
+    fixture.pointRepository.save.mockResolvedValueOnce(
+      makePoint({ titulo: 'Moved and completed', done: true }, destination),
+    );
+
+    await fixture.service.updatePoint('point-id', {
+      titulo: 'Moved and completed',
+      done: true,
+      reunionId: destination.id,
+    });
+    expect(fixture.publishedEvents).toHaveLength(1);
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'point.moved',
+    });
     await fixture.moduleRef.close();
   });
 
@@ -302,6 +383,7 @@ describe('PointService', () => {
 
   it('deletes a Point and returns 404 when no row was affected', async () => {
     const fixture = await makeFixture();
+    jest.spyOn(fixture.service, 'findOne').mockResolvedValue(makePoint());
     fixture.pointRepository.delete
       .mockResolvedValueOnce({ affected: 1, raw: [] })
       .mockResolvedValueOnce({ affected: 0, raw: [] });
@@ -319,6 +401,11 @@ describe('PointService', () => {
     expect(
       fixture.reunionsEventPublisher.publishChangeSafely,
     ).toHaveBeenCalledTimes(1);
+    expect(fixture.publishedEvents[0]).toMatchObject({
+      action: 'point.deleted',
+      reunion: { id: 'reunion-id', title: 'Weekly reunion' },
+      point: { id: 'point-id', title: 'Task' },
+    });
     await fixture.moduleRef.close();
   });
 

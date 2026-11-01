@@ -39,6 +39,10 @@ import {
   ContentCalendarMutationContext,
 } from '../realtime/contracts/content-calendar-event.contract';
 import { ReunionsEventPublisher } from 'src/editorial/reunions/realtime/reunions-event-publisher.service';
+import {
+  normalizeReunionsMutationContext,
+  reunionReference,
+} from 'src/editorial/reunions/realtime/contracts/reunions-event.contract';
 
 @Injectable()
 export class ContentCreationService {
@@ -194,7 +198,7 @@ export class ContentCreationService {
       ready: resolvedPublicationDate ? false : rest.ready,
     });
 
-    let createdReunion = false;
+    let createdReunion: Reunion | undefined;
     const savedContent = await this.contentRepo.manager.transaction(
       async (manager) => {
         const contentRepo = manager.getRepository(Content);
@@ -247,7 +251,6 @@ export class ContentCreationService {
         }
 
         if (createContentDto.type === ContentType.REUNION && !existingReunion) {
-          createdReunion = true;
           const reunionRepo = manager.getRepository(Reunion);
           const pointRepo = manager.getRepository(Point);
           const reunion = reunionRepo.create({
@@ -255,6 +258,7 @@ export class ContentCreationService {
             fecha: content.publicationDate || new Date(),
           });
           const savedReunion = await reunionRepo.save(reunion);
+          createdReunion = savedReunion;
 
           content.reunion = savedReunion;
           content.reunionId = savedReunion.id;
@@ -314,7 +318,18 @@ export class ContentCreationService {
         }),
       CONTENT_CALENDAR_GENERIC_CHANGE,
     );
-    if (createdReunion) this.reunionsEventPublisher.publishChangeSafely();
+    if (createdReunion) {
+      const mutation = normalizeReunionsMutationContext(context);
+      this.reunionsEventPublisher.publishChangeSafely(() => ({
+        type: 'reunions.invalidate',
+        version: 1,
+        reason: 'change',
+        action: 'reunion.created',
+        actor: mutation.actor,
+        reunion: reunionReference(createdReunion),
+        ...(mutation.sourceId ? { sourceId: mutation.sourceId } : {}),
+      }));
+    }
     return savedContent;
   }
 }

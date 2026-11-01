@@ -141,12 +141,13 @@ export class ListsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateListDto: UpdateListDto,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.listsServices.update(
       id,
       updateListDto,
-      contentCalendarMutationContext(user, sourceId),
+      contentCalendarMutationContext(user, sourceId ?? legacySourceId),
     );
   }
 
@@ -155,12 +156,13 @@ export class ListsController {
   removeList(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.listsServices.removeList(
       id,
       undefined,
-      contentCalendarMutationContext(user, sourceId),
+      contentCalendarMutationContext(user, sourceId ?? legacySourceId),
     );
   }
 }
