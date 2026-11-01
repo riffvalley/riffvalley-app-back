@@ -114,6 +114,34 @@ export class ListsEventPublisher implements OnModuleDestroy {
     };
   }
 
+  createDeletionEvent(input: {
+    readonly assignment: Asignation;
+    readonly list: List;
+    readonly context: ListsMutationContext | undefined;
+  }): ListsDescriptiveChangeEvent {
+    const { assignment, list, context } = input;
+    if (!context) throw new Error('lists_event_actor_missing');
+    return {
+      type: 'lists.invalidate',
+      version: 1,
+      reason: 'change',
+      action: 'assignment.deleted',
+      actor: context.actor,
+      assignee: assignment.user
+        ? {
+            id: assignment.user.id,
+            displayName: this.requiredText(assignment.user.username),
+          }
+        : null,
+      list: this.listReference(list),
+      assignmentId: this.requiredText(assignment.id),
+      discId: this.requiredText(assignment.disc?.id),
+      artistName: this.requiredText(assignment.disc?.artist?.name),
+      previousPosition: this.positionValue(assignment.position),
+      ...(context.sourceId ? { sourceId: context.sourceId } : {}),
+    };
+  }
+
   getMetrics(): Readonly<{
     activeSubscribers: number;
     publishedEvents: number;

@@ -657,7 +657,6 @@ describe('AsignationsService error classification', () => {
 
   it.each([
     ['same position', 1, 1],
-    ['null to a panel', null, 1],
     ['a panel to null', 1, null],
   ])(
     'does not classify %s as a Radar position action',
@@ -685,6 +684,35 @@ describe('AsignationsService error classification', () => {
       expect(publishedEvents).toEqual([]);
     },
   );
+
+  it('publishes null → positive position as the first Radar placement', async () => {
+    const existing = asignationFixture({
+      id: asignationId,
+      list: listFixture({ id: listId, type: ListType.WEEK }),
+      position: null,
+      disc: discFixture(discId),
+    });
+    asignationFindOne.mockResolvedValue(existing);
+    asignationPreload.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), existing, values),
+    );
+    asignationSave.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), values),
+    );
+
+    await service.update(
+      asignationId,
+      { position: 1 },
+      { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+    );
+
+    expect(publishedEvents).toHaveLength(1);
+    expect(publishedEvents[0]).toMatchObject({
+      action: 'assignment.placed',
+      previousPosition: null,
+      newPosition: 1,
+    });
+  });
 
   it.each([
     ['another Radar list', ListType.WEEK, 'another-list'],
@@ -972,14 +1000,83 @@ describe('AsignationsService error classification', () => {
     );
   });
 
-  it('returns 404 when delete affects no asignation and preserves successful delete response', async () => {
+  it.each([ListType.WEEK, ListType.MONTH])(
+    'publishes a descriptive deletion for a disc assignment in a %s list',
+    async (type) => {
+      asignationFindOne.mockResolvedValueOnce(
+        asignationFixture({
+          id: asignationId,
+          list: listFixture({ id: listId, type }),
+          position: 2,
+          disc: discFixture(discId),
+          user: Object.assign(new User(), {
+            id: userId,
+            username: 'Fulanito',
+          }),
+        }),
+      );
+      asignationDelete.mockImplementationOnce(async () => {
+        expect(publishedEvents).toHaveLength(0);
+        return { affected: 1, raw: [] };
+      });
+      const context = {
+        actor: { kind: 'user' as const, id: 'actor-id', displayName: 'Editor' },
+        sourceId: '29975434-5c45-4a8f-a197-bcb73e215830',
+      };
+
+      await expect(service.remove(asignationId, context)).resolves.toEqual({
+        message: `Asignation with id ${asignationId} has been removed`,
+      });
+
+      expect(publishedEvents).toHaveLength(1);
+      expect(publishedEvents[0]).toMatchObject({
+        action: 'assignment.deleted',
+        actor: { id: 'actor-id', displayName: 'Editor' },
+        assignee: { id: userId, displayName: 'Fulanito' },
+        list: { id: listId, type },
+        assignmentId: asignationId,
+        discId,
+        artistName: 'Grupo 1',
+        previousPosition: 2,
+        sourceId: context.sourceId,
+      });
+    },
+  );
+
+  it.each([
+    ['without a disc', ListType.WEEK, undefined],
+    ['from a special list', ListType.SPECIAL, discFixture(discId)],
+  ])('does not publish deletion %s', async (_label, type, disc) => {
+    asignationFindOne.mockResolvedValueOnce(
+      asignationFixture({
+        id: asignationId,
+        list: listFixture({ id: listId, type }),
+        position: 2,
+        disc,
+      }),
+    );
+    await service.remove(asignationId, {
+      actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' },
+    });
+    expect(publishedEvents).toEqual([]);
+  });
+
+  it('does not publish a deletion when the transaction fails and preserves not-found behavior', async () => {
+    asignationFindOne.mockResolvedValueOnce(null);
+    await expectNotFound(service.remove(asignationId));
+    expect(publishedEvents).toEqual([]);
+
+    asignationFindOne.mockResolvedValueOnce(
+      asignationFixture({
+        id: asignationId,
+        list: listFixture({ id: listId, type: ListType.WEEK }),
+        position: 2,
+        disc: discFixture(discId),
+      }),
+    );
     asignationDelete.mockResolvedValueOnce({ affected: 0, raw: [] });
     await expectNotFound(service.remove(asignationId));
-
-    asignationDelete.mockResolvedValueOnce({ affected: 1, raw: [] });
-    await expect(service.remove(asignationId)).resolves.toEqual({
-      message: `Asignation with id ${asignationId} has been removed`,
-    });
+    expect(publishedEvents).toEqual([]);
   });
 
   it('orders the global paginated query by id and preserves its response shape', async () => {
