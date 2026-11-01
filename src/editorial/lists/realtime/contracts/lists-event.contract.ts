@@ -48,6 +48,10 @@ export type ListsDescriptiveChangeEvent =
       readonly action: 'assignment.unplaced';
       readonly previousPosition: number | null;
       readonly newPosition: number | null;
+    })
+  | (ListsDescriptiveChangeBase & {
+      readonly action: 'assignment.deleted';
+      readonly previousPosition: number | null;
     });
 
 export interface ListsGenericChangeEvent extends ListsEventBase {

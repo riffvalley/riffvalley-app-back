@@ -16,7 +16,10 @@ import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
 import { ListsEventPublisher } from '../realtime/lists-event-publisher.service';
-import { ListsMutationContext } from '../realtime/contracts/lists-event.contract';
+import {
+  ListsEventListReference,
+  ListsMutationContext,
+} from '../realtime/contracts/lists-event.contract';
 import sanitizeHtml = require('sanitize-html');
 
 const MAX_RADAR_DISCS_PER_GROUP = 4;
@@ -455,7 +458,7 @@ export class AsignationsService {
     | undefined {
     if (previousPosition === newPosition) return undefined;
     if (
-      previousPosition === 0 &&
+      (previousPosition === 0 || previousPosition === null) &&
       typeof newPosition === 'number' &&
       newPosition > 0
     ) {
@@ -524,11 +527,49 @@ export class AsignationsService {
     }
   }
 
-  async remove(id: string) {
-    const result = await this.asignationRepository.delete({ id });
-    if (result.affected === 0) {
-      throw new NotFoundException(`Asignation with id ${id} not found`);
+  async remove(id: string, context?: ListsMutationContext) {
+    const committed = await this.asignationRepository.manager.transaction(
+      async (manager) => {
+        const asignationRepo = manager.getRepository(Asignation);
+        const existing = await asignationRepo.findOne({
+          where: { id },
+          relations: ['list', 'disc'],
+          lock: { mode: 'pessimistic_write', tables: ['asignation'] },
+        });
+
+        if (!existing)
+          throw new NotFoundException(`Asignation with id ${id} not found`);
+
+        const result = await asignationRepo.delete({ id });
+        if (result.affected === 0)
+          throw new NotFoundException(`Asignation with id ${id} not found`);
+
+        const list = existing.list;
+        const eligibleListReference: ListsEventListReference | undefined =
+          list.type === ListType.WEEK || list.type === ListType.MONTH
+            ? { id: list.id, type: list.type }
+            : undefined;
+
+        return {
+          assignment: existing,
+          list,
+          eventListReference: existing.disc ? eligibleListReference : undefined,
+        };
+      },
+    );
+
+    if (committed.eventListReference) {
+      this.eventPublisher.publishChangeSafely(
+        () =>
+          this.eventPublisher.createDeletionEvent({
+            assignment: committed.assignment,
+            list: committed.list,
+            context,
+          }),
+        committed.eventListReference,
+      );
     }
+
     return { message: `Asignation with id ${id} has been removed` };
   }
 

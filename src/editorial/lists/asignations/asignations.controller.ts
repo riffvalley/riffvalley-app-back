@@ -64,8 +64,15 @@ export class AsignationsController {
 
   @Delete(':id')
   @Auth(ValidRoles.riffvalley)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.asignationsService.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user?: User,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+  ) {
+    return this.asignationsService.remove(
+      id,
+      listsMutationContext(user, sourceId),
+    );
   }
 
   @Get('list/:listId')

@@ -22,7 +22,9 @@ describe('AsignationsController position validation', () => {
     transformOptions: { enableImplicitConversion: true },
   });
 
-  const service: jest.Mocked<Pick<AsignationsService, 'create' | 'update'>> = {
+  const service: jest.Mocked<
+    Pick<AsignationsService, 'create' | 'update' | 'remove'>
+  > = {
     create: jest.fn<
       ReturnType<AsignationsService['create']>,
       Parameters<AsignationsService['create']>
@@ -30,6 +32,10 @@ describe('AsignationsController position validation', () => {
     update: jest.fn<
       ReturnType<AsignationsService['update']>,
       Parameters<AsignationsService['update']>
+    >(),
+    remove: jest.fn<
+      ReturnType<AsignationsService['remove']>,
+      Parameters<AsignationsService['remove']>
     >(),
   };
   let controller: AsignationsController;
@@ -148,6 +154,16 @@ describe('AsignationsController position validation', () => {
         sourceId: '29975434-5c45-4a8f-a197-bcb73e215830',
       },
     );
+
+    controller.remove(
+      asignationId,
+      user,
+      '29975434-5c45-4a8f-a197-bcb73e215830',
+    );
+    expect(service.remove).toHaveBeenCalledWith(asignationId, {
+      actor: { kind: 'user', id: 'actor-id', displayName: 'Editora' },
+      sourceId: '29975434-5c45-4a8f-a197-bcb73e215830',
+    });
   });
 
   it.each([
