@@ -15,6 +15,7 @@ import { ListContentCoordinator } from './application/list-content-coordinator.s
 import { ListWordPressReconciliationService } from './wordpress/list-wordpress-reconciliation.service';
 import { WeeklyListPublisherService } from './wordpress/weekly-list-publisher.service';
 import { MonthlyListPublisherService } from './wordpress/monthly-list-publisher.service';
+import { ListsRealtimeModule } from './realtime/lists-realtime.module';
 
 @Module({
   controllers: [ListsController],
@@ -30,11 +31,12 @@ import { MonthlyListPublisherService } from './wordpress/monthly-list-publisher.
   imports: [
     TypeOrmModule.forFeature([List, Content]),
     ContentCalendarRealtimeModule,
+    ListsRealtimeModule,
     AuthorizationModule,
     WordpressIntegrationModule,
     NewsModule,
     SpotifyIntegrationModule,
   ],
-  exports: [ListsService],
+  exports: [ListsService, ListsRealtimeModule],
 })
 export class ListsModule {}

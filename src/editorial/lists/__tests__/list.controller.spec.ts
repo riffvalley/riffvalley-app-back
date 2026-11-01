@@ -7,6 +7,7 @@ import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ListsController } from '../list.controller';
 import { ListsService } from '../list.service';
+import { ListsStreamService } from '../realtime/lists-stream.service';
 import { ListType } from '../entities/list.entity';
 import { CreateWeeklyListDto } from '../dto/create-weekly-list.dto';
 import { GenerateWpPostsQueryDto } from '../dto/generate-wp-posts-query.dto';
@@ -46,7 +47,10 @@ describe('ListsController WordPress authorization', () => {
     };
     const moduleBuilder = Test.createTestingModule({
       controllers: [ListsController],
-      providers: [{ provide: ListsService, useValue: listsService }],
+      providers: [
+        { provide: ListsService, useValue: listsService },
+        { provide: ListsStreamService, useValue: { open: jest.fn() } },
+      ],
     });
     const module = await moduleBuilder
       .overrideGuard(UserRoleGuard)
@@ -78,6 +82,21 @@ describe('ListsController WordPress authorization', () => {
     ).toBe(false);
     expect(roleMeetsMinimum(ValidRoles.riffvalley, ValidRoles.riffvalley)).toBe(
       true,
+    );
+    expect(roleMeetsMinimum(ValidRoles.superadmin, ValidRoles.riffvalley)).toBe(
+      true,
+    );
+  });
+
+  it('protects the global events endpoint with the riffvalley minimum', () => {
+    const handler = ListsController.prototype.openEvents;
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('events');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(0);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBe(
+      ValidRoles.riffvalley,
+    );
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toContain(
+      UserRoleGuard,
     );
     expect(roleMeetsMinimum(ValidRoles.superadmin, ValidRoles.riffvalley)).toBe(
       true,

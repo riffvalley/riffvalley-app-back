@@ -14,7 +14,12 @@ import { Asignation } from '../entities/asignations.entity';
 import { List, ListType } from '../../entities/list.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { Disc } from 'src/catalog/discs/entities/disc.entity';
+import { Artist } from 'src/catalog/artists/entities/artist.entity';
 import { ListsService } from '../../list.service';
+import { ListsEventPublisher } from '../../realtime/lists-event-publisher.service';
+import type { ListsEvent } from '../../realtime/contracts/lists-event.contract';
+import { CreateAsignationDto } from '../dto/create-asignations.dto';
+import { UpdateAsignationDto } from '../dto/update-asignations.dto';
 
 jest.mock('sanitize-html', () => jest.fn((value: string) => value));
 
@@ -60,6 +65,9 @@ describe('AsignationsService error classification', () => {
   let discRepository: Repository<Disc>;
   let listRepository: Repository<List>;
   let listsService: jest.Mocked<Pick<ListsService, 'syncDiscToWordPress'>>;
+  let eventPublisher: ListsEventPublisher;
+  let publishedEvents: ListsEvent[];
+  let unsubscribeEvents: () => void;
   let manager: EntityManager;
   let asignationCreate: jest.SpiedFunction<Repository<Asignation>['create']>;
   let asignationSave: jest.SpiedFunction<Repository<Asignation>['save']>;
@@ -88,7 +96,10 @@ describe('AsignationsService error classification', () => {
   }
 
   function discFixture(id: string): Disc {
-    const disc = Object.assign(new Disc(), { id });
+    const disc = Object.assign(new Disc(), {
+      id,
+      artist: Object.assign(new Artist(), { name: 'Grupo 1' }),
+    });
     for (const property of [
       'debut',
       'ep',
@@ -178,7 +189,9 @@ describe('AsignationsService error classification', () => {
       );
     userFindOneBy = jest
       .spyOn(userRepository, 'findOneBy')
-      .mockResolvedValue(Object.assign(new User(), { id: userId }));
+      .mockResolvedValue(
+        Object.assign(new User(), { id: userId, username: 'Fulanito' }),
+      );
     discFindOneBy = jest
       .spyOn(discRepository, 'findOneBy')
       .mockResolvedValue(discFixture(discId));
@@ -187,12 +200,14 @@ describe('AsignationsService error classification', () => {
       .mockResolvedValue(listFixture({ id: listId, type: ListType.WEEK }));
 
     transactionQuery = jest.spyOn(manager, 'query').mockResolvedValue([]);
-    jest
-      .spyOn(manager, 'getRepository')
-      .mockImplementation((target) =>
-        target === List ? listRepository : asignationRepository,
-      );
+    jest.spyOn(manager, 'getRepository').mockImplementation((target) => {
+      if (target === List) return listRepository;
+      if (target === User) return userRepository;
+      if (target === Disc) return discRepository;
+      return asignationRepository;
+    });
     listsService = { syncDiscToWordPress: jest.fn() };
+    publishedEvents = [];
 
     const module = await Test.createTestingModule({
       providers: [
@@ -205,11 +220,18 @@ describe('AsignationsService error classification', () => {
         { provide: getRepositoryToken(Disc), useValue: discRepository },
         { provide: getRepositoryToken(List), useValue: listRepository },
         { provide: ListsService, useValue: listsService },
+        ListsEventPublisher,
       ],
     }).compile();
     service = module.get(AsignationsService);
+    eventPublisher = module.get(ListsEventPublisher);
+    unsubscribeEvents = eventPublisher.subscribe((event) =>
+      publishedEvents.push(event),
+    );
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
+
+  afterEach(() => unsubscribeEvents());
 
   it('returns an existing asignation without changing its payload', async () => {
     const existing = asignationFixture({ id: asignationId, position: 2 });
@@ -249,11 +271,127 @@ describe('AsignationsService error classification', () => {
     expect(result).toBe(created);
     expect(asignationRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        user: { id: userId },
-        disc: { id: discId },
+        user: expect.objectContaining({ id: userId }),
+        disc: expect.objectContaining({ id: discId }),
         list: expect.objectContaining({ id: listId }),
         position: 2,
       }),
+    );
+  });
+
+  it.each([
+    ['Radar inbox', ListType.WEEK, 0],
+    ['Radar panel', ListType.WEEK, 3],
+    ['Radar null position', ListType.WEEK, null],
+    ['monthly list', ListType.MONTH, undefined],
+  ])(
+    'publishes one descriptive event for a disc created in a %s',
+    async (_label, type, position) => {
+      listFindOneBy.mockResolvedValue(listFixture({ id: listId, type }));
+      asignationSave.mockImplementation(async (values) =>
+        Object.assign(new Asignation(), values, { id: asignationId }),
+      );
+      const context = {
+        actor: {
+          kind: 'user' as const,
+          id: 'actor-id',
+          displayName: 'Editora',
+        },
+        sourceId: '29975434-5c45-4a8f-a197-bcb73e215830',
+      };
+
+      await service.create(
+        Object.assign(new CreateAsignationDto(), {
+          listId,
+          userId,
+          discId,
+          ...(position !== undefined ? { position } : {}),
+        }),
+        context,
+      );
+
+      expect(publishedEvents).toHaveLength(1);
+      expect(publishedEvents[0]).toMatchObject({
+        type: 'lists.invalidate',
+        version: 1,
+        reason: 'change',
+        action: 'assignment.created',
+        actor: { id: 'actor-id', displayName: 'Editora' },
+        assignee: { id: userId, displayName: 'Fulanito' },
+        list: { id: listId, type },
+        assignmentId: asignationId,
+        discId,
+        artistName: 'Grupo 1',
+        newPosition: position ?? null,
+        sourceId: context.sourceId,
+      });
+      expect(JSON.stringify(publishedEvents[0])).not.toMatch(
+        /description|similarBands|spotifyTrackId|email|password/,
+      );
+    },
+  );
+
+  it('does not publish a descriptive creation for no-disc or ineligible lists', async () => {
+    listFindOneBy.mockResolvedValue(
+      listFixture({ id: listId, type: ListType.WEEK }),
+    );
+    await service.create(
+      { listId },
+      {
+        actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' },
+      },
+    );
+    expect(publishedEvents).toEqual([]);
+
+    listFindOneBy.mockResolvedValue(
+      listFixture({ id: listId, type: ListType.SPECIAL }),
+    );
+    await service.create(
+      { listId, discId },
+      {
+        actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' },
+      },
+    );
+    expect(publishedEvents).toEqual([]);
+  });
+
+  it('publishes no creation event when the assignment transaction fails', async () => {
+    const databaseError = new Error('write failed');
+    asignationSave.mockRejectedValue(databaseError);
+
+    await expect(
+      service.create(
+        { listId, discId },
+        { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+      ),
+    ).rejects.toBe(databaseError);
+    expect(publishedEvents).toEqual([]);
+  });
+
+  it('uses a list-scoped generic fallback when descriptive metadata is incomplete', async () => {
+    listFindOneBy.mockResolvedValue(
+      listFixture({ id: listId, type: ListType.MONTH }),
+    );
+    discFindOneBy.mockResolvedValue(Object.assign(new Disc(), { id: discId }));
+    asignationSave.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), values, { id: asignationId }),
+    );
+
+    await service.create(
+      { listId, discId },
+      { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+    );
+
+    expect(publishedEvents).toEqual([
+      {
+        type: 'lists.invalidate',
+        version: 1,
+        reason: 'change',
+        list: { id: listId, type: ListType.MONTH },
+      },
+    ]);
+    expect(JSON.stringify(publishedEvents[0])).not.toMatch(
+      /artistName|assignee|assignmentId|discId/,
     );
   });
 
@@ -469,6 +607,270 @@ describe('AsignationsService error classification', () => {
     );
   });
 
+  it.each([
+    [0, 1, 'assignment.placed'],
+    [1, 2, 'assignment.moved'],
+    [2, 0, 'assignment.unplaced'],
+  ] as const)(
+    'publishes %s → %s as %s after the transaction',
+    async (previousPosition, newPosition, action) => {
+      const existing = asignationFixture({
+        id: asignationId,
+        list: listFixture({ id: listId, type: ListType.WEEK }),
+        position: previousPosition,
+        disc: discFixture(discId),
+        user: Object.assign(new User(), { id: userId, username: 'Fulanito' }),
+      });
+      asignationFindOne.mockResolvedValue(existing);
+      asignationPreload.mockImplementation(async (values) =>
+        Object.assign(new Asignation(), existing, values),
+      );
+      asignationSave.mockImplementation(async (values) =>
+        Object.assign(new Asignation(), values),
+      );
+      const context = {
+        actor: {
+          kind: 'user' as const,
+          id: 'actor-id',
+          displayName: 'Editora',
+        },
+        sourceId: '29975434-5c45-4a8f-a197-bcb73e215830',
+      };
+
+      await service.update(asignationId, { position: newPosition }, context);
+
+      expect(publishedEvents).toHaveLength(1);
+      expect(publishedEvents[0]).toMatchObject({
+        action,
+        actor: { id: 'actor-id', displayName: 'Editora' },
+        assignee: { id: userId, displayName: 'Fulanito' },
+        list: { id: listId, type: ListType.WEEK },
+        assignmentId: asignationId,
+        discId,
+        artistName: 'Grupo 1',
+        previousPosition,
+        newPosition,
+        sourceId: context.sourceId,
+      });
+    },
+  );
+
+  it.each([
+    ['same position', 1, 1],
+    ['null to a panel', null, 1],
+    ['a panel to null', 1, null],
+  ])(
+    'does not classify %s as a Radar position action',
+    async (_label, previousPosition, newPosition) => {
+      const existing = asignationFixture({
+        id: asignationId,
+        list: listFixture({ id: listId, type: ListType.WEEK }),
+        position: previousPosition,
+        disc: discFixture(discId),
+      });
+      asignationFindOne.mockResolvedValue(existing);
+      asignationPreload.mockImplementation(async (values) =>
+        Object.assign(new Asignation(), existing, values),
+      );
+      asignationSave.mockImplementation(async (values) =>
+        Object.assign(new Asignation(), values),
+      );
+
+      await service.update(
+        asignationId,
+        Object.assign(new UpdateAsignationDto(), { position: newPosition }),
+        { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+      );
+
+      expect(publishedEvents).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['another Radar list', ListType.WEEK, 'another-list'],
+    ['a monthly list', ListType.MONTH, 'month-list'],
+  ])(
+    'does not emit a position event for %s',
+    async (_label, targetType, targetListId) => {
+      const existing = asignationFixture({
+        id: asignationId,
+        list: listFixture({ id: listId, type: ListType.WEEK }),
+        position: 1,
+        disc: discFixture(discId),
+      });
+      asignationFindOne.mockResolvedValue(existing);
+      listFindOneBy.mockImplementation(async (where) => {
+        const id =
+          !Array.isArray(where) && typeof where.id === 'string'
+            ? where.id
+            : listId;
+        return listFixture({
+          id,
+          type: id === listId ? ListType.WEEK : targetType,
+        });
+      });
+      asignationPreload.mockImplementation(async (values) =>
+        Object.assign(new Asignation(), existing, values),
+      );
+      asignationSave.mockImplementation(async (values) =>
+        Object.assign(new Asignation(), values),
+      );
+
+      await service.update(
+        asignationId,
+        { listId: targetListId, position: 2 },
+        { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+      );
+
+      expect(publishedEvents).toEqual([]);
+    },
+  );
+
+  it('publishes only the Radar movement when user assignment changes in the same patch', async () => {
+    const existing = asignationFixture({
+      id: asignationId,
+      list: listFixture({ id: listId, type: ListType.WEEK }),
+      position: 1,
+      disc: discFixture(discId),
+      user: Object.assign(new User(), { id: 'old-user', username: 'Old user' }),
+    });
+    asignationFindOne.mockResolvedValue(existing);
+    asignationPreload.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), existing, values),
+    );
+    asignationSave.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), values),
+    );
+
+    await service.update(
+      asignationId,
+      { position: 2, userId },
+      { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+    );
+
+    expect(publishedEvents).toHaveLength(1);
+    expect(publishedEvents[0]).toMatchObject({
+      action: 'assignment.moved',
+      assignee: { id: userId, displayName: 'Fulanito' },
+    });
+  });
+
+  it('keeps a committed position event independent from later WordPress synchronization', async () => {
+    const existing = asignationFixture({
+      id: asignationId,
+      list: listFixture({ id: listId, type: ListType.WEEK }),
+      position: 1,
+      disc: discFixture(discId),
+    });
+    asignationFindOne.mockResolvedValue(existing);
+    asignationPreload.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), existing, values),
+    );
+    asignationSave.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), values),
+    );
+    listsService.syncDiscToWordPress.mockRejectedValue(
+      new Error('WordPress unavailable'),
+    );
+
+    await expect(
+      service.update(
+        asignationId,
+        { position: 2, description: '<p>Changed</p>' },
+        { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+      ),
+    ).rejects.toThrow('WordPress unavailable');
+    expect(publishedEvents).toHaveLength(1);
+    expect(publishedEvents[0]).toMatchObject({
+      action: 'assignment.moved',
+      previousPosition: 1,
+      newPosition: 2,
+    });
+  });
+
+  it('publishes no position event when the update transaction fails', async () => {
+    const existing = asignationFixture({
+      id: asignationId,
+      list: listFixture({ id: listId, type: ListType.WEEK }),
+      position: 1,
+      disc: discFixture(discId),
+    });
+    asignationFindOne.mockResolvedValue(existing);
+    asignationPreload.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), existing, values),
+    );
+    const transactionError = new Error('update rolled back');
+    asignationSave.mockRejectedValue(transactionError);
+
+    await expect(
+      service.update(
+        asignationId,
+        { position: 2 },
+        { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+      ),
+    ).rejects.toBe(transactionError);
+    expect(publishedEvents).toEqual([]);
+  });
+
+  it('falls back after commit when changed assignee metadata cannot be loaded', async () => {
+    const existing = asignationFixture({
+      id: asignationId,
+      list: listFixture({ id: listId, type: ListType.WEEK }),
+      position: 1,
+      disc: discFixture(discId),
+      user: Object.assign(new User(), { id: 'old-user', username: 'Old user' }),
+    });
+    asignationFindOne.mockResolvedValue(existing);
+    asignationPreload.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), existing, values),
+    );
+    asignationSave.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), values),
+    );
+    userFindOneBy.mockRejectedValueOnce(new Error('user lookup unavailable'));
+
+    await expect(
+      service.update(
+        asignationId,
+        { position: 2, userId },
+        { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+      ),
+    ).resolves.toMatchObject({ id: asignationId });
+
+    expect(publishedEvents).toEqual([
+      {
+        type: 'lists.invalidate',
+        version: 1,
+        reason: 'change',
+        list: { id: listId, type: ListType.WEEK },
+      },
+    ]);
+  });
+
+  it.each([
+    ['user assignment', { userId }],
+    ['done state', { done: true }],
+    ['description', { description: '<p>Texto</p>' }],
+  ])('does not publish for an exclusive %s update', async (_label, patch) => {
+    const existing = asignationFixture({
+      id: asignationId,
+      list: listFixture({ id: listId, type: ListType.WEEK }),
+      position: 1,
+      disc: discFixture(discId),
+    });
+    asignationFindOne.mockResolvedValue(existing);
+    asignationPreload.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), existing, values),
+    );
+    asignationSave.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), values),
+    );
+
+    await service.update(asignationId, patch);
+
+    expect(publishedEvents).toEqual([]);
+  });
+
   it('locks only the asignation row while loading its nullable relations', async () => {
     await expect(
       service.update(asignationId, { done: true }),
@@ -499,6 +901,7 @@ describe('AsignationsService error classification', () => {
       status: 400,
     });
     expect(asignationSave).not.toHaveBeenCalled();
+    expect(publishedEvents).toEqual([]);
   });
 
   it('does not apply the cap to update destinations outside WEEK lists', async () => {
