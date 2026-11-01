@@ -21,6 +21,7 @@ import { AuthorizationModule } from 'src/identity/authorization/authorization.mo
 import { ContentQueryService } from './application/content-query.service';
 import { ContentCreationService } from './application/content-creation.service';
 import { ContentLifecycleService } from './application/content-lifecycle.service';
+import { ContentCalendarRealtimeModule } from './realtime/content-calendar-realtime.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ContentLifecycleService } from './application/content-lifecycle.service
       List,
     ]),
     forwardRef(() => ListsModule),
+    ContentCalendarRealtimeModule,
     DiscModule,
     AuthorizationModule,
   ],
@@ -46,6 +48,6 @@ import { ContentLifecycleService } from './application/content-lifecycle.service
     ContentCreationService,
     ContentLifecycleService,
   ],
-  exports: [ContentsService],
+  exports: [ContentsService, ContentCalendarRealtimeModule],
 })
 export class ContentsModule {}

@@ -21,6 +21,7 @@ import { Video } from 'src/editorial/videos/entities/video.entity';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { List } from 'src/editorial/lists/entities/list.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
+import { ContentCalendarEventPublisher } from '../../realtime/content-calendar-event-publisher.service';
 
 describe('ContentCreationService', () => {
   type TransactionState = {
@@ -173,6 +174,9 @@ describe('ContentCreationService', () => {
       createWeeklyList: jest.fn().mockResolvedValue(list),
       createMonthlyList: jest.fn().mockResolvedValue(list),
     };
+    const eventPublisher = {
+      publishInvalidationSafely: jest.fn(),
+    };
 
     const testingModule: TestingModule = await Test.createTestingModule({
       providers: [
@@ -187,6 +191,7 @@ describe('ContentCreationService', () => {
         { provide: getRepositoryToken(Article), useValue: articleRepository },
         { provide: getRepositoryToken(Video), useValue: videoRepository },
         { provide: ListsService, useValue: listsService },
+        { provide: ContentCalendarEventPublisher, useValue: eventPublisher },
       ],
     }).compile();
 
@@ -202,6 +207,7 @@ describe('ContentCreationService', () => {
       articleRepository,
       videoRepository,
       listsService,
+      eventPublisher,
       contentTx: { save: contentSave },
       articleTx: { save: articleSave },
       videoTx: { save: videoSave },
@@ -249,8 +255,46 @@ describe('ContentCreationService', () => {
       expect(result[relation]).toEqual(
         expect.objectContaining({ id: 'saved-id' }),
       );
+      expect(
+        fixture.eventPublisher.publishInvalidationSafely,
+      ).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('publishes only after the Content creation transaction commits', async () => {
+    const fixture = await makeFixture();
+    fixture.eventPublisher.publishInvalidationSafely.mockImplementation(() => {
+      expect(fixture.committedWrites).toHaveLength(1);
+    });
+
+    await fixture.service.create({
+      type: ContentType.PHOTOS,
+      name: 'Photos',
+      authorId: 'author-id',
+    });
+
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not publish when an auxiliary save fails and the transaction rolls back', async () => {
+    const fixture = await makeFixture();
+    fixture.articleTx.save.mockRejectedValue(new Error('article save failed'));
+
+    await expect(
+      fixture.service.create({
+        type: ContentType.ARTICLE,
+        name: 'Article',
+        authorId: 'author-id',
+      }),
+    ).rejects.toThrow('article save failed');
+
+    expect(fixture.committedWrites).toHaveLength(0);
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).not.toHaveBeenCalled();
+  });
 
   it('creates RADAR and BEST lists through the Content transaction manager', async () => {
     for (const type of [ContentType.RADAR, ContentType.BEST]) {

@@ -13,6 +13,7 @@ import {
 } from 'src/editorial/contents/entities/content.entity';
 import { UpdateListDto } from '../dto/update-list.dto';
 import { List, ListType } from '../entities/list.entity';
+import { ContentCalendarEventPublisher } from 'src/editorial/contents/realtime/content-calendar-event-publisher.service';
 import {
   assertRequiredEditorialDate,
   hasAnyEditorialDate,
@@ -32,6 +33,7 @@ export class ListContentCoordinator {
     private readonly listRepository: Repository<List>,
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
+    private readonly eventPublisher: ContentCalendarEventPublisher,
   ) {}
 
   async update(id: string, updateListDto: UpdateListDto) {
@@ -109,83 +111,88 @@ export class ListContentCoordinator {
         return list;
       }
 
-      return await this.listRepository.manager.transaction(async (manager) => {
-        const listRepo = manager.getRepository(List);
-        const contentRepo = manager.getRepository(Content);
-        const currentList = updateListDto.type
-          ? await listRepo.findOneBy({ id })
-          : null;
-        if (updateListDto.type && !currentList) {
-          throw new NotFoundException(`List with id ${id} not found`);
-        }
-        if (
-          currentList &&
-          updateListDto.type !== undefined &&
-          currentList.type !== updateListDto.type
-        ) {
-          await this.lockListTypeForUpdate(manager, id);
-        }
-        const transactionalList = await listRepo.preload({
-          id,
-          ...updateListDto,
-        });
-
-        if (!transactionalList) {
-          throw new NotFoundException(`List with id ${id} not found`);
-        }
-
-        if (
-          currentList &&
-          currentList.type !== ListType.WEEK &&
-          transactionalList.type === ListType.WEEK
-        ) {
-          await this.assertRadarGroupsWithinLimit(manager, id);
-        }
-
-        await listRepo.save(transactionalList);
-        const content = await contentRepo.findOne({
-          where: { list: { id: transactionalList.id } },
-        });
-
-        if (content) {
+      const result = await this.listRepository.manager.transaction(
+        async (manager) => {
           let contentChanged = false;
-
-          if (updateListDto.closeDate !== undefined) {
-            contentChanged =
-              this.assignDateIfChanged(
-                content.closeDate,
-                transactionalList.closeDate,
-                (date) => (content.closeDate = date),
-              ) || contentChanged;
-          }
-          if (updateListDto.releaseDate !== undefined) {
-            contentChanged =
-              this.assignDateIfChanged(
-                content.publicationDate,
-                transactionalList.releaseDate,
-                (date) => (content.publicationDate = date),
-              ) || contentChanged;
+          const listRepo = manager.getRepository(List);
+          const contentRepo = manager.getRepository(Content);
+          const currentList = updateListDto.type
+            ? await listRepo.findOneBy({ id })
+            : null;
+          if (updateListDto.type && !currentList) {
+            throw new NotFoundException(`List with id ${id} not found`);
           }
           if (
-            updateListDto.listDate !== undefined &&
-            this.listTypeHasSyncedListDate(transactionalList.type)
+            currentList &&
+            updateListDto.type !== undefined &&
+            currentList.type !== updateListDto.type
           ) {
-            contentChanged =
-              this.assignDateIfChanged(
-                content.listDate,
-                transactionalList.listDate,
-                (date) => (content.listDate = date),
-              ) || contentChanged;
+            await this.lockListTypeForUpdate(manager, id);
+          }
+          const transactionalList = await listRepo.preload({
+            id,
+            ...updateListDto,
+          });
+
+          if (!transactionalList) {
+            throw new NotFoundException(`List with id ${id} not found`);
           }
 
-          if (contentChanged) {
-            await contentRepo.save(content);
-            this.logger.log(`Updated content ${content.id} from list sync`);
+          if (
+            currentList &&
+            currentList.type !== ListType.WEEK &&
+            transactionalList.type === ListType.WEEK
+          ) {
+            await this.assertRadarGroupsWithinLimit(manager, id);
           }
-        }
 
-        return transactionalList;
-      });
+          await listRepo.save(transactionalList);
+          const content = await contentRepo.findOne({
+            where: { list: { id: transactionalList.id } },
+          });
+
+          if (content) {
+            if (updateListDto.closeDate !== undefined) {
+              contentChanged =
+                this.assignDateIfChanged(
+                  content.closeDate,
+                  transactionalList.closeDate,
+                  (date) => (content.closeDate = date),
+                ) || contentChanged;
+            }
+            if (updateListDto.releaseDate !== undefined) {
+              contentChanged =
+                this.assignDateIfChanged(
+                  content.publicationDate,
+                  transactionalList.releaseDate,
+                  (date) => (content.publicationDate = date),
+                ) || contentChanged;
+            }
+            if (
+              updateListDto.listDate !== undefined &&
+              this.listTypeHasSyncedListDate(transactionalList.type)
+            ) {
+              contentChanged =
+                this.assignDateIfChanged(
+                  content.listDate,
+                  transactionalList.listDate,
+                  (date) => (content.listDate = date),
+                ) || contentChanged;
+            }
+
+            if (contentChanged) {
+              await contentRepo.save(content);
+              this.logger.log(`Updated content ${content.id} from list sync`);
+            }
+          }
+
+          return { list: transactionalList, contentChanged };
+        },
+      );
+      if (result.contentChanged) {
+        this.eventPublisher.publishInvalidationSafely();
+      }
+      return result.list;
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
       this.handleDbExceptions(error);
@@ -193,7 +200,10 @@ export class ListContentCoordinator {
   }
 
   async removeList(id: string, manager?: EntityManager) {
-    if (manager) return this.removeListWithManager(id, manager);
+    if (manager) {
+      const result = await this.removeListWithManager(id, manager);
+      return result.list;
+    }
 
     const list = await this.listRepository.findOne({ where: { id } });
     if (!list) {
@@ -207,9 +217,14 @@ export class ListContentCoordinator {
       return this.listRepository.remove(list);
     }
 
-    return this.listRepository.manager.transaction((transactionManager) =>
-      this.removeListWithManager(id, transactionManager),
+    const result = await this.listRepository.manager.transaction(
+      (transactionManager) =>
+        this.removeListWithManager(id, transactionManager),
     );
+    if (result.contentRemoved) {
+      this.eventPublisher.publishInvalidationSafely();
+    }
+    return result.list;
   }
 
   private async removeListWithManager(id: string, manager: EntityManager) {
@@ -228,7 +243,8 @@ export class ListContentCoordinator {
       await contentRepo.remove(content);
     }
 
-    return listRepo.remove(list);
+    const removedList = await listRepo.remove(list);
+    return { list: removedList, contentRemoved: Boolean(content) };
   }
 
   private async lockListTypeForUpdate(

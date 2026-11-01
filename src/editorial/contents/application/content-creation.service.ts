@@ -29,6 +29,7 @@ import {
 } from 'src/editorial/videos/entities/video.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
 import { isValidDateValue } from 'src/editorial/lists/domain/list-date-rules';
+import { ContentCalendarEventPublisher } from '../realtime/content-calendar-event-publisher.service';
 
 @Injectable()
 export class ContentCreationService {
@@ -47,6 +48,7 @@ export class ContentCreationService {
     private readonly videoRepo: Repository<Video>,
     @Inject(forwardRef(() => ListsService))
     private readonly listsService: ListsService,
+    private readonly eventPublisher: ContentCalendarEventPublisher,
   ) {}
 
   async create(createContentDto: CreateContentDto): Promise<Content> {
@@ -179,106 +181,114 @@ export class ContentCreationService {
       ready: resolvedPublicationDate ? false : rest.ready,
     });
 
-    return this.contentRepo.manager.transaction(async (manager) => {
-      const contentRepo = manager.getRepository(Content);
+    const savedContent = await this.contentRepo.manager.transaction(
+      async (manager) => {
+        const contentRepo = manager.getRepository(Content);
 
-      // Auto-created companions and Content share this transaction. Existing
-      // associations above are read-only and remain attached without new rows.
-      if (
-        createContentDto.type === ContentType.RIFF_VALLEY_PLAYLIST &&
-        !riffValleyPlaylistId
-      ) {
-        const playlistRepo = manager.getRepository(RiffValleyPlaylist);
-        const playlist = playlistRepo.create({
-          name: rest.name,
-          status: RiffValleyPlaylistStatus.EDITING,
-          type: RiffValleyPlaylistType.GENERO,
-          link: '',
-          updateDate: new Date(),
-          user: author,
-        });
-        content.riffValleyPlaylist = await playlistRepo.save(playlist);
-      }
+        // Auto-created companions and Content share this transaction. Existing
+        // associations above are read-only and remain attached without new rows.
+        if (
+          createContentDto.type === ContentType.RIFF_VALLEY_PLAYLIST &&
+          !riffValleyPlaylistId
+        ) {
+          const playlistRepo = manager.getRepository(RiffValleyPlaylist);
+          const playlist = playlistRepo.create({
+            name: rest.name,
+            status: RiffValleyPlaylistStatus.EDITING,
+            type: RiffValleyPlaylistType.GENERO,
+            link: '',
+            updateDate: new Date(),
+            user: author,
+          });
+          content.riffValleyPlaylist = await playlistRepo.save(playlist);
+        }
 
-      if (createContentDto.type === ContentType.ARTICLE && !articleId) {
-        const articleRepo = manager.getRepository(Article);
-        const article = articleRepo.create({
-          name: rest.name,
-          status: ArticleStatus.EDITING,
-          type: ArticleType.ARTICULO,
-          updateDate: new Date(),
-          user: author,
-        });
-        content.article = await articleRepo.save(article);
-      }
+        if (createContentDto.type === ContentType.ARTICLE && !articleId) {
+          const articleRepo = manager.getRepository(Article);
+          const article = articleRepo.create({
+            name: rest.name,
+            status: ArticleStatus.EDITING,
+            type: ArticleType.ARTICULO,
+            updateDate: new Date(),
+            user: author,
+          });
+          content.article = await articleRepo.save(article);
+        }
 
-      if (createContentDto.type === ContentType.VIDEO && !videoId) {
-        const videoRepo = manager.getRepository(Video);
-        const video = videoRepo.create({
-          name: rest.name,
-          status: VideoStatus.EDITING,
-          type: VideoType.CUSTOM,
-          updateDate: new Date(),
-          user: author,
-        });
-        content.video = await videoRepo.save(video);
-      }
+        if (createContentDto.type === ContentType.VIDEO && !videoId) {
+          const videoRepo = manager.getRepository(Video);
+          const video = videoRepo.create({
+            name: rest.name,
+            status: VideoStatus.EDITING,
+            type: VideoType.CUSTOM,
+            updateDate: new Date(),
+            user: author,
+          });
+          content.video = await videoRepo.save(video);
+        }
 
-      if (createContentDto.type === ContentType.REUNION && existingReunion) {
-        content.reunion = existingReunion;
-        content.reunionId = existingReunion.id;
-      }
+        if (createContentDto.type === ContentType.REUNION && existingReunion) {
+          content.reunion = existingReunion;
+          content.reunionId = existingReunion.id;
+        }
 
-      if (createContentDto.type === ContentType.REUNION && !existingReunion) {
-        const reunionRepo = manager.getRepository(Reunion);
-        const pointRepo = manager.getRepository(Point);
-        const reunion = reunionRepo.create({
-          titulo: content.name,
-          fecha: content.publicationDate || new Date(),
-        });
-        const savedReunion = await reunionRepo.save(reunion);
+        if (createContentDto.type === ContentType.REUNION && !existingReunion) {
+          const reunionRepo = manager.getRepository(Reunion);
+          const pointRepo = manager.getRepository(Point);
+          const reunion = reunionRepo.create({
+            titulo: content.name,
+            fecha: content.publicationDate || new Date(),
+          });
+          const savedReunion = await reunionRepo.save(reunion);
 
-        content.reunion = savedReunion;
-        content.reunionId = savedReunion.id;
-        await pointRepo.save([
-          {
-            titulo: 'Asignar Radar semanal',
-            content: '',
-            done: false,
-            reunion: savedReunion,
-          },
-          {
-            titulo: 'Crónicas y artículos pendientes',
-            content: '',
-            done: false,
-            reunion: savedReunion,
-          },
-        ]);
-      }
+          content.reunion = savedReunion;
+          content.reunionId = savedReunion.id;
+          await pointRepo.save([
+            {
+              titulo: 'Asignar Radar semanal',
+              content: '',
+              done: false,
+              reunion: savedReunion,
+            },
+            {
+              titulo: 'Crónicas y artículos pendientes',
+              content: '',
+              done: false,
+              reunion: savedReunion,
+            },
+          ]);
+        }
 
-      const saved = await contentRepo.save(content);
+        const saved = await contentRepo.save(content);
 
-      // Preserve the existing RADAR/BEST Content/List transaction and ordering.
-      if (saved.type === ContentType.RADAR || saved.type === ContentType.BEST) {
-        const list =
-          saved.type === ContentType.RADAR
-            ? await this.listsService.createWeeklyList(
-                saved.publicationDate,
-                saved.listDate,
-                saved.closeDate,
-                manager,
-              )
-            : await this.listsService.createMonthlyList(
-                saved.publicationDate,
-                saved.listDate,
-                saved.closeDate,
-                manager,
-              );
-        saved.list = list;
-        return contentRepo.save(saved);
-      }
+        // Preserve the existing RADAR/BEST Content/List transaction and ordering.
+        if (
+          saved.type === ContentType.RADAR ||
+          saved.type === ContentType.BEST
+        ) {
+          const list =
+            saved.type === ContentType.RADAR
+              ? await this.listsService.createWeeklyList(
+                  saved.publicationDate,
+                  saved.listDate,
+                  saved.closeDate,
+                  manager,
+                )
+              : await this.listsService.createMonthlyList(
+                  saved.publicationDate,
+                  saved.listDate,
+                  saved.closeDate,
+                  manager,
+                );
+          saved.list = list;
+          return contentRepo.save(saved);
+        }
 
-      return saved;
-    });
+        return saved;
+      },
+    );
+
+    this.eventPublisher.publishInvalidationSafely();
+    return savedContent;
   }
 }

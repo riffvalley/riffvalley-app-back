@@ -15,6 +15,7 @@ import { ListsService } from 'src/editorial/lists/list.service';
 import { List } from 'src/editorial/lists/entities/list.entity';
 import { isValidDateValue } from 'src/editorial/lists/domain/list-date-rules';
 import { ContentQueryService } from './content-query.service';
+import { ContentCalendarEventPublisher } from '../realtime/content-calendar-event-publisher.service';
 
 @Injectable()
 export class ContentLifecycleService {
@@ -30,6 +31,7 @@ export class ContentLifecycleService {
     @Inject(forwardRef(() => ListsService))
     private readonly listsService: ListsService,
     private readonly contentQueryService: ContentQueryService,
+    private readonly eventPublisher: ContentCalendarEventPublisher,
   ) {}
 
   async update(
@@ -37,6 +39,7 @@ export class ContentLifecycleService {
     updateContentDto: UpdateContentDto,
   ): Promise<Content> {
     const content = await this.contentQueryService.findOne(id);
+    const originalCalendarState = this.getCalendarState(content);
 
     const {
       authorId,
@@ -278,13 +281,17 @@ export class ContentLifecycleService {
       return saved;
     };
 
-    if (listSyncNeeded || reunionSyncNeeded) {
-      return this.contentRepo.manager.transaction((manager) =>
-        persistUpdate(manager),
-      );
-    }
+    const saved =
+      listSyncNeeded || reunionSyncNeeded
+        ? await this.contentRepo.manager.transaction((manager) =>
+            persistUpdate(manager),
+          )
+        : await persistUpdate();
 
-    return persistUpdate();
+    if (this.calendarStateChanged(originalCalendarState, saved)) {
+      this.eventPublisher.publishInvalidationSafely();
+    }
+    return saved;
   }
 
   async remove(id: string): Promise<void> {
@@ -313,6 +320,8 @@ export class ContentLifecycleService {
       await this.contentRepo.remove(content);
     }
 
+    this.eventPublisher.publishInvalidationSafely();
+
     // NOTE: The linked RiffValleyPlaylist/Article/Video entity is left untouched — its
     // status is no longer auto-reset on Content removal. Video/Article/RiffValleyPlaylist
     // and Content are fully independent now.
@@ -340,5 +349,36 @@ export class ContentLifecycleService {
     const leftTime = left == null ? null : new Date(left).getTime();
     const rightTime = right == null ? null : new Date(right).getTime();
     return leftTime === rightTime;
+  }
+
+  private getCalendarState(content: Content): readonly unknown[] {
+    const dateValue = (value: Date | string | null | undefined) =>
+      value == null ? null : new Date(value).getTime();
+
+    return [
+      content.type,
+      content.name,
+      content.notes ?? null,
+      dateValue(content.publicationDate),
+      dateValue(content.closeDate),
+      dateValue(content.listDate),
+      content.ready,
+      content.backlog,
+      content.author?.id ?? null,
+      content.reunionId ?? content.reunion?.id ?? null,
+      content.list?.id ?? null,
+      dateValue(content.list?.releaseDate),
+      dateValue(content.list?.closeDate),
+      dateValue(content.list?.listDate),
+    ];
+  }
+
+  private calendarStateChanged(
+    originalState: readonly unknown[],
+    saved: Content,
+  ): boolean {
+    return originalState.some(
+      (value, index) => value !== this.getCalendarState(saved)[index],
+    );
   }
 }
