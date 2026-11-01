@@ -14,6 +14,7 @@ import { CreateReunionDto } from '../dto/create-reunion.dto';
 import { UpdateReunionDto } from '../dto/update-reunion.dto';
 import { Point } from '../points/entities/point.entity';
 import { ReunionService } from '../reunions.service';
+import { ReunionsEventPublisher } from '../realtime/reunions-event-publisher.service';
 
 type ReunionRepositoryMock = {
   create: jest.Mock<Reunion, [DeepPartial<Reunion>]>;
@@ -71,6 +72,7 @@ describe('ReunionService', () => {
     const contentsService: ContentsServiceMock = {
       remove: jest.fn<Promise<void>, [string]>(),
     };
+    const reunionsEventPublisher = { publishChangeSafely: jest.fn() };
     const moduleRef = await Test.createTestingModule({
       providers: [
         ReunionService,
@@ -83,6 +85,7 @@ describe('ReunionService', () => {
           useValue: contentRepository,
         },
         { provide: ContentsService, useValue: contentsService },
+        { provide: ReunionsEventPublisher, useValue: reunionsEventPublisher },
       ],
     }).compile();
 
@@ -91,6 +94,7 @@ describe('ReunionService', () => {
       reunionRepository,
       contentRepository,
       contentsService,
+      reunionsEventPublisher,
       moduleRef,
     };
   };
@@ -109,6 +113,9 @@ describe('ReunionService', () => {
     await expect(fixture.service.createReunion(dto)).resolves.toBe(saved);
     expect(fixture.reunionRepository.create).toHaveBeenCalledWith(dto);
     expect(fixture.reunionRepository.save).toHaveBeenCalledWith(saved);
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).toHaveBeenCalledTimes(1);
     await fixture.moduleRef.close();
   });
 
@@ -158,6 +165,26 @@ describe('ReunionService', () => {
     ).resolves.toBe(saved);
     expect(reunion.titulo).toBe('New title');
     expect(fixture.reunionRepository.save).toHaveBeenCalledWith(reunion);
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).toHaveBeenCalledTimes(1);
+    await fixture.moduleRef.close();
+  });
+
+  it('does not publish a Reunion update when the supplied value is unchanged', async () => {
+    const fixture = await makeFixture();
+    const reunion = makeReunion();
+    jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(reunion);
+    fixture.reunionRepository.save.mockResolvedValueOnce(reunion);
+
+    await fixture.service.updateReunion('reunion-id', {
+      titulo: reunion.titulo,
+      fecha: reunion.fecha,
+    });
+
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).not.toHaveBeenCalled();
     await fixture.moduleRef.close();
   });
 
@@ -176,6 +203,9 @@ describe('ReunionService', () => {
     });
     expect(fixture.contentsService.remove).toHaveBeenCalledWith('content-id');
     expect(fixture.reunionRepository.delete).not.toHaveBeenCalled();
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).not.toHaveBeenCalled();
     await fixture.moduleRef.close();
   });
 
@@ -189,6 +219,9 @@ describe('ReunionService', () => {
     await expect(
       fixture.service.deleteReunion('reunion-id'),
     ).resolves.toBeUndefined();
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).toHaveBeenCalledTimes(1);
     expect(fixture.reunionRepository.delete).toHaveBeenNthCalledWith(
       1,
       'reunion-id',
@@ -196,6 +229,28 @@ describe('ReunionService', () => {
     await expect(fixture.service.deleteReunion('missing-id')).rejects.toThrow(
       new NotFoundException('Reunion with ID missing-id not found'),
     );
+    await fixture.moduleRef.close();
+  });
+
+  it('propagates a linked Content deletion failure without directly deleting Reunion', async () => {
+    const foreignKeyError = new Error(
+      'foreign key constraint: Reunion is referenced by another Content',
+    );
+    const fixture = await makeFixture();
+    fixture.contentRepository.findOne.mockResolvedValueOnce({
+      id: 'first-content-id',
+      reunionId: 'reunion-id',
+    });
+    fixture.contentsService.remove.mockRejectedValueOnce(foreignKeyError);
+
+    await expect(fixture.service.deleteReunion('reunion-id')).rejects.toBe(
+      foreignKeyError,
+    );
+
+    expect(fixture.contentsService.remove).toHaveBeenCalledWith(
+      'first-content-id',
+    );
+    expect(fixture.reunionRepository.delete).not.toHaveBeenCalled();
     await fixture.moduleRef.close();
   });
 });

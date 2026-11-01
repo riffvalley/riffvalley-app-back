@@ -7,7 +7,10 @@ import {
   Body,
   Patch,
   Headers,
+  Req,
+  Res,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { ReunionService } from './reunions.service';
 import { CreateReunionDto } from './dto/create-reunion.dto';
 import { UpdateReunionDto } from './dto/update-reunion.dto';
@@ -16,10 +19,20 @@ import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { GetUser } from 'src/identity/authorization/decorators/get-user.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { contentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
+import { ReunionsStreamService } from './realtime/reunions-stream.service';
 
 @Controller('reunions')
 export class ReunionController {
-  constructor(private readonly reunionService: ReunionService) {}
+  constructor(
+    private readonly reunionService: ReunionService,
+    private readonly streamService: ReunionsStreamService,
+  ) {}
+
+  @Get('events')
+  @Auth(ValidRoles.riffvalley)
+  openStream(@Req() request: Request, @Res() response: Response): void {
+    this.streamService.open(request, response);
+  }
 
   @Post()
   @Auth(ValidRoles.riffvalley)

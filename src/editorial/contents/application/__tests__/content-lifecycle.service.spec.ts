@@ -23,6 +23,7 @@ import { Article } from 'src/editorial/articles/entities/article.entity';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Point } from 'src/editorial/reunions/points/entities/point.entity';
 import { ContentCalendarEventPublisher } from '../../realtime/content-calendar-event-publisher.service';
+import { ReunionsEventPublisher } from 'src/editorial/reunions/realtime/reunions-event-publisher.service';
 
 describe('ContentLifecycleService', () => {
   type TransactionState = {
@@ -214,6 +215,7 @@ describe('ContentLifecycleService', () => {
     const eventPublisher = {
       publishChangeSafely: jest.fn(),
     };
+    const reunionsEventPublisher = { publishChangeSafely: jest.fn() };
 
     const testingModule: TestingModule = await Test.createTestingModule({
       providers: [
@@ -225,6 +227,7 @@ describe('ContentLifecycleService', () => {
         { provide: ListsService, useValue: listsService },
         { provide: ContentQueryService, useValue: contentQueryService },
         { provide: ContentCalendarEventPublisher, useValue: eventPublisher },
+        { provide: ReunionsEventPublisher, useValue: reunionsEventPublisher },
       ],
     }).compile();
 
@@ -243,6 +246,7 @@ describe('ContentLifecycleService', () => {
       listsService,
       contentQueryService,
       eventPublisher,
+      reunionsEventPublisher,
       txContentRepository: {
         save: contentTxSave,
         remove: contentTxRemove,
@@ -443,6 +447,9 @@ describe('ContentLifecycleService', () => {
     expect(fixture.committedWrites).toEqual([]);
     expect(fixture.contentRepository.save).not.toHaveBeenCalled();
     expect(fixture.eventPublisher.publishChangeSafely).not.toHaveBeenCalled();
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).not.toHaveBeenCalled();
     await fixture.testingModule.close();
   });
 
@@ -539,6 +546,9 @@ describe('ContentLifecycleService', () => {
     );
     expect(fixture.listsService.removeList).not.toHaveBeenCalled();
     expect(fixture.committedWrites).toContain(content);
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).toHaveBeenCalledTimes(1);
     await fixture.testingModule.close();
   });
 

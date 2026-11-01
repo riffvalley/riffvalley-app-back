@@ -12,6 +12,7 @@ import { UsersService } from 'src/identity/users/users.service';
 import { ContentCalendarEventPublisher } from '../content-calendar-event-publisher.service';
 import { ContentCalendarEventsController } from '../content-calendar-events.controller';
 import { ContentCalendarStreamService } from '../content-calendar-stream.service';
+import { EditorialSseTransport } from 'src/editorial/realtime/editorial-sse-transport.service';
 
 const JWT_SECRET = 'content-calendar-sse-http-test-secret';
 const USER_ID = '73d38a0c-cb8a-49da-9421-c04d11112423';
@@ -58,6 +59,7 @@ describe('Content Calendar SSE HTTP endpoint', () => {
       controllers: [ContentCalendarEventsController],
       providers: [
         ContentCalendarEventPublisher,
+        EditorialSseTransport,
         ContentCalendarStreamService,
         JwtStrategy,
         UserRoleGuard,

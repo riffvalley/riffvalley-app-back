@@ -26,6 +26,7 @@ import {
   ContentCalendarMutationContext,
   contentCalendarCivilDate,
 } from '../realtime/contracts/content-calendar-event.contract';
+import { ReunionsEventPublisher } from 'src/editorial/reunions/realtime/reunions-event-publisher.service';
 
 @Injectable()
 export class ContentLifecycleService {
@@ -42,6 +43,7 @@ export class ContentLifecycleService {
     private readonly listsService: ListsService,
     private readonly contentQueryService: ContentQueryService,
     private readonly eventPublisher: ContentCalendarEventPublisher,
+    private readonly reunionsEventPublisher: ReunionsEventPublisher,
   ) {}
 
   async update(
@@ -184,6 +186,7 @@ export class ContentLifecycleService {
 
     const reunionSyncNeeded =
       content.type === ContentType.REUNION || Boolean(content.reunionId);
+    let reunionWasModified = false;
     const persistUpdate = async (manager?: EntityManager): Promise<Content> => {
       const contentRepo = manager
         ? manager.getRepository(Content)
@@ -285,6 +288,7 @@ export class ContentLifecycleService {
 
             if (reunionChanged) {
               await reunionRepo.save(reunionEntity);
+              reunionWasModified = true;
             }
           }
         }
@@ -326,6 +330,7 @@ export class ContentLifecycleService {
         CONTENT_CALENDAR_GENERIC_CHANGE,
       );
     }
+    if (reunionWasModified) this.reunionsEventPublisher.publishChangeSafely();
     return saved;
   }
 
@@ -349,6 +354,7 @@ export class ContentLifecycleService {
       publicationDate: content.publicationDate,
     };
     const listId = content.list?.id;
+    const reunionWasRemoved = Boolean(content.reunion);
 
     if (listId || content.reunion) {
       await this.contentRepo.manager.transaction(async (manager) => {
@@ -376,6 +382,7 @@ export class ContentLifecycleService {
         }),
       CONTENT_CALENDAR_GENERIC_CHANGE,
     );
+    if (reunionWasRemoved) this.reunionsEventPublisher.publishChangeSafely();
 
     // NOTE: The linked RiffValleyPlaylist/Article/Video entity is left untouched — its
     // status is no longer auto-reset on Content removal. Video/Article/RiffValleyPlaylist

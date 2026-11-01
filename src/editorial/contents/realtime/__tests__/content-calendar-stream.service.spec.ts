@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { ContentCalendarEventPublisher } from '../content-calendar-event-publisher.service';
+import { EditorialSseTransport } from 'src/editorial/realtime/editorial-sse-transport.service';
 import {
   CONTENT_CALENDAR_HEARTBEAT_INTERVAL_MS,
   CONTENT_CALENDAR_MAX_STREAM_DURATION_MS,
@@ -52,12 +53,14 @@ class FakeResponse extends EventEmitter {
 
 describe('ContentCalendarStreamService', () => {
   let publisher: ContentCalendarEventPublisher;
+  let transport: EditorialSseTransport;
   let service: ContentCalendarStreamService;
 
   beforeEach(() => {
     jest.useFakeTimers();
     publisher = new ContentCalendarEventPublisher();
-    service = new ContentCalendarStreamService(publisher);
+    transport = new EditorialSseTransport();
+    service = new ContentCalendarStreamService(publisher, transport);
   });
 
   afterEach(() => {

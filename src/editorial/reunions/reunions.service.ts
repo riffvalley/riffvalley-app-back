@@ -7,6 +7,7 @@ import { UpdateReunionDto } from './dto/update-reunion.dto';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
 import { ContentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
+import { ReunionsEventPublisher } from './realtime/reunions-event-publisher.service';
 
 @Injectable()
 export class ReunionService {
@@ -16,11 +17,14 @@ export class ReunionService {
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
     private readonly contentsService: ContentsService,
+    private readonly reunionsEventPublisher: ReunionsEventPublisher,
   ) {}
 
   async createReunion(createReunionDto: CreateReunionDto): Promise<Reunion> {
     const reunion = this.reunionRepository.create(createReunionDto);
-    return this.reunionRepository.save(reunion);
+    const saved = await this.reunionRepository.save(reunion);
+    this.reunionsEventPublisher.publishChangeSafely();
+    return saved;
   }
 
   async findAll(): Promise<Reunion[]> {
@@ -46,8 +50,17 @@ export class ReunionService {
     updateData: UpdateReunionDto,
   ): Promise<Reunion> {
     const reunion = await this.findOne(id);
+    const changed =
+      (updateData.titulo !== undefined &&
+        reunion.titulo !== updateData.titulo) ||
+      (updateData.description !== undefined &&
+        reunion.description !== updateData.description) ||
+      (updateData.fecha !== undefined &&
+        reunion.fecha.getTime() !== updateData.fecha.getTime());
     Object.assign(reunion, updateData);
-    return this.reunionRepository.save(reunion);
+    const saved = await this.reunionRepository.save(reunion);
+    if (changed) this.reunionsEventPublisher.publishChangeSafely();
+    return saved;
   }
 
   async deleteReunion(
@@ -69,6 +82,7 @@ export class ReunionService {
       if (result.affected === 0) {
         throw new NotFoundException(`Reunion with ID ${id} not found`);
       }
+      this.reunionsEventPublisher.publishChangeSafely();
     }
   }
 }

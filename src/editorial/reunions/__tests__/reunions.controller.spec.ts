@@ -18,6 +18,7 @@ import { UpdateReunionDto } from '../dto/update-reunion.dto';
 import { ReunionService } from '../reunions.service';
 import { Reunion } from '../entities/reunion.entity';
 import { UserRoleGuard } from 'src/identity/auth/guards/user-role/user-role.guard';
+import { ReunionsStreamService } from '../realtime/reunions-stream.service';
 
 const isGuardType = (value: unknown): value is Type<CanActivate> =>
   typeof value === 'function';
@@ -51,6 +52,7 @@ describe('ReunionController', () => {
     jest.clearAllMocks();
     const guardProviders = guardsFor([
       ReunionController.prototype.create,
+      ReunionController.prototype.openStream,
       ReunionController.prototype.update,
       ReunionController.prototype.remove,
     ]).map((guard) => ({
@@ -61,6 +63,7 @@ describe('ReunionController', () => {
       controllers: [ReunionController],
       providers: [
         { provide: ReunionService, useValue: reunionService },
+        { provide: ReunionsStreamService, useValue: { open: jest.fn() } },
         ...guardProviders,
       ],
     })
@@ -74,6 +77,18 @@ describe('ReunionController', () => {
     expect(Reflect.getMetadata(PATH_METADATA, ReunionController)).toBe(
       'reunions',
     );
+    expect(
+      Reflect.getMetadata(
+        PATH_METADATA,
+        ReunionController.prototype.openStream,
+      ),
+    ).toBe('events');
+    expect(
+      Reflect.getMetadata(
+        METHOD_METADATA,
+        ReunionController.prototype.openStream,
+      ),
+    ).toBe(0);
     expect(
       Reflect.getMetadata(PATH_METADATA, ReunionController.prototype.create),
     ).toBe('/');
@@ -107,6 +122,7 @@ describe('ReunionController', () => {
 
     for (const handler of [
       ReunionController.prototype.create,
+      ReunionController.prototype.openStream,
       ReunionController.prototype.update,
       ReunionController.prototype.remove,
     ]) {
@@ -121,6 +137,15 @@ describe('ReunionController', () => {
     ]) {
       expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
     }
+    expect(
+      Object.getOwnPropertyNames(ReunionController.prototype).indexOf(
+        'openStream',
+      ),
+    ).toBeLessThan(
+      Object.getOwnPropertyNames(ReunionController.prototype).indexOf(
+        'findOne',
+      ),
+    );
   });
 
   it('delegates CRUD calls and returns service responses unchanged', async () => {
