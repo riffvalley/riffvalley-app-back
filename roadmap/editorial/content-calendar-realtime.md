@@ -4,14 +4,19 @@ Roadmap backend para sincronizar entre editores los cambios de **Content Calenda
 
 ## Estado y alcance
 
-- `SSE-1`: auditoría y decisiones arquitectónicas — **documentado**.
-- `SSE-2`: conexión SSE, autenticación y heartbeat — **completada el 2026-11-01**; endpoint, publisher en memoria, ciclo de vida, permisos, pruebas y documentación implementados.
-- `SSE-3`: emisión después de mutaciones confirmadas — **completada el 2026-11-01**; cubre creación, actualización y eliminación de Content y los cambios de Lists que persisten/eliminan Content.
-- `SSE-4`: cliente TanStack Query — consumidor v1 implementado en `riffvalley-app-front`; pendiente adaptar y aceptar el contrato descriptivo v2 en una tarea frontend independiente.
-- `SSE-6a-BE`: contrato editorial descriptivo v2 — **completada el 2026-11-01**; sustituye el envelope v1 sin compatibilidad.
-- `SSE-5`: validación de sincronización, reconexión y carga — pendiente; sin pruebas contra producción.
+**Primera fase SSE de Content Calendar: COMPLETADA Y CERRADA el 2026-11-01.** El propietario confirmó personalmente que SSE v2 funciona correctamente en Heroku, incluida la sincronización entre editores y los toasts descriptivos. Es aceptación funcional integrada observada por el propietario, no un benchmark ni una certificación de capacidad.
 
-SSE-2 y SSE-3 son cambios backend; SSE-4 se implementa solo en frontend. SSE-5 requiere la integración de ambos. No se reabre el roadmap E-CC.
+| Tarea                                            | Estado final                                                |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| `SSE-1` — Auditoría y decisiones arquitectónicas | Completada y documentada.                                   |
+| `SSE-2` — Infraestructura SSE                    | Completada en backend.                                      |
+| `SSE-3` — Publicación tras commit                | Completada en backend.                                      |
+| `SSE-4` — Cliente SSE y TanStack Query           | Completada en frontend.                                     |
+| `SSE-6a-BE` — Contrato descriptivo               | Completada en backend.                                      |
+| `SSE-6b-FE` — Toasts descriptivos                | Completada en frontend.                                     |
+| `SSE-5` — Aceptación funcional integrada del MVP | Cerrada por aceptación funcional del propietario en Heroku. |
+
+El único contrato vigente es `contents.invalidate` v2. SSE-5 se cierra por aceptación funcional; las pruebas formales de carga y escalabilidad se aplazan conscientemente a `SSE-OPS-1`, seguimiento operativo separado y no bloqueante. No se reabre E-CC.
 
 ## 1. SSE-1 — Auditoría y decisiones arquitectónicas
 
@@ -75,29 +80,19 @@ Antes de SSE-3, caracterizar los caminos transaccionales existentes con pruebas 
 - Cerrar la conexión al logout/cambio de usuario o generación de sesión en esa pestaña. Cada conexión termina como máximo a los 10 minutos; la autorización remota revocada puede permanecer activa hasta ese cierre. No se hacen consultas periódicas de sesión ni se añade revocación inmediata.
 - El servidor escucha `request.aborted` y los eventos `response.close`, `response.finish` y `response.error`; no usa `request.close`, que también puede indicar que el GET ya se leyó por completo. Cada cierre cancela timers/suscripción y retira listeners/referencias.
 
-### 1.4 Contrato de eventos recomendado
+### 1.4 Contrato de eventos vigente
 
-Usar inicialmente un solo evento de invalidación, compatible con ampliaciones controladas:
+El único contrato activo es el envelope editorial v2 `contents.invalidate`, documentado completamente en [`SSE-6a-BE`](#sse-6a-be-contrato-descriptivo-v2-para-content-calendar). El cambio inicial de v1 a v2 fue inmediato y sin negociación; v1 se conserva en este documento solo como antecedente histórico de SSE-2/SSE-3, no como alternativa de interoperabilidad.
 
-```text
-event: contents.invalidate
-data: {"type":"contents.invalidate","version":1}
-
-```
-
-- Es un aviso genérico para que el cliente vuelva a consultar Contents; no es un estado replicado ni un registro de auditoría.
-- No incluir ID de Content en la primera versión: la acción del consumidor invalida las queries mensual y backlog completas, y el ID no hace falta para recuperar estado. Así tampoco se distingue si cambió un Content concreto.
-- No enviar notas, título, fechas, usuario, relaciones, listas ni objetos completos. La lectura posterior conserva los endpoints y autorización actuales.
-- Emitir el mismo tipo ante creación, edición, eliminación, programación, retirada al backlog o cambio de fecha si cambió la proyección de Content Calendar. No crear mensajes separados para CRUD hasta que el cliente requiera acciones distintas.
-- Versionar el envelope (`version: 1`) y rechazar/ignorar tipos o versiones desconocidas en frontend. El heartbeat debe ser un comentario SSE (`: heartbeat`) para que no se interprete como cambio de datos.
-- No asignar `id:` SSE ni prometer reproducción con `Last-Event-ID`: no existe historial persistente y los eventos son efímeros. Un evento repetido es inocuo porque solo invalida consultas.
-- Al aceptar una conexión, enviar una señal inicial de invalidación para que el cliente cargue estado actual aun si abrió el calendario antes de suscribirse.
+El evento inicial v2 invalida el calendario sin habilitar un aviso. Los cambios v2 describen `action`, `actor`, `content` y `changes`; `sourceId` es opcional y efímero. El stream no contiene registros completos ni historial: HTTP sigue siendo la fuente de verdad y la recuperación ocurre mediante TanStack Query.
 
 ### 1.5 Ubicación del emisor en NestJS y evolución horizontal
 
+Las subsecciones 1.5–1.9 conservan análisis y propuestas de la auditoría inicial, no una lista de tareas abiertas de la primera fase. Las decisiones y el comportamiento implementados se resumen en 1.10 y en las tareas completadas de la sección 2; las pruebas de capacidad descritas en 1.9 se aplazan a SSE-OPS-1.
+
 - Mantener la propiedad de este canal en `ContentsModule`, en un área concreta `contents/realtime/`: un controlador de stream separado y un servicio de suscripción/emisión con interfaz pequeña. El servicio de dominio publica el aviso; el controlador solo autentica, escribe protocolo SSE y gestiona ciclo de vida.
 - Definir una frontera de publisher estable (por ejemplo, contrato `ContentCalendarEventPublisher`) e inyectarla en creación/ciclo de vida/coordinación de Lists. El adaptador MVP usa un `Subject` RxJS en memoria. No hacer que las mutaciones dependan de `Subject` directamente; esa frontera permite un adaptador distribuido sin rehacer reglas de Contents.
-- Con un dyno web, un emisor local llega a todos los streams de ese proceso. Es adecuado para 9 editores y picos de 11–12 conexiones, sujeto a confirmar carga de fondo del dyno en prueba. La instancia no guarda eventos ni necesita base de datos.
+- Con un dyno web, un emisor local llega a todos los streams de ese proceso. La auditoría inicial tomó 9 editores y picos de 11–12 conexiones como estimación de planificación, no como capacidad medida o validada. La instancia no guarda eventos ni necesita base de datos.
 - Con varios dynos, cada router distribuye conexiones y una mutación puede aterrizar en un proceso distinto al de sus suscriptores: un `Subject` local dejaría clientes sin aviso. Entonces añadir transporte entre instancias (Redis Pub/Sub es opción inicial) detrás del publisher, publicar después del commit y suscribir cada dyno. Redis Pub/Sub también es efímero: una caída puede perder mensajes; si se necesita entrega durable, orden o replay se reevalúa outbox/stream persistente. En todos los casos el cliente debe poder recuperar por HTTP.
 - No introducir Redis hoy. El hito para hacerlo es habilitar más de un dyno web con SSE activo, o medir pérdida/aislamiento entre instancias, no alcanzar una cifra arbitraria de conexiones en un proceso.
 
@@ -107,7 +102,7 @@ No hay mediciones del dyno actual, huella por conexión ni benchmark del proceso
 
 | Streams simultáneos | Lectura proporcional                                                                                                                          | Decisión de esta fase                                                                                          |
 | ------------------: | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-|                  12 | Pico editorial conocido; decenas de listeners y heartbeat muy pequeño                                                                         | Escenario de aceptación inicial. Medir RSS/heap, event loop y latencia junto con tráfico HTTP normal.          |
+|                  12 | Escenario de referencia de la planificación inicial                                                                                           | No medido; forma parte del benchmark aplazado a SSE-OPS-1.                                                     |
 |                  50 | Mayor retención de sockets y timers; el emisor y el tráfico siguen ligados al número de procesos                                              | Ensayo intermedio para descubrir tendencia y fugas, no representa usuarios actuales.                           |
 |                 100 | Medir memoria incremental y efecto de reconexiones concurrentes; evitar tormenta al reiniciar                                                 | Ensayo de capacidad del proceso/dyno concreto. No inferir estabilidad por router Heroku.                       |
 |                 500 | Prueba de estrés/planificación, probablemente con generador separado y ramp-up; vigilar conexiones, CPU, RSS, latencias y peticiones normales | No asumir viable en el dyno contratado; usar resultados para decidir límites, más dynos o transporte dedicado. |
@@ -139,7 +134,7 @@ La evaluación inicial es que 12 conexiones persistentes son proporcionadas y se
 - Al recibir un mensaje, validar estructura, `type` y `version`; agrupar avisos breves (p. ej. debounce de 100–250 ms, ajustado con UX y tests) en una invalidación de `contentCalendarQueryKeys.root(userId, generation, role)`. Eso cubre mes y backlog sin duplicar estado remoto.
 - Usar `invalidateQueries`; dejar que las funciones query existentes vuelvan a consultar los endpoints de Contents. No parchear cache ni insertar contenidos del payload SSE.
 - Volver a invalidar al conectar, reconectar y restaurar conectividad. En sesión cerrada o cambiada, cerrar stream y no usar claves del usuario anterior. Mantener el aislamiento actual de query keys.
-- Para un Content con operación local pendiente, un evento entrante no debe cambiar el formulario ni la posición optimista. Debounce las invalidaciones; si el mismo ID está guardándose, posponer una refetch hasta la respuesta/reconciliación existente y ejecutar una invalidación final. Como el contrato MVP no lleva ID, esta supresión por fila no está disponible inicialmente: la consulta se hace en background, mientras el borrador del modal sigue siendo estado local. No aceptar el resultado remoto como reemplazo del formulario abierto.
+- Para un Content con operación local pendiente, un evento entrante no debe cambiar el formulario ni la posición optimista. El contrato v2 puede incluir `content.id` y `sourceId` para correlacionar el cambio; la vista conserva la supresión durante operaciones pendientes, la respuesta HTTP sigue siendo la autoridad y no se acepta el payload como reemplazo del formulario abierto.
 - La sincronización visual no resuelve conflictos de escritura. Dos editores pueden guardar sobre el mismo valor; se preserva la semántica HTTP existente y no se añaden locks, versiones de entidad ni edición colaborativa. Informar al editor de un cambio detectado durante su edición podría considerarse después, sin sobrescribir el formulario.
 - Validar que el refetch no interfiera con cancelación de queries, `pendingContentIds`, reversión/reconciliación de drag-and-drop ni respuestas inciertas. La invalidación remota no reemplaza el camino de confirmación de cada mutación local.
 
@@ -165,9 +160,9 @@ El umbral no se fija con números inventados: primero obtener línea base sin SS
 
 **Coste esperado:** el MVP no requiere proveedor o base de datos nueva. Añade memoria por socket, actividad periódica de heartbeat, CPU de parseo y mantenimiento, y reduce capacidad disponible del dyno para requests si existe presión de recursos. Más dynos pueden aumentar coste de alojamiento; un bus distribuido añade operación, monitorización y coste de servicio. El importe no puede calcularse sin el plan y mediciones reales.
 
-**Decisiones recomendadas:** fetch streaming con Bearer existente; `Subject` RxJS en memoria detrás de publisher; envelope `contents.invalidate` v1; publicación tras commit en los puntos de emisión de la tabla; servicio bajo ContentsModule; heartbeat 25 s; backoff con jitter; HTTP como recuperación autoritativa; sin Redis/outbox para un dyno.
+**Decisiones finales:** Fetch streaming con Bearer existente; publisher RxJS en memoria; contrato exclusivo `contents.invalidate` v2; publicación tras commit y una vez por operación lógica; heartbeat de 25 s; duración máxima de 10 min; backoff con jitter; HTTP como recuperación autoritativa; sin Redis ni persistencia de eventos en la primera fase.
 
-**Pendiente para SSE-4/SSE-5:** confirmar el origen final del calendario en producción; acordar cómo compartir la lectura/renovación de Bearer con Axios; comprobar buffering y timeout a través de la ruta desplegada; identificar capacidad del dyno y línea base de memoria/CPU; definir umbrales operativos con datos reales. La política de 10 minutos y la aceptación de revocación remota hasta el timeout ya están aprobadas.
+**Seguimiento fuera de la primera fase:** benchmark formal de 12/50/100/500 conexiones, mediciones cuantitativas de memoria/CPU/latencia y pruebas de estrés/reconexión masiva no constan como ejecutados. Se aplazan conscientemente a `SSE-OPS-1 — Benchmark operativo`; no bloquean la aceptación funcional del MVP. La confirmación del propietario en Heroku no certifica capacidad ni escalabilidad.
 
 **Riesgos principales:** autorización que cambia durante conexión activa; eventos perdidos al terminar el proceso o durante un futuro fallo de bus; invalidaciones repetidas durante formularios abiertos; reconexiones en ráfaga; memoria/CPU del dyno no medida; tests de integración que no caractericen todos los commits y rollbacks. Ninguno justifica persistir eventos en la fase inicial si la reconexión vuelve a consultar datos actuales.
 
@@ -179,7 +174,7 @@ El umbral no se fija con números inventados: primero obtener línea base sin SS
 
 - Ruta `GET /api/contents/events`, registrada antes de la ruta dinámica de Contents y protegida por `@Auth(ValidRoles.riffvalley)`. La jerarquía existente incluye `superadmin`.
 - Publisher local RxJS encapsulado (`ContentCalendarEventPublisher`) en `ContentCalendarRealtimeModule`, exportado a través de `ContentsModule` como frontera para SSE-3. No se conecta a ninguna mutación en esta fase.
-- Envelope exacto `contents.invalidate` v1, envío inicial sin consulta de base de datos, sin `id:` SSE, replay ni payload editorial.
+- Envelope inicial `contents.invalidate` v1 como antecedente histórico; fue sustituido por v2 en SSE-6a-BE, sin negociación ni compatibilidad. El envío inicial no consulta la base de datos y no usa `id:` SSE ni replay.
 - Heartbeat compartido cada 25 segundos y máximo de 10 minutos por stream; finalización libera la suscripción y timers. `beforeApplicationShutdown` cierra los streams antes de que Nest cierre el adaptador HTTP; `main.ts` habilita los shutdown hooks.
 - CORS global sin cambios; una prueba HTTP verifica el preflight `Authorization` contra un origen ya autorizado.
 - Logs y contadores locales cubren streams activos/abiertos/cerrados, motivo de cierre, errores y publicaciones, sin registrar tokens ni identidad.
@@ -198,7 +193,7 @@ El umbral no se fija con números inventados: primero obtener línea base sin SS
 - `ListContentCoordinator.update()` publica solo si sincronizó y guardó realmente Content; el resultado interno tipado sale de la transacción y se publica después del commit. Los cambios de nombre/descripción/relaciones de List que no cambian Content no notifican.
 - `ListContentCoordinator.removeList()` publica después del commit únicamente si borró Content asociado. Con un `EntityManager` externo no publica; `ContentLifecycleService.remove()` es el propietario y emite una sola vez después de su transacción.
 - El publisher expone `publishInvalidationSafely()`: si falla la publicación posterior al commit, registra `event=content_calendar_invalidation_publish_failed` sin información editorial y mantiene exitosa la mutación ya confirmada. No hay reintentos, outbox ni persistencia.
-- El sobre sigue siendo exactamente `contents.invalidate` v1, sin ID ni datos editoriales. Los eventos son efímeros; conexión/reconexión y SSE-4 recuperarán la vista mediante HTTP.
+- En la entrega original de SSE-3 el sobre era `contents.invalidate` v1; SSE-6a-BE lo sustituyó de inmediato por v2. Los eventos siguen siendo efímeros y conexión/reconexión recuperan la vista mediante HTTP.
 
 **Pruebas:** suites focalizadas de creación/lifecycle de Contents, `ListContentCoordinator` y publisher verifican emisión tras commit, ausencia en fallos/rollback, actualizaciones sin cambios, sincronización de fechas, eliminación ligada/no ligada, rama con manager externo y contención/log de fallo del publisher. Los flujos delegados continúan cubiertos por los servicios comunes; no se añaden publicadores específicos.
 
@@ -242,25 +237,25 @@ Las fechas del envelope son civiles `YYYY-MM-DD`, extraídas del prefijo de la f
 
 `X-Content-Calendar-Client-Id` es un identificador efímero opcional generado por la instancia cliente, validado por formato y propagado como `sourceId`. No identifica ni autoriza al usuario. Se permite en CORS para que las mutaciones cross-origin puedan incluirlo. El consumidor frontend lo compara para silenciar el aviso de la pestaña que inició la operación. No se modifica Axios de forma general.
 
-SSE-6a-BE no cambia persistencia, reglas editoriales, autenticación del stream, heartbeat ni duración; no añade migraciones, Redis, colas, Web Push ni notificaciones persistentes. El cambio v1→v2 es inmediato; los tests solo aceptan v2. La adaptación del consumidor frontend v2 y la aceptación final permanecen pendientes.
+SSE-6a-BE no cambia persistencia, reglas editoriales, autenticación del stream, heartbeat ni duración; no añade migraciones, Redis, colas, Web Push ni notificaciones persistentes. El cambio v1→v2 fue inmediato; solo se acepta v2. SSE-6b-FE y la aceptación funcional integrada quedaron cerradas el 2026-11-01.
 
 **Pruebas y gates:** cobertura del publisher, stream HTTP, creación/lifecycle de Contents, Lists, rutas de delegación y CORS; incluye acciones, actor usuario/sistema, títulos por tipo, fecha civil, `sourceId`, ausencia de campos sensibles, commit/rollback, emisión única y fallback genérico. `pnpm run verify` aprobado: 272 suites y 2.672 tests pasaron; 31 suites y 165 tests omitidos por configuración. Después se repitió el test del publisher actualizado: 23 tests pasaron. Typecheck: 0 errores; build/runtime dependencies aprobados; ESLint: 0 hallazgos nuevos (832 históricos baselined); estructura: 0 infracciones nuevas (9 históricas baselined). Prettier focalizado y `git diff --check` aprobados. No se ejecutó E2E porque la tarea no requiere servicios externos.
 
 ### SSE-4 — Contrato y adaptación frontend (cross-repo)
 
-- Mantener tarea en el roadmap frontend, separada de este repositorio backend.
-- Usar Fetch ReadableStream con Bearer existente; validar envelope/tipo/versión v2 y distinguir `reason: "initial"` de los cambios editoriales.
-- Comparar `sourceId` para silenciar el aviso de la instancia cliente que originó la mutación.
-- Debounce e invalidar query root de calendario; cerrar/reabrir según usuario, generación, rol, logout y ciclo de vida de vista.
-- Tras abrir/reabrir, consultar mes/backlog HTTP. No introducir otro estado remoto ni sobrescribir modales/borradores.
-- Compartir mecanismo de refresh actual en lugar de duplicarlo para Axios/SSE.
+**Completada el 2026-11-01** en `riffvalley-app-front`. El consumidor Fetch/ReadableStream reutiliza Identity, valida exclusivamente v2, compara `sourceId`, invalida TanStack Query y recupera mediante HTTP. La vista abre el stream solo mientras Content Calendar está montado, respeta ciclo de sesión y «Mis eventos», y presenta toasts con Vue Sonner después de cambios visibles confirmados por refetch. La implementación, pruebas y límites están en [`roadmap frontend`](../../../riffvalley-app-front/roadmap/editorial/content-calendar-realtime.md) y [`documentación del módulo`](../../../riffvalley-app-front/docs/frontend/modules/content-calendar-realtime.md).
 
-### SSE-5 — Validación de sincronización, reconexión y carga
+### SSE-6b-FE — Toasts editoriales descriptivos v2
 
-- Comprobar mutaciones y eventos entre dos sesiones editoriales, incluidos rollback, borrado, listas sincronizadas, entrada/salida de backlog y cambios sin Content.
-- Verificar recovery al conectar, reconnect, pérdida de red, JWT expirado, cierre de sesión, reinicio de proceso y recuperación HTTP.
-- Ejecutar matriz de carga no productiva a 12/50/100/500; recoger métricas y compararlas con la capacidad real del dyno y la línea base HTTP.
-- Decidir en base a datos si el dyno actual basta y cuándo se justifica escalar o añadir Redis para múltiples procesos.
+**Completada el 2026-11-01** en `riffvalley-app-front`. Se muestran actor, acción, Content y fecha cuando corresponde; el origen de la pestaña actual se suprime, se respeta «Mis eventos» y los lotes se agrupan sin perder invalidaciones. Se reutiliza Vue Sonner; no se añadió una dependencia de notificaciones.
+
+### SSE-5 — Aceptación funcional integrada del MVP
+
+**Cerrada el 2026-11-01 por aceptación funcional del propietario del proyecto.** El propietario confirmó personalmente que SSE v2 funciona en Heroku, con sincronización entre editores y toasts descriptivos. La aceptación comprende el funcionamiento integrado observado de la conexión autenticada, recepción de eventos, actualización con TanStack Query, toasts de Vue Sonner y Content Calendar general. No se inventa un informe manual de escenarios ni se afirma que el agente realizara pruebas visuales.
+
+**No acreditado y aplazado:** benchmark formal de 12/50/100/500 conexiones, mediciones de memoria/CPU/latencia, estrés y reconexión masiva. El proyecto decide conscientemente aplazarlos a un seguimiento operativo independiente `SSE-OPS-1 — Benchmark operativo`. No bloquean el cierre funcional del MVP ni certifican capacidad o escalabilidad. Redis Pub/Sub solo se reconsidera si el despliegue multi-dyno lo requiere.
+
+La primera fase no incluye historial de actividad, entrega a usuarios desconectados ni persistencia de notificaciones. Evoluciones posibles posteriores —SSE de cambios internos de Lists, notificaciones personales, persistencia/historial, Web Push, ámbitos de suscripción y distribución multi-dyno— quedan fuera de esta fase. Los futuros ajustes visuales pequeños de Content Calendar también serán tareas independientes; no reabren E-CC ni SSE.
 
 ## Referencias internas
 
