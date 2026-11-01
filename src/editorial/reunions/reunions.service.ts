@@ -6,8 +6,12 @@ import { CreateReunionDto } from './dto/create-reunion.dto';
 import { UpdateReunionDto } from './dto/update-reunion.dto';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
-import { ContentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 import { ReunionsEventPublisher } from './realtime/reunions-event-publisher.service';
+import {
+  reunionReference,
+  ReunionsMutationContext,
+  REUNIONS_SYSTEM_ACTOR,
+} from './realtime/contracts/reunions-event.contract';
 
 @Injectable()
 export class ReunionService {
@@ -20,10 +24,22 @@ export class ReunionService {
     private readonly reunionsEventPublisher: ReunionsEventPublisher,
   ) {}
 
-  async createReunion(createReunionDto: CreateReunionDto): Promise<Reunion> {
+  async createReunion(
+    createReunionDto: CreateReunionDto,
+    context?: ReunionsMutationContext,
+  ): Promise<Reunion> {
     const reunion = this.reunionRepository.create(createReunionDto);
     const saved = await this.reunionRepository.save(reunion);
-    this.reunionsEventPublisher.publishChangeSafely();
+    const mutation = context ?? { actor: REUNIONS_SYSTEM_ACTOR };
+    this.reunionsEventPublisher.publishChangeSafely(() => ({
+      type: 'reunions.invalidate',
+      version: 1,
+      reason: 'change',
+      action: 'reunion.created',
+      actor: mutation.actor,
+      reunion: reunionReference(saved),
+      ...(mutation.sourceId ? { sourceId: mutation.sourceId } : {}),
+    }));
     return saved;
   }
 
@@ -48,6 +64,7 @@ export class ReunionService {
   async updateReunion(
     id: string,
     updateData: UpdateReunionDto,
+    context?: ReunionsMutationContext,
   ): Promise<Reunion> {
     const reunion = await this.findOne(id);
     const changed =
@@ -59,14 +76,26 @@ export class ReunionService {
         reunion.fecha.getTime() !== updateData.fecha.getTime());
     Object.assign(reunion, updateData);
     const saved = await this.reunionRepository.save(reunion);
-    if (changed) this.reunionsEventPublisher.publishChangeSafely();
+    if (changed) {
+      const mutation = context ?? { actor: REUNIONS_SYSTEM_ACTOR };
+      this.reunionsEventPublisher.publishChangeSafely(() => ({
+        type: 'reunions.invalidate',
+        version: 1,
+        reason: 'change',
+        action: 'reunion.updated',
+        actor: mutation.actor,
+        reunion: reunionReference(saved),
+        ...(mutation.sourceId ? { sourceId: mutation.sourceId } : {}),
+      }));
+    }
     return saved;
   }
 
   async deleteReunion(
     id: string,
-    context?: ContentCalendarMutationContext,
+    context?: ReunionsMutationContext,
   ): Promise<void> {
+    const reunion = await this.findOne(id);
     // Check if there is associated content
     const content = await this.contentRepository.findOne({
       where: { reunionId: id },
@@ -82,7 +111,16 @@ export class ReunionService {
       if (result.affected === 0) {
         throw new NotFoundException(`Reunion with ID ${id} not found`);
       }
-      this.reunionsEventPublisher.publishChangeSafely();
+      const mutation = context ?? { actor: REUNIONS_SYSTEM_ACTOR };
+      this.reunionsEventPublisher.publishChangeSafely(() => ({
+        type: 'reunions.invalidate',
+        version: 1,
+        reason: 'change',
+        action: 'reunion.deleted',
+        actor: mutation.actor,
+        reunion: reunionReference(reunion),
+        ...(mutation.sourceId ? { sourceId: mutation.sourceId } : {}),
+      }));
     }
   }
 }

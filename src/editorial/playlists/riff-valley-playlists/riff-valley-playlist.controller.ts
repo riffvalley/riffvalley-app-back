@@ -78,12 +78,13 @@ export class RiffValleyPlaylistController {
   createContent(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.riffValleyPlaylistService
       .createContentForRiffValleyPlaylist(
         id,
-        contentCalendarMutationContext(user, sourceId),
+        contentCalendarMutationContext(user, sourceId ?? legacySourceId),
       )
       .then(toPublicContentReference);
   }

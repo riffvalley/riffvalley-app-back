@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Subject } from 'rxjs';
 import {
-  REUNIONS_CHANGE_EVENT,
+  REUNIONS_GENERIC_CHANGE_EVENT,
   ReunionsEvent,
 } from './contracts/reunions-event.contract';
 
@@ -24,14 +24,31 @@ export class ReunionsEventPublisher implements OnModuleDestroy {
     };
   }
 
-  publishChangeSafely(): void {
+  publishChangeSafely(
+    createEvent:
+      | ReunionsEvent
+      | (() => ReunionsEvent) = REUNIONS_GENERIC_CHANGE_EVENT,
+  ): void {
     try {
-      this.publishedEvents += 1;
-      this.events.next(REUNIONS_CHANGE_EVENT);
-      this.logger.log(`event=reunions_event count=${this.publishedEvents}`);
+      this.publish(
+        typeof createEvent === 'function' ? createEvent() : createEvent,
+      );
     } catch {
       this.logger.error('event=reunions_event_publish_failed');
+      if (createEvent !== REUNIONS_GENERIC_CHANGE_EVENT) {
+        try {
+          this.publish(REUNIONS_GENERIC_CHANGE_EVENT);
+        } catch {
+          this.logger.error('event=reunions_event_fallback_failed');
+        }
+      }
     }
+  }
+
+  private publish(event: ReunionsEvent): void {
+    this.publishedEvents += 1;
+    this.events.next(event);
+    this.logger.log(`event=reunions_event count=${this.publishedEvents}`);
   }
 
   getMetrics(): Readonly<{

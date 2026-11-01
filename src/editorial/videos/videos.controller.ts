@@ -56,10 +56,14 @@ export class VideosController {
   createContent(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.videosService
-      .createContentForVideo(id, contentCalendarMutationContext(user, sourceId))
+      .createContentForVideo(
+        id,
+        contentCalendarMutationContext(user, sourceId ?? legacySourceId),
+      )
       .then(toPublicContentReference);
   }
 

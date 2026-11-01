@@ -177,15 +177,25 @@ describe('ReunionController', () => {
     );
     await expect(controller.remove('reunion-id')).resolves.toBeUndefined();
 
-    expect(reunionService.createReunion).toHaveBeenCalledWith(dto);
+    expect(reunionService.createReunion).toHaveBeenCalledWith(
+      dto,
+      expect.objectContaining({
+        actor: { kind: 'system', displayName: 'Proceso automático' },
+      }),
+    );
     expect(reunionService.findOne).toHaveBeenCalledWith('reunion-id');
     expect(reunionService.updateReunion).toHaveBeenCalledWith(
       'reunion-id',
       updateDto,
+      expect.objectContaining({
+        actor: { kind: 'system', displayName: 'Proceso automático' },
+      }),
     );
     expect(reunionService.deleteReunion).toHaveBeenCalledWith(
       'reunion-id',
-      undefined,
+      expect.objectContaining({
+        actor: { kind: 'system', displayName: 'Proceso automático' },
+      }),
     );
   });
 
@@ -230,6 +240,9 @@ describe('ReunionController', () => {
     expect(reunionService.updateReunion).toHaveBeenCalledWith(
       'reunion-id',
       validated,
+      expect.objectContaining({
+        actor: { kind: 'system', displayName: 'Proceso automático' },
+      }),
     );
 
     for (const invalidBody of [

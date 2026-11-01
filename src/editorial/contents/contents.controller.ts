@@ -40,11 +40,12 @@ export class ContentsController {
   create(
     @Body() createContentDto: CreateContentDto,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.contentsService.create(
       createContentDto,
-      contentCalendarMutationContext(user, sourceId),
+      contentCalendarMutationContext(user, sourceId ?? legacySourceId),
     );
   }
 
@@ -76,12 +77,13 @@ export class ContentsController {
     @Param('id') id: string,
     @Body() updateContentDto: UpdateContentDto,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.contentsService.update(
       id,
       updateContentDto,
-      contentCalendarMutationContext(user, sourceId),
+      contentCalendarMutationContext(user, sourceId ?? legacySourceId),
     );
   }
 
@@ -90,11 +92,12 @@ export class ContentsController {
   remove(
     @Param('id') id: string,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.contentsService.remove(
       id,
-      contentCalendarMutationContext(user, sourceId),
+      contentCalendarMutationContext(user, sourceId ?? legacySourceId),
     );
   }
 }

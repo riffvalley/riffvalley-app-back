@@ -18,7 +18,7 @@ import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { GetUser } from 'src/identity/authorization/decorators/get-user.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
-import { contentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
+import { reunionsMutationContext } from './realtime/contracts/reunions-event.contract';
 import { ReunionsStreamService } from './realtime/reunions-stream.service';
 
 @Controller('reunions')
@@ -36,8 +36,16 @@ export class ReunionController {
 
   @Post()
   @Auth(ValidRoles.riffvalley)
-  async create(@Body() createReunionDto: CreateReunionDto) {
-    return this.reunionService.createReunion(createReunionDto);
+  async create(
+    @Body() createReunionDto: CreateReunionDto,
+    @GetUser() user?: User,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
+  ) {
+    return this.reunionService.createReunion(
+      createReunionDto,
+      reunionsMutationContext(user, sourceId ?? legacySourceId),
+    );
   }
 
   @Get()
@@ -52,8 +60,18 @@ export class ReunionController {
 
   @Patch(':id')
   @Auth(ValidRoles.riffvalley)
-  async update(@Param('id') id: string, @Body() updateData: UpdateReunionDto) {
-    return this.reunionService.updateReunion(id, updateData);
+  async update(
+    @Param('id') id: string,
+    @Body() updateData: UpdateReunionDto,
+    @GetUser() user?: User,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
+  ) {
+    return this.reunionService.updateReunion(
+      id,
+      updateData,
+      reunionsMutationContext(user, sourceId ?? legacySourceId),
+    );
   }
 
   @Delete(':id')
@@ -61,11 +79,12 @@ export class ReunionController {
   async remove(
     @Param('id') id: string,
     @GetUser() user?: User,
-    @Headers('x-content-calendar-client-id') sourceId?: string,
+    @Headers('x-riff-valley-client-id') sourceId?: string,
+    @Headers('x-content-calendar-client-id') legacySourceId?: string,
   ) {
     return this.reunionService.deleteReunion(
       id,
-      contentCalendarMutationContext(user, sourceId),
+      reunionsMutationContext(user, sourceId ?? legacySourceId),
     );
   }
 }

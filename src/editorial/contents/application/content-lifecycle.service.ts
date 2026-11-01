@@ -27,6 +27,10 @@ import {
   contentCalendarCivilDate,
 } from '../realtime/contracts/content-calendar-event.contract';
 import { ReunionsEventPublisher } from 'src/editorial/reunions/realtime/reunions-event-publisher.service';
+import {
+  normalizeReunionsMutationContext,
+  reunionReference,
+} from 'src/editorial/reunions/realtime/contracts/reunions-event.contract';
 
 @Injectable()
 export class ContentLifecycleService {
@@ -186,7 +190,7 @@ export class ContentLifecycleService {
 
     const reunionSyncNeeded =
       content.type === ContentType.REUNION || Boolean(content.reunionId);
-    let reunionWasModified = false;
+    let modifiedReunion: Reunion | undefined;
     const persistUpdate = async (manager?: EntityManager): Promise<Content> => {
       const contentRepo = manager
         ? manager.getRepository(Content)
@@ -288,7 +292,7 @@ export class ContentLifecycleService {
 
             if (reunionChanged) {
               await reunionRepo.save(reunionEntity);
-              reunionWasModified = true;
+              modifiedReunion = reunionEntity;
             }
           }
         }
@@ -330,7 +334,18 @@ export class ContentLifecycleService {
         CONTENT_CALENDAR_GENERIC_CHANGE,
       );
     }
-    if (reunionWasModified) this.reunionsEventPublisher.publishChangeSafely();
+    if (modifiedReunion) {
+      const mutation = normalizeReunionsMutationContext(context);
+      this.reunionsEventPublisher.publishChangeSafely(() => ({
+        type: 'reunions.invalidate',
+        version: 1,
+        reason: 'change',
+        action: 'reunion.updated',
+        actor: mutation.actor,
+        reunion: reunionReference(modifiedReunion),
+        ...(mutation.sourceId ? { sourceId: mutation.sourceId } : {}),
+      }));
+    }
     return saved;
   }
 
@@ -354,7 +369,7 @@ export class ContentLifecycleService {
       publicationDate: content.publicationDate,
     };
     const listId = content.list?.id;
-    const reunionWasRemoved = Boolean(content.reunion);
+    const deletedReunion = content.reunion;
 
     if (listId || content.reunion) {
       await this.contentRepo.manager.transaction(async (manager) => {
@@ -382,7 +397,18 @@ export class ContentLifecycleService {
         }),
       CONTENT_CALENDAR_GENERIC_CHANGE,
     );
-    if (reunionWasRemoved) this.reunionsEventPublisher.publishChangeSafely();
+    if (deletedReunion) {
+      const mutation = normalizeReunionsMutationContext(context);
+      this.reunionsEventPublisher.publishChangeSafely(() => ({
+        type: 'reunions.invalidate',
+        version: 1,
+        reason: 'change',
+        action: 'reunion.deleted',
+        actor: mutation.actor,
+        reunion: reunionReference(deletedReunion),
+        ...(mutation.sourceId ? { sourceId: mutation.sourceId } : {}),
+      }));
+    }
 
     // NOTE: The linked RiffValleyPlaylist/Article/Video entity is left untouched — its
     // status is no longer auto-reset on Content removal. Video/Article/RiffValleyPlaylist

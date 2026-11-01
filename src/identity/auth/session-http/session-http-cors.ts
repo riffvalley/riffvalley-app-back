@@ -27,6 +27,7 @@ export const AUTH_HTTP_CORS_OPTIONS: CorsOptions = {
     'Content-Type',
     'X-Custom-Lang',
     'X-Content-Calendar-Client-Id',
+    'X-Riff-Valley-Client-Id',
     'X-Auth-Session-Mode',
     'X-CSRF-Token',
     'X-Refresh-Operation',
