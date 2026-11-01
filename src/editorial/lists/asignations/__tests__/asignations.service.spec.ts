@@ -755,6 +755,41 @@ describe('AsignationsService error classification', () => {
     });
   });
 
+  it('keeps the Radar movement descriptive when preload returns a partial disc relation', async () => {
+    const existing = asignationFixture({
+      id: asignationId,
+      list: listFixture({ id: listId, type: ListType.WEEK }),
+      position: 1,
+      disc: discFixture(discId),
+    });
+    asignationFindOne.mockResolvedValue(existing);
+    asignationPreload.mockResolvedValue(
+      asignationFixture({
+        id: asignationId,
+        position: 2,
+        disc: Object.assign(new Disc(), { id: discId }),
+      }),
+    );
+    asignationSave.mockImplementation(async (values) =>
+      Object.assign(new Asignation(), values),
+    );
+
+    await service.update(
+      asignationId,
+      { position: 2 },
+      { actor: { kind: 'user', id: 'actor-id', displayName: 'Editor' } },
+    );
+
+    expect(publishedEvents).toHaveLength(1);
+    expect(publishedEvents[0]).toMatchObject({
+      action: 'assignment.moved',
+      discId,
+      artistName: 'Grupo 1',
+      previousPosition: 1,
+      newPosition: 2,
+    });
+  });
+
   it('keeps a committed position event independent from later WordPress synchronization', async () => {
     const existing = asignationFixture({
       id: asignationId,
