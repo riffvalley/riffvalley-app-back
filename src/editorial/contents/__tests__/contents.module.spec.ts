@@ -16,6 +16,7 @@ import { ContentCalendarEventsController } from '../realtime/content-calendar-ev
 import { ContentCalendarEventPublisher } from '../realtime/content-calendar-event-publisher.service';
 import { ContentCalendarStreamService } from '../realtime/content-calendar-stream.service';
 import { ContentCalendarRealtimeModule } from '../realtime/content-calendar-realtime.module';
+import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 
 describe('ContentsModule providers', () => {
   it('registers each internal service once and no longer imports PointsModule', () => {
@@ -48,6 +49,9 @@ describe('ContentsModule providers', () => {
     expect(providerList).not.toContain(ContentCalendarStreamService);
     expect(controllerList).not.toContain(ContentCalendarEventsController);
     expect(importList).toContain(ContentCalendarRealtimeModule);
+    expect(
+      Reflect.getMetadata('imports', ContentCalendarRealtimeModule),
+    ).toContain(AuthorizationModule);
     expect(
       Reflect.getMetadata('providers', ContentCalendarRealtimeModule),
     ).toContain(ContentCalendarEventPublisher);
