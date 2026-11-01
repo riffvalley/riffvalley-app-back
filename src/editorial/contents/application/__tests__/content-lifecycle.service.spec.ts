@@ -22,6 +22,7 @@ import { Video } from 'src/editorial/videos/entities/video.entity';
 import { Article } from 'src/editorial/articles/entities/article.entity';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Point } from 'src/editorial/reunions/points/entities/point.entity';
+import { ContentCalendarEventPublisher } from '../../realtime/content-calendar-event-publisher.service';
 
 describe('ContentLifecycleService', () => {
   type TransactionState = {
@@ -210,6 +211,9 @@ describe('ContentLifecycleService', () => {
     > = {
       findOne: jest.fn().mockResolvedValue(content),
     };
+    const eventPublisher = {
+      publishInvalidationSafely: jest.fn(),
+    };
 
     const testingModule: TestingModule = await Test.createTestingModule({
       providers: [
@@ -220,6 +224,7 @@ describe('ContentLifecycleService', () => {
         { provide: getRepositoryToken(List), useValue: listRepository },
         { provide: ListsService, useValue: listsService },
         { provide: ContentQueryService, useValue: contentQueryService },
+        { provide: ContentCalendarEventPublisher, useValue: eventPublisher },
       ],
     }).compile();
 
@@ -237,6 +242,7 @@ describe('ContentLifecycleService', () => {
       listRepository,
       listsService,
       contentQueryService,
+      eventPublisher,
       txContentRepository: {
         save: contentTxSave,
         remove: contentTxRemove,
@@ -278,8 +284,78 @@ describe('ContentLifecycleService', () => {
       new Date('2026-11-01T00:00:00.000Z'),
     );
     expect(fixture.list.closeDate).toBeNull();
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).toHaveBeenCalledTimes(1);
     expect(fixture.list.listDate).toBeNull();
     expect(fixture.content.ready).toBe(false);
+    await fixture.testingModule.close();
+  });
+
+  it('does not publish for an update that persists no calendar changes', async () => {
+    const fixture = await makeFixture();
+
+    await fixture.service.update('content-id', { name: 'Monthly list' });
+
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('publishes once after an update transaction commits', async () => {
+    const fixture = await makeFixture();
+    fixture.eventPublisher.publishInvalidationSafely.mockImplementation(() => {
+      expect(fixture.committedWrites.length).toBeGreaterThan(0);
+    });
+
+    await fixture.service.update('content-id', {
+      publicationDate: '2026-11-01T00:00:00.000Z',
+    });
+
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes once when scheduling backlog Content on the calendar', async () => {
+    const fixture = await makeFixture(
+      makeContent({
+        type: ContentType.PHOTOS,
+        list: undefined,
+        publicationDate: undefined,
+        backlog: true,
+        ready: false,
+      }),
+    );
+
+    await fixture.service.update('content-id', {
+      publicationDate: '2026-11-01T00:00:00.000Z',
+      backlog: false,
+    });
+
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).toHaveBeenCalledTimes(1);
+    await fixture.testingModule.close();
+  });
+
+  it('publishes once when removing scheduled Content back to backlog', async () => {
+    const fixture = await makeFixture(
+      makeContent({
+        type: ContentType.PHOTOS,
+        list: undefined,
+        backlog: false,
+      }),
+    );
+
+    await fixture.service.update('content-id', {
+      publicationDate: null,
+      backlog: true,
+    });
+
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).toHaveBeenCalledTimes(1);
     await fixture.testingModule.close();
   });
 
@@ -376,6 +452,9 @@ describe('ContentLifecycleService', () => {
     expect(fixture.manager.repositoryTargets).toContain(Reunion);
     expect(fixture.committedWrites).toEqual([]);
     expect(fixture.contentRepository.save).not.toHaveBeenCalled();
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).not.toHaveBeenCalled();
     await fixture.testingModule.close();
   });
 
@@ -413,6 +492,9 @@ describe('ContentLifecycleService', () => {
     );
     expect(fixture.committedWrites).toEqual([]);
     expect(fixture.contentRepository.save).not.toHaveBeenCalled();
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).not.toHaveBeenCalled();
     await fixture.testingModule.close();
   });
 
@@ -450,6 +532,9 @@ describe('ContentLifecycleService', () => {
     );
     expect(fixture.txReunionRepository.delete).not.toHaveBeenCalled();
     expect(fixture.contentRepository.remove).not.toHaveBeenCalled();
+    expect(
+      fixture.eventPublisher.publishInvalidationSafely,
+    ).toHaveBeenCalledTimes(1);
     await fixture.testingModule.close();
   });
 
@@ -626,6 +711,9 @@ describe('ContentLifecycleService', () => {
       listError,
     );
     expect(listFixture.committedWrites).toEqual([]);
+    expect(
+      listFixture.eventPublisher.publishInvalidationSafely,
+    ).not.toHaveBeenCalled();
 
     const point = Object.assign(new Point(), { id: 'point-id' });
     const reunion = Object.assign(new Reunion(), {
@@ -658,6 +746,9 @@ describe('ContentLifecycleService', () => {
     expect(reunionFixture.content.reunion).toBe(reunion);
     expect(reunion.points).toEqual([point]);
     expect(reunionFixture.contentRepository.remove).not.toHaveBeenCalled();
+    expect(
+      reunionFixture.eventPublisher.publishInvalidationSafely,
+    ).not.toHaveBeenCalled();
     await listFixture.testingModule.close();
     await reunionFixture.testingModule.close();
   });
@@ -679,6 +770,9 @@ describe('ContentLifecycleService', () => {
     expect(plainFixture.contentRepository.remove).toHaveBeenCalledWith(
       plainContent,
     );
+    expect(
+      plainFixture.eventPublisher.publishInvalidationSafely,
+    ).toHaveBeenCalledTimes(1);
     await missingFixture.testingModule.close();
     await plainFixture.testingModule.close();
   });

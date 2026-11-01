@@ -9,6 +9,7 @@ import { getMetadataArgsStorage } from 'typeorm';
 import { Content } from 'src/editorial/contents/entities/content.entity';
 import { ContentCreationService } from 'src/editorial/contents/application/content-creation.service';
 import { ContentLifecycleService } from 'src/editorial/contents/application/content-lifecycle.service';
+import { ContentCalendarEventPublisher } from 'src/editorial/contents/realtime/content-calendar-event-publisher.service';
 import { ContentQueryService } from 'src/editorial/contents/application/content-query.service';
 import { ContentsModule } from 'src/editorial/contents/contents.module';
 import { AppModule } from 'src/app.module';
@@ -182,6 +183,10 @@ describe('Reunions and Points NestJS wiring', () => {
         { provide: ContentsService, useValue: { remove: jest.fn() } },
         { provide: ListsService, useValue: {} },
         { provide: ContentQueryService, useValue: {} },
+        {
+          provide: ContentCalendarEventPublisher,
+          useValue: { publishInvalidationSafely: jest.fn() },
+        },
       ],
     }).compile();
 

@@ -7,6 +7,7 @@ import {
   ContentType,
 } from 'src/editorial/contents/entities/content.entity';
 import { ListContentCoordinator } from '../list-content-coordinator.service';
+import { ContentCalendarEventPublisher } from 'src/editorial/contents/realtime/content-calendar-event-publisher.service';
 
 type TrackedList = List & { deleted?: boolean };
 type TrackedContent = Content & { deleted?: boolean };
@@ -164,13 +165,17 @@ describe('ListContentCoordinator List/Content writes', () => {
       }
     });
 
+    const eventPublisher = new ContentCalendarEventPublisher();
+    jest.spyOn(eventPublisher, 'publishInvalidationSafely');
     const service = new ListContentCoordinator(
       listRepository,
       contentRepository,
+      eventPublisher,
     );
 
     return {
       service,
+      eventPublisher,
       list,
       content,
       listRepository,
@@ -208,6 +213,7 @@ describe('ListContentCoordinator List/Content writes', () => {
       txContentRepository,
       manager,
       transaction,
+      eventPublisher,
     } = makeTransactionalService();
 
     await service.update(
@@ -229,6 +235,18 @@ describe('ListContentCoordinator List/Content writes', () => {
     );
     expect(content.closeDate).toBeNull();
     expect(content.listDate).toBeNull();
+    expect(eventPublisher.publishInvalidationSafely).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes nothing when a List update does not change linked Content', async () => {
+    const { service, eventPublisher } = makeTransactionalService();
+
+    await service.update(
+      'list-id',
+      updateWithDate('releaseDate', '2026-10-01T00:00:00.000Z'),
+    );
+
+    expect(eventPublisher.publishInvalidationSafely).not.toHaveBeenCalled();
   });
 
   it('leaves all synchronized dates unchanged when date fields are omitted', async () => {
@@ -413,8 +431,14 @@ describe('ListContentCoordinator List/Content writes', () => {
 
   it('deletes both entities in the transaction and rejects a failed List deletion', async () => {
     const error = new Error('list delete failed');
-    const { service, content, list, txContentRepository, transaction } =
-      makeTransactionalService({ listRemoveError: error });
+    const {
+      service,
+      content,
+      list,
+      txContentRepository,
+      transaction,
+      eventPublisher,
+    } = makeTransactionalService({ listRemoveError: error });
 
     await expect(service.removeList('list-id')).rejects.toBe(error);
 
@@ -422,27 +446,30 @@ describe('ListContentCoordinator List/Content writes', () => {
     expect(txContentRepository.remove).toHaveBeenCalledTimes(1);
     expect(content.deleted).toBeUndefined();
     expect(list.deleted).toBeUndefined();
+    expect(eventPublisher.publishInvalidationSafely).not.toHaveBeenCalled();
   });
 
   it('commits the related Content and List deletion through one manager', async () => {
-    const { service, content, list, transaction } = makeTransactionalService();
+    const { service, content, list, transaction, eventPublisher } =
+      makeTransactionalService();
 
     await service.removeList('list-id');
 
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(content.deleted).toBe(true);
     expect(list.deleted).toBe(true);
+    expect(eventPublisher.publishInvalidationSafely).toHaveBeenCalledTimes(1);
   });
 
   it('deletes an unlinked List directly without opening a transaction', async () => {
-    const { service, listRepository, transaction } = makeTransactionalService({
-      hasContent: false,
-    });
+    const { service, listRepository, transaction, eventPublisher } =
+      makeTransactionalService({ hasContent: false });
 
     await service.removeList('list-id');
 
     expect(transaction).not.toHaveBeenCalled();
     expect(listRepository.remove).toHaveBeenCalledTimes(1);
+    expect(eventPublisher.publishInvalidationSafely).not.toHaveBeenCalled();
   });
 
   it('uses a manager supplied by the caller without opening a nested transaction', async () => {
@@ -452,6 +479,7 @@ describe('ListContentCoordinator List/Content writes', () => {
       manager,
       txContentRepository,
       txListRepository,
+      eventPublisher,
     } = makeTransactionalService();
 
     await service.removeList('list-id', manager);
@@ -459,6 +487,7 @@ describe('ListContentCoordinator List/Content writes', () => {
     expect(transaction).not.toHaveBeenCalled();
     expect(txContentRepository.remove).toHaveBeenCalledTimes(1);
     expect(txListRepository.remove).toHaveBeenCalledTimes(1);
+    expect(eventPublisher.publishInvalidationSafely).not.toHaveBeenCalled();
   });
 
   it('does not delete List when deleting linked Content fails', async () => {

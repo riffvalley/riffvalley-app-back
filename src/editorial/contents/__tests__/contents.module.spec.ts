@@ -12,13 +12,22 @@ import { ContentCreationService } from '../application/content-creation.service'
 import { ContentQueryService } from '../application/content-query.service';
 import { ContentLifecycleService } from '../application/content-lifecycle.service';
 import { ContentsModule } from '../contents.module';
+import { ContentCalendarEventsController } from '../realtime/content-calendar-events.controller';
+import { ContentCalendarEventPublisher } from '../realtime/content-calendar-event-publisher.service';
+import { ContentCalendarStreamService } from '../realtime/content-calendar-stream.service';
+import { ContentCalendarRealtimeModule } from '../realtime/content-calendar-realtime.module';
 
 describe('ContentsModule providers', () => {
   it('registers each internal service once and no longer imports PointsModule', () => {
     const providers: unknown = Reflect.getMetadata('providers', ContentsModule);
     const imports: unknown = Reflect.getMetadata('imports', ContentsModule);
+    const controllers: unknown = Reflect.getMetadata(
+      'controllers',
+      ContentsModule,
+    );
     const providerList = Array.isArray(providers) ? providers : [];
     const importList = Array.isArray(imports) ? imports : [];
+    const controllerList = Array.isArray(controllers) ? controllers : [];
 
     expect(
       providerList.filter(
@@ -35,6 +44,19 @@ describe('ContentsModule providers', () => {
         (provider: unknown) => provider === ContentLifecycleService,
       ),
     ).toHaveLength(1);
+    expect(providerList).not.toContain(ContentCalendarEventPublisher);
+    expect(providerList).not.toContain(ContentCalendarStreamService);
+    expect(controllerList).not.toContain(ContentCalendarEventsController);
+    expect(importList).toContain(ContentCalendarRealtimeModule);
+    expect(
+      Reflect.getMetadata('providers', ContentCalendarRealtimeModule),
+    ).toContain(ContentCalendarEventPublisher);
+    expect(
+      Reflect.getMetadata('providers', ContentCalendarRealtimeModule),
+    ).toContain(ContentCalendarStreamService);
+    expect(
+      Reflect.getMetadata('controllers', ContentCalendarRealtimeModule),
+    ).toContain(ContentCalendarEventsController);
     expect(importList).not.toContain(PointsModule);
 
     const typeOrmFeature = importList.find(

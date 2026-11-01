@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { List } from './entities/list.entity';
 import { AuthorizationModule } from 'src/identity/authorization/authorization.module';
 import { Content } from 'src/editorial/contents/entities/content.entity';
+import { ContentCalendarRealtimeModule } from 'src/editorial/contents/realtime/content-calendar-realtime.module';
 import { WordpressIntegrationModule } from 'src/integrations/wordpress-integration/wordpress-integration.module';
 import { NewsModule } from 'src/product/news/news.module';
 import { SpotifyIntegrationModule } from 'src/integrations/spotify-integration/spotify-integration.module';
@@ -28,6 +29,7 @@ import { MonthlyListPublisherService } from './wordpress/monthly-list-publisher.
   ],
   imports: [
     TypeOrmModule.forFeature([List, Content]),
+    ContentCalendarRealtimeModule,
     AuthorizationModule,
     WordpressIntegrationModule,
     NewsModule,

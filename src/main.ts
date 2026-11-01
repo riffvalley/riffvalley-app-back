@@ -12,6 +12,9 @@ async function bootstrap() {
     logger: WinstonModule.createLogger(winstonConfig),
   });
 
+  // Let stream providers close open responses during Heroku's SIGTERM drain.
+  app.enableShutdownHooks();
+
   // Heroku documents X-Forwarded-Proto as untrusted when clients may supply
   // earlier values. Keep Express proxy trust disabled so session security
   // relies only on TLS on the socket until a verifiable proxy signal exists.
