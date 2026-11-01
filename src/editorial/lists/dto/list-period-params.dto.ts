@@ -10,7 +10,7 @@ function transformPeriodInteger(value: unknown): number {
 }
 
 export class ListYearParamsDto {
-  @Transform(({ value }) => transformPeriodInteger(value))
+  @Transform(({ obj, key }) => transformPeriodInteger(obj[key]))
   @IsInt()
   @Min(100)
   @Max(275759)
@@ -18,7 +18,7 @@ export class ListYearParamsDto {
 }
 
 export class ListYearMonthParamsDto extends ListYearParamsDto {
-  @Transform(({ value }) => transformPeriodInteger(value))
+  @Transform(({ obj, key }) => transformPeriodInteger(obj[key]))
   @IsInt()
   @Min(1)
   @Max(12)

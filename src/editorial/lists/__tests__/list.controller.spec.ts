@@ -145,6 +145,7 @@ describe('ListsController WordPress authorization', () => {
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
+      transformOptions: { enableImplicitConversion: true },
     });
     const transformBody = (value: Record<string, unknown>) =>
       validationPipe.transform(value, {
@@ -185,6 +186,7 @@ describe('ListsController WordPress authorization', () => {
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
+      transformOptions: { enableImplicitConversion: true },
     });
 
     async function validateParams<T extends object>(
@@ -200,6 +202,7 @@ describe('ListsController WordPress authorization', () => {
 
     it.each([
       ['weekly', { year: '2026', month: '1' }, 1],
+      ['weekly', { year: '2026', month: '11' }, 11],
       ['weekly', { year: '2026', month: '12' }, 12],
     ])(
       'preserves valid %s period parameters',
