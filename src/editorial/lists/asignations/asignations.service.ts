@@ -357,10 +357,12 @@ export class AsignationsService {
                 targetPosition,
               )
             : undefined;
-          const eventAsignation =
-            positionAction && (userId || restDto.discId)
-              ? Object.assign(new Asignation(), nextAsignation)
-              : nextAsignation;
+          const eventAsignation = positionAction
+            ? Object.assign(new Asignation(), nextAsignation, {
+                user: userId ? nextAsignation.user : existing.user,
+                disc: restDto.discId ? nextAsignation.disc : existing.disc,
+              })
+            : nextAsignation;
           return {
             asignation: nextAsignation,
             eventAsignation,
