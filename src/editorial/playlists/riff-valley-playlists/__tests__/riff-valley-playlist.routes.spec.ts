@@ -199,8 +199,19 @@ describe('RiffValleyPlaylist Nest HTTP routes', () => {
     await request(app.getHttpServer())
       .post(`/api/riff-valley-playlists/${id}/content`)
       .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Content-Calendar-Client-Id', 'calendar-tab-1')
       .expect(201, { id: 'content-id', riffValleyPlaylistId: id });
-    expect(service.createContentForRiffValleyPlaylist).toHaveBeenCalledWith(id);
+    expect(service.createContentForRiffValleyPlaylist).toHaveBeenCalledWith(
+      id,
+      {
+        actor: {
+          kind: 'user',
+          id: testUser.id,
+          displayName: testUser.username,
+        },
+        sourceId: 'calendar-tab-1',
+      },
+    );
   });
 
   it('rejects empty names and returns 404 when a referenced user does not exist', async () => {

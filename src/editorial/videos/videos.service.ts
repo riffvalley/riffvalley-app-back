@@ -22,6 +22,7 @@ import {
   VideoType as VideoTypeEnum,
 } from './entities/video.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
+import { ContentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 import { ContentType } from 'src/editorial/contents/entities/content.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
@@ -273,7 +274,10 @@ export class VideosService {
    * publicationDate) linked to this Video and stops there — Video and
    * Content stay fully independent afterwards, no further sync happens.
    */
-  async createContentForVideo(videoId: string): Promise<Video> {
+  async createContentForVideo(
+    videoId: string,
+    context?: ContentCalendarMutationContext,
+  ): Promise<Video> {
     const video = await this.findOne(videoId);
 
     if (video.content) {
@@ -285,13 +289,15 @@ export class VideosService {
       );
     }
 
-    await this.contentsService.create({
+    const contentDto = {
       name: video.name,
       type: ContentType.VIDEO,
       authorId: video.user.id,
       videoId: video.id,
       backlog: true,
-    });
+    };
+    if (context) await this.contentsService.create(contentDto, context);
+    else await this.contentsService.create(contentDto);
 
     return this.findOne(videoId);
   }

@@ -12,6 +12,7 @@ import {
   RiffValleyPlaylistType,
 } from './entities/riff-valley-playlist.entity';
 import { ContentsService } from 'src/editorial/contents/contents.service';
+import { ContentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 import { ContentType } from 'src/editorial/contents/entities/content.entity';
 import { CreateRiffValleyPlaylistDto } from './dto/create-riff-valley-playlist.dto';
 import { UpdateRiffValleyPlaylistDto } from './dto/update-riff-valley-playlist.dto';
@@ -273,6 +274,7 @@ export class RiffValleyPlaylistService {
    */
   async createContentForRiffValleyPlaylist(
     id: string,
+    context?: ContentCalendarMutationContext,
   ): Promise<RiffValleyPlaylist> {
     const riffValleyPlaylist = await this.findOne(id);
 
@@ -287,13 +289,15 @@ export class RiffValleyPlaylistService {
       );
     }
 
-    await this.contentsService.create({
+    const contentDto = {
       name: riffValleyPlaylist.name,
       type: ContentType.RIFF_VALLEY_PLAYLIST,
       authorId: riffValleyPlaylist.user.id,
       riffValleyPlaylistId: riffValleyPlaylist.id,
       backlog: true,
-    });
+    };
+    if (context) await this.contentsService.create(contentDto, context);
+    else await this.contentsService.create(contentDto);
 
     return this.findOne(id);
   }

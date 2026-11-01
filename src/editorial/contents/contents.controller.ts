@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  Headers,
 } from '@nestjs/common';
 import { ContentsService } from './contents.service';
 import { CreateContentDto } from './dto/create-content.dto';
@@ -16,6 +17,9 @@ import { FindContentByMonthQueryDto } from './dto/find-content-by-month-query.dt
 import { DiscLinkMaintenanceService } from 'src/catalog/discs/maintenance/disc-link-maintenance.service';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
+import { GetUser } from 'src/identity/authorization/decorators/get-user.decorator';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { contentCalendarMutationContext } from './realtime/contracts/content-calendar-event.contract';
 
 @Controller('contents')
 export class ContentsController {
@@ -33,8 +37,15 @@ export class ContentsController {
 
   @Post()
   @Auth(ValidRoles.riffvalley)
-  create(@Body() createContentDto: CreateContentDto) {
-    return this.contentsService.create(createContentDto);
+  create(
+    @Body() createContentDto: CreateContentDto,
+    @GetUser() user?: User,
+    @Headers('x-content-calendar-client-id') sourceId?: string,
+  ) {
+    return this.contentsService.create(
+      createContentDto,
+      contentCalendarMutationContext(user, sourceId),
+    );
   }
 
   @Get('by-month')
@@ -61,13 +72,29 @@ export class ContentsController {
 
   @Patch(':id')
   @Auth(ValidRoles.riffvalley)
-  update(@Param('id') id: string, @Body() updateContentDto: UpdateContentDto) {
-    return this.contentsService.update(id, updateContentDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateContentDto: UpdateContentDto,
+    @GetUser() user?: User,
+    @Headers('x-content-calendar-client-id') sourceId?: string,
+  ) {
+    return this.contentsService.update(
+      id,
+      updateContentDto,
+      contentCalendarMutationContext(user, sourceId),
+    );
   }
 
   @Delete(':id')
   @Auth(ValidRoles.riffvalley)
-  remove(@Param('id') id: string) {
-    return this.contentsService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @GetUser() user?: User,
+    @Headers('x-content-calendar-client-id') sourceId?: string,
+  ) {
+    return this.contentsService.remove(
+      id,
+      contentCalendarMutationContext(user, sourceId),
+    );
   }
 }

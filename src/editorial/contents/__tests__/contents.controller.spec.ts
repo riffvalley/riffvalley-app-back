@@ -158,7 +158,10 @@ describe('ContentsController daily link update authorization', () => {
       UserRoleGuard,
     );
     await expect(controller.remove('content-id')).resolves.toBeUndefined();
-    expect(contentsService.remove).toHaveBeenCalledWith('content-id');
+    expect(contentsService.remove).toHaveBeenCalledWith(
+      'content-id',
+      undefined,
+    );
     await module.close();
   });
 });

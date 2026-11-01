@@ -8,6 +8,7 @@ import {
   Delete,
   ParseUUIDPipe,
   Query,
+  Headers,
 } from '@nestjs/common';
 import { ListsService } from './list.service';
 import { CreateListDto } from './dto/create-list.dto';
@@ -21,6 +22,9 @@ import {
 import { ListQueryDto } from './dto/list-query.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
+import { GetUser } from 'src/identity/authorization/decorators/get-user.decorator';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { contentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 
 @Controller('lists')
 export class ListsController {
@@ -136,13 +140,27 @@ export class ListsController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateListDto: UpdateListDto,
+    @GetUser() user?: User,
+    @Headers('x-content-calendar-client-id') sourceId?: string,
   ) {
-    return this.listsServices.update(id, updateListDto);
+    return this.listsServices.update(
+      id,
+      updateListDto,
+      contentCalendarMutationContext(user, sourceId),
+    );
   }
 
   @Delete(':id')
   @Auth(ValidRoles.riffvalley)
-  removeList(@Param('id', ParseUUIDPipe) id: string) {
-    return this.listsServices.removeList(id);
+  removeList(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user?: User,
+    @Headers('x-content-calendar-client-id') sourceId?: string,
+  ) {
+    return this.listsServices.removeList(
+      id,
+      undefined,
+      contentCalendarMutationContext(user, sourceId),
+    );
   }
 }

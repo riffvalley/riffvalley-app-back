@@ -6,6 +6,7 @@ import { SCHEDULE_CRON_OPTIONS } from '@nestjs/schedule/dist/schedule.constants'
 import { ContentsService } from '../contents.service';
 import { ContentSchedulerService } from '../content-scheduler.service';
 import { Content, ContentType } from '../entities/content.entity';
+import { CONTENT_CALENDAR_SYSTEM_ACTOR } from '../realtime/contracts/content-calendar-event.contract';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { DiscLinkMaintenanceService } from 'src/catalog/discs/maintenance/disc-link-maintenance.service';
 import { DiscModule } from 'src/catalog/discs/discs.module';
@@ -76,12 +77,15 @@ describe('ContentSchedulerService weekly Content/Reunion job', () => {
       jest.useRealTimers();
     }
 
-    expect(fixture.contentsService.create).toHaveBeenCalledWith({
-      name: 'Reunion 21-10-2026',
-      type: ContentType.REUNION,
-      authorId: 'author-id',
-      publicationDate: nextWednesday.toISOString(),
-    });
+    expect(fixture.contentsService.create).toHaveBeenCalledWith(
+      {
+        name: 'Reunion 21-10-2026',
+        type: ContentType.REUNION,
+        authorId: 'author-id',
+        publicationDate: nextWednesday.toISOString(),
+      },
+      { actor: CONTENT_CALENDAR_SYSTEM_ACTOR },
+    );
     await fixture.module.close();
   });
 

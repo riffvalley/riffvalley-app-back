@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   ParseUUIDPipe,
+  Headers,
 } from '@nestjs/common';
 import { ArticlesService } from './articles.service';
 import { FindArticlesQueryDto } from './dto/find-articles-query.dto';
@@ -16,6 +17,9 @@ import { UpdateArticleDto } from './dto/update-article.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { toPublicContentReference } from 'src/editorial/contents/serialization/public-content-reference';
+import { GetUser } from 'src/identity/authorization/decorators/get-user.decorator';
+import { User } from 'src/identity/auth/entities/user.entity';
+import { contentCalendarMutationContext } from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 
 @Controller('articles')
 export class ArticlesController {
@@ -45,9 +49,16 @@ export class ArticlesController {
   // this Article. Article and Content stay independent from then on.
   @Post(':id/content')
   @Auth(ValidRoles.riffvalley)
-  createContent(@Param('id', ParseUUIDPipe) id: string) {
+  createContent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user?: User,
+    @Headers('x-content-calendar-client-id') sourceId?: string,
+  ) {
     return this.articlesService
-      .createContentForArticle(id)
+      .createContentForArticle(
+        id,
+        contentCalendarMutationContext(user, sourceId),
+      )
       .then(toPublicContentReference);
   }
 

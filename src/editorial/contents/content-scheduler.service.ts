@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { ContentsService } from './contents.service';
 import { ContentType } from './entities/content.entity';
+import { CONTENT_CALENDAR_SYSTEM_ACTOR } from './realtime/contracts/content-calendar-event.contract';
 
 @Injectable()
 export class ContentSchedulerService {
@@ -63,12 +64,15 @@ export class ContentSchedulerService {
     this.logger.log(`Creating weekly reunion content: ${titleReunion}`);
 
     try {
-      await this.contentsService.create({
-        name: titleReunion,
-        type: ContentType.REUNION,
-        authorId: author.id,
-        publicationDate: nextWednesday.toISOString(),
-      });
+      await this.contentsService.create(
+        {
+          name: titleReunion,
+          type: ContentType.REUNION,
+          authorId: author.id,
+          publicationDate: nextWednesday.toISOString(),
+        },
+        { actor: CONTENT_CALENDAR_SYSTEM_ACTOR },
+      );
       this.logger.log(`Weekly reunion content created successfully`);
     } catch (error) {
       this.logger.error(

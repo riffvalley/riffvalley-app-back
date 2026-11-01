@@ -166,7 +166,7 @@ describe('Content Calendar SSE HTTP endpoint', () => {
       expect(stream.response.headers.get('connection')).toBe('keep-alive');
       expect(stream.response.headers.get('x-accel-buffering')).toBe('no');
       expect(stream.firstChunk).toBe(
-        'event: contents.invalidate\ndata: {"type":"contents.invalidate","version":1}\n\n',
+        'event: contents.invalidate\ndata: {"type":"contents.invalidate","version":2,"reason":"initial"}\n\n',
       );
       expect(stream.firstChunk).not.toContain('id:');
       expect(stream.firstChunk).not.toMatch(
@@ -193,13 +193,14 @@ describe('Content Calendar SSE HTTP endpoint', () => {
     ).toBe(0);
   });
 
-  it('allows the existing CORS allowlist to preflight Authorization', async () => {
+  it('allows the existing CORS allowlist to preflight Authorization and the client source ID', async () => {
     const response = await fetch(baseUrl, {
       method: 'OPTIONS',
       headers: {
         Origin: 'https://app.riffvalley.es',
         'Access-Control-Request-Method': 'GET',
-        'Access-Control-Request-Headers': 'authorization',
+        'Access-Control-Request-Headers':
+          'authorization,x-content-calendar-client-id',
       },
     });
 
@@ -209,6 +210,9 @@ describe('Content Calendar SSE HTTP endpoint', () => {
     );
     expect(response.headers.get('access-control-allow-headers')).toContain(
       'Authorization',
+    );
+    expect(response.headers.get('access-control-allow-headers')).toContain(
+      'X-Content-Calendar-Client-Id',
     );
   });
 

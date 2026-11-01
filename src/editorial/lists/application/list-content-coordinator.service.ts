@@ -13,7 +13,17 @@ import {
 } from 'src/editorial/contents/entities/content.entity';
 import { UpdateListDto } from '../dto/update-list.dto';
 import { List, ListType } from '../entities/list.entity';
-import { ContentCalendarEventPublisher } from 'src/editorial/contents/realtime/content-calendar-event-publisher.service';
+import {
+  ContentCalendarEventPublisher,
+  createContentCalendarEvent,
+} from 'src/editorial/contents/realtime/content-calendar-event-publisher.service';
+import {
+  CONTENT_CALENDAR_GENERIC_CHANGE,
+  CONTENT_CALENDAR_SYSTEM_ACTOR,
+  ContentCalendarField,
+  ContentCalendarMutationContext,
+  contentCalendarCivilDate,
+} from 'src/editorial/contents/realtime/contracts/content-calendar-event.contract';
 import {
   assertRequiredEditorialDate,
   hasAnyEditorialDate,
@@ -36,7 +46,11 @@ export class ListContentCoordinator {
     private readonly eventPublisher: ContentCalendarEventPublisher,
   ) {}
 
-  async update(id: string, updateListDto: UpdateListDto) {
+  async update(
+    id: string,
+    updateListDto: UpdateListDto,
+    context?: ContentCalendarMutationContext,
+  ) {
     const list = await this.listRepository.preload({
       id,
       ...updateListDto,
@@ -77,6 +91,7 @@ export class ListContentCoordinator {
           (updateListDto.listDate !== undefined &&
             this.listTypeHasSyncedListDate(list.type) &&
             !this.dateValuesMatch(linkedContent.listDate, list.listDate)));
+      const previousPublicationDate = linkedContent?.publicationDate;
 
       if (!contentSyncNeeded) {
         if (updateListDto.type !== undefined) {
@@ -114,6 +129,7 @@ export class ListContentCoordinator {
       const result = await this.listRepository.manager.transaction(
         async (manager) => {
           let contentChanged = false;
+          const changedFields = new Set<ContentCalendarField>();
           const listRepo = manager.getRepository(List);
           const contentRepo = manager.getRepository(Content);
           const currentList = updateListDto.type
@@ -153,6 +169,12 @@ export class ListContentCoordinator {
 
           if (content) {
             if (updateListDto.closeDate !== undefined) {
+              if (
+                contentCalendarCivilDate(content.closeDate) !==
+                contentCalendarCivilDate(transactionalList.closeDate)
+              ) {
+                changedFields.add('closeDate');
+              }
               contentChanged =
                 this.assignDateIfChanged(
                   content.closeDate,
@@ -161,6 +183,12 @@ export class ListContentCoordinator {
                 ) || contentChanged;
             }
             if (updateListDto.releaseDate !== undefined) {
+              if (
+                contentCalendarCivilDate(content.publicationDate) !==
+                contentCalendarCivilDate(transactionalList.releaseDate)
+              ) {
+                changedFields.add('publicationDate');
+              }
               contentChanged =
                 this.assignDateIfChanged(
                   content.publicationDate,
@@ -172,6 +200,12 @@ export class ListContentCoordinator {
               updateListDto.listDate !== undefined &&
               this.listTypeHasSyncedListDate(transactionalList.type)
             ) {
+              if (
+                contentCalendarCivilDate(content.listDate) !==
+                contentCalendarCivilDate(transactionalList.listDate)
+              ) {
+                changedFields.add('listDate');
+              }
               contentChanged =
                 this.assignDateIfChanged(
                   content.listDate,
@@ -186,11 +220,44 @@ export class ListContentCoordinator {
             }
           }
 
-          return { list: transactionalList, contentChanged };
+          return {
+            list: transactionalList,
+            contentChanged,
+            content,
+            changedFields: [...changedFields],
+          };
         },
       );
-      if (result.contentChanged) {
-        this.eventPublisher.publishInvalidationSafely();
+      if (
+        result.contentChanged &&
+        result.content &&
+        result.changedFields.length > 0
+      ) {
+        const mutation = context ?? { actor: CONTENT_CALENDAR_SYSTEM_ACTOR };
+        const previousDate = contentCalendarCivilDate(previousPublicationDate);
+        const newDate = contentCalendarCivilDate(
+          result.content.publicationDate,
+        );
+        const action =
+          previousDate === null && newDate !== null
+            ? 'scheduled'
+            : previousDate !== null && newDate === null
+              ? 'unscheduled'
+              : previousDate !== newDate
+                ? 'moved'
+                : 'updated';
+        this.eventPublisher.publishChangeSafely(
+          () =>
+            createContentCalendarEvent({
+              action,
+              content: result.content,
+              actor: mutation.actor,
+              sourceId: mutation.sourceId,
+              previousDate: previousPublicationDate,
+              fields: result.changedFields,
+            }),
+          CONTENT_CALENDAR_GENERIC_CHANGE,
+        );
       }
       return result.list;
     } catch (error) {
@@ -199,7 +266,11 @@ export class ListContentCoordinator {
     }
   }
 
-  async removeList(id: string, manager?: EntityManager) {
+  async removeList(
+    id: string,
+    manager?: EntityManager,
+    context?: ContentCalendarMutationContext,
+  ) {
     if (manager) {
       const result = await this.removeListWithManager(id, manager);
       return result.list;
@@ -222,7 +293,20 @@ export class ListContentCoordinator {
         this.removeListWithManager(id, transactionManager),
     );
     if (result.contentRemoved) {
-      this.eventPublisher.publishInvalidationSafely();
+      const mutation = context ?? { actor: CONTENT_CALENDAR_SYSTEM_ACTOR };
+      this.eventPublisher.publishChangeSafely(
+        () =>
+          result.removedContent
+            ? createContentCalendarEvent({
+                action: 'deleted',
+                content: result.removedContent,
+                actor: mutation.actor,
+                sourceId: mutation.sourceId,
+                previousDate: result.removedContent.publicationDate,
+              })
+            : CONTENT_CALENDAR_GENERIC_CHANGE,
+        CONTENT_CALENDAR_GENERIC_CHANGE,
+      );
     }
     return result.list;
   }
@@ -239,12 +323,24 @@ export class ListContentCoordinator {
     const content = await contentRepo.findOne({
       where: { list: { id: list.id } },
     });
+    const removedContent = content
+      ? {
+          id: content.id,
+          name: content.name,
+          type: content.type,
+          publicationDate: content.publicationDate,
+        }
+      : null;
     if (content) {
       await contentRepo.remove(content);
     }
 
     const removedList = await listRepo.remove(list);
-    return { list: removedList, contentRemoved: Boolean(content) };
+    return {
+      list: removedList,
+      contentRemoved: Boolean(content),
+      removedContent,
+    };
   }
 
   private async lockListTypeForUpdate(

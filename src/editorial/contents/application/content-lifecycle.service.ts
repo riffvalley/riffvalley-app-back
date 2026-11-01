@@ -15,7 +15,17 @@ import { ListsService } from 'src/editorial/lists/list.service';
 import { List } from 'src/editorial/lists/entities/list.entity';
 import { isValidDateValue } from 'src/editorial/lists/domain/list-date-rules';
 import { ContentQueryService } from './content-query.service';
-import { ContentCalendarEventPublisher } from '../realtime/content-calendar-event-publisher.service';
+import {
+  ContentCalendarEventPublisher,
+  createContentCalendarEvent,
+} from '../realtime/content-calendar-event-publisher.service';
+import {
+  CONTENT_CALENDAR_GENERIC_CHANGE,
+  CONTENT_CALENDAR_SYSTEM_ACTOR,
+  ContentCalendarField,
+  ContentCalendarMutationContext,
+  contentCalendarCivilDate,
+} from '../realtime/contracts/content-calendar-event.contract';
 
 @Injectable()
 export class ContentLifecycleService {
@@ -37,9 +47,11 @@ export class ContentLifecycleService {
   async update(
     id: string,
     updateContentDto: UpdateContentDto,
+    context?: ContentCalendarMutationContext,
   ): Promise<Content> {
     const content = await this.contentQueryService.findOne(id);
     const originalCalendarState = this.getCalendarState(content);
+    const previousPublicationDate = content.publicationDate;
 
     const {
       authorId,
@@ -288,13 +300,39 @@ export class ContentLifecycleService {
           )
         : await persistUpdate();
 
-    if (this.calendarStateChanged(originalCalendarState, saved)) {
-      this.eventPublisher.publishInvalidationSafely();
+    const changedFields = this.getChangedFields(originalCalendarState, saved);
+    if (changedFields.length > 0) {
+      const mutation = context ?? { actor: CONTENT_CALENDAR_SYSTEM_ACTOR };
+      const previousDate = contentCalendarCivilDate(previousPublicationDate);
+      const newDate = contentCalendarCivilDate(saved.publicationDate);
+      const action =
+        previousDate === null && newDate !== null
+          ? 'scheduled'
+          : previousDate !== null && newDate === null
+            ? 'unscheduled'
+            : previousDate !== newDate
+              ? 'moved'
+              : 'updated';
+      this.eventPublisher.publishChangeSafely(
+        () =>
+          createContentCalendarEvent({
+            action,
+            content: saved,
+            actor: mutation.actor,
+            sourceId: mutation.sourceId,
+            previousDate: previousPublicationDate,
+            fields: changedFields,
+          }),
+        CONTENT_CALENDAR_GENERIC_CHANGE,
+      );
     }
     return saved;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(
+    id: string,
+    context?: ContentCalendarMutationContext,
+  ): Promise<void> {
     const content = await this.contentRepo.findOne({
       where: { id },
       relations: ['list', 'reunion', 'riffValleyPlaylist', 'article', 'video'],
@@ -304,6 +342,12 @@ export class ContentLifecycleService {
       throw new NotFoundException(`Content with id ${id} not found`);
     }
 
+    const deletedContent = {
+      id: content.id,
+      name: content.name,
+      type: content.type,
+      publicationDate: content.publicationDate,
+    };
     const listId = content.list?.id;
 
     if (listId || content.reunion) {
@@ -320,7 +364,18 @@ export class ContentLifecycleService {
       await this.contentRepo.remove(content);
     }
 
-    this.eventPublisher.publishInvalidationSafely();
+    const mutation = context ?? { actor: CONTENT_CALENDAR_SYSTEM_ACTOR };
+    this.eventPublisher.publishChangeSafely(
+      () =>
+        createContentCalendarEvent({
+          action: 'deleted',
+          content: deletedContent,
+          actor: mutation.actor,
+          sourceId: mutation.sourceId,
+          previousDate: deletedContent.publicationDate,
+        }),
+      CONTENT_CALENDAR_GENERIC_CHANGE,
+    );
 
     // NOTE: The linked RiffValleyPlaylist/Article/Video entity is left untouched — its
     // status is no longer auto-reset on Content removal. Video/Article/RiffValleyPlaylist
@@ -353,7 +408,7 @@ export class ContentLifecycleService {
 
   private getCalendarState(content: Content): readonly unknown[] {
     const dateValue = (value: Date | string | null | undefined) =>
-      value == null ? null : new Date(value).getTime();
+      contentCalendarCivilDate(value);
 
     return [
       content.type,
@@ -373,12 +428,33 @@ export class ContentLifecycleService {
     ];
   }
 
-  private calendarStateChanged(
+  private getChangedFields(
     originalState: readonly unknown[],
     saved: Content,
-  ): boolean {
-    return originalState.some(
-      (value, index) => value !== this.getCalendarState(saved)[index],
-    );
+  ): ContentCalendarField[] {
+    const fields: readonly ContentCalendarField[] = [
+      'type',
+      'title',
+      'editorialDetails',
+      'publicationDate',
+      'closeDate',
+      'listDate',
+      'ready',
+      'backlog',
+      'author',
+      'reunion',
+      'list',
+      'publicationDate',
+      'closeDate',
+      'listDate',
+    ];
+    const currentState = this.getCalendarState(saved);
+    return [
+      ...new Set(
+        fields.filter(
+          (_, index) => originalState[index] !== currentState[index],
+        ),
+      ),
+    ];
   }
 }

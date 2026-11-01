@@ -23,12 +23,13 @@ describe('auth HTTP CORS policy', () => {
     expect(AUTH_HTTP_CORS_OPTIONS.credentials).toBe(true);
   });
 
-  it('allows the legacy and refresh protocol headers in preflight', () => {
+  it('allows the authenticated request and calendar source headers in preflight', () => {
     expect(AUTH_HTTP_CORS_OPTIONS.allowedHeaders).toEqual(
       expect.arrayContaining([
         'Authorization',
         'Content-Type',
         'X-Custom-Lang',
+        'X-Content-Calendar-Client-Id',
         'X-Auth-Session-Mode',
         'X-CSRF-Token',
         'X-Refresh-Operation',
