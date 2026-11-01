@@ -22,6 +22,7 @@ import { ContentQueryService } from './application/content-query.service';
 import { ContentCreationService } from './application/content-creation.service';
 import { ContentLifecycleService } from './application/content-lifecycle.service';
 import { ContentCalendarRealtimeModule } from './realtime/content-calendar-realtime.module';
+import { ReunionsRealtimeModule } from '../reunions/realtime/reunions-realtime.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ContentCalendarRealtimeModule } from './realtime/content-calendar-realt
     ]),
     forwardRef(() => ListsModule),
     ContentCalendarRealtimeModule,
+    ReunionsRealtimeModule,
     DiscModule,
     AuthorizationModule,
   ],

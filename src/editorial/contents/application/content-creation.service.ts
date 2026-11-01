@@ -38,6 +38,7 @@ import {
   CONTENT_CALENDAR_SYSTEM_ACTOR,
   ContentCalendarMutationContext,
 } from '../realtime/contracts/content-calendar-event.contract';
+import { ReunionsEventPublisher } from 'src/editorial/reunions/realtime/reunions-event-publisher.service';
 
 @Injectable()
 export class ContentCreationService {
@@ -57,6 +58,7 @@ export class ContentCreationService {
     @Inject(forwardRef(() => ListsService))
     private readonly listsService: ListsService,
     private readonly eventPublisher: ContentCalendarEventPublisher,
+    private readonly reunionsEventPublisher: ReunionsEventPublisher,
   ) {}
 
   async create(
@@ -192,6 +194,7 @@ export class ContentCreationService {
       ready: resolvedPublicationDate ? false : rest.ready,
     });
 
+    let createdReunion = false;
     const savedContent = await this.contentRepo.manager.transaction(
       async (manager) => {
         const contentRepo = manager.getRepository(Content);
@@ -244,6 +247,7 @@ export class ContentCreationService {
         }
 
         if (createContentDto.type === ContentType.REUNION && !existingReunion) {
+          createdReunion = true;
           const reunionRepo = manager.getRepository(Reunion);
           const pointRepo = manager.getRepository(Point);
           const reunion = reunionRepo.create({
@@ -310,6 +314,7 @@ export class ContentCreationService {
         }),
       CONTENT_CALENDAR_GENERIC_CHANGE,
     );
+    if (createdReunion) this.reunionsEventPublisher.publishChangeSafely();
     return savedContent;
   }
 }

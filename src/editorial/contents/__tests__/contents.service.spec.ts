@@ -5,6 +5,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Reunion } from 'src/editorial/reunions/entities/reunion.entity';
 import { Point } from 'src/editorial/reunions/points/entities/point.entity';
 import { ContentCalendarEventPublisher } from '../realtime/content-calendar-event-publisher.service';
+import { ReunionsEventPublisher } from 'src/editorial/reunions/realtime/reunions-event-publisher.service';
 import { RiffValleyPlaylist } from 'src/editorial/playlists/riff-valley-playlists/entities/riff-valley-playlist.entity';
 import { Article } from 'src/editorial/articles/entities/article.entity';
 import {
@@ -296,6 +297,10 @@ describe('ContentsService creation facade compatibility', () => {
         { provide: ContentLifecycleService, useValue: lifecycleService },
         {
           provide: ContentCalendarEventPublisher,
+          useValue: { publishChangeSafely: jest.fn() },
+        },
+        {
+          provide: ReunionsEventPublisher,
           useValue: { publishChangeSafely: jest.fn() },
         },
         { provide: ListsService, useValue: listsService },

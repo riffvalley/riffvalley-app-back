@@ -12,6 +12,7 @@ import { Point } from '../entities/point.entity';
 import { CreatePointDto } from '../dto/create-points.dto';
 import { UpdatePointDto } from '../dto/update-point.dto';
 import { PointService } from '../points.service';
+import { ReunionsEventPublisher } from '../../realtime/reunions-event-publisher.service';
 
 type PointRepositoryMock = {
   create: jest.Mock<Point, [DeepPartial<Point>]>;
@@ -59,11 +60,13 @@ describe('PointService', () => {
     const reunionRepository: ReunionRepositoryMock = {
       findOne: jest.fn<Promise<Reunion | null>, [FindOneOptions<Reunion>]>(),
     };
+    const reunionsEventPublisher = { publishChangeSafely: jest.fn() };
     const moduleRef = await Test.createTestingModule({
       providers: [
         PointService,
         { provide: getRepositoryToken(Point), useValue: pointRepository },
         { provide: getRepositoryToken(Reunion), useValue: reunionRepository },
+        { provide: ReunionsEventPublisher, useValue: reunionsEventPublisher },
       ],
     }).compile();
 
@@ -71,6 +74,7 @@ describe('PointService', () => {
       service: moduleRef.get(PointService),
       pointRepository,
       reunionRepository,
+      reunionsEventPublisher,
       moduleRef,
     };
   };
@@ -102,6 +106,9 @@ describe('PointService', () => {
     expect(fixture.pointRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ reunion }),
     );
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).toHaveBeenCalledTimes(1);
     await fixture.moduleRef.close();
   });
 
@@ -165,6 +172,53 @@ describe('PointService', () => {
     expect(point.reunion).toBe(originalReunion);
     expect(fixture.pointRepository.save).toHaveBeenCalledWith(point);
     expect(fixture.reunionRepository.findOne).not.toHaveBeenCalled();
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).toHaveBeenCalledTimes(1);
+    await fixture.moduleRef.close();
+  });
+
+  it.each([
+    [{ titulo: 'Updated title' }, 'titulo', 'Updated title'],
+    [{ content: 'Updated notes' }, 'content', 'Updated notes'],
+    [{ done: true }, 'done', true],
+  ] as const)(
+    'updates Point field %s and returns the saved Point with its Reunion',
+    async (update, field, value) => {
+      const fixture = await makeFixture();
+      const reunion = makeReunion();
+      const point = makePoint({}, reunion);
+      jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
+      fixture.pointRepository.save.mockResolvedValueOnce(point);
+
+      await expect(
+        fixture.service.updatePoint('point-id', update),
+      ).resolves.toBe(point);
+
+      expect(point).toMatchObject({ [field]: value, reunion });
+      expect(fixture.pointRepository.save).toHaveBeenCalledWith(point);
+      expect(
+        fixture.reunionsEventPublisher.publishChangeSafely,
+      ).toHaveBeenCalledTimes(1);
+      await fixture.moduleRef.close();
+    },
+  );
+
+  it('saves an update that makes no effective changes', async () => {
+    const fixture = await makeFixture();
+    const point = makePoint({ titulo: 'Unchanged title', done: false });
+    jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
+    fixture.reunionRepository.findOne.mockResolvedValueOnce(point.reunion);
+    fixture.pointRepository.save.mockResolvedValueOnce(point);
+
+    await expect(
+      fixture.service.updatePoint('point-id', { titulo: 'Unchanged title' }),
+    ).resolves.toBe(point);
+
+    expect(fixture.pointRepository.save).toHaveBeenCalledWith(point);
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).not.toHaveBeenCalled();
     await fixture.moduleRef.close();
   });
 
@@ -189,6 +243,7 @@ describe('PointService', () => {
     expect(fixture.pointRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ reunion: destination }),
     );
+    expect(point.reunion).toBe(destination);
     expect(result.reunion).toBe(destination);
     expect(result).not.toHaveProperty('reunionId');
     await fixture.moduleRef.close();
@@ -228,6 +283,23 @@ describe('PointService', () => {
     await fixture.moduleRef.close();
   });
 
+  it('returns 404 when updating a Point that does not exist', async () => {
+    const fixture = await makeFixture();
+    jest
+      .spyOn(fixture.service, 'findOne')
+      .mockRejectedValueOnce(
+        new NotFoundException('Point with ID missing-id not found'),
+      );
+
+    await expect(
+      fixture.service.updatePoint('missing-id', { done: true }),
+    ).rejects.toThrow(
+      new NotFoundException('Point with ID missing-id not found'),
+    );
+    expect(fixture.pointRepository.save).not.toHaveBeenCalled();
+    await fixture.moduleRef.close();
+  });
+
   it('deletes a Point and returns 404 when no row was affected', async () => {
     const fixture = await makeFixture();
     fixture.pointRepository.delete
@@ -244,6 +316,29 @@ describe('PointService', () => {
       1,
       'point-id',
     );
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).toHaveBeenCalledTimes(1);
+    await fixture.moduleRef.close();
+  });
+
+  it('does not publish an update when all supplied fields are unchanged', async () => {
+    const fixture = await makeFixture();
+    const point = makePoint();
+    jest.spyOn(fixture.service, 'findOne').mockResolvedValueOnce(point);
+    fixture.reunionRepository.findOne.mockResolvedValueOnce(point.reunion);
+    fixture.pointRepository.save.mockResolvedValueOnce(point);
+
+    await fixture.service.updatePoint('point-id', {
+      titulo: point.titulo,
+      content: point.content,
+      done: point.done,
+      reunionId: point.reunion.id,
+    });
+
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).not.toHaveBeenCalled();
     await fixture.moduleRef.close();
   });
 });

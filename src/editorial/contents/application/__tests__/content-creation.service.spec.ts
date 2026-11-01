@@ -22,6 +22,7 @@ import { User } from 'src/identity/auth/entities/user.entity';
 import { List } from 'src/editorial/lists/entities/list.entity';
 import { ListsService } from 'src/editorial/lists/list.service';
 import { ContentCalendarEventPublisher } from '../../realtime/content-calendar-event-publisher.service';
+import { ReunionsEventPublisher } from 'src/editorial/reunions/realtime/reunions-event-publisher.service';
 
 describe('ContentCreationService', () => {
   type TransactionState = {
@@ -177,6 +178,7 @@ describe('ContentCreationService', () => {
     const eventPublisher = {
       publishChangeSafely: jest.fn(),
     };
+    const reunionsEventPublisher = { publishChangeSafely: jest.fn() };
 
     const testingModule: TestingModule = await Test.createTestingModule({
       providers: [
@@ -192,6 +194,7 @@ describe('ContentCreationService', () => {
         { provide: getRepositoryToken(Video), useValue: videoRepository },
         { provide: ListsService, useValue: listsService },
         { provide: ContentCalendarEventPublisher, useValue: eventPublisher },
+        { provide: ReunionsEventPublisher, useValue: reunionsEventPublisher },
       ],
     }).compile();
 
@@ -208,6 +211,7 @@ describe('ContentCreationService', () => {
       videoRepository,
       listsService,
       eventPublisher,
+      reunionsEventPublisher,
       contentTx: { save: contentSave },
       articleTx: { save: articleSave },
       videoTx: { save: videoSave },
@@ -353,6 +357,9 @@ describe('ContentCreationService', () => {
     expect(result.reunion).toBe(existing);
     expect(fixture.reunionTx.save).not.toHaveBeenCalled();
     expect(fixture.pointTx.save).not.toHaveBeenCalled();
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).not.toHaveBeenCalled();
 
     fixture.articleFindOne.mockResolvedValueOnce(null);
     await expect(
@@ -380,10 +387,28 @@ describe('ContentCreationService', () => {
     expect(fixture.manager.repositoryTargets).toContain(Point);
     expect(fixture.reunionTx.save).toHaveBeenCalledTimes(1);
     expect(fixture.pointTx.save).toHaveBeenCalledWith([
-      expect.objectContaining({ titulo: 'Asignar Radar semanal' }),
-      expect.objectContaining({ titulo: 'Crónicas y artículos pendientes' }),
+      expect.objectContaining({
+        titulo: 'Asignar Radar semanal',
+        reunion: expect.objectContaining({ id: 'saved-id' }),
+      }),
+      expect.objectContaining({
+        titulo: 'Crónicas y artículos pendientes',
+        reunion: expect.objectContaining({ id: 'saved-id' }),
+      }),
     ]);
-    expect(result.reunionId).toBeDefined();
+    expect(fixture.contentTx.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reunion: expect.objectContaining({ id: 'saved-id' }),
+        reunionId: 'saved-id',
+      }),
+    );
+    expect(result).toMatchObject({
+      reunion: expect.objectContaining({ id: 'saved-id' }),
+      reunionId: 'saved-id',
+    });
+    expect(
+      fixture.reunionsEventPublisher.publishChangeSafely,
+    ).toHaveBeenCalledTimes(1);
     await fixture.testingModule.close();
   });
 
@@ -410,6 +435,9 @@ describe('ContentCreationService', () => {
       await expect(fixture.service.create(input)).rejects.toBe(error);
       expect(fixture.transaction.transactionCalls).toBe(1);
       expect(fixture.committedWrites).toEqual([]);
+      expect(
+        fixture.reunionsEventPublisher.publishChangeSafely,
+      ).not.toHaveBeenCalled();
       await fixture.testingModule.close();
     },
   );

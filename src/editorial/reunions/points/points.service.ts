@@ -9,6 +9,7 @@ import { Point } from './entities/point.entity';
 import { CreatePointDto } from './dto/create-points.dto';
 import { UpdatePointDto } from './dto/update-point.dto';
 import { Reunion } from 'src/editorial/reunions/entities/reunion.entity';
+import { ReunionsEventPublisher } from '../realtime/reunions-event-publisher.service';
 
 @Injectable()
 export class PointService {
@@ -17,6 +18,7 @@ export class PointService {
     private readonly pointRepository: Repository<Point>,
     @InjectRepository(Reunion)
     private readonly reunionRepository: Repository<Reunion>,
+    private readonly reunionsEventPublisher: ReunionsEventPublisher,
   ) {}
 
   async createPoint(createPointDto: CreatePointDto): Promise<Point> {
@@ -30,7 +32,9 @@ export class PointService {
     }
 
     const point = this.pointRepository.create({ ...data, reunion });
-    return this.pointRepository.save(point);
+    const saved = await this.pointRepository.save(point);
+    this.reunionsEventPublisher.publishChangeSafely();
+    return saved;
   }
 
   async findAll(): Promise<Point[]> {
@@ -51,6 +55,12 @@ export class PointService {
   async updatePoint(id: string, updateData: UpdatePointDto): Promise<Point> {
     const point = await this.findOne(id);
     const { reunionId, ...pointFields } = updateData;
+    let changed =
+      (pointFields.titulo !== undefined &&
+        point.titulo !== pointFields.titulo) ||
+      (pointFields.content !== undefined &&
+        point.content !== pointFields.content) ||
+      (pointFields.done !== undefined && point.done !== pointFields.done);
 
     if (reunionId !== undefined) {
       if (reunionId === null) {
@@ -63,11 +73,14 @@ export class PointService {
       if (!reunion) {
         throw new NotFoundException(`Reunion with ID ${reunionId} not found`);
       }
+      if (point.reunion.id !== reunion.id) changed = true;
       point.reunion = reunion;
     }
 
     Object.assign(point, pointFields);
-    return this.pointRepository.save(point);
+    const saved = await this.pointRepository.save(point);
+    if (changed) this.reunionsEventPublisher.publishChangeSafely();
+    return saved;
   }
 
   async deletePoint(id: string): Promise<void> {
@@ -75,5 +88,6 @@ export class PointService {
     if (result.affected === 0) {
       throw new NotFoundException(`Point with ID ${id} not found`);
     }
+    this.reunionsEventPublisher.publishChangeSafely();
   }
 }
