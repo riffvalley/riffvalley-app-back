@@ -9,12 +9,18 @@ import {
 import { Auth } from '../../../identity/auth/decorators/auth.decorator';
 import { ValidRoles } from '../../../identity/auth/interfaces/valid-roles';
 import { ResolveLocalityDto } from '../dto/resolve-locality.dto';
+import { InspectLocalitiesBatchDto } from '../dto/inspect-localities-batch.dto';
 import { ManageLocalityAliasDto } from '../dto/manage-locality-alias.dto';
 import { LocalitiesService } from './localities.service';
 
 @Controller('localities')
 export class LocalitiesController {
   constructor(private readonly localitiesService: LocalitiesService) {}
+
+  @Post('inspect-batch')
+  inspectBatch(@Body() dto: InspectLocalitiesBatchDto) {
+    return this.localitiesService.inspectBatch(dto);
+  }
 
   @Post('resolve')
   @Auth(ValidRoles.riffvalley)

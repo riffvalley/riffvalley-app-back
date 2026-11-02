@@ -16,8 +16,13 @@ import { ImportEntityResolversService } from '../../../import/resolution/import-
 import { ImportRowReceiptsService } from '../../../import/receipts/import-row-receipts.service';
 import { NominatimGeocoderService } from '../../../venues/localities/nominatim-geocoder.service';
 import { Locality } from '../../../venues/entities/locality.entity';
+import { LocalityAlias } from '../../../venues/entities/locality-alias.entity';
 import { Venue } from '../../../venues/entities/venue.entity';
 import { VenuesService } from '../../../venues/venues.service';
+import { LocalitiesService } from '../../../venues/localities/localities.service';
+import { Country } from '../../../countries/entities/country.entity';
+import { AdministrativeRegion } from '../../../administrative-regions/entities/administrative-region.entity';
+import { AdministrativeRegionsService } from '../../../administrative-regions/administrative-regions.service';
 
 const enabled = process.env.CON_B04F_PG_INTEGRATION === '1';
 const integrationSuite = enabled ? describe : describe.skip;
@@ -308,6 +313,60 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
 
   afterAll(async () => {
     if (dataSource?.isInitialized) await dataSource.destroy();
+  });
+
+  it('inspects locality aliases in PostgreSQL with a fixed grouped query count and no geocoding', async () => {
+    await dataSource.getRepository(LocalityAlias).save(
+      dataSource.getRepository(LocalityAlias).create({
+        localityId,
+        name: 'Villa de Madrid',
+        normalizedName: 'villa de madrid',
+        language: 'es',
+        kind: 'alternate',
+      }),
+    );
+    const countryRepository = dataSource.getRepository(Country);
+    const regionRepository = dataSource.getRepository(AdministrativeRegion);
+    const geocoder = new NominatimGeocoderService(
+      dataSource,
+      new ConfigService({
+        GEOCODING_PROVIDER_URL: process.env.GEOCODING_PROVIDER_URL,
+      }),
+    );
+    const geocodeSpy = jest.spyOn(geocoder, 'geocode');
+    const localityService = new LocalitiesService(
+      dataSource.getRepository(Locality),
+      dataSource.getRepository(LocalityAlias),
+      countryRepository,
+      regionRepository,
+      new AdministrativeRegionsService(regionRepository, countryRepository),
+      geocoder,
+    );
+    logger.reset();
+
+    await expect(
+      localityService.inspectBatch({
+        localities: [
+          {
+            name: 'Madrid',
+            countryId,
+            administrativeRegionId: regionId,
+          },
+          {
+            name: 'Villa de Madrid',
+            countryId,
+            administrativeRegionId: regionId,
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      results: [
+        { index: 0, status: 'existing', locality: { id: localityId } },
+        { index: 1, status: 'existing', locality: { id: localityId } },
+      ],
+    });
+    expect(logger.queryCount).toBe(3);
+    expect(geocodeSpy).not.toHaveBeenCalled();
   });
 
   it('imports three concerts with one shared Tour and replays the exact batch idempotently', async () => {

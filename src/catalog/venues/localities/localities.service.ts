@@ -4,14 +4,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AdministrativeRegionsService } from '../../administrative-regions/administrative-regions.service';
 import { AdministrativeRegion } from '../../administrative-regions/entities/administrative-region.entity';
+import { Country } from '../../countries/entities/country.entity';
 import { normalizeGeography } from '../../geography/helpers/normalize-geography';
 import { ManageLocalityAliasDto } from '../dto/manage-locality-alias.dto';
 import { LocalityAlias } from '../entities/locality-alias.entity';
 import { Locality } from '../entities/locality.entity';
 import { ResolveLocalityDto } from '../dto/resolve-locality.dto';
+import { InspectLocalitiesBatchDto } from '../dto/inspect-localities-batch.dto';
 import {
   GeocodingAlias,
   NominatimGeocoderService,
@@ -35,9 +37,158 @@ export class LocalitiesService {
     private readonly localityRepository: Repository<Locality>,
     @InjectRepository(LocalityAlias)
     private readonly aliasRepository: Repository<LocalityAlias>,
+    @InjectRepository(Country)
+    private readonly countryRepository: Repository<Country>,
+    @InjectRepository(AdministrativeRegion)
+    private readonly regionRepository: Repository<AdministrativeRegion>,
     private readonly administrativeRegionsService: AdministrativeRegionsService,
     private readonly geocoder: NominatimGeocoderService,
   ) {}
+
+  async inspectBatch(dto: InspectLocalitiesBatchDto) {
+    const { localities } = dto;
+    if (localities.length === 0) return { results: [] };
+    const countryIds = [...new Set(localities.map((item) => item.countryId))];
+    const regionIds = [
+      ...new Set(
+        localities.flatMap((item) =>
+          item.administrativeRegionId ? [item.administrativeRegionId] : [],
+        ),
+      ),
+    ];
+    const [countries, regions] = await Promise.all([
+      this.countryRepository.find({
+        where: { id: In(countryIds) },
+        select: { id: true, name: true },
+      }),
+      regionIds.length
+        ? this.regionRepository.find({
+            where: { id: In(regionIds) },
+            relations: { country: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const countryById = new Map(
+      countries.map((country) => [country.id, country]),
+    );
+    const regionById = new Map(regions.map((region) => [region.id, region]));
+    const inputKeys = [
+      ...new Set(localities.map((item) => normalizeGeography(item.name))),
+    ].filter(Boolean);
+    const candidates = inputKeys.length
+      ? await this.localityRepository
+          .createQueryBuilder('locality')
+          .innerJoinAndSelect('locality.administrativeRegion', 'region')
+          .innerJoinAndSelect('region.country', 'country')
+          .leftJoinAndSelect(
+            'locality.aliases',
+            'alias',
+            'alias.normalizedName IN (:...inputKeys)',
+            { inputKeys },
+          )
+          .where(
+            '(locality.nameNormalized IN (:...inputKeys) OR EXISTS (SELECT 1 FROM locality_aliases alias WHERE alias.locality_id = locality.id AND alias.normalized_name IN (:...inputKeys)))',
+            { inputKeys },
+          )
+          .andWhere('region.countryId IN (:...countryIds)', { countryIds })
+          .getMany()
+      : [];
+    const candidatesByName = new Map<string, Map<string, Locality>>();
+    for (const candidate of candidates) {
+      const names = new Set([
+        candidate.nameNormalized,
+        ...(candidate.aliases ?? []).map((alias) => alias.normalizedName),
+      ]);
+      for (const name of names) {
+        const matchingCandidates = candidatesByName.get(name) ?? new Map();
+        matchingCandidates.set(candidate.id, candidate);
+        candidatesByName.set(name, matchingCandidates);
+      }
+    }
+
+    return {
+      results: localities.map((input, index) => {
+        const base = { index, input };
+        const country = countryById.get(input.countryId);
+        if (!country)
+          return {
+            ...base,
+            status: 'invalid' as const,
+            code: 'LOCALITY_COUNTRY_NOT_FOUND',
+            candidates: [],
+          };
+        const region = input.administrativeRegionId
+          ? regionById.get(input.administrativeRegionId)
+          : undefined;
+        if (input.administrativeRegionId && !region)
+          return {
+            ...base,
+            status: 'invalid' as const,
+            code: 'LOCALITY_REGION_NOT_FOUND',
+            candidates: [],
+          };
+        if (region && region.countryId !== input.countryId)
+          return {
+            ...base,
+            status: 'invalid' as const,
+            code: 'LOCALITY_REGION_COUNTRY_MISMATCH',
+            candidates: [],
+          };
+
+        const nameKey = normalizeGeography(input.name);
+        const provinceKey = input.province
+          ? normalizeGeography(input.province)
+          : null;
+        const matches = [
+          ...(candidatesByName.get(nameKey)?.values() ?? []),
+        ].filter((candidate) => {
+          return (
+            candidate.administrativeRegion.countryId === input.countryId &&
+            (!input.administrativeRegionId ||
+              candidate.administrativeRegionId ===
+                input.administrativeRegionId) &&
+            (!provinceKey ||
+              candidate.provinceNormalized === provinceKey ||
+              candidate.provinceNormalized === '')
+          );
+        });
+        const uniqueMatches = matches;
+        const toCandidate = (locality: Locality) => ({
+          id: locality.id,
+          name: locality.name,
+          province: locality.province,
+          country: {
+            id: locality.administrativeRegion.countryId,
+            name: locality.administrativeRegion.country.name,
+          },
+          administrativeRegion: {
+            id: locality.administrativeRegion.id,
+            name: locality.administrativeRegion.name,
+          },
+        });
+        if (uniqueMatches.length > 1)
+          return {
+            ...base,
+            status: 'ambiguous' as const,
+            code: 'LOCALITY_AMBIGUOUS',
+            candidates: uniqueMatches.map(toCandidate),
+          };
+        if (uniqueMatches[0])
+          return {
+            ...base,
+            status: 'existing' as const,
+            locality: toCandidate(uniqueMatches[0]),
+            candidates: [],
+          };
+        return {
+          ...base,
+          status: 'new' as const,
+          candidates: [],
+          requiresAdministrativeRegionId: !region,
+        };
+      }),
+    };
+  }
 
   async resolveAndGeocode(dto: ResolveLocalityDto) {
     const name = dto.name.trim().replace(/\s+/gu, ' ');

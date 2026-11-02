@@ -111,6 +111,62 @@ export class ToursService {
     return this.tourRepository.findOneBy({ normalizedName });
   }
 
+  async resolveBatch(names: string[]) {
+    const normalizedNames = [
+      ...new Set(names.map((name) => normalizeGeography(name)).filter(Boolean)),
+    ];
+    const tours = normalizedNames.length
+      ? await this.tourRepository
+          .createQueryBuilder('tour')
+          .select(['tour.id', 'tour.name', 'tour.normalizedName'])
+          .where('tour.normalizedName IN (:...normalizedNames)', {
+            normalizedNames,
+          })
+          .getMany()
+      : [];
+    const toursByName = new Map<string, Tour[]>();
+    for (const tour of tours) {
+      const matches = toursByName.get(tour.normalizedName) ?? [];
+      matches.push(tour);
+      toursByName.set(tour.normalizedName, matches);
+    }
+
+    return {
+      results: names.map((name, index) => {
+        const normalizedName = normalizeGeography(name);
+        const matches = toursByName.get(normalizedName) ?? [];
+        const common = { index, name };
+        if (!normalizedName)
+          return {
+            ...common,
+            status: 'invalid' as const,
+            code: 'TOUR_NAME_INVALID',
+            candidates: [],
+          };
+        if (matches.length > 1)
+          return {
+            ...common,
+            status: 'ambiguous' as const,
+            code: 'TOUR_AMBIGUOUS',
+            candidates: matches.map(({ id, name: canonicalName }) => ({
+              id,
+              name: canonicalName,
+            })),
+          };
+        const tour = matches[0];
+        return tour
+          ? {
+              ...common,
+              status: 'existing' as const,
+              code: 'TOUR_CONFIRMATION_REQUIRED',
+              entity: { id: tour.id, name: tour.name },
+              candidates: [],
+            }
+          : { ...common, status: 'new' as const, candidates: [] };
+      }),
+    };
+  }
+
   async findAll(query: ToursQueryDto) {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;

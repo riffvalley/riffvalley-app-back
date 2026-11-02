@@ -482,11 +482,11 @@ export class VenuesService {
         'venue.nameNormalized',
         'venue.localityId',
       ])
-      .where('venue.localityId IN (:...localityIds)', { localityIds })
+      .andWhere('venue.localityId IN (:...localityIds)', { localityIds })
       .andWhere('venue.nameNormalized IN (:...names)', { names })
       .getMany();
     return {
-      results: dto.venues.map((input) => {
+      results: dto.venues.map((input, index) => {
         const normalized = normalizeGeography(input.name);
         const matches = candidates.filter(
           (candidate) =>
@@ -494,12 +494,21 @@ export class VenuesService {
             candidate.nameNormalized === normalized,
         );
         return {
+          index,
           name: input.name,
           localityId: input.localityId,
           venue:
             matches.length === 1
               ? { id: matches[0].id, name: matches[0].name }
               : null,
+          status:
+            matches.length > 1
+              ? ('ambiguous' as const)
+              : matches.length === 1
+                ? ('existing' as const)
+                : ('new' as const),
+          ...(matches.length > 1 ? { code: 'VENUE_AMBIGUOUS' } : {}),
+          candidates: matches.map(({ id, name }) => ({ id, name })),
         };
       }),
     };

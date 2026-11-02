@@ -29,6 +29,10 @@ Los endpoints ordinarios de Venue no aceptan `isGeneric`; no permiten modificar,
 
 ## API implementada
 
+### Inspectores del importador (CON-B04g)
+
+Los endpoints públicos `POST /api/artists/resolve-batch`, `POST /api/localities/inspect-batch`, `POST /api/tours/resolve-batch` y `POST /api/venues/resolve-batch` son consultas agrupadas de hasta 100 entradas, sin escrituras ni geocodificación. Los resultados conservan `index` y nombres de entrada repetidos. Artist mantiene el campo legacy `artist`; Locality requiere `countryId` y ofrece contexto de región/provincia y candidatos; Tour solo resuelve igualdad normalizada y marca `TOUR_CONFIRMATION_REQUIRED` cuando ya existe; Venue se mantiene por nombre exacto y localidad. `existing`, `new`, `ambiguous` e `invalid` distinguen los resultados, con códigos estables y candidatos identificables cuando hace falta. Los contratos completos y ejemplos están en [importer.md](importer.md).
+
 - `GET /api/events?limit=20&offset=0&type=concert&dateFrom=2027-04-01&dateTo=2027-04-30&venueId=<uuid>&administrativeRegionId=<uuid>` — lectura pública paginada. El rango filtra por fecha de inicio.
 - `GET /api/events/:id` — lectura pública con Venue y lineup ordenado.
 - `POST /api/events` — requiere `riffvalley` o superior.

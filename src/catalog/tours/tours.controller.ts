@@ -14,6 +14,7 @@ import { ValidRoles } from '../../identity/auth/interfaces/valid-roles';
 import { CreateTourDto } from './dto/create-tour.dto';
 import { ToursQueryDto } from './dto/tours-query.dto';
 import { UpdateTourDto } from './dto/update-tour.dto';
+import { ResolveToursBatchDto } from './dto/resolve-tours-batch.dto';
 import { ToursService } from './tours.service';
 
 @Controller('tours')
@@ -29,6 +30,11 @@ export class ToursController {
   @Get()
   findAll(@Query() query: ToursQueryDto) {
     return this.toursService.findAll(query);
+  }
+
+  @Post('resolve-batch')
+  resolveBatch(@Body() dto: ResolveToursBatchDto) {
+    return this.toursService.resolveBatch(dto.names);
   }
 
   @Get(':id')

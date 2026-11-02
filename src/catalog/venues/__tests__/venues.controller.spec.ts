@@ -8,6 +8,7 @@ import { ValidRoles } from '../../../identity/auth/interfaces/valid-roles';
 import { UserRoleGuard } from '../../../identity/authorization/guards/user-role/user-role.guard';
 import { VenuesController } from '../venues.controller';
 import { LocalitiesController } from '../localities/localities.controller';
+import { InspectLocalitiesBatchDto } from '../dto/inspect-localities-batch.dto';
 
 describe('VenuesController routes and permissions', () => {
   const method = (name: keyof VenuesController) =>
@@ -43,15 +44,56 @@ describe('VenuesController routes and permissions', () => {
 
   it('protects locality resolution and keeps venue resolution as a read operation', () => {
     const resolveLocality = LocalitiesController.prototype.resolve;
+    const inspectLocalities = LocalitiesController.prototype.inspectBatch;
     expect(Reflect.getMetadata(META_MINIMUM_ROLE, resolveLocality)).toBe(
       ValidRoles.riffvalley,
     );
+    expect(Reflect.getMetadata(PATH_METADATA, inspectLocalities)).toBe(
+      'inspect-batch',
+    );
+    expect(Reflect.getMetadata(METHOD_METADATA, inspectLocalities)).toBe(1);
+    expect(
+      Reflect.getMetadata(META_MINIMUM_ROLE, inspectLocalities),
+    ).toBeUndefined();
     expect(Reflect.getMetadata(PATH_METADATA, method('resolveBatch'))).toBe(
       'resolve-batch',
     );
     expect(
       Reflect.getMetadata(META_MINIMUM_ROLE, method('resolveBatch')),
     ).toBeUndefined();
+  });
+
+  it('validates the locality inspection batch size and required country context', async () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+    const transform = (localities: object[]) =>
+      pipe.transform(
+        { localities },
+        { type: 'body', metatype: InspectLocalitiesBatchDto },
+      );
+    const countryId = 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783';
+    await expect(
+      transform(
+        Array.from({ length: 100 }, (_, index) => ({
+          name: `Locality ${index}`,
+          countryId,
+        })),
+      ),
+    ).resolves.toBeInstanceOf(InspectLocalitiesBatchDto);
+    await expect(
+      transform(
+        Array.from({ length: 101 }, (_, index) => ({
+          name: `Locality ${index}`,
+          countryId,
+        })),
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(transform([{ name: 'Madrid' }])).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it('requires riffvalley for manual locality alias changes', () => {
@@ -73,3 +115,4 @@ describe('VenuesController routes and permissions', () => {
     expect(Reflect.getMetadata(METHOD_METADATA, removeAlias)).toBe(3);
   });
 });
+import { ValidationPipe } from '@nestjs/common';

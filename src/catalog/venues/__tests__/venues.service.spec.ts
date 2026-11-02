@@ -641,11 +641,70 @@ describe('VenuesService', () => {
     ).resolves.toEqual({
       results: [
         {
+          index: 0,
           name: ' SALA   SOL ',
           localityId: 'madrid',
           venue: { id: 'venue-id', name: 'Sala Sol' },
+          status: 'existing',
+          candidates: [{ id: 'venue-id', name: 'Sala Sol' }],
         },
-        { name: 'Sala Sol', localityId: 'barcelona', venue: null },
+        {
+          index: 1,
+          name: 'Sala Sol',
+          localityId: 'barcelona',
+          venue: null,
+          status: 'new',
+          candidates: [],
+        },
+      ],
+    });
+    expect(builder.where).toHaveBeenCalledWith('venue.isGeneric = false');
+    expect(builder.andWhere).toHaveBeenCalledWith(
+      'venue.localityId IN (:...localityIds)',
+      { localityIds: ['madrid', 'barcelona'] },
+    );
+  });
+
+  it('returns every exact candidate instead of choosing an inconsistent duplicate', async () => {
+    const builder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        {
+          id: 'venue-one',
+          name: 'Sala Sol',
+          nameNormalized: 'sala sol',
+          localityId: 'madrid',
+        },
+        {
+          id: 'venue-two',
+          name: 'Sala Sol',
+          nameNormalized: 'sala sol',
+          localityId: 'madrid',
+        },
+      ]),
+    };
+    venues.createQueryBuilder.mockReturnValue(builder);
+
+    await expect(
+      service.resolveBatch({
+        venues: [{ name: 'Sala Sol', localityId: 'madrid' }],
+      }),
+    ).resolves.toEqual({
+      results: [
+        {
+          index: 0,
+          name: 'Sala Sol',
+          localityId: 'madrid',
+          venue: null,
+          status: 'ambiguous',
+          code: 'VENUE_AMBIGUOUS',
+          candidates: [
+            { id: 'venue-one', name: 'Sala Sol' },
+            { id: 'venue-two', name: 'Sala Sol' },
+          ],
+        },
       ],
     });
   });

@@ -2,6 +2,8 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AdministrativeRegionsService } from '../../../administrative-regions/administrative-regions.service';
+import { AdministrativeRegion } from '../../../administrative-regions/entities/administrative-region.entity';
+import { Country } from '../../../countries/entities/country.entity';
 import { normalizeGeography } from '../../../geography/helpers/normalize-geography';
 import { Locality } from '../../entities/locality.entity';
 import { LocalityAlias } from '../../entities/locality-alias.entity';
@@ -13,6 +15,8 @@ describe('LocalitiesService', () => {
   let service: LocalitiesService;
   let localities: Record<string, jest.Mock>;
   let aliases: Record<string, jest.Mock>;
+  let countries: Record<string, jest.Mock>;
+  let administrativeRegions: Record<string, jest.Mock>;
   let regions: { findOne: jest.Mock; findByIdentity: jest.Mock };
   let geocoder: { geocode: jest.Mock };
   let moduleRef: TestingModule;
@@ -31,6 +35,7 @@ describe('LocalitiesService', () => {
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => value),
       delete: jest.fn(async () => undefined),
+      createQueryBuilder: jest.fn(),
     };
     aliases = {
       find: jest.fn(async () => []),
@@ -38,6 +43,10 @@ describe('LocalitiesService', () => {
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => value),
       remove: jest.fn(async () => undefined),
+    };
+    countries = { find: jest.fn(async () => [country]) };
+    administrativeRegions = {
+      find: jest.fn(async () => [region]),
     };
     regions = {
       findOne: jest.fn(async () => region),
@@ -49,6 +58,11 @@ describe('LocalitiesService', () => {
         LocalitiesService,
         { provide: getRepositoryToken(Locality), useValue: localities },
         { provide: getRepositoryToken(LocalityAlias), useValue: aliases },
+        { provide: getRepositoryToken(Country), useValue: countries },
+        {
+          provide: getRepositoryToken(AdministrativeRegion),
+          useValue: administrativeRegions,
+        },
         { provide: AdministrativeRegionsService, useValue: regions },
         { provide: NominatimGeocoderService, useValue: geocoder },
       ],
@@ -63,6 +77,128 @@ describe('LocalitiesService', () => {
     administrativeRegionId: 'region-id',
     province: 'Gipuzkoa',
   } as ResolveLocalityDto;
+
+  it('inspects localities in one read-only batch and resolves aliases with geography context', async () => {
+    const locality = {
+      id: 'locality-id',
+      name: 'Donostia',
+      nameNormalized: 'donostia',
+      province: 'Gipuzkoa',
+      provinceNormalized: 'gipuzkoa',
+      administrativeRegionId: region.id,
+      administrativeRegion: region,
+      aliases: [{ normalizedName: 'san sebastian' }],
+    } as Locality;
+    const queryBuilder = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([locality]),
+    };
+    localities.createQueryBuilder.mockReturnValue(queryBuilder);
+
+    await expect(
+      service.inspectBatch({
+        localities: [
+          {
+            name: 'San Sebastián',
+            countryId: 'country-id',
+            province: 'Gipuzkoa',
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      results: [
+        {
+          index: 0,
+          status: 'existing',
+          locality: {
+            id: 'locality-id',
+            name: 'Donostia',
+            country: { id: 'country-id', name: 'Spain' },
+            administrativeRegion: { id: 'region-id', name: 'País Vasco' },
+          },
+        },
+      ],
+    });
+    expect(localities.createQueryBuilder).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.getMany).toHaveBeenCalledTimes(1);
+    expect(geocoder.geocode).not.toHaveBeenCalled();
+    expect(localities.save).not.toHaveBeenCalled();
+    expect(aliases.save).not.toHaveBeenCalled();
+  });
+
+  it('returns all homonymous localities and rejects invalid context without guessing', async () => {
+    const first = {
+      id: 'locality-one',
+      name: 'Santiago',
+      province: 'A Coruña',
+      provinceNormalized: 'a coruna',
+      nameNormalized: 'santiago',
+      administrativeRegionId: 'region-id',
+      administrativeRegion: region,
+      aliases: [],
+    } as Locality;
+    const second = {
+      ...first,
+      id: 'locality-two',
+      province: 'Pontevedra',
+      provinceNormalized: 'pontevedra',
+      administrativeRegionId: 'region-two',
+      administrativeRegion: {
+        ...region,
+        id: 'region-two',
+        name: 'Galicia 2',
+      },
+    } as Locality;
+    const queryBuilder = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([first, second]),
+    };
+    localities.createQueryBuilder.mockReturnValue(queryBuilder);
+
+    const result = await service.inspectBatch({
+      localities: [
+        { name: 'Santiago', countryId: 'country-id' },
+        {
+          name: 'Santiago',
+          countryId: 'country-id',
+          administrativeRegionId: 'region-id',
+        },
+      ],
+    });
+    expect(result.results[0]).toMatchObject({
+      index: 0,
+      status: 'ambiguous',
+      code: 'LOCALITY_AMBIGUOUS',
+      candidates: [{ id: 'locality-one' }, { id: 'locality-two' }],
+    });
+    expect(result.results[1]).toMatchObject({
+      index: 1,
+      status: 'existing',
+      locality: { id: 'locality-one' },
+    });
+
+    countries.find.mockResolvedValueOnce([]);
+    await expect(
+      service.inspectBatch({
+        localities: [{ name: 'Santiago', countryId: 'missing-country' }],
+      }),
+    ).resolves.toMatchObject({
+      results: [
+        {
+          status: 'invalid',
+          code: 'LOCALITY_COUNTRY_NOT_FOUND',
+        },
+      ],
+    });
+    expect(geocoder.geocode).not.toHaveBeenCalled();
+    expect(localities.save).not.toHaveBeenCalled();
+  });
 
   it('reuses stored coordinates and avoids calling Nominatim', async () => {
     const locality = {

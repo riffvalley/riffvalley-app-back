@@ -75,13 +75,20 @@ export class ArtistsService {
   }
 
   async resolveBatch(names: string[]) {
-    const artists = await this.artistCatalogService.resolveExactNames(names);
+    const resolutions =
+      await this.artistCatalogService.inspectExactNames(names);
     return {
       results: names.map((name, index) => {
-        const artist = artists[index];
+        const resolution = resolutions[index];
+        const artist =
+          resolution.status === 'existing' ? resolution.entity : null;
         return {
+          index,
           name,
           artist: artist ? { id: artist.id, name: artist.name } : null,
+          status: resolution.status,
+          ...(resolution.code ? { code: resolution.code } : {}),
+          candidates: resolution.candidates,
         };
       }),
     };

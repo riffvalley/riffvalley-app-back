@@ -138,6 +138,63 @@ describe('ToursService', () => {
     await expect(service.findExactByName('No such tour')).resolves.toBeNull();
   });
 
+  it('resolves exact normalized Tour names in one query and preserves repeated inputs', async () => {
+    const builder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        {
+          id: 'tour-id',
+          name: 'Septicflesh European Tour 2027',
+          normalizedName: 'septicflesh european tour 2027',
+        },
+      ]),
+    };
+    tours.createQueryBuilder.mockReturnValue(builder);
+
+    await expect(
+      service.resolveBatch([
+        ' SEPTICFLESH   European Tour 2027 ',
+        'Septicflesh European Tour 2027',
+        'European Tour',
+      ]),
+    ).resolves.toEqual({
+      results: [
+        {
+          index: 0,
+          name: ' SEPTICFLESH   European Tour 2027 ',
+          status: 'existing',
+          code: 'TOUR_CONFIRMATION_REQUIRED',
+          entity: { id: 'tour-id', name: 'Septicflesh European Tour 2027' },
+          candidates: [],
+        },
+        {
+          index: 1,
+          name: 'Septicflesh European Tour 2027',
+          status: 'existing',
+          code: 'TOUR_CONFIRMATION_REQUIRED',
+          entity: { id: 'tour-id', name: 'Septicflesh European Tour 2027' },
+          candidates: [],
+        },
+        {
+          index: 2,
+          name: 'European Tour',
+          status: 'new',
+          candidates: [],
+        },
+      ],
+    });
+    expect(builder.getMany).toHaveBeenCalledTimes(1);
+    expect(builder.where).toHaveBeenCalledWith(
+      'tour.normalizedName IN (:...normalizedNames)',
+      {
+        normalizedNames: ['septicflesh european tour 2027', 'european tour'],
+      },
+    );
+    expect(tours.create).not.toHaveBeenCalled();
+    expect(tours.save).not.toHaveBeenCalled();
+  });
+
   it('lists tours with offset pagination', async () => {
     const builder = {
       orderBy: jest.fn().mockReturnThis(),

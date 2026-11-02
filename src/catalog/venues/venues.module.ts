@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdministrativeRegionsModule } from '../administrative-regions/administrative-regions.module';
+import { AdministrativeRegion } from '../administrative-regions/entities/administrative-region.entity';
+import { Country } from '../countries/entities/country.entity';
 import { AuthorizationModule } from '../../identity/authorization/authorization.module';
 import { GeocodingRateLimit } from './entities/geocoding-rate-limit.entity';
 import { Locality } from './entities/locality.entity';
@@ -20,6 +22,8 @@ import { VenuesService } from './venues.service';
       LocalityAlias,
       Venue,
       GeocodingRateLimit,
+      Country,
+      AdministrativeRegion,
     ]),
     AdministrativeRegionsModule,
     AuthorizationModule,

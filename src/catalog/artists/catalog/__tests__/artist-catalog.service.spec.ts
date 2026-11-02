@@ -172,6 +172,41 @@ describe('ArtistCatalogService', () => {
     );
   });
 
+  it('distinguishes new names from ambiguous identities and returns every candidate', async () => {
+    const queryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        { id: 'artist-a', name: 'Twin' },
+        { id: 'artist-b', name: 'TWIN' },
+      ]),
+    };
+    artistRepository.createQueryBuilder.mockReturnValue(queryBuilder);
+
+    await expect(
+      service.inspectExactNames(['Twin', 'Unknown', 'Twin']),
+    ).resolves.toEqual([
+      {
+        status: 'ambiguous',
+        code: 'ARTIST_AMBIGUOUS',
+        candidates: [
+          { id: 'artist-a', name: 'Twin' },
+          { id: 'artist-b', name: 'TWIN' },
+        ],
+      },
+      { status: 'new', candidates: [] },
+      {
+        status: 'ambiguous',
+        code: 'ARTIST_AMBIGUOUS',
+        candidates: [
+          { id: 'artist-a', name: 'Twin' },
+          { id: 'artist-b', name: 'TWIN' },
+        ],
+      },
+    ]);
+    expect(artistRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ['MOL', 'MØL'],
     ['Solstafir', 'Sólstafir'],
