@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Event } from '../events/entities/event.entity';
 import { EventArtist } from '../events/entities/event-artist.entity';
+import { normalizeGeography } from '../geography/helpers/normalize-geography';
 import { CreateTourDto } from './dto/create-tour.dto';
 import { ToursQueryDto } from './dto/tours-query.dto';
 import { UpdateTourDto } from './dto/update-tour.dto';
@@ -66,6 +67,17 @@ function isForeignKeyViolation(error: unknown): boolean {
   );
 }
 
+function isTourNameUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505' &&
+    'constraint' in error &&
+    error.constraint === 'UQ_tours_normalized_name'
+  );
+}
+
 @Injectable()
 export class ToursService {
   constructor(
@@ -78,11 +90,25 @@ export class ToursService {
   ) {}
 
   async create(dto: CreateTourDto): Promise<Tour> {
+    const name = dto.name.trim();
     const tour = this.tourRepository.create({
-      name: dto.name.trim(),
+      name,
+      normalizedName: normalizeGeography(name),
       description: dto.description ?? null,
     });
-    return this.tourRepository.save(tour);
+    try {
+      return await this.tourRepository.save(tour);
+    } catch (error) {
+      if (isTourNameUniqueViolation(error))
+        throw new ConflictException('A tour with this normalized name exists');
+      throw error;
+    }
+  }
+
+  async findExactByName(name: string): Promise<Tour | null> {
+    const normalizedName = normalizeGeography(name);
+    if (!normalizedName) return null;
+    return this.tourRepository.findOneBy({ normalizedName });
   }
 
   async findAll(query: ToursQueryDto) {
@@ -219,9 +245,18 @@ export class ToursService {
   async update(id: string, dto: UpdateTourDto): Promise<Tour> {
     const tour = await this.tourRepository.findOneBy({ id });
     if (!tour) throw new NotFoundException(`Tour with id ${id} not found`);
-    if (dto.name !== undefined) tour.name = dto.name.trim();
+    if (dto.name !== undefined) {
+      tour.name = dto.name.trim();
+      tour.normalizedName = normalizeGeography(tour.name);
+    }
     if (dto.description !== undefined) tour.description = dto.description;
-    return this.tourRepository.save(tour);
+    try {
+      return await this.tourRepository.save(tour);
+    } catch (error) {
+      if (isTourNameUniqueViolation(error))
+        throw new ConflictException('A tour with this normalized name exists');
+      throw error;
+    }
   }
 
   async remove(id: string): Promise<{ affected: number }> {

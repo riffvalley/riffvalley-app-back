@@ -27,6 +27,6 @@ import { VenuesService } from './venues.service';
   ],
   controllers: [VenuesController, LocalitiesController],
   providers: [VenuesService, LocalitiesService, NominatimGeocoderService],
-  exports: [VenuesService],
+  exports: [VenuesService, LocalitiesService, NominatimGeocoderService],
 })
 export class VenuesModule {}

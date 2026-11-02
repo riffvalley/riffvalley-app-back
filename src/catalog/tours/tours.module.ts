@@ -14,5 +14,6 @@ import { ToursService } from './tours.service';
   ],
   controllers: [ToursController],
   providers: [ToursService],
+  exports: [ToursService],
 })
 export class ToursModule {}

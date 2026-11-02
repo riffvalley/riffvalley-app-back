@@ -63,6 +63,17 @@ export class VenuesService {
     localityId: string,
     manager?: EntityManager,
   ): Promise<Venue> {
+    const result = await this.getOrCreateGenericVenueWithStatus(
+      localityId,
+      manager,
+    );
+    return result.venue;
+  }
+
+  async getOrCreateGenericVenueWithStatus(
+    localityId: string,
+    manager?: EntityManager,
+  ): Promise<{ venue: Venue; status: 'created' | 'existing' }> {
     const localityRepository = manager
       ? manager.getRepository(Locality)
       : this.localityRepository;
@@ -79,7 +90,7 @@ export class VenuesService {
       localityId,
       isGeneric: true,
     });
-    if (existing) return existing;
+    if (existing) return { venue: existing, status: 'existing' };
 
     const inserted = (await venueRepository.query(
       `INSERT INTO "venues" ("name", "name_normalized", "type", "status", "locality_id", "is_generic")
@@ -93,7 +104,42 @@ export class VenuesService {
       : await venueRepository.findOneBy({ localityId, isGeneric: true });
     if (!venue?.id)
       throw new ConflictException('Generic venue could not be persisted');
-    return venue;
+    return { venue, status: inserted[0] ? 'created' : 'existing' };
+  }
+
+  async createImportVenue(
+    name: string,
+    localityId: string,
+    manager: EntityManager,
+  ): Promise<{ venue: Venue; status: 'created' | 'existing' }> {
+    const cleanName = name.trim().replace(/\s+/gu, ' ');
+    const nameNormalized = normalizeGeography(cleanName);
+    if (!nameNormalized || cleanName.length > 180)
+      throw new BadRequestException('Venue name is invalid');
+    const venueRepository = manager.getRepository(Venue);
+    const existing = await venueRepository.findOneBy({
+      localityId,
+      nameNormalized,
+      isGeneric: false,
+    });
+    if (existing) return { venue: existing, status: 'existing' };
+    const inserted = (await venueRepository.query(
+      `INSERT INTO "venues" ("name", "name_normalized", "type", "status", "locality_id", "is_generic")
+       VALUES ($1, $2, 'concert_hall', 'active', $3, false)
+       ON CONFLICT ("locality_id", "name_normalized") WHERE "is_generic" = false DO NOTHING
+       RETURNING "id"`,
+      [cleanName, nameNormalized, localityId],
+    )) as Array<{ id: string }>;
+    const venue = inserted[0]
+      ? await venueRepository.findOneBy({ id: inserted[0].id })
+      : await venueRepository.findOneBy({
+          localityId,
+          nameNormalized,
+          isGeneric: false,
+        });
+    if (!venue)
+      throw new ConflictException('Import venue could not be persisted');
+    return { venue, status: inserted[0] ? 'created' : 'existing' };
   }
 
   async importBatch(dto: ImportVenuesBatchDto) {

@@ -1,5 +1,7 @@
 # CON-B03 — Dominio de conciertos y festivales
 
+El contrato de importación por lote (`POST /api/events/import-batch`) y su persistencia parcial se documentan en [importer.md](importer.md); no modifica el modelo de dominio descrito aquí.
+
 **Estado:** implementado en backend; migraciones Event Domain, Tours y Tour por actuación aplicadas y verificadas en la base local `SpamMusicDB` el 2026-11-02. No se comprobó ni modificó ningún entorno remoto.
 
 ## Auditoría y decisiones
@@ -31,6 +33,7 @@ Los endpoints ordinarios de Venue no aceptan `isGeneric`; no permiten modificar,
 - `GET /api/events/:id` — lectura pública con Venue y lineup ordenado.
 - `POST /api/events` — requiere `riffvalley` o superior.
 - `PATCH /api/events/:id` — requiere `riffvalley` o superior. `lineup` omitido preserva el lineup; un array lo sustituye, y `[]` lo vacía.
+- `POST /api/events/:eventId/import-lineup` — requiere JWT y rol mínimo `riffvalley`; confirma de forma independiente una ampliación aditiva del lineup. Recibe `batchId`, `rowId`, `sourceRow` original y los artistas confirmados; el evento de ruta es la autoridad del destino. Revalida conflictos, añade solo participaciones ausentes al final y no modifica Event ni EventArtist existentes. Las nuevas participaciones llevan `tourId = null`, incluso en festivales; no se crea `TourArtist`.
 - `DELETE /api/events/:id` — requiere `riffvalley` o superior.
 
 El body de creación acepta `type`, `startDate`, `endDate?`, `name?`, `venueId?`, `localityId?`, `price?`, `otherInfo?` y `lineup?: [{artistId: uuid|null, name}]`. Debe incluir `venueId` o `localityId`; si ambos se envían, el Venue debe pertenecer a esa Locality. `localityId` solo resuelve o crea el Venue genérico y nunca se persiste en Event. Un ID de Artist debe existir; `artistId: null` representa un artista aún no catalogado. El orden del array define posiciones 1..N.
@@ -62,6 +65,16 @@ El DTO de lineup admite `tourId?: uuid | null`. Omitirlo crea la actuación sin 
 `PATCH /api/events/:eventId/artists/:eventArtistId` modifica exclusivamente `tourId` en una participación de festival y requiere el rol `riffvalley` o superior. El body debe contener `tourId` explícito como UUID o `null`; se rechazan campos adicionales. La transacción verifica el festival, que la participación pertenece a ese Event y que la gira exista antes de guardar. No sustituye el lineup ni modifica Event, Artist u otras participaciones. En la respuesta de Tour detalle, `participatingArtist.id` identifica la fila EventArtist.
 
 La eliminación de Tour se rechaza cuando quedan conciertos o actuaciones de festivales asociados. La FK usa `RESTRICT`; desvincular una gira nunca elimina eventos ni artistas. La migración incremental `1792110000000-AddTourToEventArtists` incorpora `event_artists.tour_id`, FK restrictiva, índice parcial `(tour_id, event_id, position)` y triggers de integridad que requieren que el Event sea festival y bloquean cambios de tipo incompatibles. Las tres migraciones pendientes (`CreateEventDomain1792090000000`, `CreateTours1792100000000` y `AddTourToEventArtists1792110000000`) se aplicaron en una transacción local; `db:check` confirmó cero pendientes y se verificaron las columnas, restricciones, índices y triggers. `synchronize` y `migrationsRun` siguen desactivados.
+
+## CON-B04a — Preparación del modelo para importación masiva
+
+Tour añade `normalizedName`, generado mediante `normalizeGeography(name)`, manteniendo `name` como valor visible. La migración incremental `1792120000000-PrepareTourNamesAndImportReceipts` añade y rellena la columna, aborta si hay colisiones y crea `UQ_tours_normalized_name`. Antes de aplicar, la consulta de solo lectura a `SpamMusicDB` encontró cero Tours y cero colisiones. La migración se aplicó allí el 2026-11-02; `db:check` confirmó cero pendientes y se verificaron la columna, el índice único y las restricciones de recibos. El ledger conserva la histórica `UpdateListStatusEnum1766066905027` sin artefacto compilado: 111 entradas aplicadas frente a 110 migraciones compiladas. No se ejecutó en remoto ni se editó el ledger. La actualización y creación usan el mismo normalizador; PostgreSQL es la autoridad ante carreras y `ToursService` traduce su unique violation a conflicto controlado.
+
+El nombre sugerido al editor sigue la convención **Artista principal + nombre de gira + año** (p. ej. `Septicflesh European Tour 2027`), sin validación rígida ni generación automática por artistas. `ToursService.findExactByName(name)` realiza igualdad exacta de clave normalizada y devuelve Tour o `null`. No crea ni fusiona giras; cuando la clave existe, el importador futuro requiere confirmación mediante el ID del Tour.
+
+`catalog_import_row_receipts` persiste editor, batch UUID, row UUID, hash SHA-256 del JSON procesado con claves de objeto ordenadas, estado y resultado JSONB. Su identidad única es `(editor_id, batch_id, row_id)` y `editor_id` referencia `users` con `ON DELETE RESTRICT`; usuarios distintos no comparten recibos. `ImportRowReceiptsService.execute` reserva la identidad con `INSERT .. ON CONFLICT DO NOTHING`, obtiene `FOR UPDATE` y corre persistencia/resultado en la misma transacción. Una fila completa repetida reproduce el resultado; otra huella bajo la misma identidad da conflicto. La transacción serializa reintentos concurrentes y revierte recibo y callback juntos. No se conserva payload de entrada. Retención indefinida, sin limpieza en esta fase; la migración no permite rollback automático destructivo de recibos.
+
+La suite de integración PostgreSQL está preparada para una base de fixtures vacía con prefijo `con_b04a_` y `CON_B04A_PG_INTEGRATION=1`; no se ejecutó porque ese fixture crea y elimina tablas y la base habitual `SpamMusicDB` contiene el esquema persistente. El esquema de producción de la migración sí se verificó directamente en PostgreSQL local; la carrera de recibos con conexiones concurrentes sigue pendiente. La suite unitaria no se considera evidencia de esa carrera.
 
 ## Posterior
 

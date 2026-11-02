@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { EntityManager } from 'typeorm';
 import { Locality } from '../entities/locality.entity';
 import { Venue } from '../entities/venue.entity';
 import { CreateVenueDto } from '../dto/create-venue.dto';
@@ -117,6 +118,51 @@ describe('VenuesService', () => {
       ['Santander', 'santander', 'locality-id'],
     );
     expect(venues.findOneBy).toHaveBeenNthCalledWith(2, { id: 'generic-id' });
+  });
+
+  it('reports whether a transaction created or reused the generic venue', async () => {
+    localities.findOneBy.mockResolvedValue({
+      id: 'locality-id',
+      name: 'Santander',
+    });
+    venues.findOneBy
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'generic-id', isGeneric: true });
+    venues.query.mockResolvedValue([{ id: 'generic-id' }]);
+
+    await expect(
+      service.getOrCreateGenericVenueWithStatus('locality-id'),
+    ).resolves.toEqual({
+      venue: { id: 'generic-id', isGeneric: true },
+      status: 'created',
+    });
+  });
+
+  it('creates import venues transactionally and reuses normalized conflicts', async () => {
+    const manager = Object.create(EntityManager.prototype) as EntityManager;
+    Object.assign(manager, {
+      getRepository: jest.fn().mockReturnValue(venues),
+    });
+    venues.findOneBy
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'raced-id', name: 'Sala Sol' });
+    venues.query.mockResolvedValueOnce([]);
+
+    await expect(
+      service.createImportVenue(' Sala   Sol ', 'locality-id', manager),
+    ).resolves.toEqual({
+      venue: { id: 'raced-id', name: 'Sala Sol' },
+      status: 'existing',
+    });
+    expect(venues.findOneBy).toHaveBeenNthCalledWith(2, {
+      localityId: 'locality-id',
+      nameNormalized: 'sala sol',
+      isGeneric: false,
+    });
+    expect(venues.query).toHaveBeenCalledWith(
+      expect.stringContaining('ON CONFLICT ("locality_id", "name_normalized")'),
+      ['Sala Sol', 'sala sol', 'locality-id'],
+    );
   });
 
   it('returns the existing generic venue and rejects a missing locality', async () => {

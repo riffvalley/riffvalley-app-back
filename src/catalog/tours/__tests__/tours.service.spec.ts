@@ -17,7 +17,11 @@ describe('ToursService', () => {
     tours = {
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => ({ ...value, id: 'tour-id' })),
-      findOneBy: jest.fn(async () => ({ id: 'tour-id', name: 'Winter Tour' })),
+      findOneBy: jest.fn(async () => ({
+        id: 'tour-id',
+        name: 'Winter Tour',
+        normalizedName: 'winter tour',
+      })),
       findOne: jest.fn(async () => ({ id: 'tour-id', name: 'Winter Tour' })),
       delete: jest.fn(async () => ({ affected: 1 })),
       createQueryBuilder: jest.fn(),
@@ -61,20 +65,77 @@ describe('ToursService', () => {
     });
     expect(tours.create).toHaveBeenCalledWith({
       name: 'Machine Head — Gira de invierno',
+      normalizedName: 'machine head — gira de invierno',
       description: 'Europe',
     });
 
     tours.findOneBy.mockResolvedValueOnce({
       id: 'tour-id',
       name: 'Old name',
+      normalizedName: 'old name',
       description: null,
     });
     await expect(
       service.update('tour-id', { name: 'New name', description: 'Updated' }),
     ).resolves.toMatchObject({ name: 'New name', description: 'Updated' });
     expect(tours.save).toHaveBeenLastCalledWith(
-      expect.objectContaining({ id: 'tour-id', name: 'New name' }),
+      expect.objectContaining({
+        id: 'tour-id',
+        name: 'New name',
+        normalizedName: 'new name',
+      }),
     );
+  });
+
+  it('translates PostgreSQL normalized-name collisions to a controlled conflict', async () => {
+    tours.save.mockRejectedValueOnce({
+      code: '23505',
+      constraint: 'UQ_tours_normalized_name',
+    });
+    await expect(
+      service.create({ name: 'SEPTICFLESH European Tour 2027' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('updates normalized names atomically with the visible name', async () => {
+    tours.findOneBy.mockResolvedValueOnce({
+      id: 'tour-id',
+      name: 'Old name',
+      normalizedName: 'old name',
+      description: null,
+    });
+    tours.save.mockRejectedValueOnce({
+      code: '23505',
+      constraint: 'UQ_tours_normalized_name',
+    });
+    await expect(
+      service.update('tour-id', { name: '  SEPTICFLESH European Tour 2027 ' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tours.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        name: 'SEPTICFLESH European Tour 2027',
+        normalizedName: 'septicflesh european tour 2027',
+      }),
+    );
+  });
+
+  it('resolves Tour names by exact normalized equality without creating one', async () => {
+    tours.findOneBy.mockResolvedValueOnce({
+      id: 'tour-id',
+      name: 'Septicflesh European Tour 2027',
+      normalizedName: 'septicflesh european tour 2027',
+    });
+    await expect(
+      service.findExactByName('  SEPTICFLESH   European Tour 2027  '),
+    ).resolves.toMatchObject({ id: 'tour-id' });
+    expect(tours.findOneBy).toHaveBeenCalledWith({
+      normalizedName: 'septicflesh european tour 2027',
+    });
+    expect(tours.create).not.toHaveBeenCalled();
+    expect(tours.save).not.toHaveBeenCalled();
+
+    tours.findOneBy.mockResolvedValueOnce(null);
+    await expect(service.findExactByName('No such tour')).resolves.toBeNull();
   });
 
   it('lists tours with offset pagination', async () => {
@@ -202,6 +263,7 @@ describe('ToursService', () => {
     await service.create(dto);
     expect(tours.create).toHaveBeenLastCalledWith({
       name: 'Independent Tour',
+      normalizedName: 'independent tour',
       description: null,
     });
   });
