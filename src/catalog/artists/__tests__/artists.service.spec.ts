@@ -17,6 +17,7 @@ describe('ArtistsService facade', () => {
   const artistCatalogService = {
     findAll: jest.fn(),
     findOne: jest.fn(),
+    resolveExactNames: jest.fn(),
   };
   const artistWriteService = {
     create: jest.fn(),
@@ -157,5 +158,30 @@ describe('ArtistsService facade', () => {
     );
     expect(artistOrphansService.removeOrphanArtists).toHaveBeenCalledWith();
     expect(artistWriteService.remove).toHaveBeenCalledWith('artist-id');
+  });
+
+  it('resolves names in order, preserves repeats, and projects only artist identity fields', async () => {
+    const names = ['architects', 'Unknown', 'architects'];
+    artistCatalogService.resolveExactNames.mockResolvedValue([
+      { id: 'artist-1', name: 'Architects', description: 'not exposed' },
+      null,
+      { id: 'artist-1', name: 'Architects', image: 'not exposed' },
+    ]);
+
+    await expect(service.resolveBatch(names)).resolves.toEqual({
+      results: [
+        {
+          name: 'architects',
+          artist: { id: 'artist-1', name: 'Architects' },
+        },
+        { name: 'Unknown', artist: null },
+        {
+          name: 'architects',
+          artist: { id: 'artist-1', name: 'Architects' },
+        },
+      ],
+    });
+    expect(artistCatalogService.resolveExactNames).toHaveBeenCalledTimes(1);
+    expect(artistCatalogService.resolveExactNames).toHaveBeenCalledWith(names);
   });
 });

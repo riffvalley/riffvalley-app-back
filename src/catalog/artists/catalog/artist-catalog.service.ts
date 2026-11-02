@@ -74,35 +74,7 @@ export class ArtistCatalogService {
   async findExactNameMatches(
     names: string[],
   ): Promise<ArtistCatalogNameMatch[]> {
-    const searchKeys = [
-      ...new Set(names.flatMap(getMusicNameSearchKeys).filter(Boolean)),
-    ];
-    if (!searchKeys.length) return names.map(() => emptyNameMatch());
-    const legacySearchKeys = [
-      ...new Set(
-        searchKeys
-          .map((key) => normalizeForSearch(key.normalize('NFKC')))
-          .filter(Boolean),
-      ),
-    ];
-
-    const candidates = await this.artistRepository
-      .createQueryBuilder('artist')
-      .select(['artist.id', 'artist.name'])
-      .where(
-        '(artist.search_name_normalized IN (:...searchKeys) OR (artist.search_name_normalized IS NULL AND artist.nameNormalized IN (:...legacySearchKeys)))',
-        { searchKeys, legacySearchKeys },
-      )
-      .getMany();
-
-    const matchedArtists = names.map((name) => {
-      const key = normalizeMusicName(name);
-      if (!key) return null;
-      const matched = candidates.filter((candidate) =>
-        compareNormalizedMusicNames(name, candidate.name),
-      );
-      return matched.length === 1 ? matched[0] : null;
-    });
+    const matchedArtists = await this.findExactArtistIdentities(names);
     const artistIds = [
       ...new Set(
         matchedArtists.flatMap((artist) => (artist ? [artist.id] : [])),
@@ -158,6 +130,46 @@ export class ArtistCatalogService {
         catalogDiscCount: catalogDiscs.length,
         catalogDiscs,
       };
+    });
+  }
+
+  async resolveExactNames(
+    names: string[],
+  ): Promise<Array<Pick<Artist, 'id' | 'name'> | null>> {
+    return this.findExactArtistIdentities(names);
+  }
+
+  private async findExactArtistIdentities(
+    names: string[],
+  ): Promise<Array<Pick<Artist, 'id' | 'name'> | null>> {
+    const searchKeys = [
+      ...new Set(names.flatMap(getMusicNameSearchKeys).filter(Boolean)),
+    ];
+    if (!searchKeys.length) return names.map(() => null);
+    const legacySearchKeys = [
+      ...new Set(
+        searchKeys
+          .map((key) => normalizeForSearch(key.normalize('NFKC')))
+          .filter(Boolean),
+      ),
+    ];
+
+    const candidates = await this.artistRepository
+      .createQueryBuilder('artist')
+      .select(['artist.id', 'artist.name'])
+      .where(
+        '(artist.search_name_normalized IN (:...searchKeys) OR (artist.search_name_normalized IS NULL AND artist.nameNormalized IN (:...legacySearchKeys)))',
+        { searchKeys, legacySearchKeys },
+      )
+      .getMany();
+
+    return names.map((name) => {
+      const key = normalizeMusicName(name);
+      if (!key) return null;
+      const matched = candidates.filter((candidate) =>
+        compareNormalizedMusicNames(name, candidate.name),
+      );
+      return matched.length === 1 ? matched[0] : null;
     });
   }
 }
