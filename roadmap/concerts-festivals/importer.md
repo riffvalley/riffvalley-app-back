@@ -1,5 +1,13 @@
 # Importador de conciertos y festivales
 
+## CON-B04f — Validación integral y rendimiento con Docker
+
+**Estado:** validación backend completada en PostgreSQL 16.14 aislado mediante Docker Compose. La configuración reproducible y las métricas completas están en [import-performance.md](import-performance.md). La ejecución no usó `SpamMusicDB`, PostgreSQL del host, servicios remotos ni frontend.
+
+`bash scripts/con-b04f/validate-docker.sh` construye el runner Node 24/pnpm 11.28.7, inicia PostgreSQL y el fixture geográfico local, ejecuta `pnpm run verify`, y luego las integraciones reales de recibos, migraciones e importador. Las siete migraciones `179207`–`179213` se ejecutaron contra la base de eventos. La cadena histórica completa no se reproduce desde cero: el test crea solo las tablas prerrequisito de Country, Artist y User que anteceden al tramo de dominio.
+
+Resultados: verify aprobado (303 suites y 2.896 tests aprobados; 34 suites/182 tests omitidos por sus condiciones normales); 17 pruebas PostgreSQL aprobadas; migraciones, índices, FKs, triggers, rollback, idempotencia y conflictos concurrentes verificados. Las ampliaciones simultáneas conservaron posiciones únicas y registraron cero deadlocks. Los lotes A de 20/50/100 filas promediaron 234 ms/359 ms/941 ms; los escenarios medidos de 100 filas promediaron menos de 1,3 s. La importación de localidades nuevas usó exclusivamente el fixture Docker. No se añadieron optimizaciones de producción porque estas mediciones no identificaron un cuello de botella que justificase cambiar las reglas o consultas.
+
 ## CON-B04e — Ampliación confirmada de lineups existentes
 
 **Estado:** implementada en backend mediante `POST /api/events/:eventId/import-lineup`; requiere JWT y rol mínimo `riffvalley`. No cambia el frontend ni el comportamiento de `POST /api/events/import-batch`.
@@ -90,7 +98,7 @@ La inspección inicial usa `ImportConflictsService.inspect`; antes de escribir, 
 
 `ImportRowReceiptsService` identifica editor + lote + fila y compara el hash SHA-256 del contenido normalizado. Una consulta de lote permite reproducir recibos completados antes de revisar posibles duplicados; la reserva, el evento y el resultado se confirman en la misma transacción. Contenido distinto con identidad reutilizada devuelve `IMPORT_IDEMPOTENCY_CONFLICT`. Conflictos e inválidos no guardan recibo, por lo que pueden reintentarse con la misma identidad después de corregir condiciones externas; los fallos técnicos anteriores al commit tampoco dejan recibo.
 
-La inspección de artistas es agrupada y las localidades repetidas comparten la preparación geográfica; Nominatim no se consulta para localidades existentes. El lote limita consultas de candidatos por localidad y fechas. La integración PostgreSQL aislada de reintentos/concurrencia queda pendiente hasta disponer de un fixture vacío; no se usa la base local persistente `SpamMusicDB` para suites destructivas.
+La inspección de artistas es agrupada y las localidades repetidas comparten la preparación geográfica; Nominatim no se consulta para localidades existentes. El lote limita consultas de candidatos por localidad y fechas. Las integraciones PostgreSQL, las carreras y las métricas se ejecutaron después en el entorno aislado de CON-B04f descrito en [import-performance.md](import-performance.md); no se usó `SpamMusicDB`.
 
 ## CON-D01 — Auditoría y contrato de importación masiva
 
@@ -118,7 +126,7 @@ La convención recomendada al editor es **Artista principal + nombre de gira + a
 
 `ImportRowReceiptsService.execute` recibe el ID del editor autenticado, `batchId`, `rowId`, contenido procesado y un callback de persistencia. Calcula SHA-256 sobre JSON con claves de objeto ordenadas, reserva la identidad única `(editor_id, batch_id, row_id)`, y ejecuta el callback y el guardado del resultado JSONB con el mismo `EntityManager` transaccional. El retry con contenido equivalente devuelve el resultado anterior; contenido distinto con la misma identidad genera conflicto. La clave incluye editor para aislar cuentas. Se guardan solo identidad, hash, estado, resultado e instantes de creación/actualización; el contenido de entrada no se conserva. Los recibos se retienen indefinidamente en esta fase; no existe proceso de limpieza. La migración no es reversible automáticamente porque borrar recibos puede habilitar duplicados tras un retry.
 
-Contratos disponibles para CON-B04b: resolución exacta `ToursService.findExactByName`; módulo exportable `ToursModule`; servicio `ImportRowReceiptsService.execute`, apto para escribir recibo y resultado de fila en la transacción de la futura importación. No se crean eventos ni recibos mediante endpoints/importaciones en CON-B04a. PostgreSQL confirmó la unicidad y restricciones instaladas; la serialización concurrente de reintentos sigue pendiente de la suite `CON_B04A_PG_INTEGRATION=1` en una base de fixtures separada.
+Contratos disponibles para CON-B04b: resolución exacta `ToursService.findExactByName`; módulo exportable `ToursModule`; servicio `ImportRowReceiptsService.execute`, apto para escribir recibo y resultado de fila en la transacción de la futura importación. No se crean eventos ni recibos mediante endpoints/importaciones en CON-B04a. PostgreSQL confirmó la unicidad y restricciones instaladas. En la fase B04a la carrera de reintentos seguía pendiente; CON-B04f la validó después contra PostgreSQL 16.14 aislado, junto con la separación de recibos por operación.
 
 ## CON-B03b — Giras
 

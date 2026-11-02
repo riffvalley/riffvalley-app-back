@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { normalizeGeography } from '../../../geography/helpers/normalize-geography';
 import { PrepareTourNamesAndImportReceipts1792120000000 } from '../../../../migrations/1792120000000-PrepareTourNamesAndImportReceipts';
+import { ScopeImportReceiptsByOperation1792130000000 } from '../../../../migrations/1792130000000-ScopeImportReceiptsByOperation';
 import { ImportRowReceiptsService } from '../import-row-receipts.service';
 
 const enabled = process.env.CON_B04A_PG_INTEGRATION === '1';
@@ -25,7 +26,6 @@ function assertIsolatedTarget(): void {
 integrationSuite('Import row receipts PostgreSQL integration', () => {
   let dataSource: DataSource;
   let service: ImportRowReceiptsService;
-  let migration: PrepareTourNamesAndImportReceipts1792120000000;
   let editorId: string;
 
   beforeAll(async () => {
@@ -39,6 +39,10 @@ integrationSuite('Import row receipts PostgreSQL integration', () => {
       password: process.env.DB_PASSWORD,
       synchronize: false,
       migrationsRun: false,
+      migrations: [
+        PrepareTourNamesAndImportReceipts1792120000000,
+        ScopeImportReceiptsByOperation1792130000000,
+      ],
     });
     await dataSource.initialize();
     const existingTables = (await dataSource.query(`
@@ -63,14 +67,11 @@ integrationSuite('Import row receipts PostgreSQL integration', () => {
     await dataSource.query('INSERT INTO "tours" ("name") VALUES ($1)', [
       'Legacy Tour',
     ]);
-    migration = new PrepareTourNamesAndImportReceipts1792120000000();
-    const queryRunner = dataSource.createQueryRunner();
-    await queryRunner.connect();
-    try {
-      await migration.up(queryRunner);
-    } finally {
-      await queryRunner.release();
-    }
+    const executed = await dataSource.runMigrations({ transaction: 'all' });
+    expect(executed.map(({ name }) => name)).toEqual([
+      'PrepareTourNamesAndImportReceipts1792120000000',
+      'ScopeImportReceiptsByOperation1792130000000',
+    ]);
     const backfilledTours = await dataSource.query(
       'SELECT "normalized_name" FROM "tours"',
     );
@@ -87,6 +88,7 @@ integrationSuite('Import row receipts PostgreSQL integration', () => {
     await dataSource.query('DROP TABLE "catalog_import_row_receipts"');
     await dataSource.query('DROP TABLE "tours"');
     await dataSource.query('DROP TABLE "users"');
+    await dataSource.query('DROP TABLE "migrations"');
     await dataSource.query('DROP EXTENSION "uuid-ossp"');
     await dataSource.destroy();
   });
@@ -164,11 +166,36 @@ integrationSuite('Import row receipts PostgreSQL integration', () => {
     });
   });
 
+  it('keeps create-event and expand-lineup receipts independent under one row identity', async () => {
+    const identity = { editorId, batchId: randomUUID(), rowId: randomUUID() };
+    const createResult = await service.execute(
+      identity,
+      { name: 'European Tour 2027' },
+      async () => ({ eventId: 'created-event' }),
+    );
+    const expansionResult = await service.execute(
+      { ...identity, operation: 'expand-lineup' },
+      { eventId: 'existing-event', artists: ['Gojira'] },
+      async () => ({ eventId: 'existing-event', status: 'updated' }),
+    );
+
+    expect(createResult.replayed).toBe(false);
+    expect(expansionResult.replayed).toBe(false);
+    const receipts = await dataSource.query(
+      'SELECT "operation" FROM "catalog_import_row_receipts" WHERE "editor_id" = $1 AND "batch_id" = $2 AND "row_id" = $3 ORDER BY "operation"',
+      [identity.editorId, identity.batchId, identity.rowId],
+    );
+    expect(receipts).toEqual([
+      { operation: 'create-event' },
+      { operation: 'expand-lineup' },
+    ]);
+  });
+
   it('rolls back the receipt when the transactional import operation fails', async () => {
     const identity = { editorId, batchId: randomUUID(), rowId: randomUUID() };
     await expect(
-      service.execute(identity, { name: 'Tour' }, async () => {
-        await dataSource.manager.query(
+      service.execute(identity, { name: 'Tour' }, async (manager) => {
+        await manager.query(
           'INSERT INTO "tours" ("name", "normalized_name") VALUES ($1, $2)',
           ['Transient Tour', 'transient tour'],
         );
