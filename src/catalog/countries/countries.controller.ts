@@ -31,6 +31,11 @@ export class CountriesController {
     return this.unitsService.findAll(countriesQueryDto);
   }
 
+  @Get('all')
+  findAllUnpaginated() {
+    return this.unitsService.findAllUnpaginated();
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.unitsService.findOne(id);

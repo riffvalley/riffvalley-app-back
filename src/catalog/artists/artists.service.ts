@@ -74,6 +74,19 @@ export class ArtistsService {
     return this.artistSearchService.findByName(name);
   }
 
+  async resolveBatch(names: string[]) {
+    const artists = await this.artistCatalogService.resolveExactNames(names);
+    return {
+      results: names.map((name, index) => {
+        const artist = artists[index];
+        return {
+          name,
+          artist: artist ? { id: artist.id, name: artist.name } : null,
+        };
+      }),
+    };
+  }
+
   update(id: string, updateArtistDto: UpdateArtistDto) {
     return this.artistWriteService.update(id, updateArtistDto);
   }

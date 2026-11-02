@@ -12,6 +12,10 @@ describe('ArtistCatalogService', () => {
     findOneByOrFail: jest.fn(),
     findOne: jest.fn(),
     createQueryBuilder: jest.fn(),
+    save: jest.fn(),
+    insert: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
   };
   const discRepository = { query: jest.fn() };
   let service: ArtistCatalogService;
@@ -212,5 +216,58 @@ describe('ArtistCatalogService', () => {
       { catalogArtistId: null, catalogDiscCount: 0, catalogDiscs: [] },
     ]);
     expect(discRepository.query).not.toHaveBeenCalled();
+  });
+
+  it('resolves exact identities in one catalog query, preserves ambiguity as null, and does not read discs', async () => {
+    const candidates = [
+      Object.assign(new Artist(), { id: 'artist-1', name: 'Architects' }),
+      Object.assign(new Artist(), { id: 'artist-2', name: 'Spiritbox' }),
+      Object.assign(new Artist(), { id: 'artist-3', name: 'Twin' }),
+      Object.assign(new Artist(), { id: 'artist-4', name: 'TWIN ' }),
+    ];
+    const queryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(candidates),
+    };
+    artistRepository.createQueryBuilder.mockReturnValue(queryBuilder);
+
+    await expect(
+      service.resolveExactNames([
+        ' architects ',
+        'Spiritbox',
+        'Missing',
+        'ARCHITECTS',
+        'Twin',
+      ]),
+    ).resolves.toEqual([
+      { id: 'artist-1', name: 'Architects' },
+      { id: 'artist-2', name: 'Spiritbox' },
+      null,
+      { id: 'artist-1', name: 'Architects' },
+      null,
+    ]);
+
+    expect(artistRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.select).toHaveBeenCalledWith([
+      'artist.id',
+      'artist.name',
+    ]);
+    expect(queryBuilder.where).toHaveBeenCalledTimes(1);
+    expect(discRepository.query).not.toHaveBeenCalled();
+    expect(artistRepository.save).not.toHaveBeenCalled();
+    expect(artistRepository.insert).not.toHaveBeenCalled();
+    expect(artistRepository.update).not.toHaveBeenCalled();
+    expect(artistRepository.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns one null per input and skips the database for an empty batch', async () => {
+    await expect(service.resolveExactNames([])).resolves.toEqual([]);
+    expect(artistRepository.createQueryBuilder).not.toHaveBeenCalled();
+    await expect(service.resolveExactNames(['   ', ''])).resolves.toEqual([
+      null,
+      null,
+    ]);
+    expect(artistRepository.createQueryBuilder).not.toHaveBeenCalled();
   });
 });
