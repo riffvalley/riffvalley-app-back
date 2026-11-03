@@ -142,3 +142,7 @@ Los tests existentes de Article/Photos/Playlist y el contrato de controlador/aut
 - Frontend solo lectura: `src/modules/editorial/content-calendar/application/useContentCalendarOperations.ts`, `presentation/views/ContentCalendar.vue`, modales Radar/Backlog, tests de caracterización y `src/services/contents/contents.ts`.
 - Arquitectura previa preservada: `roadmap/backend-cleanup/editorial/videos-contents.md` (BC-CNT-11/12 completadas; esta política de producto es trabajo separado).
 - Dependencia frontend pendiente: `riffvalley-app-front/roadmap/editorial/content-calendar.md`; adaptar las confirmaciones de eliminación según la matriz aprobada, sin alterar los cambios backend de esta tarea.
+
+## Seguimiento posterior — E-CC-9a-BE
+
+La auditoría independiente de `Content.ready`, sus consumidores, contratos y alternativas está documentada en [E-CC-9a-BE](content-ready-audit.md). Recomienda deprecación progresiva condicionada a aprobación funcional y a confirmar clientes e historial. La tarea backend de deprecación, [E-CC-9b-BE](content-ready-audit.md), permanece pendiente; no cambia el alcance ni los resultados de E-CC-8. El filtro frontend «Mis eventos» continúa separado como E-CC-9 en el roadmap del frontend.
