@@ -1,5 +1,21 @@
 # Importador de conciertos y festivales
 
+## CON-F08d.3a — UUID explícitos de localidad y recinto
+
+**Estado:** implementada en backend. No modifica el frontend; CON-F08d.3b deberá consumir los nuevos campos y conservar el texto junto a los UUID elegidos.
+
+Cada fila de `POST /api/events/import-batch` puede incluir `localityId` y `venueId` opcionales, ambos UUID. El sobre `{batchId, countryId, rows}`, el máximo de 100 filas, la validación independiente y los estados por fila se conservan. Si no se envían, la resolución por nombres mantiene el contrato y la huella SHA-256 histórica.
+
+Una identidad explícita se vuelve a consultar dentro de la transacción de la fila. `localityId` debe existir, pertenecer al `countryId`, coincidir con `city` por nombre normalizado o alias y no contradecir `province` ni `administrativeRegionId`. Cuando la localidad almacenada no tiene provincia, un `province` de entrada no se considera contradicción. La región solo se exige para crear localidades nuevas; una localidad explícita ya existente no requiere `administrativeRegionId`. `venueId` debe existir, pertenecer a la localidad resuelta (o determinarla cuando `localityId` se omite), y ser compatible con `venue` por nombre normalizado. Ningún identificador inválido o desactualizado activa una búsqueda o creación alternativa.
+
+Sin UUID se conserva la búsqueda actual por país, nombre, alias, provincia y región, así como la creación transaccional de localidad/recinto cuando procede. Sin `venueId`, un `venue` vacío conserva la creación/reutilización idempotente del Venue genérico. Con `venueId`, se reutiliza ese Venue exacto, físico o genérico; si también hay texto, debe normalizar al nombre seleccionado.
+
+Las referencias inexistentes o incompatibles devuelven `invalid` en la fila. Los códigos identifican el campo/contexto afectado, por ejemplo `LOCALITY_ID_NOT_FOUND`, `LOCALITY_ID_COUNTRY_MISMATCH`, `LOCALITY_ID_REGION_MISMATCH`, `LOCALITY_ID_NAME_MISMATCH`, `LOCALITY_ID_PROVINCE_MISMATCH`, `VENUE_ID_NOT_FOUND`, `VENUE_ID_COUNTRY_MISMATCH`, `VENUE_LOCALITY_MISMATCH` o `VENUE_ID_NAME_MISMATCH`. La detección de conflictos compara la Locality validada por su UUID, evitando colisiones por localidades homónimas; no cambia la semántica de conciertos, festivales de varios días ni giras.
+
+`localityId` y `venueId` se incorporan a la identidad SHA-256 cuando se proporcionan, por lo que cambiar cualquiera produce el conflicto de idempotencia del recibo existente. Cuando faltan, las propiedades se omiten del contenido hasheado y se conserva exactamente la forma de payload de recibos previos. No hay migración ni regeneración de recibos.
+
+**Verificación:** `pnpm run verify` completado en una imagen aislada: suite unitaria completa (304 suites y 2.914 tests aprobados), build y todos los gates sin hallazgos nuevos. Además, 34 tests focalizados y PostgreSQL 16.14 aislado mediante Docker (3 pruebas de migraciones, 11 del importador y 5 de recibos). Prettier y `git diff --check` pasan. CON-F08d.3b sigue pendiente y no forma parte de esta entrega.
+
 ## CON-B04g — Inspectores batch de entidades
 
 **Estado:** implementado en backend. Los inspectores son públicos y de solo lectura; no crean entidades ni llaman a Nominatim. El máximo es 100 elementos por petición. `index` y el valor de `input`/`name` conservan la correlación incluso cuando hay nombres repetidos; los resultados siempre mantienen el orden recibido.

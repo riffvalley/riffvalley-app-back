@@ -57,6 +57,10 @@ export class ImportEventRowDto {
   @MaxLength(150)
   city: string;
 
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsUUID()
+  localityId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(150)
@@ -66,6 +70,10 @@ export class ImportEventRowDto {
   @IsOptional()
   @IsUUID()
   administrativeRegionId?: string | null;
+
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsUUID()
+  venueId?: string;
 
   @IsOptional()
   @IsString()

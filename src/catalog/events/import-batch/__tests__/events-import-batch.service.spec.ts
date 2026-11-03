@@ -113,11 +113,13 @@ function makeHarness(existingTour = false) {
     ) as ImportRowReceiptsService,
     {
       lookupMany: jest.fn(
-        async () =>
-          new Map<
+        async (...args: Parameters<ImportRowReceiptsService['lookupMany']>) => {
+          void args;
+          return new Map<
             string,
             { result: ImportReceiptResult } | { conflict: true }
-          >(),
+          >();
+        },
       ),
       execute: jest.fn(
         async (
@@ -276,6 +278,67 @@ describe('EventsImportBatchService', () => {
     expect(result.results[0].rowId).toBe('bad-row');
     expect(harness.createdEvents).toHaveLength(1);
     expect(harness.receiptMocks.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes explicit locality and venue UUIDs through inspection, persistence, and receipt identity', async () => {
+    const harness = makeHarness();
+    const localityId = '11111111-1111-4111-8111-111111111111';
+    const venueId = '22222222-2222-4222-8222-222222222222';
+    const rowId = '33333333-3333-4333-8333-333333333333';
+
+    await harness.service.importBatch(
+      'editor-id',
+      batch([
+        {
+          rowId,
+          type: 'concert',
+          startDate: '2027-05-15',
+          city: 'Madrid',
+          localityId,
+          venueId,
+        },
+      ]),
+    );
+
+    expect(harness.resolverMocks.prepareLocalities).toHaveBeenCalledWith([
+      expect.objectContaining({ localityId, venueId }),
+    ]);
+    expect(harness.resolverMocks.materializeLocality).toHaveBeenCalledWith(
+      expect.objectContaining({ localityId, venueId }),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(harness.resolverMocks.materializeVenue).toHaveBeenCalledWith(
+      undefined,
+      'locality-id',
+      expect.anything(),
+      venueId,
+      undefined,
+    );
+    const lookupContent = harness.receiptMocks.lookupMany.mock.calls[0][2][0]
+      .content as Record<string, unknown>;
+    expect(lookupContent).toMatchObject({ localityId, venueId });
+  });
+
+  it('keeps the legacy receipt payload shape when UUIDs are omitted', async () => {
+    const harness = makeHarness();
+
+    await harness.service.importBatch(
+      'editor-id',
+      batch([
+        {
+          rowId: '33333333-3333-4333-8333-333333333334',
+          type: 'concert',
+          startDate: '2027-05-15',
+          city: 'Madrid',
+        },
+      ]),
+    );
+
+    const lookupContent = harness.receiptMocks.lookupMany.mock.calls[0][2][0]
+      .content as Record<string, unknown>;
+    expect(lookupContent).not.toHaveProperty('localityId');
+    expect(lookupContent).not.toHaveProperty('venueId');
   });
 
   it('replays a committed row before checking its event for conflicts', async () => {

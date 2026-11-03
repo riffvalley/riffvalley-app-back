@@ -37,6 +37,9 @@ export interface ImportResolution<T> {
 
 export interface ImportLocalityInput {
   city: string;
+  localityId?: string;
+  venueId?: string;
+  venueName?: string | null;
   province?: string | null;
   countryId?: string;
   administrativeRegionId?: string;
@@ -46,6 +49,10 @@ export interface PreparedImportLocality {
   input: ImportLocalityInput;
   resolution: ImportResolution<Locality>;
   geocoding?: GeocodingResult;
+}
+
+export interface ImportLocationResolution extends ImportResolution<Locality> {
+  selectedVenue?: Venue;
 }
 
 export interface ImportTourResolutionContext {
@@ -58,6 +65,9 @@ function localityInputKey(input: ImportLocalityInput): string {
     normalizeGeography(input.province ?? ''),
     input.countryId ?? '',
     input.administrativeRegionId ?? '',
+    input.localityId ?? '',
+    input.venueId ?? '',
+    normalizeGeography(input.venueName ?? ''),
   ].join(':');
 }
 
@@ -204,6 +214,8 @@ export class ImportEntityResolversService {
   ): Promise<ImportResolution<Locality>> {
     const city = input.city.trim().replace(/\s+/gu, ' ');
     if (!city) return { status: 'invalid', code: 'LOCALITY_NAME_INVALID' };
+    const explicit = await this.inspectExplicitLocality(input, manager);
+    if (explicit) return explicit;
     const nameKey = normalizeGeography(city);
     const provinceKey = input.province
       ? normalizeGeography(input.province)
@@ -266,12 +278,7 @@ export class ImportEntityResolversService {
     const preparedByKey = new Map<string, PreparedImportLocality>();
     const results: PreparedImportLocality[] = [];
     for (const input of inputs) {
-      const key = [
-        normalizeGeography(input.city),
-        normalizeGeography(input.province ?? ''),
-        input.countryId ?? '',
-        input.administrativeRegionId ?? '',
-      ].join(':');
+      const key = localityInputKey(input);
       const cached = preparedByKey.get(key);
       if (cached) {
         results.push(cached);
@@ -335,7 +342,9 @@ export class ImportEntityResolversService {
     input: ImportLocalityInput,
     manager: EntityManager,
     prepared?: PreparedImportLocality,
-  ): Promise<ImportResolution<Locality>> {
+  ): Promise<ImportLocationResolution> {
+    const explicit = await this.inspectExplicitLocality(input, manager);
+    if (explicit) return explicit;
     const inspected = await this.inspectLocalityWithManager(input, manager);
     if (inspected.status !== 'created') return inspected;
     if (
@@ -440,7 +449,21 @@ export class ImportEntityResolversService {
     name: string | null | undefined,
     localityId: string,
     manager: EntityManager,
+    venueId?: string,
+    selectedVenue?: Venue,
   ): Promise<ImportResolution<Venue>> {
+    if (venueId) {
+      const selected =
+        selectedVenue?.id === venueId
+          ? selectedVenue
+          : await manager.getRepository(Venue).findOneBy({ id: venueId });
+      if (!selected) return { status: 'invalid', code: 'VENUE_ID_NOT_FOUND' };
+      if (selected.localityId !== localityId)
+        return { status: 'invalid', code: 'VENUE_LOCALITY_MISMATCH' };
+      if (name?.trim() && normalizeGeography(name) !== selected.nameNormalized)
+        return { status: 'invalid', code: 'VENUE_ID_NAME_MISMATCH' };
+      return { status: 'existing', entity: selected };
+    }
     if (!name?.trim()) {
       const result = await this.venuesService.getOrCreateGenericVenueWithStatus(
         localityId,
@@ -466,6 +489,95 @@ export class ImportEntityResolversService {
       manager,
     );
     return { status: result.status, entity: result.venue };
+  }
+
+  private async inspectExplicitLocality(
+    input: ImportLocalityInput,
+    manager?: EntityManager,
+  ): Promise<ImportLocationResolution | null> {
+    if (!input.localityId && !input.venueId) return null;
+
+    let selectedVenue: Venue | null = null;
+    if (input.venueId) {
+      selectedVenue = await (
+        manager?.getRepository(Venue) ?? this.dataSource.getRepository(Venue)
+      ).findOne({
+        where: { id: input.venueId },
+        relations: {
+          locality: { administrativeRegion: { country: true }, aliases: true },
+        },
+      });
+      if (!selectedVenue)
+        return { status: 'invalid', code: 'VENUE_ID_NOT_FOUND' };
+      if (
+        input.venueName?.trim() &&
+        normalizeGeography(input.venueName) !== selectedVenue.nameNormalized
+      )
+        return { status: 'invalid', code: 'VENUE_ID_NAME_MISMATCH' };
+    }
+
+    let locality: Locality | null;
+    if (input.localityId) {
+      if (selectedVenue) {
+        if (selectedVenue.localityId !== input.localityId)
+          return { status: 'invalid', code: 'VENUE_LOCALITY_MISMATCH' };
+        locality = selectedVenue.locality ?? null;
+      } else {
+        locality = await (
+          manager?.getRepository(Locality) ??
+          this.dataSource.getRepository(Locality)
+        ).findOne({
+          where: { id: input.localityId },
+          relations: {
+            administrativeRegion: { country: true },
+            aliases: true,
+          },
+        });
+      }
+      if (!locality)
+        return { status: 'invalid', code: 'LOCALITY_ID_NOT_FOUND' };
+    } else {
+      locality = selectedVenue?.locality ?? null;
+      if (!locality)
+        return { status: 'invalid', code: 'VENUE_LOCALITY_NOT_FOUND' };
+    }
+
+    const countryId = locality.administrativeRegion?.countryId;
+    if (input.countryId && countryId !== input.countryId)
+      return {
+        status: 'invalid',
+        code:
+          input.venueId && !input.localityId
+            ? 'VENUE_ID_COUNTRY_MISMATCH'
+            : 'LOCALITY_ID_COUNTRY_MISMATCH',
+      };
+    if (
+      input.administrativeRegionId &&
+      locality.administrativeRegionId !== input.administrativeRegionId
+    )
+      return { status: 'invalid', code: 'LOCALITY_ID_REGION_MISMATCH' };
+
+    const cityKey = normalizeGeography(input.city);
+    const localityNames = new Set([
+      locality.nameNormalized,
+      ...(locality.aliases ?? []).map((alias) => alias.normalizedName),
+    ]);
+    if (!localityNames.has(cityKey))
+      return { status: 'invalid', code: 'LOCALITY_ID_NAME_MISMATCH' };
+
+    const provinceKey = normalizeGeography(input.province ?? '');
+    if (
+      provinceKey &&
+      locality.provinceNormalized &&
+      locality.provinceNormalized !== provinceKey
+    )
+      return { status: 'invalid', code: 'LOCALITY_ID_PROVINCE_MISMATCH' };
+
+    return {
+      status: 'existing',
+      entity: locality,
+      ...(selectedVenue ? { selectedVenue } : {}),
+    };
   }
 
   async inspectTour(name: string): Promise<ImportResolution<Tour>> {

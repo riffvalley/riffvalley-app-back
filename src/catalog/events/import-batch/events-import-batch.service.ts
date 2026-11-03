@@ -279,6 +279,9 @@ export class EventsImportBatchService {
       localityResolutions = await this.resolvers.prepareLocalities(
         processableRows.map(({ row }) => ({
           city: row.city,
+          localityId: row.localityId,
+          venueId: row.venueId,
+          venueName: row.venue,
           province: row.province,
           countryId: dto.countryId,
           administrativeRegionId: row.administrativeRegionId,
@@ -585,6 +588,8 @@ export class EventsImportBatchService {
       administrativeRegionId: row.administrativeRegionId ?? null,
       countryId,
       venue: row.venue ?? null,
+      ...(row.localityId !== undefined ? { localityId: row.localityId } : {}),
+      ...(row.venueId !== undefined ? { venueId: row.venueId } : {}),
       tourId: row.tourId ?? null,
       price: row.price ?? null,
       otherInfo: row.otherInfo ?? null,
@@ -627,6 +632,9 @@ export class EventsImportBatchService {
     const localityResult = await this.resolvers.materializeLocality(
       {
         city: row.city,
+        localityId: row.localityId,
+        venueId: row.venueId,
+        venueName: row.venue,
         province: row.province,
         countryId: prepared.countryId,
         administrativeRegionId: row.administrativeRegionId,
@@ -713,6 +721,8 @@ export class EventsImportBatchService {
       row.venue,
       localityResult.entity.id,
       manager,
+      row.venueId,
+      localityResult.selectedVenue,
     );
     if (
       !venueResult.entity ||

@@ -1,5 +1,6 @@
 import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
 import { Locality } from '../../../venues/entities/locality.entity';
+import { Venue } from '../../../venues/entities/venue.entity';
 import { Tour } from '../../../tours/entities/tour.entity';
 import { NominatimGeocoderService } from '../../../venues/localities/nominatim-geocoder.service';
 import { VenuesService } from '../../../venues/venues.service';
@@ -184,6 +185,254 @@ describe('ImportEntityResolversService', () => {
       status: 'invalid',
       code: 'LOCALITY_CONTEXT_REQUIRED',
     });
+  });
+
+  it('reuses an explicit locality UUID and checks country, region, city, and province context', async () => {
+    const locality = Object.assign(new Locality(), {
+      id: 'locality-id',
+      name: 'Madrid',
+      nameNormalized: 'madrid',
+      provinceNormalized: 'madrid',
+      administrativeRegionId: 'region-id',
+      administrativeRegion: { countryId: 'country-id' },
+      aliases: [{ normalizedName: 'villa de madrid' }],
+    });
+    const repository = { findOne: jest.fn().mockResolvedValue(locality) };
+    const dataSource = Object.assign(Object.create(DataSource.prototype), {
+      getRepository: jest.fn().mockReturnValue(repository),
+    }) as DataSource;
+    const service = createService(dataSource);
+
+    const compatible = await service.inspectLocality({
+      city: ' MADRID ',
+      province: 'Madrid',
+      localityId: 'locality-id',
+      countryId: 'country-id',
+      administrativeRegionId: 'region-id',
+    });
+    const wrongProvince = await service.inspectLocality({
+      city: 'Madrid',
+      province: 'Barcelona',
+      localityId: 'locality-id',
+      countryId: 'country-id',
+    });
+    const wrongCountry = await service.inspectLocality({
+      city: 'Madrid',
+      localityId: 'locality-id',
+      countryId: 'other-country',
+    });
+    const normalizedAlias = await service.inspectLocality({
+      city: 'Villa   de Madrid',
+      localityId: 'locality-id',
+      countryId: 'country-id',
+    });
+
+    expect(compatible).toEqual({ status: 'existing', entity: locality });
+    expect(wrongProvince).toEqual({
+      status: 'invalid',
+      code: 'LOCALITY_ID_PROVINCE_MISMATCH',
+    });
+    expect(wrongCountry).toEqual({
+      status: 'invalid',
+      code: 'LOCALITY_ID_COUNTRY_MISMATCH',
+    });
+    expect(normalizedAlias).toEqual({ status: 'existing', entity: locality });
+    expect(repository.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'locality-id' } }),
+    );
+  });
+
+  it('returns row-level errors for missing locality and venue UUIDs and a mismatched administrative region', async () => {
+    const locality = Object.assign(new Locality(), {
+      id: 'locality-id',
+      name: 'Madrid',
+      nameNormalized: 'madrid',
+      provinceNormalized: 'madrid',
+      administrativeRegionId: 'region-id',
+      administrativeRegion: { countryId: 'country-id' },
+      aliases: [],
+    });
+    const localityRepository = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue(locality),
+    };
+    const venueRepository = { findOne: jest.fn().mockResolvedValue(null) };
+    const dataSource = Object.assign(Object.create(DataSource.prototype), {
+      getRepository: jest.fn((entity: unknown) =>
+        entity === Venue ? venueRepository : localityRepository,
+      ),
+    }) as DataSource;
+    const service = createService(dataSource);
+
+    const missingLocality = await service.inspectLocality({
+      city: 'Madrid',
+      localityId: 'missing-locality-id',
+      countryId: 'country-id',
+    });
+    const wrongRegion = await service.inspectLocality({
+      city: 'Madrid',
+      localityId: 'locality-id',
+      countryId: 'country-id',
+      administrativeRegionId: 'other-region-id',
+    });
+    const missingVenue = await service.inspectLocality({
+      city: 'Madrid',
+      venueId: 'missing-venue-id',
+      countryId: 'country-id',
+    });
+
+    expect(missingLocality).toEqual({
+      status: 'invalid',
+      code: 'LOCALITY_ID_NOT_FOUND',
+    });
+    expect(wrongRegion).toEqual({
+      status: 'invalid',
+      code: 'LOCALITY_ID_REGION_MISMATCH',
+    });
+    expect(missingVenue).toEqual({
+      status: 'invalid',
+      code: 'VENUE_ID_NOT_FOUND',
+    });
+  });
+
+  it('derives and validates the locality from an explicit venue UUID', async () => {
+    const locality = Object.assign(new Locality(), {
+      id: 'venue-locality-id',
+      name: 'Madrid',
+      nameNormalized: 'madrid',
+      provinceNormalized: 'madrid',
+      administrativeRegionId: 'region-id',
+      administrativeRegion: { countryId: 'country-id' },
+      aliases: [],
+    });
+    const venue = Object.assign(new Venue(), {
+      id: 'venue-id',
+      localityId: locality.id,
+      locality,
+    });
+    const venueRepository = { findOne: jest.fn().mockResolvedValue(venue) };
+    const localityRepository = {
+      findOne: jest.fn().mockResolvedValue(
+        Object.assign(new Locality(), {
+          id: 'different-locality-id',
+          name: 'Madrid',
+          nameNormalized: 'madrid',
+          provinceNormalized: 'madrid',
+          administrativeRegionId: 'region-id',
+          administrativeRegion: { countryId: 'country-id' },
+          aliases: [],
+        }),
+      ),
+    };
+    const dataSource = Object.assign(Object.create(DataSource.prototype), {
+      getRepository: jest.fn((entity: unknown) =>
+        entity === Venue ? venueRepository : localityRepository,
+      ),
+    }) as DataSource;
+    const service = createService(dataSource);
+
+    const result = await service.inspectLocality({
+      city: 'Madrid',
+      venueId: venue.id,
+      countryId: 'country-id',
+      administrativeRegionId: 'region-id',
+    });
+    const mismatchedVenueName = await service.inspectLocality({
+      city: 'Madrid',
+      venueId: venue.id,
+      venueName: 'Different Venue',
+      countryId: 'country-id',
+    });
+    const incompatible = await service.inspectLocality({
+      city: 'Madrid',
+      venueId: venue.id,
+      localityId: 'different-locality-id',
+      countryId: 'country-id',
+    });
+
+    expect(result).toEqual({
+      status: 'existing',
+      entity: locality,
+      selectedVenue: venue,
+    });
+    expect(mismatchedVenueName).toEqual({
+      status: 'invalid',
+      code: 'VENUE_ID_NAME_MISMATCH',
+    });
+    expect(incompatible).toEqual({
+      status: 'invalid',
+      code: 'VENUE_LOCALITY_MISMATCH',
+    });
+  });
+
+  it('reuses the explicit venue inside the transaction and validates name and locality', async () => {
+    const venue = Object.assign(new Venue(), {
+      id: 'venue-id',
+      localityId: 'locality-id',
+      nameNormalized: 'la riviera',
+      isGeneric: false,
+    });
+    const repository = { findOneBy: jest.fn().mockResolvedValue(venue) };
+    const manager = Object.assign(Object.create(EntityManager.prototype), {
+      getRepository: jest.fn().mockReturnValue(repository),
+    }) as EntityManager;
+    const service = createService(
+      Object.create(DataSource.prototype) as DataSource,
+    );
+
+    const result = await service.materializeVenue(
+      ' LA   RIVIERA ',
+      'locality-id',
+      manager,
+      'venue-id',
+    );
+    const mismatch = await service.materializeVenue(
+      'Different Venue',
+      'locality-id',
+      manager,
+      'venue-id',
+    );
+
+    expect(result).toEqual({ status: 'existing', entity: venue });
+    expect(mismatch).toEqual({
+      status: 'invalid',
+      code: 'VENUE_ID_NAME_MISMATCH',
+    });
+  });
+
+  it('reuses an explicitly selected generic venue instead of creating or substituting one', async () => {
+    const genericVenue = Object.assign(new Venue(), {
+      id: 'generic-venue-id',
+      localityId: 'locality-id',
+      nameNormalized: 'madrid',
+      isGeneric: true,
+    });
+    const repository = { findOneBy: jest.fn().mockResolvedValue(genericVenue) };
+    const manager = Object.assign(Object.create(EntityManager.prototype), {
+      getRepository: jest.fn().mockReturnValue(repository),
+    }) as EntityManager;
+    const getOrCreateGenericVenueWithStatus = jest.fn();
+    const venuesService = Object.assign(
+      Object.create(VenuesService.prototype) as VenuesService,
+      { getOrCreateGenericVenueWithStatus },
+    );
+    const service = createService(
+      Object.create(DataSource.prototype) as DataSource,
+      jest.fn(),
+      venuesService,
+    );
+
+    const result = await service.materializeVenue(
+      null,
+      'locality-id',
+      manager,
+      genericVenue.id,
+    );
+
+    expect(result).toEqual({ status: 'existing', entity: genericVenue });
+    expect(getOrCreateGenericVenueWithStatus).not.toHaveBeenCalled();
   });
 
   it('geocodes a new locality once per normalized batch key without persisting it', async () => {

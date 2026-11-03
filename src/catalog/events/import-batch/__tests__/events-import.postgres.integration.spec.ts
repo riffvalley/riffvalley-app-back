@@ -92,7 +92,7 @@ function row(
 
 function batch(
   rows: ImportEventRowDto[],
-  batchId = randomUUID(),
+  batchId: string = randomUUID(),
 ): ImportEventsBatchDto {
   return { batchId, countryId: 'country-placeholder', rows };
 }
@@ -110,6 +110,7 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
   let countryId: string;
   let regionId: string;
   let localityId: string;
+  let venueId: string;
   let editorId: string;
   let artistIds: Map<string, string>;
   let tourConcertIds: string[];
@@ -246,6 +247,7 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
         isGeneric: false,
       }),
     );
+    venueId = venue.id;
     expect(venue.id).toBeDefined();
     for (const locality of existingBenchmarkLocalities) {
       const location = await dataSource.getRepository(Locality).findOneBy({
@@ -473,6 +475,92 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
       ['new benchmark artist'],
     )) as Array<{ id: string }>;
     expect(createdArtist).toHaveLength(1);
+  });
+
+  it('reuses selected locality and venue UUIDs, replays them, and rejects cross-locality venues without writes', async () => {
+    const selectedRow = row(
+      randomUUID(),
+      '2028-03-10',
+      [{ name: 'Septicflesh', artistId: artistIds.get('Septicflesh') }],
+      {
+        localityId,
+        venueId,
+        administrativeRegionId: regionId,
+      },
+    );
+    const request = batch([selectedRow]);
+    request.countryId = countryId;
+
+    const created = await batchService.importBatch(editorId, request);
+    expect(created.results[0]).toMatchObject({
+      status: 'created',
+      localityId,
+      venueId,
+    });
+    const replay = await batchService.importBatch(editorId, request);
+    expect(replay.results[0]).toMatchObject({
+      status: 'created',
+      localityId,
+      venueId,
+      replayed: true,
+    });
+
+    const bilbao = await dataSource.getRepository(Locality).findOneByOrFail({
+      nameNormalized: normalizeForSearch('Bilbao'),
+    });
+    const changedIdentityRequest = batch(
+      [{ ...selectedRow, localityId: bilbao.id }],
+      request.batchId,
+    );
+    changedIdentityRequest.countryId = countryId;
+    const changedIdentity = await batchService.importBatch(
+      editorId,
+      changedIdentityRequest,
+    );
+    expect(changedIdentity.results[0]).toMatchObject({
+      status: 'conflict',
+      code: 'IMPORT_IDEMPOTENCY_CONFLICT',
+    });
+    const otherVenue = await dataSource
+      .getRepository(Venue)
+      .findOneByOrFail({ localityId: bilbao.id, isGeneric: false });
+    const changedVenueRequest = batch(
+      [{ ...selectedRow, venueId: otherVenue.id }],
+      request.batchId,
+    );
+    changedVenueRequest.countryId = countryId;
+    const changedVenueIdentity = await batchService.importBatch(
+      editorId,
+      changedVenueRequest,
+    );
+    expect(changedVenueIdentity.results[0]).toMatchObject({
+      status: 'conflict',
+      code: 'IMPORT_IDEMPOTENCY_CONFLICT',
+    });
+    const before = await dataSource.getRepository(Event).count();
+    const incompatible = row(
+      randomUUID(),
+      '2028-03-11',
+      [{ name: 'Septicflesh', artistId: artistIds.get('Septicflesh') }],
+      {
+        city: bilbao.name,
+        province: bilbao.province ?? undefined,
+        localityId,
+        venue: otherVenue.name,
+        venueId: otherVenue.id,
+        administrativeRegionId: regionId,
+      },
+    );
+    const invalidRequest = batch([incompatible]);
+    invalidRequest.countryId = countryId;
+
+    const invalid = await batchService.importBatch(editorId, invalidRequest);
+    const after = await dataSource.getRepository(Event).count();
+    expect(invalid.results[0]).toMatchObject({
+      status: 'invalid',
+      code: 'VENUE_LOCALITY_MISMATCH',
+    });
+    expect(after).toBe(before);
   });
 
   it('allows a multi-day festival beside a concert, rejects same-day participation and detects festival duplicates', async () => {
