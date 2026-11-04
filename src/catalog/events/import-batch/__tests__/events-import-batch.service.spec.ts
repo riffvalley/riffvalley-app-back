@@ -7,6 +7,7 @@ import { ImportConflictsService } from '../../../import/conflicts/import-conflic
 import { ImportRowReceiptsService } from '../../../import/receipts/import-row-receipts.service';
 import { ImportReceiptResult } from '../../../import/receipts/entities/import-row-receipt.entity';
 import { EntityManager } from 'typeorm';
+import { validateSync } from 'class-validator';
 
 function makeHarness(existingTour = false) {
   let eventCounter = 0;
@@ -57,14 +58,16 @@ function makeHarness(existingTour = false) {
           resolution: { status: 'existing' as const, entity: locality },
         })),
       ),
-      inspectTour: jest.fn(async () =>
-        existingTour
-          ? {
-              status: 'conflict' as const,
-              code: 'TOUR_CONFIRMATION_REQUIRED',
-              entity: tour,
-            }
-          : { status: 'created' as const },
+      inspectTours: jest.fn(async (names: string[]) =>
+        names.map(() =>
+          existingTour
+            ? {
+                status: 'conflict' as const,
+                code: 'TOUR_CONFIRMATION_REQUIRED',
+                entity: tour,
+              }
+            : { status: 'created' as const },
+        ),
       ),
       materializeLocality: jest.fn(async () => ({
         status: 'existing' as const,
@@ -169,6 +172,277 @@ function tourRow(rowId: string, startDate: string, tourId?: string) {
 }
 
 describe('EventsImportBatchService', () => {
+  const testRowId = (index: number) =>
+    `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+
+  it('returns an existing exact concert without materializing imported entities', async () => {
+    const harness = makeHarness();
+    harness.conflictMocks.inspect.mockResolvedValue([
+      {
+        rowId: testRowId(0),
+        conflicts: [
+          {
+            rowId: testRowId(0),
+            kind: 'duplicate',
+            code: 'CONCERT_DUPLICATE',
+            severity: 'blocking',
+            message: 'Exact existing concert',
+            relatedRowIds: [],
+            existingEventIds: ['existing-event'],
+            matchingArtists: [{ artistId: null, name: 'Unknown Artist' }],
+            addableArtists: [],
+            candidateEventIds: ['existing-event'],
+          },
+        ],
+      },
+    ]);
+
+    const result = await harness.service.importBatch(
+      'editor-id',
+      batch([
+        {
+          rowId: testRowId(0),
+          type: 'concert',
+          startDate: '2027-06-01',
+          city: 'Madrid',
+          lineup: [{ name: 'Unknown Artist' }],
+        },
+      ]),
+    );
+
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        status: 'unchanged',
+        eventId: 'existing-event',
+      }),
+    ]);
+    expect(harness.receiptMocks.execute).not.toHaveBeenCalled();
+    expect(harness.resolverMocks.materializeArtist).not.toHaveBeenCalled();
+    expect(harness.resolverMocks.materializeVenue).not.toHaveBeenCalled();
+    expect(harness.createdEvents).toHaveLength(0);
+  });
+
+  it('revalidates event identity inside the row transaction before materialization', async () => {
+    const harness = makeHarness();
+    let inspections = 0;
+    harness.conflictMocks.inspect.mockImplementation(async (rows) => {
+      inspections += 1;
+      return rows.map((row) => ({
+        rowId: row.rowId,
+        conflicts:
+          inspections === 1
+            ? []
+            : [
+                {
+                  rowId: row.rowId,
+                  kind: 'duplicate' as const,
+                  code: 'CONCERT_DUPLICATE' as const,
+                  severity: 'blocking' as const,
+                  message: 'Exact existing concert',
+                  relatedRowIds: [],
+                  existingEventIds: ['concurrent-event'],
+                  matchingArtists: [{ artistId: null, name: 'Unknown Artist' }],
+                  addableArtists: [],
+                  candidateEventIds: ['concurrent-event'],
+                },
+              ],
+      }));
+    });
+
+    const result = await harness.service.importBatch(
+      'editor-id',
+      batch([
+        {
+          rowId: testRowId(0),
+          type: 'concert',
+          startDate: '2027-06-01',
+          city: 'Madrid',
+          lineup: [{ name: 'Unknown Artist' }],
+        },
+      ]),
+    );
+
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        status: 'unchanged',
+        eventId: 'concurrent-event',
+      }),
+    ]);
+    expect(harness.conflictMocks.inspect).toHaveBeenCalledTimes(2);
+    expect(harness.resolverMocks.materializeArtist).not.toHaveBeenCalled();
+    expect(harness.resolverMocks.materializeTour).not.toHaveBeenCalled();
+    expect(harness.resolverMocks.materializeVenue).not.toHaveBeenCalled();
+    expect(harness.createdEvents).toHaveLength(0);
+  });
+
+  it('rejects concerts without any participant because their identity cannot be checked safely', async () => {
+    const harness = makeHarness();
+    const result = await harness.service.importBatch(
+      'editor-id',
+      batch([
+        {
+          rowId: testRowId(0),
+          type: 'concert',
+          startDate: '2027-06-01',
+          city: 'Madrid',
+          lineup: [],
+        },
+      ]),
+    );
+
+    expect(result.results[0]).toMatchObject({
+      status: 'invalid',
+      code: 'EVENT_LINEUP_REQUIRED',
+    });
+    expect(harness.resolverMocks.materializeLocality).not.toHaveBeenCalled();
+    expect(harness.receiptMocks.execute).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 10, 25, 50])(
+    'processes a %i row request in order with one receipt transaction per row',
+    async (size) => {
+      const harness = makeHarness();
+      const executionOrder: string[] = [];
+      let active = 0;
+      let maximumActive = 0;
+      const originalExecute =
+        harness.receiptMocks.execute.getMockImplementation();
+      if (!originalExecute) throw new Error('Receipt execute mock is missing');
+      harness.receiptMocks.execute.mockImplementation(
+        async (identity, _content, operation) => {
+          active += 1;
+          maximumActive = Math.max(maximumActive, active);
+          const rowId = (identity as { rowId: string }).rowId;
+          executionOrder.push(rowId);
+          try {
+            await Promise.resolve();
+            return await originalExecute(identity, _content, operation);
+          } finally {
+            active -= 1;
+          }
+        },
+      );
+      const rows = Array.from({ length: size }, (_, index) => ({
+        rowId: testRowId(index),
+        type: 'concert',
+        startDate: `2027-06-${String((index % 28) + 1).padStart(2, '0')}`,
+        city: 'Madrid',
+        lineup: [{ name: 'Test Artist' }],
+      }));
+
+      const result = await harness.service.importBatch(
+        'editor-id',
+        batch(rows),
+      );
+
+      expect(result.results).toHaveLength(size);
+      expect(result.results.map((item) => item.rowId)).toEqual(
+        rows.map((item) => item.rowId),
+      );
+      expect(result.results.every((item) => item.status === 'created')).toBe(
+        true,
+      );
+      expect(executionOrder).toEqual(rows.map((item) => item.rowId));
+      expect(maximumActive).toBe(1);
+    },
+  );
+
+  it('rejects a 51 row DTO at the HTTP validation boundary', () => {
+    const validDto = Object.assign(new ImportEventsBatchDto(), {
+      batchId: '11111111-1111-4111-8111-111111111111',
+      countryId: '22222222-2222-4222-8222-222222222222',
+      rows: Array.from({ length: 50 }, () => ({})),
+    });
+    const oversizedDto = Object.assign(new ImportEventsBatchDto(), {
+      ...validDto,
+      rows: [...validDto.rows, {}],
+    });
+
+    expect(validateSync(validDto).map((error) => error.property)).not.toContain(
+      'rows',
+    );
+    expect(validateSync(oversizedDto).map((error) => error.property)).toContain(
+      'rows',
+    );
+  });
+
+  it('stops after an infrastructure failure and returns controlled failures for remaining rows', async () => {
+    const harness = makeHarness();
+    harness.receiptMocks.execute
+      .mockResolvedValueOnce({
+        replayed: false,
+        result: {
+          status: 'created',
+          rowId: testRowId(0),
+          eventId: 'event-0',
+        },
+      })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('connection lost'), { code: 'ECONNRESET' }),
+      );
+
+    const result = await harness.service.importBatch(
+      'editor-id',
+      batch(
+        Array.from({ length: 4 }, (_, index) => ({
+          rowId: testRowId(index),
+          type: 'concert',
+          startDate: `2027-06-0${index + 1}`,
+          city: 'Madrid',
+          lineup: [{ name: 'Test Artist' }],
+        })),
+      ),
+    );
+
+    expect(harness.receiptMocks.execute).toHaveBeenCalledTimes(2);
+    expect(result.results.map((item) => item.status)).toEqual([
+      'created',
+      'failed',
+      'failed',
+      'failed',
+    ]);
+    expect(result.results.slice(2).map((item) => item.code)).toEqual([
+      'IMPORT_PREFLIGHT_FAILED',
+      'IMPORT_PREFLIGHT_FAILED',
+    ]);
+
+    harness.receiptMocks.lookupMany.mockResolvedValue(
+      new Map([
+        [
+          testRowId(0),
+          {
+            result: {
+              status: 'created',
+              rowId: testRowId(0),
+              eventId: 'event-0',
+            },
+          },
+        ],
+      ]),
+    );
+    const retry = await harness.service.importBatch(
+      'editor-id',
+      batch(
+        Array.from({ length: 4 }, (_, index) => ({
+          rowId: testRowId(index),
+          type: 'concert',
+          startDate: `2027-06-0${index + 1}`,
+          city: 'Madrid',
+          lineup: [{ name: 'Test Artist' }],
+        })),
+      ),
+    );
+
+    expect(retry.results[0]).toMatchObject({
+      eventId: 'event-0',
+      replayed: true,
+    });
+    expect(
+      retry.results.slice(1).every((item) => item.status === 'created'),
+    ).toBe(true);
+    expect(harness.receiptMocks.execute).toHaveBeenCalledTimes(5);
+  });
+
   it('shares one newly created tour across separate rows and preserves each lineup', async () => {
     const harness = makeHarness();
     const result = await harness.service.importBatch(
@@ -265,7 +539,7 @@ describe('EventsImportBatchService', () => {
           type: 'concert',
           startDate: '2027-06-02',
           city: 'Madrid',
-          lineup: [],
+          lineup: [{ name: 'Test Artist' }],
         },
       ]),
     );
@@ -278,6 +552,20 @@ describe('EventsImportBatchService', () => {
     expect(result.results[0].rowId).toBe('bad-row');
     expect(harness.createdEvents).toHaveLength(1);
     expect(harness.receiptMocks.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the index and JSON type when a batch row is not an object', async () => {
+    const harness = makeHarness();
+    const result = await harness.service.importBatch(
+      'editor-id',
+      batch(['serialized row', null, []]),
+    );
+
+    expect(result.results.map(({ message }) => message)).toEqual([
+      'rows[0] must be an object; received string',
+      'rows[1] must be an object; received null',
+      'rows[2] must be an object; received array',
+    ]);
   });
 
   it('passes explicit locality and venue UUIDs through inspection, persistence, and receipt identity', async () => {
@@ -294,6 +582,7 @@ describe('EventsImportBatchService', () => {
           type: 'concert',
           startDate: '2027-05-15',
           city: 'Madrid',
+          lineup: [{ name: 'Test Artist' }],
           localityId,
           venueId,
         },
@@ -331,6 +620,7 @@ describe('EventsImportBatchService', () => {
           type: 'concert',
           startDate: '2027-05-15',
           city: 'Madrid',
+          lineup: [{ name: 'Test Artist' }],
         },
       ]),
     );
@@ -365,7 +655,7 @@ describe('EventsImportBatchService', () => {
           type: 'concert',
           startDate: '2027-06-02',
           city: 'Madrid',
-          lineup: [],
+          lineup: [{ name: 'Test Artist' }],
         },
       ]),
     );

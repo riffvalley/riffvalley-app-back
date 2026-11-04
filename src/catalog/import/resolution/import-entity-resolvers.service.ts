@@ -581,15 +581,44 @@ export class ImportEntityResolversService {
   }
 
   async inspectTour(name: string): Promise<ImportResolution<Tour>> {
-    const normalizedName = normalizeGeography(name);
-    if (!name.trim() || name.trim().length > 180 || !normalizedName)
-      return { status: 'invalid', code: 'TOUR_NAME_INVALID' };
-    const tour = await this.dataSource
-      .getRepository(Tour)
-      .findOneBy({ normalizedName });
-    return tour
-      ? { status: 'conflict', code: 'TOUR_CONFIRMATION_REQUIRED', entity: tour }
-      : { status: 'created' };
+    return (await this.inspectTours([name]))[0];
+  }
+
+  async inspectTours(names: string[]): Promise<Array<ImportResolution<Tour>>> {
+    const normalizedNames = names.map((name) => normalizeGeography(name));
+    const validNames = new Set(
+      names.flatMap((name, index) =>
+        name.trim() && name.trim().length <= 180 && normalizedNames[index]
+          ? [normalizedNames[index]]
+          : [],
+      ),
+    );
+    const candidates = validNames.size
+      ? await this.dataSource
+          .getRepository(Tour)
+          .createQueryBuilder('tour')
+          .where('tour.normalizedName IN (:...normalizedNames)', {
+            normalizedNames: [...validNames],
+          })
+          .getMany()
+      : [];
+    const toursByName = new Map(
+      candidates.map((tour) => [tour.normalizedName, tour]),
+    );
+
+    return names.map((name, index) => {
+      const normalizedName = normalizedNames[index];
+      if (!name.trim() || name.trim().length > 180 || !normalizedName)
+        return { status: 'invalid', code: 'TOUR_NAME_INVALID' };
+      const tour = toursByName.get(normalizedName);
+      return tour
+        ? {
+            status: 'conflict',
+            code: 'TOUR_CONFIRMATION_REQUIRED',
+            entity: tour,
+          }
+        : { status: 'created' };
+    });
   }
 
   async materializeTour(

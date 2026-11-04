@@ -73,25 +73,44 @@ export class EventsService {
     this.validateDateRange(query.dateFrom, query.dateTo);
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
-    const builder = this.eventRepository
+    const filteredEvents = this.eventRepository
       .createQueryBuilder('event')
-      .leftJoinAndSelect('event.venue', 'venue')
-      .leftJoinAndSelect('venue.locality', 'locality')
-      .leftJoinAndSelect(
-        'locality.administrativeRegion',
-        'administrativeRegion',
-      )
-      .leftJoinAndSelect('administrativeRegion.country', 'country')
-      .leftJoinAndSelect('event.lineup', 'lineup')
-      .leftJoinAndSelect('lineup.artist', 'artist');
-    this.applyFilters(builder, query);
-    const [data, totalItems] = await builder
-      .orderBy('event.startDate', 'ASC')
-      .addOrderBy('event.id', 'ASC')
-      .addOrderBy('lineup.position', 'ASC')
-      .take(limit)
-      .skip(offset)
-      .getManyAndCount();
+      .leftJoin('event.venue', 'venue')
+      .leftJoin('venue.locality', 'locality')
+      .leftJoin('locality.administrativeRegion', 'administrativeRegion');
+    this.applyFilters(filteredEvents, query);
+
+    const [page, totalItems] = await Promise.all([
+      filteredEvents
+        .clone()
+        .select('event.id', 'id')
+        .orderBy('event.startDate', 'ASC')
+        .addOrderBy('event.id', 'ASC')
+        .limit(limit)
+        .offset(offset)
+        .getRawMany<{ id: string }>(),
+      filteredEvents.clone().getCount(),
+    ]);
+
+    const eventIds = page.map(({ id }) => id);
+    const data = eventIds.length
+      ? await this.eventRepository
+          .createQueryBuilder('event')
+          .leftJoinAndSelect('event.venue', 'venue')
+          .leftJoinAndSelect('venue.locality', 'locality')
+          .leftJoinAndSelect(
+            'locality.administrativeRegion',
+            'administrativeRegion',
+          )
+          .leftJoinAndSelect('administrativeRegion.country', 'country')
+          .leftJoinAndSelect('event.lineup', 'lineup')
+          .leftJoinAndSelect('lineup.artist', 'artist')
+          .where('event.id IN (:...eventIds)', { eventIds })
+          .orderBy('event.startDate', 'ASC')
+          .addOrderBy('event.id', 'ASC')
+          .addOrderBy('lineup.position', 'ASC')
+          .getMany()
+      : [];
     return {
       totalItems,
       totalPages: Math.ceil(totalItems / limit),

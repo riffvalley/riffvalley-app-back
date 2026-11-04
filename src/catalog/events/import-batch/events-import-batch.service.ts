@@ -20,7 +20,7 @@ import { Event, EventType } from '../entities/event.entity';
 import { ImportEventsBatchDto } from '../dto/import-batch.dto';
 import { ImportEventRowDto } from '../dto/import-event-row.dto';
 
-type RowStatus = 'created' | 'conflict' | 'invalid' | 'failed';
+type RowStatus = 'created' | 'unchanged' | 'conflict' | 'invalid' | 'failed';
 
 interface ImportRowResult {
   rowId: string | null;
@@ -83,14 +83,14 @@ function rowValidationMessage(errors: ValidationError[]): string {
 
 function parseImportResult(value: ImportReceiptResult): ImportRowResult | null {
   if (
-    value.status !== 'created' ||
+    (value.status !== 'created' && value.status !== 'unchanged') ||
     typeof value.rowId !== 'string' ||
     typeof value.eventId !== 'string'
   )
     return null;
   return {
     rowId: value.rowId,
-    status: 'created',
+    status: value.status,
     eventId: value.eventId,
     ...(typeof value.tourId === 'string' ? { tourId: value.tourId } : {}),
     ...(typeof value.localityId === 'string'
@@ -106,6 +106,34 @@ function parseImportResult(value: ImportReceiptResult): ImportRowResult | null {
         }
       : {}),
   };
+}
+
+function errorCode(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return null;
+  if ('code' in value && typeof value.code === 'string') return value.code;
+  if ('driverError' in value) return errorCode(value.driverError);
+  if ('cause' in value) return errorCode(value.cause);
+  return null;
+}
+
+function isInfrastructureFailure(error: unknown): boolean {
+  const code = errorCode(error);
+  return (
+    code !== null &&
+    (/^08/u.test(code) ||
+      /^53/u.test(code) ||
+      /^57P/u.test(code) ||
+      code === '57014' ||
+      [
+        'ECONNRESET',
+        'ECONNREFUSED',
+        'EPIPE',
+        'ETIMEDOUT',
+        'ECONNABORTED',
+        'EAI_AGAIN',
+        'ENOTFOUND',
+      ].includes(code))
+  );
 }
 
 @Injectable()
@@ -125,11 +153,17 @@ export class EventsImportBatchService {
 
     dto.rows.forEach((value, index) => {
       if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        const receivedType =
+          value === null
+            ? 'null'
+            : Array.isArray(value)
+              ? 'array'
+              : typeof value;
         results.set(index, {
           rowId: null,
           status: 'invalid',
           code: 'ROW_VALIDATION_FAILED',
-          message: 'Each row must be an object',
+          message: `rows[${index}] must be an object; received ${receivedType}`,
         });
         return;
       }
@@ -180,6 +214,15 @@ export class EventsImportBatchService {
               ? 'TOUR_NAME_INVALID'
               : 'FESTIVAL_NAME_REQUIRED',
           message: 'This row type requires a non-empty name',
+        });
+        return;
+      }
+      if (row.type !== 'festival' && !row.lineup?.length) {
+        results.set(index, {
+          rowId: row.rowId,
+          status: 'invalid',
+          code: 'EVENT_LINEUP_REQUIRED',
+          message: 'A concert needs at least one participating artist',
         });
         return;
       }
@@ -363,17 +406,27 @@ export class EventsImportBatchService {
     const tourEntries = [...uniqueTours.entries()];
     const tourByKey = new Map<
       string,
-      Awaited<ReturnType<ImportEntityResolversService['inspectTour']>>
+      Awaited<ReturnType<ImportEntityResolversService['inspectTours']>>[number]
     >();
     try {
-      const tourInspections = await Promise.all(
-        tourEntries.map(([, name]) => this.resolvers.inspectTour(name)),
+      const tourInspections = await this.resolvers.inspectTours(
+        tourEntries.map(([, name]) => name),
       );
       tourEntries.forEach(([key], index) =>
         tourByKey.set(key, tourInspections[index]),
       );
     } catch (error) {
       this.logPreflightFailure('tour inspection', error);
+      if (isInfrastructureFailure(error)) {
+        this.markFailed(
+          eligible.map(([index, prepared]) => ({
+            row: prepared.row,
+            originalIndex: index,
+          })),
+          results,
+        );
+        return this.buildResponse(dto, results);
+      }
       for (const [index, prepared] of eligible) {
         if (prepared.row.type === 'tour')
           results.set(index, {
@@ -457,7 +510,30 @@ export class EventsImportBatchService {
     for (const [index, prepared] of preparedByIndex) {
       if (results.has(index)) continue;
       const analysis = conflictsByRowId.get(prepared.row.rowId);
-      if (analysis?.conflicts.length) {
+      const duplicateConflicts = (analysis?.conflicts ?? []).filter(
+        (conflict) =>
+          conflict.code === 'CONCERT_DUPLICATE' ||
+          conflict.code === 'FESTIVAL_DUPLICATE',
+      );
+      const existingDuplicateIds = [
+        ...new Set(
+          duplicateConflicts.flatMap((conflict) => conflict.existingEventIds),
+        ),
+      ];
+      const onlyExactDuplicate =
+        duplicateConflicts.length > 0 &&
+        duplicateConflicts.length === (analysis?.conflicts.length ?? 0) &&
+        existingDuplicateIds.length === 1;
+      if (onlyExactDuplicate) {
+        results.set(index, {
+          rowId: prepared.row.rowId,
+          status: 'unchanged',
+          eventId: existingDuplicateIds[0],
+          code: duplicateConflicts[0].code,
+          message:
+            'This event is already registered and was not imported again',
+        });
+      } else if (analysis?.conflicts.length) {
         const first = analysis.conflicts[0];
         results.set(index, {
           rowId: prepared.row.rowId,
@@ -523,6 +599,18 @@ export class EventsImportBatchService {
               ? 'This row identity was already used with different content or is currently processing'
               : 'The row could not be persisted; retry with the same content',
         });
+        if (isInfrastructureFailure(error)) {
+          this.markFailed(
+            [...preparedByIndex.entries()]
+              .filter(([remainingIndex]) => remainingIndex > index)
+              .map(([remainingIndex, remaining]) => ({
+                row: remaining.row,
+                originalIndex: remainingIndex,
+              })),
+            results,
+          );
+          break;
+        }
       }
     }
 
@@ -659,6 +747,48 @@ export class EventsImportBatchService {
       [`event-import:${localityResult.entity.id}`],
     );
 
+    const revalidationRow = this.toConflictRow(prepared);
+    revalidationRow.locality = {
+      status: 'existing',
+      localityId: localityResult.entity.id,
+    };
+    const revalidated = await this.conflictsService.inspect(
+      [revalidationRow],
+      manager,
+    );
+    const currentConflicts = revalidated[0]?.conflicts ?? [];
+    const duplicateConflicts = currentConflicts.filter(
+      (conflict) =>
+        conflict.code === 'CONCERT_DUPLICATE' ||
+        conflict.code === 'FESTIVAL_DUPLICATE',
+    );
+    const existingDuplicateIds = [
+      ...new Set(
+        duplicateConflicts.flatMap((conflict) => conflict.existingEventIds),
+      ),
+    ];
+    if (
+      duplicateConflicts.length > 0 &&
+      duplicateConflicts.length === currentConflicts.length &&
+      existingDuplicateIds.length === 1
+    ) {
+      return {
+        rowId: row.rowId,
+        status: 'unchanged',
+        eventId: existingDuplicateIds[0],
+      };
+    }
+    if (currentConflicts.length) {
+      const first = currentConflicts[0];
+      throw new RowRejectedError({
+        rowId: row.rowId,
+        status: 'conflict',
+        code: first.code,
+        message: first.message,
+        conflicts: currentConflicts,
+      });
+    }
+
     const materializedArtists: Array<{ id: string | null; name: string }> = [];
     for (const artist of artists) {
       const artistResult = await this.resolvers.materializeArtist(
@@ -734,39 +864,6 @@ export class EventsImportBatchService {
         code: venueResult.code ?? 'VENUE_RESOLUTION_FAILED',
         message: 'Venue could not be resolved',
       });
-
-    const revalidated = await this.conflictsService.inspect(
-      [
-        {
-          rowId: row.rowId,
-          type: row.type,
-          name: row.type === 'tour' ? null : row.name,
-          artists: materializedArtists.map((artist) => ({
-            name: artist.name,
-            status: 'existing',
-            artistId: artist.id,
-          })),
-          startDate: row.startDate,
-          endDate: row.endDate ?? null,
-          locality: {
-            status: 'existing',
-            localityId: localityResult.entity.id,
-          },
-        },
-      ],
-      manager,
-    );
-    const currentConflicts = revalidated[0]?.conflicts ?? [];
-    if (currentConflicts.length) {
-      const first = currentConflicts[0];
-      throw new RowRejectedError({
-        rowId: row.rowId,
-        status: 'conflict',
-        code: first.code,
-        message: first.message,
-        conflicts: currentConflicts,
-      });
-    }
 
     const eventRepository = manager.getRepository(Event);
     const event = await eventRepository.save(

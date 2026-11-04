@@ -105,23 +105,30 @@ function matchesGeography(
         .some((name) => normalizeGeography(name) === locality.nameNormalized),
   );
 
-  return (
-    (localityNames.some(
+  const cityMatches =
+    localityNames.some(
       (value) => normalizeGeography(value) === locality.nameNormalized,
-    ) ||
-      queriedNameMatches) &&
-    normalizeGeography(country ?? '') ===
-      normalizeGeography(countryName ?? '') &&
+    ) || queriedNameMatches;
+  const countryMatches =
+    normalizeGeography(country ?? '') === normalizeGeography(countryName ?? '');
+  const regionMatches =
     regionName !== undefined &&
     divisions.some(
       (value) => normalizeGeography(value) === normalizeGeography(regionName),
-    ) &&
-    (locality.province === null ||
-      divisions.some(
-        (value) =>
-          normalizeGeography(value) ===
-          normalizeGeography(locality.province ?? ''),
-      ))
+    );
+  const provinceMatches =
+    locality.province === null ||
+    divisions.some(
+      (value) =>
+        normalizeGeography(value) ===
+        normalizeGeography(locality.province ?? ''),
+    );
+
+  return (
+    cityMatches &&
+    countryMatches &&
+    provinceMatches &&
+    (regionMatches || locality.province !== null)
   );
 }
 
@@ -319,10 +326,20 @@ export class NominatimGeocoderService {
         return matchesGeography(result, locality);
       });
       if (matching.length === 0) return { status: 'not_found' };
-      if (matching.length !== 1) return { status: 'ambiguous' };
-      const candidate = parseCandidate(matching[0], locality.name);
-      if (!candidate || candidate.status !== 'geocoded')
-        return { status: 'unavailable' };
+      // Nominatim orders search results by relevance. Geography has already
+      // been checked against the requested locality, province, region and
+      // country, so use the highest-ranked valid result instead of rejecting
+      // a locality merely because Nominatim returned several matching OSM
+      // features (for example, a city boundary and its place node).
+      const candidate = matching
+        .map((result) => parseCandidate(result, locality.name))
+        .find(
+          (
+            result,
+          ): result is Extract<GeocodingResult, { status: 'geocoded' }> =>
+            result?.status === 'geocoded',
+        );
+      if (!candidate) return { status: 'unavailable' };
       await runner.query(
         'UPDATE localities SET latitude = $2, longitude = $3, updated_at = clock_timestamp() WHERE id = $1',
         [locality.id, candidate.latitude, candidate.longitude],

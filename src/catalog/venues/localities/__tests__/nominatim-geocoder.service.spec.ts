@@ -121,7 +121,48 @@ describe('NominatimGeocoderService', () => {
     );
   });
 
-  it('rejects multiple matching geographic results as ambiguous', async () => {
+  it('accepts an exact city and province when the region label is translated', async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [
+        {
+          lat: '39.4697065',
+          lon: '-0.3763353',
+          osm_type: 'relation',
+          osm_id: 344953,
+          address: {
+            city: 'Valencia',
+            county: 'Comarca de Valencia',
+            province: 'Valencia',
+            state: 'Comunidad Valenciana',
+            country: 'España',
+          },
+        },
+      ],
+    } as Response);
+
+    const valencia = {
+      ...locality,
+      name: 'Valencia',
+      nameNormalized: 'valencia',
+      province: 'Valencia',
+      administrativeRegion: {
+        id: 'region-id',
+        name: 'Comunitat Valenciana',
+        country: { id: 'country-id', name: 'España', isoCode: 'ES' },
+      },
+    } as Locality;
+
+    await expect(service.geocode(valencia)).resolves.toMatchObject({
+      status: 'geocoded',
+      latitude: 39.4697065,
+      longitude: -0.3763353,
+      osmId: '344953',
+    });
+  });
+
+  it('selects the first Nominatim result when multiple geographic results match', async () => {
     const hit = {
       lat: '43',
       lon: '-2',
@@ -139,8 +180,11 @@ describe('NominatimGeocoderService', () => {
       status: 200,
       json: async () => [hit, { ...hit, osm_id: 2 }],
     } as Response);
-    await expect(service.geocode(locality)).resolves.toEqual({
-      status: 'ambiguous',
+    await expect(service.geocode(locality)).resolves.toMatchObject({
+      status: 'geocoded',
+      latitude: 43,
+      longitude: -2,
+      osmId: '1',
     });
   });
 

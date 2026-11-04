@@ -1,5 +1,9 @@
 # CON-D01 — Auditoría y contrato de importación masiva
 
+## CON-F12d — Auditoría de estrategias global/lote/híbrida
+
+La auditoría del flujo actual, grafo TypeORM, comparación A/B/C, política semántica de duplicados, trabajo repetido, benchmark PostgreSQL y roadmap posterior está en [con-f12d-import-strategies.md](con-f12d-import-strategies.md). Es una fase de diseño, no una implementación; preserva los contratos actuales y recomienda materialización perezosa dentro de la transacción por evento, con deduplicación solo de lecturas/referencias confirmadas. El benchmark aislado de esta auditoría midió 50 filas nuevas y 600 filas en 12 lotes; eventos iguales/diferentes no tienen ruta actual de comparación/update y quedan sin medición.
+
 ## CON-B04g — Resolución anticipada por lotes
 
 La revisión confirmó que `ImportEntityResolversService` ya ofrecía lectura exacta/ambigua de Artist y Locality para el backend de importación, y lectura exacta de Tour mediante `ToursService.findExactByName`. Esos servicios internos también contienen operaciones de materialización/geocodificación, por lo que las rutas HTTP se conectan a lectores de catálogo puros adecuados al contexto del endpoint, sin invocar esas operaciones con efectos laterales. Artist reutiliza `ArtistCatalogService` y la normalización musical; Tour reutiliza `normalizeGeography` y su índice único. Locality aprovecha el mismo normalizador, entidades, alias e identidad geográfica existentes con una consulta agrupada. No se añade lógica aproximada ni se selecciona el primer candidato.
@@ -215,6 +219,27 @@ La consulta de candidatos persistidos se limita por Locality y rango solapado (`
 - El recibo se identifica por editor/lote/fila, valida contenido procesado por hash, guarda estado/resultado JSONB y se bloquea en la transacción que guardará la fila. La retención es indefinida hasta diseñar una limpieza explícita.
 - `1792120000000-PrepareTourNamesAndImportReceipts` aplicada en `SpamMusicDB` local el 2026-11-02 después de confirmar cero Tours y cero colisiones. `db:check` quedó con cero pendientes y el esquema real confirmó la columna no nula, ambos índices únicos, la FK y las checks del recibo. El ledger mantiene la histórica `UpdateListStatusEnum1766066905027` sin artefacto compilado (111 entradas frente a 110 migraciones compiladas); no se editó. No se ejecutó en remoto. La suite PostgreSQL de concurrencia sigue pendiente porque requiere su propia base de fixtures vacía; las pruebas unitarias no se consideran cobertura de esa carrera.
 - Exportados los contratos `ToursService.findExactByName` y `ImportRowReceiptsService.execute` para CON-B04b. CON-B04a no implementa importación masiva, endpoints ni cambios frontend.
+
+## Auditoría e implementación CON-F12b — consultas y materialización
+
+**Estado:** optimizaciones backend implementadas; no se cambia contrato ni se marca CON-F12c o la iniciativa CON-F12 como terminada. Detalle operativo en [importer.md](importer.md#con-f12b--optimización-segura-del-backend-para-importaciones-masivas).
+
+### Hallazgos confirmados
+
+- La búsqueda de Artist del preflight ya era agrupada por claves normalizadas mediante `inspectArtists`; no se añadió otra capa ni se cambió su identidad provisional. La preparación de Locality ya deduplica entradas repetidas antes de geocodificar, y nunca inserta durante la inspección. No se alteró ese flujo.
+- El preflight de Tour sí hacía una consulta por cada nombre normalizado único. Se agrupó en una sola consulta `IN` y se reconstruyen estados por cada entrada. La clave normalizada única de Tour y la confirmación explícita siguen vigentes.
+- El análisis de conflictos ya procesaba el lote en una sola llamada. Su query de eventos usaba un rango desde la fecha mínima hasta la máxima de todas las filas, junto a todas las localidades/artistas, y podía cargar candidatos no relacionados. Ahora cada query cubre como máximo 25 filas, usando solo sus localidades, artistas y rango temporal; filas sin localidad persistida siguen comparándose con identidad provisional en el algoritmo puro. Los candidatos que reaparecen entre ventanas se deduplican por Event ID. Máximo actual: cuatro consultas agrupadas por request de 100 filas.
+- La selección de artistas existentes mantiene el filtro de artistas relevantes y carga lineup ordenado. Los festivales siguen siendo candidatos de consulta; el motor puro continúa restringiendo participación a festivales de un día y deduplicando festivales por nombre/localidad/periodo. No se añadió comparación por el intervalo entero de un festival multi-día.
+- La materialización mantiene una transacción e idempotencia por fila. La relectura bajo advisory lock para localidad, los locks de identidad de Artist/Tour/Venue, la revalidación de conflictos y el orden de persistencia siguen siendo necesarios para resolver carreras con el estado más reciente. No se compartieron entidades mutables entre filas ni se paralelizaron escrituras. EventArtist se conserva como inserción ordenada dentro de la transacción de Event.
+- La inserción por lote de EventArtist ya agrupa las participaciones de una fila en una llamada a `save`; no existe una escritura de artistas por separado por cada posición. No se añadió índice: no hay un plan PostgreSQL medido que lo justifique.
+
+### Comparativa y límites de medición
+
+La comparación por fase es Tour preflight `T → 1` SELECT para `T` Tours válidos distintos (hasta 100); candidatos existentes `1 → ceil(N/25)` SELECT para `N` filas (1–4 por request). El fixture de estrés usó ocho Tours distintos por request de 100 filas: las dos fases suman nueve SELECT previos y cinco optimizados, cuatro menos por request. Para 50 requests (5.000 filas), son 450 frente a 250 SELECT en esas dos fases. Estos conteos previos se derivan del camino de código anterior y el fixture; no se ejecutó la versión anterior para cronometrar una comparación end-to-end.
+
+Las pruebas unitarias verifican una consulta para Tours múltiples, equivalencia de estados por nombre, chunking de conflictos a 25 filas, rango de fecha específico y consulta sin escrituras. La suite de reglas conserva cobertura de conflictos simétricos, múltiples candidatos, Tours, identidades provisionales y festivales multi-día. El banco PostgreSQL opt-in documentado en [import-performance.md](import-performance.md) se ejecutó con 100, 500, 1.000, 2.000 y 5.000 filas en PostgreSQL 16.14 Docker, usando requests de hasta 100 filas y los mismos fixtures a cada tamaño. Midió 0,69/2,81/5,52/11,53/42,45 s y 1.429/7.101/14.216/28.446/71.136 consultas SQL, respectivamente. En 5.000 filas hubo 4.899 transacciones, 101 conflictos, cero errores SQL y 4.899 retries idempotentes. La RSS observada creció ≈221 MiB desde el inicio hasta el final del escenario de 5.000; es una lectura al final de cada request, no una captura del pico. Son medidas reales del código optimizado; no se atribuye duración anterior ni se extrapola al tráfico de producción.
+
+El banco no usó PostgreSQL persistente, `SpamMusicDB`, Nominatim ni producción. CON-F12c debe decidir el diseño posterior con estas mediciones y sus límites, sin retirar las garantías transaccionales por evento.
 
 ## Referencias revisadas
 

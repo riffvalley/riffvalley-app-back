@@ -567,27 +567,61 @@ describe('ImportEntityResolversService', () => {
     );
   });
 
-  it('marks an existing tour as requiring explicit confirmation', async () => {
+  it('inspects multiple tours in one query and requires confirmation for matches', async () => {
     const tour = Object.assign(new Tour(), {
       id: 'tour-id',
       name: 'European Tour 2027',
       normalizedName: 'european tour 2027',
     });
-    const repository = { findOneBy: jest.fn().mockResolvedValue(tour) };
+    const queryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([tour]),
+    };
+    const repository = {
+      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+    };
     const dataSource = Object.assign(Object.create(DataSource.prototype), {
       getRepository: jest.fn().mockReturnValue(repository),
     }) as DataSource;
     const service = createService(dataSource);
 
-    const result = await service.inspectTour('EUROPEAN  TOUR 2027');
+    const result = await service.inspectTours([
+      'EUROPEAN  TOUR 2027',
+      'New Tour',
+      '   ',
+    ]);
 
-    expect(result).toEqual({
-      status: 'conflict',
-      code: 'TOUR_CONFIRMATION_REQUIRED',
-      entity: tour,
+    expect(result).toEqual([
+      {
+        status: 'conflict',
+        code: 'TOUR_CONFIRMATION_REQUIRED',
+        entity: tour,
+      },
+      { status: 'created' },
+      { status: 'invalid', code: 'TOUR_NAME_INVALID' },
+    ]);
+    expect(repository.createQueryBuilder).toHaveBeenCalledWith('tour');
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'tour.normalizedName IN (:...normalizedNames)',
+      { normalizedNames: ['european tour 2027', 'new tour'] },
+    );
+    expect(queryBuilder.getMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves single-tour inspection through the batch resolver', async () => {
+    const repository = {
+      createQueryBuilder: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      }),
+    };
+    const dataSource = Object.assign(Object.create(DataSource.prototype), {
+      getRepository: jest.fn().mockReturnValue(repository),
     });
-    expect(repository.findOneBy).toHaveBeenCalledWith({
-      normalizedName: 'european tour 2027',
+    const service = createService(dataSource as DataSource);
+
+    await expect(service.inspectTour('EUROPEAN  TOUR 2027')).resolves.toEqual({
+      status: 'created',
     });
   });
 

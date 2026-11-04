@@ -31,14 +31,18 @@ const repetitions = 3;
 class QueryCounter implements TypeOrmLogger {
   queryCount = 0;
   queryErrors = 0;
+  transactionCount = 0;
 
   reset(): void {
     this.queryCount = 0;
     this.queryErrors = 0;
+    this.transactionCount = 0;
   }
 
-  logQuery(): void {
+  logQuery(query: string): void {
     this.queryCount += 1;
+    if (/^\s*(BEGIN|START TRANSACTION)\b/iu.test(query))
+      this.transactionCount += 1;
   }
 
   logQueryError(): void {
@@ -477,6 +481,118 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
     expect(createdArtist).toHaveLength(1);
   });
 
+  it('skips an exact existing concert despite editable field differences and rejects a partial lineup without writes', async () => {
+    const original = row(
+      randomUUID(),
+      '2049-07-18',
+      [{ name: 'Septicflesh', artistId: artistIds.get('Septicflesh') }],
+      {
+        administrativeRegionId: regionId,
+        venue: 'Identity Hall A',
+        price: '20 EUR',
+        otherInfo: 'Original details',
+      },
+    );
+    const createRequest = batch([original]);
+    createRequest.countryId = countryId;
+    const created = await batchService.importBatch(editorId, createRequest);
+    expect(created.results[0].status).toBe('created');
+    const eventId = created.results[0].eventId;
+    if (!eventId) throw new Error('Expected the event to be created');
+
+    const entityCounts = (await dataSource.query(
+      `SELECT
+         (SELECT count(*)::int FROM "events") AS events,
+         (SELECT count(*)::int FROM "venues") AS venues,
+         (SELECT count(*)::int FROM "artist" WHERE "search_name_normalized" = $1) AS partial_artist_count`,
+      ['new act for partial duplicate'],
+    )) as Array<{
+      events: number;
+      venues: number;
+      partial_artist_count: number;
+    }>;
+    const before = entityCounts[0];
+    const duplicate = row(
+      randomUUID(),
+      '2049-07-18',
+      [{ name: 'Septicflesh', artistId: artistIds.get('Septicflesh') }],
+      {
+        administrativeRegionId: regionId,
+        venue: 'Different Hall',
+        price: '99 EUR',
+        otherInfo: 'Changed details',
+      },
+    );
+    const duplicateRequest = batch([duplicate]);
+    duplicateRequest.countryId = countryId;
+    const skipped = await batchService.importBatch(editorId, duplicateRequest);
+    expect(skipped.results[0]).toMatchObject({ status: 'unchanged', eventId });
+
+    const partial = row(
+      randomUUID(),
+      '2049-07-18',
+      [
+        { name: 'Septicflesh', artistId: artistIds.get('Septicflesh') },
+        { name: 'New Act for Partial Duplicate' },
+      ],
+      {
+        administrativeRegionId: regionId,
+        venue: 'Another Hall',
+      },
+    );
+    const partialRequest = batch([partial]);
+    partialRequest.countryId = countryId;
+    const rejected = await batchService.importBatch(editorId, partialRequest);
+    expect(rejected.results[0].status).toBe('conflict');
+
+    const afterCounts = (await dataSource.query(
+      `SELECT
+         (SELECT count(*)::int FROM "events") AS events,
+         (SELECT count(*)::int FROM "venues") AS venues,
+         (SELECT count(*)::int FROM "artist" WHERE "search_name_normalized" = $1) AS partial_artist_count`,
+      ['new act for partial duplicate'],
+    )) as Array<{
+      events: number;
+      venues: number;
+      partial_artist_count: number;
+    }>;
+    expect(afterCounts[0]).toEqual(before);
+    const persisted = (await dataSource.query(
+      'SELECT "venue_id", "price", "other_info" FROM "events" WHERE "id" = $1',
+      [eventId],
+    )) as Array<{ venue_id: string; price: string; other_info: string }>;
+    expect(persisted[0]).toMatchObject({
+      venue_id: expect.any(String),
+      price: '20 EUR',
+      other_info: 'Original details',
+    });
+  });
+
+  it('marks repeated identities inside one batch as conflicts without materializing either row', async () => {
+    const repeatedRows = [0, 1].map(() =>
+      row(randomUUID(), '2048-08-12', [{ name: 'Internal Duplicate Act' }], {
+        administrativeRegionId: regionId,
+      }),
+    );
+    const request = batch(repeatedRows);
+    request.countryId = countryId;
+    const before = await dataSource.getRepository(Event).count();
+
+    const result = await batchService.importBatch(editorId, request);
+
+    expect(result.results.map((item) => item.status)).toEqual([
+      'conflict',
+      'conflict',
+    ]);
+    const after = await dataSource.getRepository(Event).count();
+    const artists = (await dataSource.query(
+      'SELECT "id" FROM "artist" WHERE "search_name_normalized" = $1',
+      ['internal duplicate act'],
+    )) as Array<{ id: string }>;
+    expect(after).toBe(before);
+    expect(artists).toHaveLength(0);
+  });
+
   it('reuses selected locality and venue UUIDs, replays them, and rejects cross-locality venues without writes', async () => {
     const selectedRow = row(
       randomUUID(),
@@ -610,7 +726,10 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
       editorId,
       duplicateRequest,
     );
-    expect(duplicateResult.results[0].status).toBe('conflict');
+    expect(duplicateResult.results[0]).toMatchObject({
+      status: 'unchanged',
+      eventId: created.results[0].eventId,
+    });
 
     const festivalId = created.results[0].eventId;
     const festivalLineup = (await dataSource.query(
@@ -795,7 +914,7 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
     expect(entities[0]).toEqual({ artists: 1, venues: 1, tours: 1, events: 1 });
   });
 
-  it('revalidates simultaneous incompatible imports under the locality lock', async () => {
+  it('revalidates simultaneous exact concert imports under the locality lock', async () => {
     const requests = ['Concurrent Hall A', 'Concurrent Hall B'].map((venue) => {
       const request = batch([
         row(randomUUID(), '2050-02-15', [{ name: 'Septicflesh' }], {
@@ -810,8 +929,8 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
       requests.map((request) => batchService.importBatch(editorId, request)),
     );
     expect(results.map((result) => result.results[0].status).sort()).toEqual([
-      'conflict',
       'created',
+      'unchanged',
     ]);
     const persisted = (await dataSource.query(
       `SELECT count(*)::int AS count FROM "events" event
@@ -1061,6 +1180,195 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
     }
     console.log(`[CON-B04f benchmark] ${JSON.stringify(results)}`);
   }, 300_000);
+
+  const stressBenchmark = process.env.CON_F12B_STRESS === '1' ? it : it.skip;
+
+  stressBenchmark(
+    'benchmarks single-request imports of 1, 10, 25 and 50 rows',
+    async () => {
+      const reports: Array<Record<string, unknown>> = [];
+      const locality = existingBenchmarkLocalities[0];
+      for (const size of [1, 10, 25, 50]) {
+        const request = batch(
+          Array.from({ length: size }, (_, index) =>
+            row(
+              randomUUID(),
+              dateAt(800_000 + size * 100 + index),
+              [{ name: 'Septicflesh' }],
+              {
+                city: locality.city,
+                province: locality.province,
+                administrativeRegionId: locality.administrativeRegionId,
+                venue: `Benchmark Hall ${locality.city}`,
+              },
+            ),
+          ),
+        );
+        request.countryId = countryId;
+        logger.reset();
+        const initialRssBytes = process.memoryUsage().rss;
+        const startedAt = performance.now();
+        const result = await batchService.importBatch(editorId, request);
+        const elapsedMs = performance.now() - startedAt;
+        expect(result.results).toHaveLength(size);
+        expect(result.results.every((item) => item.status === 'created')).toBe(
+          true,
+        );
+        reports.push({
+          rows: size,
+          requests: 1,
+          elapsedMs: Number(elapsedMs.toFixed(2)),
+          sqlQueries: logger.queryCount,
+          transactions: logger.transactionCount,
+          queryErrors: logger.queryErrors,
+          approximateRssDeltaBytes: process.memoryUsage().rss - initialRssBytes,
+        });
+      }
+      console.log(
+        `[CON-F12c single-request benchmark] ${JSON.stringify(reports)}`,
+      );
+    },
+    120_000,
+  );
+
+  stressBenchmark(
+    'benchmarks cumulative 50, 100, 500, 600, 1000, 2000 and 5000 row imports in API-sized requests',
+    async () => {
+      const reports: Array<Record<string, unknown>> = [];
+      for (const size of [50, 100, 500, 600, 1_000, 2_000, 5_000]) {
+        const requests: ImportEventsBatchDto[] = [];
+        for (let offset = 0; offset < size; offset += 50) {
+          const requestRows = Math.min(50, size - offset);
+          const rows = Array.from({ length: requestRows }, (_, index) => {
+            const localIndex = index;
+            const globalIndex = offset + index;
+            const pairedConflict = localIndex === 20 || localIndex === 21;
+            const persistentConflict = globalIndex === 1;
+            const locality =
+              pairedConflict || persistentConflict
+                ? existingBenchmarkLocalities[0]
+                : existingBenchmarkLocalities[
+                    globalIndex % existingBenchmarkLocalities.length
+                  ];
+            const startOffset = 20_000 + size * 400 + globalIndex;
+            const startDate = persistentConflict
+              ? dateAt(300_000)
+              : pairedConflict
+                ? dateAt(300_001)
+                : dateAt(startOffset);
+            const lineup =
+              pairedConflict || persistentConflict
+                ? [{ name: 'Septicflesh' }]
+                : [
+                    {
+                      name:
+                        globalIndex % 10 === 0
+                          ? `CON-F12b Artist ${globalIndex % 12}`
+                          : 'Septicflesh',
+                    },
+                  ];
+            if (pairedConflict || persistentConflict)
+              return row(randomUUID(), startDate, lineup, {
+                city: locality.city,
+                province: locality.province,
+                administrativeRegionId: locality.administrativeRegionId,
+                venue: `Benchmark Hall ${locality.city}`,
+              });
+            if (localIndex % 13 === 0)
+              return row(randomUUID(), startDate, lineup, {
+                type: 'festival',
+                name: `CON-F12b Festival ${size} ${globalIndex}`,
+                endDate: dateAt(startOffset + 2),
+                city: locality.city,
+                province: locality.province,
+                administrativeRegionId: locality.administrativeRegionId,
+                venue: `Benchmark Hall ${locality.city}`,
+              });
+            if (localIndex % 10 === 0)
+              return row(randomUUID(), startDate, lineup, {
+                type: 'tour',
+                name: `CON-F12b ${size} chunk ${offset} Tour ${Math.floor(localIndex / 10)}`,
+                city: locality.city,
+                province: locality.province,
+                administrativeRegionId: locality.administrativeRegionId,
+                venue: `Benchmark Hall ${locality.city}`,
+              });
+            return row(randomUUID(), startDate, lineup, {
+              city: locality.city,
+              province: locality.province,
+              administrativeRegionId: locality.administrativeRegionId,
+              venue: `Benchmark Hall ${locality.city}`,
+            });
+          });
+          const request = batch(rows);
+          request.countryId = countryId;
+          requests.push(request);
+        }
+
+        const initialRssBytes = process.memoryUsage().rss;
+        let approximatePeakRssBytes = initialRssBytes;
+        logger.reset();
+        const startedAt = performance.now();
+        let createdRows = 0;
+        let conflictRows = 0;
+        for (const request of requests) {
+          const result = await batchService.importBatch(editorId, request);
+          createdRows += result.results.filter(
+            (item) => item.status === 'created',
+          ).length;
+          conflictRows += result.results.filter(
+            (item) => item.status === 'conflict',
+          ).length;
+          approximatePeakRssBytes = Math.max(
+            approximatePeakRssBytes,
+            process.memoryUsage().rss,
+          );
+          expect(
+            result.results.every(
+              (item) => item.status === 'created' || item.status === 'conflict',
+            ),
+          ).toBe(true);
+        }
+        const importElapsedMs = performance.now() - startedAt;
+        const importSqlQueries = logger.queryCount;
+        const importTransactions = logger.transactionCount;
+        const importQueryErrors = logger.queryErrors;
+
+        logger.reset();
+        const retryStartedAt = performance.now();
+        let replayedRows = 0;
+        for (const request of requests) {
+          const result = await batchService.importBatch(editorId, request);
+          replayedRows += result.results.filter(
+            (item) => item.replayed === true,
+          ).length;
+        }
+        expect(replayedRows).toBe(createdRows);
+        const retryElapsedMs = performance.now() - retryStartedAt;
+        reports.push({
+          scenario: 'CON-F12b-cumulative-api-sized-import',
+          size,
+          requests: requests.length,
+          baselineTourLookupSelects: requests.length * 5,
+          optimizedTourLookupSelects: requests.length,
+          baselineConflictCandidateSelects: requests.length,
+          optimizedConflictCandidateSelects: requests.length * 2,
+          createdRows,
+          conflictRows,
+          elapsedMs: Number(importElapsedMs.toFixed(2)),
+          sqlQueries: importSqlQueries,
+          transactions: importTransactions,
+          queryErrors: importQueryErrors,
+          approximateRssDeltaBytes: approximatePeakRssBytes - initialRssBytes,
+          retryElapsedMs: Number(retryElapsedMs.toFixed(2)),
+          retrySqlQueries: logger.queryCount,
+          replayedRows,
+        });
+      }
+      console.log(`[CON-F12b stress benchmark] ${JSON.stringify(reports)}`);
+    },
+    900_000,
+  );
 });
 
 async function readDeadlocks(dataSource: DataSource): Promise<number> {

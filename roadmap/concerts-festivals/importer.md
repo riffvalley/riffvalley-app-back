@@ -1,10 +1,51 @@
 # Importador de conciertos y festivales
 
+La política actual para detectar eventos ya registrados está en [CON-F12e — Detección de eventos ya existentes](con-f12e-identity-policy.md).
+
+## CON-F12d — Auditoría profunda del flujo de importación
+
+**Estado:** auditoría y diseño documentados; sin implementación de código, cambios de endpoint o frontend. La conclusión mantiene creación de referencias dentro de la transacción por Event y propone deduplicación previa de lectura más revalidación transaccional. Véanse el [análisis completo](con-f12d-import-strategies.md) y sus [mediciones PostgreSQL](con-f12d-import-strategies.md#5-rendimiento-y-límites).
+
+## CON-F12c — Peticiones HTTP de importación por lotes
+
+**Estado:** implementado y verificado con pruebas focalizadas e integración PostgreSQL aislada.
+
+El endpoint definitivo es `POST /api/events/import-batch`, protegido por JWT y rol mínimo `riffvalley`. Conserva el sobre JSON `{batchId, countryId, rows}` y ahora acepta hasta **50 filas** por petición. Cada fila sigue validándose de forma independiente; la respuesta contiene `{batchId, results}` con un resultado en la posición correspondiente a cada entrada (`created`, `conflict`, `invalid` o `failed`). El límite se aplica mediante `ArrayMaxSize(50)` en el DTO y el contrato de salida no cambia.
+
+Las filas persistibles se procesan secuencialmente. Cada una conserva su transacción y recibo de idempotencia independientes, incluyendo Event, EventArtist y entidades materializadas dentro de esa transacción. Un error de validación o conflicto de negocio solo afecta a esa fila. Ante errores de conexión PostgreSQL, falta de recursos del servidor o interrupción de conexión reconocible, la fila actual queda fallida y no se inician las siguientes; las filas exitosas previas permanecen confirmadas. Reintentar el mismo lote reproduce sus filas confirmadas desde sus recibos y vuelve a intentar las filas no confirmadas con las mismas identidades.
+
+No se crean entidades durante las consultas de inspección ni se escribe en paralelo. El orden del lineup y la protección por locks/unicidad permanecen intactos. La petición puede subdividirse en lotes menores (por ejemplo, 10 o 25) si el tiempo medido se acerca al timeout de 30 segundos del router Heroku indicado para esta infraestructura. No se introducen pausas artificiales ni una transacción global.
+
+**Rendimiento:** en PostgreSQL Docker local, 1/10/25/50 filas del servicio tomaron 8,62–27,05/53,33–83/129,63–182,83/283,89–308,40 ms. El flujo de 600 filas en 12 peticiones tomó 3,11–3,20 s acumulados; los detalles, SQL y límites de interpretación están en [import-performance.md](import-performance.md). Son mediciones locales, no una garantía de tiempo en Heroku.
+
+## CON-F12b — Optimización segura del backend para importaciones masivas
+
+**Estado:** implementada en backend. No cambia endpoints, payloads, límites ni respuestas, y no modifica el frontend.
+
+El preflight de Tour ahora resuelve todos los nombres normalizados distintos del request con una consulta `IN`, conservando un resultado por nombre y la confirmación explícita de Tours existentes. `inspectTour` mantiene su contrato interno y delega en la operación agrupada. Antes se ejecutaba una lectura por Tour distinto: para 100 nombres, hasta 100 SELECT; ahora es 1 SELECT (reducción estática de 99 consultas en ese paso). La unicidad de `tours.normalized_name` sigue siendo la autoridad.
+
+La lectura de candidatos de conflicto ya era una consulta agrupada por lote en CON-B04c. CON-F12b limita cada consulta a 25 filas y calcula localidad, artistas y rango de fechas a partir de esas filas. Así evita usar el intervalo global de fechas de la solicitud, que podía cargar eventos de ciudades y periodos no relacionados. En CON-F12b el endpoint aceptaba como máximo 100 filas; CON-F12c fija el máximo HTTP actual en 50, de modo que se ejecutan entre 1 y 2 consultas agrupadas. Cada grupo incluye los artistas existentes de sus filas y todos sus festivales candidatos; los candidatos repetidos entre grupos se deduplican por ID antes de aplicar `analyzeImportConflicts`. No cambia el algoritmo puro ni la semántica de festivales de varios días.
+
+### Consultas y medición
+
+- Tour preflight: antes `T` SELECT para `T` Tours distintos; ahora 1 SELECT cuando hay nombres válidos (`T ≤ 100`). Esta es una comparación de consultas derivada del flujo, no una medición de PostgreSQL.
+- Candidatos existentes: el código previo hacía 1 SELECT con fechas globales; ahora hace `ceil(N / 25)` SELECT agrupados para `N` filas. Con el límite HTTP actual de 50 hay como máximo 2 por request; el propósito es limitar el volumen de candidatos leídos. El benchmark PostgreSQL CON-B04f existente es opt-in, mide lotes de 20/50/100 y no se ejecutó para CON-F12b. No se atribuyen tiempos ni memoria reales a esta fase.
+- La prueba unitaria reproducible de `ImportConflictsService` verifica el límite, rangos de fechas por grupo y parámetros de localidad. La prueba del resolutor verifica que varios Tours consultan una vez y conservan estados `invalid`, `created` y `conflict` por entrada.
+- No se cambian índices: las claves usadas ya tienen restricciones/índices únicos; no se ha medido un plan PostgreSQL que justifique otro índice.
+
+### Integridad y trabajo conservado
+
+Se mantiene una transacción con recibo/idempotencia por evento. La persistencia de filas sigue secuencial. También permanecen secuenciales y transaccionales la revalidación de conflictos después del advisory lock de localidad, la materialización de cada identidad de artista, Tour, localidad y Venue, y las inserciones de cada Event con su lineup ordenado. Esas lecturas/escrituras comprueban de nuevo identidades frente a carreras; compartir resultados de preflight entre transacciones o ejecutar escrituras en paralelo debilitaría esa garantía. `EventArtist` sigue insertándose como array ordenado en la misma transacción del Event.
+
+No se crean entidades durante inspecciones. Locality, Venue, Tour y Artist conservan sus restricciones actuales y manejo de colisiones; no se añadieron migraciones. Las lecturas de locality/venue y las creaciones condicionadas por geocodificación siguen el flujo existente. El benchmark PostgreSQL aislado CON-F12b se ejecutó con lotes acumulados de 100, 500, 1.000, 2.000 y 5.000 filas, enviados en requests de hasta 100. Registró, respectivamente, 0,69/2,81/5,52/11,53/42,45 s; 1.429/7.101/14.216/28.446/71.136 consultas SQL; 98/489/979/1.959/4.899 transacciones y cero errores. Estas cifras son históricas del límite anterior; CON-F12c fija el máximo HTTP actual en 50. La comparación antes/después es reproducible para consultas de preflight: en esos fixtures, cada request tenía ocho Tours distintos y 100 filas; Tour pasa de ocho SELECT a uno y candidatos de conflicto de uno a cuatro. No se midió duración PostgreSQL antes del cambio; RSS se muestrea de forma aproximada y no representa el pico. Los detalles y el comando están en [import-performance.md](import-performance.md).
+
+CON-F12c implementa y mide el límite HTTP actual de 50 filas, conservando la transacción y la idempotencia por evento. No implementa workers, colas, endpoints de seguimiento ni cambios de contrato JSON.
+
 ## CON-F08d.3a — UUID explícitos de localidad y recinto
 
 **Estado:** implementada en backend. No modifica el frontend; CON-F08d.3b deberá consumir los nuevos campos y conservar el texto junto a los UUID elegidos.
 
-Cada fila de `POST /api/events/import-batch` puede incluir `localityId` y `venueId` opcionales, ambos UUID. El sobre `{batchId, countryId, rows}`, el máximo de 100 filas, la validación independiente y los estados por fila se conservan. Si no se envían, la resolución por nombres mantiene el contrato y la huella SHA-256 histórica.
+Cada fila de `POST /api/events/import-batch` puede incluir `localityId` y `venueId` opcionales, ambos UUID. El sobre `{batchId, countryId, rows}`, el máximo actual de 50 filas, la validación independiente y los estados por fila se conservan. Si no se envían, la resolución por nombres mantiene el contrato y la huella SHA-256 histórica.
 
 Una identidad explícita se vuelve a consultar dentro de la transacción de la fila. `localityId` debe existir, pertenecer al `countryId`, coincidir con `city` por nombre normalizado o alias y no contradecir `province` ni `administrativeRegionId`. Cuando la localidad almacenada no tiene provincia, un `province` de entrada no se considera contradicción. La región solo se exige para crear localidades nuevas; una localidad explícita ya existente no requiere `administrativeRegionId`. `venueId` debe existir, pertenecer a la localidad resuelta (o determinarla cuando `localityId` se omite), y ser compatible con `venue` por nombre normalizado. Ningún identificador inválido o desactualizado activa una búsqueda o creación alternativa.
 

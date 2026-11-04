@@ -323,6 +323,90 @@ describe('analyzeImportConflicts', () => {
     expect(codes(results, 'absent')).toEqual([]);
   });
 
+  it('treats only a complete concert lineup as unchanged and compares unresolved artists by normalized name', () => {
+    const existing: ExistingImportEventCandidate[] = [
+      {
+        id: 'concert-with-extra-artist',
+        type: EventType.CONCERT,
+        name: null,
+        startDate: '2027-05-15',
+        endDate: null,
+        localityId: 'madrid',
+        lineup: [
+          { artistId: 'metallica-id', name: 'Metallica' },
+          { artistId: 'kvelertak-id', name: 'Kvelertak' },
+        ],
+      },
+    ];
+    const rows = [
+      concert('partial', [artist('Metallica', 'metallica-id')]),
+      concert('unresolved-exact', [
+        { name: ' metallica ', status: 'created' },
+        { name: 'KVELERTAK', status: 'created' },
+      ]),
+      concert('different-lineup', [artist('Gojira')]),
+    ];
+
+    const results = analyzeImportConflicts(rows, existing);
+
+    expect(codes(results, 'partial')).toContain(
+      'CONCERT_ARTIST_DATE_LOCALITY_CONFLICT',
+    );
+    expect(codes(results, 'partial')).not.toContain('CONCERT_DUPLICATE');
+    expect(codes(results, 'unresolved-exact')).toContain('CONCERT_DUPLICATE');
+    expect(codes(results, 'different-lineup')).toEqual([]);
+  });
+
+  it('identifies a festival by normalized name, locality, and full period regardless of lineup', () => {
+    const existing: ExistingImportEventCandidate[] = [
+      {
+        id: 'festival-existing',
+        type: EventType.FESTIVAL,
+        name: 'Rock in Río',
+        startDate: '2027-06-12',
+        endDate: '2027-06-14',
+        localityId: 'madrid',
+        lineup: [{ artistId: 'other-artist', name: 'Other Artist' }],
+      },
+    ];
+    const festival: ImportConflictRow = {
+      rowId: 'festival-different-lineup',
+      type: EventType.FESTIVAL,
+      name: ' ROCK IN RIO ',
+      artists: [{ name: 'New Artist', status: 'created' }],
+      startDate: '2027-06-12',
+      endDate: '2027-06-14',
+      locality,
+    };
+
+    const results = analyzeImportConflicts([festival], existing);
+
+    expect(codes(results, festival.rowId)).toContain('FESTIVAL_DUPLICATE');
+  });
+
+  it('falls back to the stored artist name when a persisted lineup has no artist ID', () => {
+    const result = analyzeImportConflicts(
+      [
+        concert('legacy-lineup', [
+          artist('Legacy Artist', 'resolved-artist-id'),
+        ]),
+      ],
+      [
+        {
+          id: 'legacy-event',
+          type: EventType.CONCERT,
+          name: null,
+          startDate: '2027-05-15',
+          endDate: null,
+          localityId: 'madrid',
+          lineup: [{ artistId: null, name: 'Legacy Artist' }],
+        },
+      ],
+    );
+
+    expect(codes(result, 'legacy-lineup')).toContain('CONCERT_DUPLICATE');
+  });
+
   it('does not report participation conflicts with a persisted multi-day festival', () => {
     const existing: ExistingImportEventCandidate[] = [
       {

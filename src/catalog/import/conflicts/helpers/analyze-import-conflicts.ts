@@ -70,9 +70,31 @@ function eventMatchesArtist(
   if (artist.artistId && eventArtist.artistId)
     return artist.artistId === eventArtist.artistId;
   return (
-    artist.status === 'created' &&
-    !eventArtist.artistId &&
+    (artist.status === 'created' || !eventArtist.artistId) &&
     compareNormalizedMusicNames(artist.name, eventArtist.name)
+  );
+}
+
+function sameConcertLineup(
+  rowArtists: ImportConflictArtist[],
+  eventArtists: ExistingImportEventCandidate['lineup'],
+): boolean {
+  if (!rowArtists.length || !eventArtists.length) return false;
+  if (rowArtists.some((artist) => artistIdentity(artist) === null))
+    return false;
+  return (
+    rowArtists.length === eventArtists.length &&
+    rowArtists.every(
+      (artist) =>
+        eventArtists.filter((eventArtist) =>
+          eventMatchesArtist(artist, eventArtist),
+        ).length === 1,
+    ) &&
+    eventArtists.every(
+      (eventArtist) =>
+        rowArtists.filter((artist) => eventMatchesArtist(artist, eventArtist))
+          .length === 1,
+    )
   );
 }
 
@@ -281,9 +303,9 @@ export function analyzeImportConflicts(
               artist.status === 'existing' || artist.status === 'created',
           );
           const duplicate =
-            addable.length === 0 &&
+            shared.length > 0 &&
             resolvedArtists.length === row.artists.length &&
-            shared.length === row.artists.length;
+            sameConcertLineup(row.artists, event.lineup);
           add(
             makeResult(
               row.rowId,

@@ -10,6 +10,11 @@ import {
   ImportConflictRow,
 } from './import-conflicts.types';
 
+// A request has at most 100 event rows and up to 100 lineup entries per row.
+// Grouping 25 rows keeps the expanded artist parameter list below 2,501 values
+// and avoids broad date ranges across unrelated cities or distant dates.
+const MAX_ROWS_PER_QUERY = 25;
+
 @Injectable()
 export class ImportConflictsService {
   constructor(
@@ -40,74 +45,82 @@ export class ImportConflictsService {
     manager?: EntityManager,
   ): Promise<ExistingImportEventCandidate[]> {
     if (!rows.length) return [];
-    const artistIds = [
-      ...new Set(
-        rows.flatMap((row) =>
-          row.artists
-            .filter((artist) => artist.status === 'existing')
-            .map((artist) => artist.artistId)
-            .filter((artistId): artistId is string => Boolean(artistId)),
-        ),
-      ),
-    ];
-    const from = rows.reduce(
-      (date, row) => (row.startDate < date ? row.startDate : date),
-      rows[0].startDate,
-    );
-    const to = rows.reduce((date, row) => {
-      const endDate = row.endDate ?? row.startDate;
-      return endDate > date ? endDate : date;
-    }, rows[0].endDate ?? rows[0].startDate);
     const repository = manager?.getRepository(Event) ?? this.eventRepository;
-    const events = await repository
-      .createQueryBuilder('event')
-      .innerJoinAndSelect('event.venue', 'venue')
-      .leftJoinAndSelect('event.lineup', 'lineup')
-      .select([
-        'event.id',
-        'event.type',
-        'event.name',
-        'event.startDate',
-        'event.endDate',
-        'venue.id',
-        'venue.localityId',
-        'lineup.id',
-        'lineup.artistId',
-        'lineup.name',
-        'lineup.position',
-      ])
-      .where('venue.localityId IN (:...localityIds)', { localityIds })
-      .andWhere('event.startDate <= :toDate', { toDate: to })
-      .andWhere('COALESCE(event.endDate, event.startDate) >= :fromDate', {
-        fromDate: from,
-      })
-      .andWhere('event.type IN (:...types)', {
-        types: [EventType.CONCERT, EventType.FESTIVAL],
-      })
-      .andWhere(
-        artistIds.length
-          ? '(event.type = :festivalType OR lineup.artistId IS NULL OR lineup.artistId IN (:...artistIds))'
-          : '(event.type = :festivalType OR lineup.artistId IS NULL)',
-        {
-          festivalType: EventType.FESTIVAL,
-          ...(artistIds.length ? { artistIds } : {}),
-        },
-      )
-      .orderBy('event.id', 'ASC')
-      .addOrderBy('lineup.position', 'ASC')
-      .getMany();
+    const candidatesById = new Map<string, ExistingImportEventCandidate>();
+    const relevantLocalities = new Set(localityIds);
+    for (let offset = 0; offset < rows.length; offset += MAX_ROWS_PER_QUERY) {
+      const batchRows = rows
+        .slice(offset, offset + MAX_ROWS_PER_QUERY)
+        .filter((row) =>
+          row.locality.localityId
+            ? relevantLocalities.has(row.locality.localityId)
+            : false,
+        );
+      if (!batchRows.length) continue;
+      const localityBatch = [
+        ...new Set(
+          batchRows.flatMap((row) =>
+            row.locality.localityId ? [row.locality.localityId] : [],
+          ),
+        ),
+      ];
+      const from = batchRows.reduce(
+        (date, row) => (row.startDate < date ? row.startDate : date),
+        batchRows[0].startDate,
+      );
+      const to = batchRows.reduce((date, row) => {
+        const endDate = row.endDate ?? row.startDate;
+        return endDate > date ? endDate : date;
+      }, batchRows[0].endDate ?? batchRows[0].startDate);
+      const events = await repository
+        .createQueryBuilder('event')
+        .innerJoinAndSelect('event.venue', 'venue')
+        .leftJoinAndSelect('event.lineup', 'lineup')
+        .select([
+          'event.id',
+          'event.type',
+          'event.name',
+          'event.startDate',
+          'event.endDate',
+          'venue.id',
+          'venue.localityId',
+          'lineup.id',
+          'lineup.artistId',
+          'lineup.name',
+          'lineup.position',
+        ])
+        .where('venue.localityId IN (:...localityIds)', {
+          localityIds: localityBatch,
+        })
+        .andWhere('event.startDate <= :toDate', { toDate: to })
+        .andWhere('COALESCE(event.endDate, event.startDate) >= :fromDate', {
+          fromDate: from,
+        })
+        .andWhere('event.type IN (:...types)', {
+          types: [EventType.CONCERT, EventType.FESTIVAL],
+        })
+        .orderBy('event.id', 'ASC')
+        .addOrderBy('lineup.position', 'ASC')
+        .getMany();
 
-    return events.map((event) => ({
-      id: event.id,
-      type: event.type,
-      name: event.name,
-      startDate: event.startDate,
-      endDate: event.endDate,
-      localityId: event.venue?.localityId ?? '',
-      lineup: (event.lineup ?? []).map((artist: EventArtist) => ({
-        artistId: artist.artistId,
-        name: artist.name,
-      })),
-    }));
+      for (const event of events) {
+        candidatesById.set(event.id, {
+          id: event.id,
+          type: event.type,
+          name: event.name,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          localityId: event.venue?.localityId ?? '',
+          lineup: (event.lineup ?? []).map((artist: EventArtist) => ({
+            artistId: artist.artistId,
+            name: artist.name,
+          })),
+        });
+      }
+    }
+
+    return [...candidatesById.values()].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
   }
 }
