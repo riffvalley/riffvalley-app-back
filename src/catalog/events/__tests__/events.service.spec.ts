@@ -448,13 +448,21 @@ describe('EventsService', () => {
     }
 
     const builder = {
+      leftJoin: jest.fn().mockReturnThis(),
       leftJoinAndSelect: jest.fn().mockReturnThis(),
+      clone: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
-      getManyAndCount: jest.fn().mockResolvedValue([[{ id: 'event-id' }], 21]),
+      limit: jest.fn().mockReturnThis(),
+      offset: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{ id: 'event-id' }]),
+      getCount: jest.fn().mockResolvedValue(21),
+      getMany: jest.fn().mockResolvedValue([{ id: 'event-id' }]),
     };
     eventRepository.createQueryBuilder.mockReturnValue(builder);
     await expect(
@@ -477,8 +485,8 @@ describe('EventsService', () => {
       limit: 10,
     });
     expect(builder.andWhere).toHaveBeenCalledTimes(6);
-    expect(builder.take).toHaveBeenCalledWith(10);
-    expect(builder.skip).toHaveBeenCalledWith(10);
+    expect(builder.limit).toHaveBeenCalledWith(10);
+    expect(builder.offset).toHaveBeenCalledWith(10);
   });
 
   it('creates a festival and resolves its locality through the venue domain', async () => {
