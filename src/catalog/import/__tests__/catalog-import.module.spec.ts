@@ -6,6 +6,9 @@ import { Artist } from '../../artists/entities/artist.entity';
 import { Country } from '../../countries/entities/country.entity';
 import { Disc } from '../../discs/entities/disc.entity';
 import { Genre } from '../../genres/entities/genre.entity';
+import { Tour } from '../../tours/entities/tour.entity';
+import { Locality } from '../../venues/entities/locality.entity';
+import { Venue } from '../../venues/entities/venue.entity';
 import { Rate } from '../../../community/rates/entities/rate.entity';
 import { NationalRelease } from '../../../editorial/national-releases/entities/national-release.entity';
 import { RiffValleyPlaylistArtist } from '../../../editorial/playlists/spotify-playlists/entities/riff-valley-playlist-artist.entity';
@@ -20,10 +23,20 @@ import { ExcelController } from '../excel/controller/excel.controller';
 import { ExcelImportService } from '../excel/import/excel-import.service';
 import { ExcelWorkbookParser } from '../excel/parser/excel-workbook.parser';
 import { ExcelTemplateService } from '../excel/template/excel-template.service';
+import { ImportEntityResolversService } from '../resolution/import-entity-resolvers.service';
+import { VenuesService } from '../../venues/venues.service';
+import { NominatimGeocoderService } from '../../venues/localities/nominatim-geocoder.service';
+import { Event } from '../../events/entities/event.entity';
+import { ImportConflictsService } from '../conflicts/import-conflicts.service';
 
 @Global()
 @Module({
-  providers: [{ provide: getDataSourceToken(), useValue: {} }],
+  providers: [
+    {
+      provide: getDataSourceToken(),
+      useValue: { getRepository: jest.fn(() => ({})) },
+    },
+  ],
   exports: [getDataSourceToken()],
 })
 class MockDataSourceModule {}
@@ -43,6 +56,10 @@ describe('CatalogImportModule dependency injection', () => {
       NationalRelease,
       RiffValleyPlaylistArtist,
       SpotifyConnection,
+      Tour,
+      Locality,
+      Venue,
+      Event,
     ];
 
     const testingModule = Test.createTestingModule({
@@ -73,6 +90,10 @@ describe('CatalogImportModule dependency injection', () => {
       ExcelImportService,
       ExcelWorkbookParser,
       ExcelTemplateService,
+      ImportEntityResolversService,
+      VenuesService,
+      NominatimGeocoderService,
+      ImportConflictsService,
     ];
 
     for (const provider of expectedProviders) {

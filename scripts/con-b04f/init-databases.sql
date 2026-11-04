@@ -1,0 +1,2 @@
+CREATE DATABASE con_b04a_con_b04f_receipts OWNER con_b04f_runner;
+CREATE DATABASE con_b04f_events OWNER con_b04f_runner;

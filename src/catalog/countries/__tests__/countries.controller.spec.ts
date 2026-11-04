@@ -41,6 +41,7 @@ describe('CountriesController contract characterization', () => {
   const service = {
     create: jest.fn(),
     findAll: jest.fn(),
+    findAllUnpaginated: jest.fn(),
     findOne: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
@@ -133,6 +134,23 @@ describe('CountriesController contract characterization', () => {
     await expect(controller.findAll(query)).resolves.toBe(response);
     expect(service.findAll).toHaveBeenCalledWith(query);
     expect(service.findAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps GET /api/countries/all to the complete country list', async () => {
+    const response = [
+      { id: 'country-a', name: 'France', isoCode: 'FR' },
+      { id: 'country-b', name: 'Spain', isoCode: 'ES' },
+    ];
+    service.findAllUnpaginated.mockResolvedValue(response);
+
+    expect(
+      Reflect.getMetadata(PATH_METADATA, handler('findAllUnpaginated')),
+    ).toBe('all');
+    expect(
+      Reflect.getMetadata(METHOD_METADATA, handler('findAllUnpaginated')),
+    ).toBe(RequestMethod.GET);
+    await expect(controller.findAllUnpaginated()).resolves.toBe(response);
+    expect(service.findAllUnpaginated).toHaveBeenCalledTimes(1);
   });
 
   it('maps GET /api/countries/:id with ParseUUIDPipe and returns the Country from the service', async () => {
@@ -234,7 +252,11 @@ describe('CountriesController contract characterization', () => {
     expect(
       Reflect.getMetadata(META_MINIMUM_ROLE, CountriesController),
     ).toBeUndefined();
-    for (const method of ['findAll', 'findOne'] as const) {
+    for (const method of [
+      'findAll',
+      'findAllUnpaginated',
+      'findOne',
+    ] as const) {
       expect(
         Reflect.getMetadata(GUARDS_METADATA, handler(method)),
       ).toBeUndefined();
@@ -252,13 +274,21 @@ describe('CountriesController contract characterization', () => {
     }
   });
 
-  it.each(['create', 'findAll', 'findOne', 'update', 'remove'] as const)(
+  it.each([
+    'create',
+    'findAll',
+    'findAllUnpaginated',
+    'findOne',
+    'update',
+    'remove',
+  ] as const)(
     'propagates service errors from %s without wrapping them',
     async (method) => {
       const error = new Error('service failure');
       const call = {
         create: () => controller.create({ name: 'Spain' } as CreateCountryDto),
         findAll: () => controller.findAll({} as CountriesQueryDto),
+        findAllUnpaginated: () => controller.findAllUnpaginated(),
         findOne: () => controller.findOne('country-id'),
         update: () => controller.update('country-id', { name: 'Spain' }),
         remove: () => controller.remove('country-id'),
