@@ -9,6 +9,10 @@ import { CrossDomainModule } from './app/cross-domain/cross-domain.module';
 // Catalog
 import { ArtistsModule } from './catalog/artists/artists.module';
 import { CountriesModule } from './catalog/countries/countries.module';
+import { AdministrativeRegionsModule } from './catalog/administrative-regions/administrative-regions.module';
+import { VenuesModule } from './catalog/venues/venues.module';
+import { EventsModule } from './catalog/events/events.module';
+import { ToursModule } from './catalog/tours/tours.module';
 import { DiscModule } from './catalog/discs/discs.module';
 import { GenresModule } from './catalog/genres/genres.module';
 import { CatalogImportModule } from './catalog/import/catalog-import.module';
@@ -66,6 +70,10 @@ import { VersionsModule } from './product/versions/versions.module';
     // Catalog
     ArtistsModule,
     CountriesModule,
+    AdministrativeRegionsModule,
+    VenuesModule,
+    EventsModule,
+    ToursModule,
     DiscModule,
     GenresModule,
     CatalogImportModule,

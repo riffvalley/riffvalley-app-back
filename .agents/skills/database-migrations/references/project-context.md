@@ -12,17 +12,17 @@ Reconfirma estos datos en el repositorio cada vez que uses la skill. Se observar
 
 ## Paquete y comandos existentes
 
-El proyecto admite Node 20.18.1+ y 22.x; `.nvmrc` conserva Node 20 como referencia. Usa Yarn Classic 1.22.22, fijado en `packageManager`.
+El repositorio requiere Node 24.x y fija pnpm 11.28.7 en `packageManager`.
 
-- `yarn migration:create src/migrations/<Nombre>` crea una migración vacía.
-- `yarn migration:generate src/migrations/<Nombre>` genera diferencias de entidades contra la base indicada por `src/data-source.ts`; solo debe apuntar a una base aislada y verificada.
-- `yarn migration:run` ejecuta todas las pendientes con el datasource TypeScript.
-- `yarn migration:run:prod` ejecuta todas las pendientes con el datasource compilado `dist/data-source.js`.
-- `yarn db:status` lista las migraciones cargadas desde `dist/migrations/*.js`, las aplicadas según el ledger existente y las pendientes. No crea el ledger ni instala extensiones.
-- `yarn db:check` usa la misma consulta y termina con error si falta el ledger o quedan pendientes.
-- `yarn db:migrate` aplica las pendientes usando `DataSource.runMigrations()` y valida el ledger al terminar. Con `STAGE=prod` exige `--confirm <DB_NAME>:<lista ordenada exacta>`; la lista confirmada debe coincidir con todas las pendientes observadas.
-- Los tres `db:*` requieren `yarn build` antes y ejecutan JavaScript compilado, sin `ts-node`. Su inspección de ledger evita los métodos `showMigrations()`/`getExecutedMigrations()` de TypeORM 0.3.26 porque crean la tabla si no existe.
-- `yarn migration:revert` revierte la última migración con el datasource TypeScript. No usar automáticamente; en producción requiere autorización específica y un plan de recuperación.
+- `pnpm run migration:create src/migrations/<Nombre>` crea una migración vacía.
+- `pnpm run migration:generate src/migrations/<Nombre>` genera diferencias de entidades contra la base indicada por `src/data-source.ts`; en este repositorio el destino local habitual es `SpamMusicDB` y debe verificarse antes de generar.
+- `pnpm run migration:run` ejecuta todas las pendientes con el datasource TypeScript.
+- `pnpm run migration:run:prod` ejecuta todas las pendientes con el datasource compilado `dist/data-source.js`.
+- `pnpm run db:status` lista las migraciones cargadas desde `dist/migrations/*.js`, las aplicadas según el ledger existente y las pendientes. No crea el ledger ni instala extensiones.
+- `pnpm run db:check` usa la misma consulta y termina con error si falta el ledger o quedan pendientes.
+- `pnpm run db:migrate` aplica las pendientes usando `DataSource.runMigrations()` y valida el ledger al terminar. Con `STAGE=prod` exige `--confirm <DB_NAME>:<lista ordenada exacta>`; la lista confirmada debe coincidir con todas las pendientes observadas.
+- Los tres `db:*` requieren `pnpm run build` antes y ejecutan JavaScript compilado, sin `ts-node`. Su inspección de ledger evita los métodos `showMigrations()`/`getExecutedMigrations()` de TypeORM 0.3.26 porque crean la tabla si no existe.
+- `pnpm run migration:revert` revierte la última migración con el datasource TypeScript. No usar automáticamente; en producción requiere autorización específica y un plan de recuperación.
 
 ## Conexión y ledger
 

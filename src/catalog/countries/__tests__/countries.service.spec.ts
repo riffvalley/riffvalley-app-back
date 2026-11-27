@@ -20,6 +20,7 @@ describe('CountriesService current behavior', () => {
     create: jest.Mock;
     save: jest.Mock;
     findAndCount: jest.Mock;
+    find: jest.Mock;
     findOneByOrFail: jest.Mock;
     preload: jest.Mock;
     delete: jest.Mock;
@@ -32,6 +33,7 @@ describe('CountriesService current behavior', () => {
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => value),
       findAndCount: jest.fn(),
+      find: jest.fn(),
       findOneByOrFail: jest.fn(),
       preload: jest.fn(),
       delete: jest.fn(),
@@ -275,6 +277,20 @@ describe('CountriesService current behavior', () => {
         currentPage: NaN,
         limit: 0,
       });
+    });
+  });
+
+  describe('findAllUnpaginated', () => {
+    it('returns all countries sorted by name without applying pagination', async () => {
+      const countries = [
+        { id: 'country-a', name: 'France', isoCode: 'FR' },
+        { id: 'country-b', name: 'Spain', isoCode: 'ES' },
+      ] as Country[];
+      repository.find.mockResolvedValue(countries);
+
+      await expect(service.findAllUnpaginated()).resolves.toBe(countries);
+      expect(repository.find).toHaveBeenCalledWith({ order: { name: 'ASC' } });
+      expect(repository.find).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -19,6 +19,11 @@ import { CreateArtistDto } from '../dto/create-artist.dto';
 import { UpdateArtistDto } from '../dto/update-artist.dto';
 import { ArtistDirectoryQueryDto } from '../directory/dto/artist-directory-query.dto';
 import { FillArtistImagesDto } from '../images/dto/fill-artist-images.dto';
+import {
+  MAX_ARTIST_RESOLUTION_NAME_LENGTH,
+  MAX_ARTIST_RESOLUTION_NAMES,
+  ResolveArtistsBatchDto,
+} from '../dto/resolve-artists-batch.dto';
 import { ArtistsController } from '../artists.controller';
 import { ArtistsService } from '../artists.service';
 
@@ -33,6 +38,7 @@ describe('ArtistsController contract characterization', () => {
     findOne: jest.fn(),
     findOneWithDetails: jest.fn(),
     findByName: jest.fn(),
+    resolveBatch: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
     removeOrphanArtists: jest.fn(),
@@ -309,6 +315,76 @@ describe('ArtistsController contract characterization', () => {
     expect(service.findByName).toHaveBeenCalledWith('Artist + Name');
   });
 
+  it('maps POST /artists/resolve-batch as a public read and preserves results', async () => {
+    const dto = Object.assign(new ResolveArtistsBatchDto(), {
+      names: ['Architects', 'Unknown', 'Architects'],
+    });
+    const response = {
+      results: [
+        {
+          name: 'Architects',
+          artist: {
+            id: 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783',
+            name: 'Architects',
+          },
+        },
+        { name: 'Unknown', artist: null },
+        {
+          name: 'Architects',
+          artist: {
+            id: 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783',
+            name: 'Architects',
+          },
+        },
+      ],
+    };
+    service.resolveBatch.mockResolvedValue(response);
+    const handler = route('resolveBatch');
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('resolve-batch');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(1);
+    expect(Reflect.getMetadata(META_MINIMUM_ROLE, handler)).toBeUndefined();
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toBeUndefined();
+    await expect(controller.resolveBatch(dto)).resolves.toBe(response);
+    expect(service.resolveBatch).toHaveBeenCalledWith(dto.names);
+  });
+
+  it('validates batch shape, entries, name length and maximum count while accepting an empty array', async () => {
+    const validationPipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+    const transform = (value: unknown) =>
+      validationPipe.transform(value, {
+        type: 'body',
+        metatype: ResolveArtistsBatchDto,
+      });
+
+    await expect(transform({ names: [] })).resolves.toBeInstanceOf(
+      ResolveArtistsBatchDto,
+    );
+    await expect(transform({ names: 'Architects' })).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(
+      transform({ names: ['Architects', 42] }),
+    ).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(transform({ names: ['   '] })).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(
+      transform({ names: ['x'.repeat(MAX_ARTIST_RESOLUTION_NAME_LENGTH + 1)] }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      transform({
+        names: Array(MAX_ARTIST_RESOLUTION_NAMES + 1).fill('Artist'),
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
   it('maps PATCH /artists/:id and passes the UpdateArtistDto unchanged', async () => {
     const id = 'c5dce76c-04b2-4b2b-8ca4-bb7365e86783';
     const dto = { name: 'Renamed', countryId: 'country-id' } as UpdateArtistDto;
@@ -387,6 +463,7 @@ describe('ArtistsController contract characterization', () => {
       'findOne',
       'findOneWithDetails',
       'findByName',
+      'resolveBatch',
     ] as const;
     for (const method of methods) {
       expect(

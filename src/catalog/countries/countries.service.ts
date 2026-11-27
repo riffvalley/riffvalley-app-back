@@ -64,6 +64,10 @@ export class CountriesService {
     };
   }
 
+  findAllUnpaginated(): Promise<Country[]> {
+    return this.unitRepository.find({ order: { name: 'ASC' } });
+  }
+
   async findOne(id: string): Promise<Country> {
     try {
       const unit = await this.unitRepository.findOneByOrFail({ id });

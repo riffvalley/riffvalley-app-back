@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16.14
+    restart: "no"
+    ports:
+      - "127.0.0.1:55472:5432"
+    environment:
+      POSTGRES_USER: con_b04f_runner
+      POSTGRES_PASSWORD: con_b04f_local_only
+      POSTGRES_DB: con_b04f_admin
+    volumes:
+      - con_b04f_postgres_data:/var/lib/postgresql/data
+      - ./scripts/con-b04f/init-databases.sql:/docker-entrypoint-initdb.d/01-test-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U con_b04f_runner -d con_b04f_admin"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  geocoder-mock:
+    image: node:24-bookworm-slim
+    restart: "no"
+    network_mode: host
+    volumes:
+      - ./scripts/con-b04f/geocoder-fixture.js:/fixture/geocoder-fixture.js:ro
+    command: ["node", "/fixture/geocoder-fixture.js"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:55473/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      geocoder-mock:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - /app/node_modules
+
+volumes:
+  con_b04f_postgres_data:

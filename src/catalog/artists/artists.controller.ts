@@ -15,6 +15,7 @@ import { UpdateArtistDto } from './dto/update-artist.dto';
 import { ArtistManagementQueryDto } from './dto/artist-management-query.dto';
 import { ArtistDirectoryQueryDto } from './directory/dto/artist-directory-query.dto';
 import { FillArtistImagesDto } from './images/dto/fill-artist-images.dto';
+import { ResolveArtistsBatchDto } from './dto/resolve-artists-batch.dto';
 import { PaginationDto } from 'src/shared/dto/pagination.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
@@ -50,6 +51,11 @@ export class ArtistsController {
   @Get('directory')
   findDirectory(@Query() directoryQuery: ArtistDirectoryQueryDto) {
     return this.artistsService.findDirectory(directoryQuery);
+  }
+
+  @Post('resolve-batch')
+  resolveBatch(@Body() dto: ResolveArtistsBatchDto) {
+    return this.artistsService.resolveBatch(dto.names);
   }
 
   @Get('images/fill/preview')

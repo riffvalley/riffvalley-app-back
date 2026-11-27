@@ -10,30 +10,30 @@
 
 ### Bootstrap de esquema actual para una base vacía
 
-El repositorio contiene 92 migraciones incrementales sin una migración inicial. No asumas que se pueden aplicar desde cero: algunas migraciones tempranas alteran tablas antes de que se creen. `yarn db:bootstrap-local` ofrece una alternativa local limitada: construye el esquema vigente desde metadata de entidades con `DataSource.synchronize(false)`, sin crear ni registrar el ledger. No es un baseline de migraciones ni permite ejecutar las migraciones históricas posteriormente.
+El repositorio contiene 92 migraciones incrementales sin una migración inicial. No asumas que se pueden aplicar desde cero: algunas migraciones tempranas alteran tablas antes de que se creen. `pnpm run db:bootstrap-local` ofrece una alternativa local limitada: construye el esquema vigente desde metadata de entidades con `DataSource.synchronize(false)`, sin crear ni registrar el ledger. No es un baseline de migraciones ni permite ejecutar las migraciones históricas posteriormente.
 
 El comando solo admite `STAGE=dev`, `DB_HOST=localhost`, `DB_PORT=5432`, `DB_NAME=SpamMusicDB`, el contenedor Docker `spammusicdb` con imagen PostgreSQL 17 y `DATABASE_URL` ausente. Verifica por SQL el nombre de base/usuario/propietario, versión y dirección interna del contenedor. Si `public` contiene relaciones, exige confirmación interactiva exacta `REINICIAR SpamMusicDB` antes de borrarlo; rechaza objetos en otros esquemas. El modo `--verify-only` no escribe. Ejecuta localmente:
 
 ```sh
-DISABLE_SCHEDULED_TASKS=true STAGE=dev yarn db:bootstrap-local
-yarn db:bootstrap-local --verify-only
+DISABLE_SCHEDULED_TASKS=true STAGE=dev pnpm run db:bootstrap-local
+pnpm run db:bootstrap-local --verify-only
 ```
 
 Tras el bootstrap, `db:status` informará 92 pendientes porque no hay ledger; no ejecutes `db:migrate`, `migration:run` ni `db:check` como si fuera una base migrada. Para probar una cadena real de migraciones se requiere una base inicial compatible y aislada; este bootstrap valida el esquema funcional actual, no el historial. El arranque de Nest mantiene `synchronize: false` y `migrationsRun: false`.
 
 En local, `DISABLE_SCHEDULED_TASKS=true` junto con `STAGE=dev` apaga únicamente la inscripción de cron jobs de Nest Schedule. La configuración no puede desactivar los cron jobs en otros stages y no afecta endpoints ni guards.
 
-Revisa `package.json`, `src/data-source.ts`, `src/app.module.ts`, `Procfile`, entidades y migraciones existentes. Comprueba `git status` y que `STAGE`, host, puerto y base apuntan a PostgreSQL local aislado.
+Revisa `package.json`, `src/data-source.ts`, `src/app.module.ts`, `Procfile`, entidades y migraciones existentes. Comprueba `git status` y confirma que `STAGE=dev`, `DB_HOST` apunta a loopback, `DB_NAME=SpamMusicDB` y `DATABASE_URL` no está definida. `SpamMusicDB` es el destino persistente habitual para aplicar migraciones; no hace falta crear ni seleccionar otra base aislada.
 
 Para crear un archivo vacío:
 
-    yarn migration:create src/migrations/AddArtistSearchIndex
+    pnpm run migration:create src/migrations/AddArtistSearchIndex
 
-Para generar diferencias a partir de entidades, configura el datasource con una base local aislada y verificada:
+Para generar diferencias a partir de entidades, usa el datasource local verificado de `SpamMusicDB`:
 
-    STAGE=dev DB_HOST=127.0.0.1 DB_PORT=55432 DB_NAME=rv_migrations_test DB_USERNAME=postgres DB_PASSWORD='<password-local>' yarn migration:generate src/migrations/AddArtistSearchIndex
+    pnpm run migration:generate src/migrations/AddArtistSearchIndex
 
-Revisa `up()` y `down()`, incluidos pérdida de datos, locks, constraints, defaults y backfills. Las migraciones aplicadas/publicadas son inmutables. Prueba en una base desechable o aislada. Los comandos generales usan los artefactos compilados, así que ejecuta antes `yarn build` y luego `yarn db:status`, `yarn db:migrate` y `yarn db:check` con el destino local verificado. Comprueba también el esquema, datos, ledger y comportamiento del código. No sustituyas PostgreSQL aislado por una base persistente.
+Revisa `up()` y `down()`, incluidos pérdida de datos, locks, constraints, defaults y backfills. Las migraciones aplicadas/publicadas son inmutables. Los comandos generales usan los artefactos compilados, así que ejecuta antes `pnpm run build` y luego `pnpm run db:status`, `pnpm run db:migrate` y `pnpm run db:check` sobre `SpamMusicDB`. Comprueba también el esquema, datos, ledger y comportamiento del código. Reserva otras bases para suites de integración cuyo fixture las cree o elimine explícitamente.
 
 ## Qué muestra `db:status`
 
@@ -57,7 +57,7 @@ Desde una copia local del repositorio, con Heroku CLI autenticada, ejecuta:
 
     bash scripts/db-migrate-heroku.sh
 
-El script verifica la identidad exacta de `spammusic-back`, consulta el release y usa `heroku run --no-tty --exit-code` para reutilizar los comandos generales. El release remoto debe incluir la salida estable `yarn db:status --json`; el modo de texto del comando conserva su comportamiento habitual. El JSON contiene `stage`, el nombre de base de TypeORM, existencia del ledger y nombres ordenados de pendientes. El asistente detiene el proceso si `stage` no es `prod`, falta el ledger o `DB_NAME` difiere del datasource.
+El script verifica la identidad exacta de `spammusic-back`, consulta el release y usa `heroku run --no-tty --exit-code` para reutilizar los comandos generales. El release remoto debe incluir la salida estable `pnpm run db:status -- --json`; el modo de texto del comando conserva su comportamiento habitual. El JSON contiene `stage`, el nombre de base de TypeORM, existencia del ledger y nombres ordenados de pendientes. El asistente detiene el proceso si `stage` no es `prod`, falta el ledger o `DB_NAME` difiere del datasource.
 
 Heroku no ofrece salida JSON para `pg:info` ni para `pg:backups:info`. Por eso el script muestra sus informes sin analizarlos: el desarrollador debe confirmar que `Database` coincide exactamente con `DB_NAME`, introducir el ID del backup creado y confirmar que el informe de ese ID indica `Completed` y corresponde al attachment/base esperados. Si no puede verificarlo, cancela. El token de autorización incluye app, base, lista ordenada y la declaración de compatibilidad o ventana coordinada.
 
