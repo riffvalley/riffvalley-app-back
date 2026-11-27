@@ -13,6 +13,7 @@ type DirectoryRow = {
   name: string;
   genre: string | null;
   genreColor: string | null;
+  countryIso: string | null;
 };
 
 type CountRow = { totalItems: number | string };
@@ -28,6 +29,7 @@ export class ArtistDirectoryService {
     letter?: string;
     q?: string;
     genreId?: string;
+    countryId?: string;
     limit?: number;
     offset?: number;
   }) {
@@ -62,9 +64,16 @@ export class ArtistDirectoryService {
       );
     }
 
+    if (query.countryId) {
+      const countryParameter = parameters.push(query.countryId);
+      conditions.push(`artist."countryId" = $${countryParameter}`);
+    }
+
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const countRows = (await this.artistRepository.query(
-      `SELECT COUNT(*)::int AS "totalItems" FROM artist ${where}`,
+      `SELECT COUNT(*)::int AS "totalItems"
+       FROM artist
+       ${where}`,
       parameters,
     )) as CountRow[];
     const totalItems = Number(countRows[0]?.totalItems ?? 0);
@@ -76,8 +85,10 @@ export class ArtistDirectoryService {
         artist.id AS id,
         artist.name AS name,
         latest.genre_name AS genre,
-        latest.genre_color AS "genreColor"
+        latest.genre_color AS "genreColor",
+        country."isoCode" AS "countryIso"
       FROM artist
+      LEFT JOIN country ON country.id = artist."countryId"
       LEFT JOIN LATERAL (
         SELECT genre.name AS genre_name, genre.color AS genre_color
         FROM disc
@@ -106,6 +117,7 @@ export class ArtistDirectoryService {
         name: row.name,
         genre: row.genre ?? null,
         genreColor: row.genreColor ?? null,
+        countryIso: row.countryIso ?? null,
       })),
     };
   }

@@ -12,6 +12,24 @@ describe('ArtistDirectoryQueryDto', () => {
     await expect(validate(dto)).resolves.toHaveLength(0);
   });
 
+  it('accepts an optional country UUID filter', async () => {
+    const dto = plainToInstance(ArtistDirectoryQueryDto, {
+      countryId: 'e6d53d47-71e5-4cbe-9abf-99ff4dcff9fd',
+    });
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rejects an invalid country ID filter', async () => {
+    const dto = plainToInstance(ArtistDirectoryQueryDto, {
+      countryId: 'ES',
+    });
+    await expect(validate(dto)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ property: 'countryId' }),
+      ]),
+    );
+  });
+
   it('rejects an invalid genre ID', async () => {
     const dto = plainToInstance(ArtistDirectoryQueryDto, {
       genreId: 'not-a-uuid',
