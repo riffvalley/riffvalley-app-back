@@ -14,6 +14,7 @@ import { MailService } from '../../communications/mail/mail.service';
 import { Disc } from '../../catalog/discs/entities/disc.entity';
 import { normalizeMusicName } from '../../catalog/shared/music-name/normalize-music-name';
 import { buildDiscSuggestionQuery } from './helpers/build-disc-suggestion-query';
+import { formatReleaseDay } from './helpers/format-release-day';
 
 interface SuggestedDiscCandidate {
   releaseId: string;
@@ -359,7 +360,7 @@ export class NationalReleasesService {
       created.push(
         await this.createFromDisc({
           discId: disc.id,
-          releaseDay: disc.releaseDate.toISOString().slice(0, 10),
+          releaseDay: formatReleaseDay(disc.releaseDate),
           approved: false,
           discType,
         }),
