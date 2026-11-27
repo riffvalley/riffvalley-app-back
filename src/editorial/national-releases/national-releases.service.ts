@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { In, QueryFailedError, Repository } from 'typeorm';
 import { NationalRelease, DiscType } from './entities/national-release.entity';
 import { CreateNationalReleaseDto } from './dto/create-national-release.dto';
 import { UpdateNationalReleaseDto } from './dto/update-national-release.dto';
@@ -292,6 +292,88 @@ export class NationalReleasesService {
     });
 
     return this.repo.save(release);
+  }
+
+  async syncNationalDiscsMonth(month: number, year: number) {
+    const start = new Date(Date.UTC(year, month - 1, 1));
+    const end = new Date(Date.UTC(year, month, 1));
+    const discs = await this.discRepo
+      .createQueryBuilder('disc')
+      .leftJoinAndSelect('disc.artist', 'artist')
+      .leftJoinAndSelect('artist.country', 'country')
+      .leftJoinAndSelect('disc.genre', 'genre')
+      .where('disc.releaseDate >= :start AND disc.releaseDate < :end', {
+        start,
+        end,
+      })
+      .andWhere('country.name = :countryName', { countryName: 'España' })
+      .orderBy('disc.releaseDate', 'ASC')
+      .addOrderBy('disc.name', 'ASC')
+      .getMany();
+
+    const linked = discs.length
+      ? await this.repo.find({
+          where: { discId: In(discs.map(({ id }) => id)) },
+        })
+      : [];
+    const linkedByDiscId = new Map(
+      linked.flatMap((release) =>
+        release.discId ? [[release.discId, release] as const] : [],
+      ),
+    );
+    const created: NationalRelease[] = [];
+    const linkedExisting: NationalRelease[] = [];
+    const errors: { discId: string; discName: string; message: string }[] = [];
+
+    for (const disc of discs) {
+      const existingLinked = linkedByDiscId.get(disc.id);
+      if (existingLinked) {
+        errors.push({
+          discId: disc.id,
+          discName: disc.name,
+          message: `El disco ${disc.name} ya tiene una National Release`,
+        });
+        continue;
+      }
+
+      const discType = disc.ep ? DiscType.EP : DiscType.ALBUM;
+      if (!disc.releaseDate) continue;
+      const artistName = disc.artist?.name ?? '';
+      const existingUnlinked = await this.repo
+        .createQueryBuilder('r')
+        .where('r.discId IS NULL')
+        .andWhere('LOWER(r.artistName) = LOWER(:artistName)', { artistName })
+        .andWhere('LOWER(r.discName) = LOWER(:discName)', {
+          discName: disc.name,
+        })
+        .andWhere('r.discType = :discType', { discType })
+        .getOne();
+
+      if (existingUnlinked) {
+        existingUnlinked.discId = disc.id;
+        existingUnlinked.disc = disc;
+        linkedExisting.push(await this.repo.save(existingUnlinked));
+        continue;
+      }
+
+      created.push(
+        await this.createFromDisc({
+          discId: disc.id,
+          releaseDay: disc.releaseDate.toISOString().slice(0, 10),
+          approved: false,
+          discType,
+        }),
+      );
+    }
+
+    return {
+      month,
+      year,
+      scanned: discs.length,
+      created,
+      linked: linkedExisting,
+      errors,
+    };
   }
 
   async linkDisc(id: string, dto: LinkDiscDto): Promise<NationalRelease> {
