@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { SuggestionsService } from './suggestions.service';
 import { CreateSuggestionDto } from './dto/create-suggestion.dto';
+import { SuggestionsQueryDto } from './dto/suggestions-query.dto';
 import {
   UpdateSuggestionDto,
   RejectSuggestionDto,
@@ -20,7 +21,6 @@ import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { GetUser } from 'src/identity/auth/decorators/get-user.decorator';
 import { User } from 'src/identity/auth/entities/user.entity';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
-import { SuggestionStatus, SuggestionType } from './entities/suggestion.entity';
 
 @Controller('suggestions')
 export class SuggestionsController {
@@ -34,21 +34,14 @@ export class SuggestionsController {
 
   @Get()
   @Auth(ValidRoles.superadmin)
-  findAll(
-    @Query('type') type?: SuggestionType,
-    @Query('status') status?: SuggestionStatus,
-  ) {
-    return this.suggestionsService.findAll({ type, status });
+  findAll(@Query() filters: SuggestionsQueryDto) {
+    return this.suggestionsService.findAll(filters);
   }
 
   @Get('my')
   @Auth()
-  findMine(
-    @GetUser() user: User,
-    @Query('type') type?: SuggestionType,
-    @Query('status') status?: SuggestionStatus,
-  ) {
-    return this.suggestionsService.findByUser(user, { type, status });
+  findMine(@GetUser() user: User, @Query() filters: SuggestionsQueryDto) {
+    return this.suggestionsService.findByUser(user, filters);
   }
 
   @Get(':id')

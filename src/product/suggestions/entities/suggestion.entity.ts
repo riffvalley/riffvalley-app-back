@@ -27,6 +27,20 @@ export enum SuggestionType {
   BUG = 'bug',
 }
 
+export enum SuggestionCategory {
+  ALBUMS = 'albums',
+  ARTISTS = 'artists',
+  VOTES = 'votes',
+  STATISTICS = 'statistics',
+  RANKINGS = 'rankings',
+  EVENTS = 'events',
+  HOME = 'home',
+  ACCOUNT = 'account',
+  OTHER = 'other',
+}
+
+export type SuggestionCategoryFilter = SuggestionCategory | 'uncategorized';
+
 @Entity('suggestion')
 export class Suggestion {
   @PrimaryGeneratedColumn('uuid')
@@ -44,6 +58,9 @@ export class Suggestion {
     default: SuggestionType.SUGGESTION,
   })
   type: SuggestionType;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  category: SuggestionCategory | null;
 
   @Column({
     type: 'enum',

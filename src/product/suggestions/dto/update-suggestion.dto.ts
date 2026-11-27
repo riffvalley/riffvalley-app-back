@@ -7,6 +7,7 @@ import {
   MinLength,
 } from 'class-validator';
 import {
+  SuggestionCategory,
   SuggestionPriority,
   SuggestionType,
 } from '../entities/suggestion.entity';
@@ -30,6 +31,10 @@ export class UpdateSuggestionDto {
   @IsEnum(SuggestionPriority)
   @IsOptional()
   priority?: SuggestionPriority;
+
+  @IsEnum(SuggestionCategory)
+  @IsOptional()
+  category?: SuggestionCategory | null;
 }
 
 export class RejectSuggestionDto {

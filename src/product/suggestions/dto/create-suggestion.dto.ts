@@ -4,8 +4,10 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import {
+  SuggestionCategory,
   SuggestionPriority,
   SuggestionType,
 } from '../entities/suggestion.entity';
@@ -27,4 +29,8 @@ export class CreateSuggestionDto {
   @IsEnum(SuggestionPriority)
   @IsOptional()
   priority?: SuggestionPriority;
+
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsEnum(SuggestionCategory)
+  category?: SuggestionCategory;
 }
