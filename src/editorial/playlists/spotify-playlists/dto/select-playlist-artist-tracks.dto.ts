@@ -33,7 +33,6 @@ export class ReplacePlaylistArtistTracksDto {
 
 export class ReplaceFailedFestivalArtistTracksDto {
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(10)
   @ArrayUnique()
   @IsString({ each: true })
