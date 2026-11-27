@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { Artist } from '../../entities/artist.entity';
+import { Country } from '../../../countries/entities/country.entity';
 import { Disc } from '../../../discs/entities/disc.entity';
 import { Genre } from '../../../genres/entities/genre.entity';
 import { normalizeForSearch } from '../../helpers/normalize-for-search';
@@ -18,6 +19,7 @@ runPostgres('Artist directory PostgreSQL integration', () => {
   let artistIds: string[] = [];
   let genreId: string;
   let olderGenreId: string;
+  let countryId: string;
 
   beforeAll(async () => {
     if (
@@ -148,6 +150,8 @@ runPostgres('Artist directory PostgreSQL integration', () => {
         await dataSource.getRepository(Genre).delete({ id: genreId });
       if (olderGenreId)
         await dataSource.getRepository(Genre).delete({ id: olderGenreId });
+      if (countryId)
+        await dataSource.getRepository(Country).delete({ id: countryId });
       await dataSource.destroy();
     }
   });
@@ -212,6 +216,40 @@ runPostgres('Artist directory PostgreSQL integration', () => {
       }),
     ]);
   });
+
+  it('filters by country ID and includes the ISO code in directory results', async () => {
+    const country = await dataSource.getRepository(Country).save({
+      name: `${fixturePrefix} Spain`,
+      isoCode: 'ES',
+    });
+    countryId = country.id;
+    const countryArtist = await dataSource.getRepository(Artist).save({
+      name: `A ${fixturePrefix} country artist`,
+      nameNormalized: normalizeForSearch(`A ${fixturePrefix} country artist`),
+      searchNameNormalized: normalizeMusicName(
+        `A ${fixturePrefix} country artist`,
+      ),
+      countryId,
+      needsReview: false,
+    });
+    artistIds.push(countryArtist.id);
+
+    const result = await service.findDirectory({
+      q: `${fixturePrefix} country artist`,
+      countryId,
+      limit: 10,
+    });
+
+    expect(result.totalItems).toBe(1);
+    expect(result.data).toEqual([
+      expect.objectContaining({
+        id: countryArtist.id,
+        name: `A ${fixturePrefix} country artist`,
+        countryIso: 'ES',
+      }),
+    ]);
+  });
+
   it('filters by any related disc genre, keeps latest-disc color, counts unique artists, and paginates', async () => {
     const target = await dataSource.getRepository(Artist).findOneByOrFail({
       name: `The ${fixturePrefix}`,

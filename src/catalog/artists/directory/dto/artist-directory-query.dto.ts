@@ -28,6 +28,10 @@ export class ArtistDirectoryQueryDto {
   genreId?: string;
 
   @IsOptional()
+  @IsUUID()
+  countryId?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

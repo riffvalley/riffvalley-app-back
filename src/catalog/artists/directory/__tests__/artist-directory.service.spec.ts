@@ -27,8 +27,15 @@ describe('ArtistDirectoryService', () => {
           name: 'A Band',
           genre: 'Metal',
           genreColor: '#123',
+          countryIso: null,
         },
-        { id: 'artist-2', name: 'Ä Band', genre: null, genreColor: null },
+        {
+          id: 'artist-2',
+          name: 'Ä Band',
+          genre: null,
+          genreColor: null,
+          countryIso: null,
+        },
       ],
     });
     const [countSql, countParameters] = artistRepository.query.mock
@@ -173,5 +180,48 @@ describe('ArtistDirectoryService', () => {
       data: [],
     });
     expect(artistRepository.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('filters by country ID for both count and page and returns the country ISO', async () => {
+    artistRepository.query
+      .mockReset()
+      .mockResolvedValueOnce([{ totalItems: 1 }])
+      .mockResolvedValueOnce([
+        {
+          id: 'artist-1',
+          name: 'A Band',
+          genre: 'Metal',
+          genreColor: '#123',
+          countryIso: 'ES',
+        },
+      ]);
+
+    await expect(
+      service.findDirectory({ letter: 'A', countryId: 'country-id' }),
+    ).resolves.toMatchObject({
+      totalItems: 1,
+      data: [
+        {
+          id: 'artist-1',
+          name: 'A Band',
+          genre: 'Metal',
+          genreColor: '#123',
+          countryIso: 'ES',
+        },
+      ],
+    });
+
+    const [countSql, countParameters] = artistRepository.query.mock
+      .calls[0] as [string, unknown[]];
+    const [pageSql, pageParameters] = artistRepository.query.mock.calls[1] as [
+      string,
+      unknown[],
+    ];
+    expect(countSql).not.toContain('LEFT JOIN country');
+    expect(countSql).toContain('artist."countryId" = $2');
+    expect(countParameters).toEqual(['A', 'country-id']);
+    expect(pageSql).toContain('country."isoCode" AS "countryIso"');
+    expect(pageSql).toContain('artist."countryId" = $2');
+    expect(pageParameters).toEqual(['A', 'country-id', 20, 0]);
   });
 });
