@@ -258,6 +258,7 @@ export class SpotifyPlaylistArtistSyncService {
       spotifyTrackIds,
       'festival',
       existing,
+      true,
     );
   }
 
@@ -323,6 +324,7 @@ export class SpotifyPlaylistArtistSyncService {
     spotifyTrackIds: string[],
     playlistType: 'festival' | 'genre',
     current?: RiffValleyPlaylistArtist,
+    allowEmptyFestivalSelection = false,
   ) {
     const [riffValleyPlaylist, artist] = await Promise.all([
       playlistType === 'genre'
@@ -339,7 +341,7 @@ export class SpotifyPlaylistArtistSyncService {
       (spotifyTrackIds.length !== 2 || uniqueTrackCount !== 2);
     const invalidFestivalSelection =
       playlistType === 'festival' &&
-      (spotifyTrackIds.length < 1 ||
+      ((!allowEmptyFestivalSelection && spotifyTrackIds.length < 1) ||
         spotifyTrackIds.length > 10 ||
         uniqueTrackCount !== spotifyTrackIds.length);
     if (invalidGenreSelection) {
@@ -374,10 +376,9 @@ export class SpotifyPlaylistArtistSyncService {
 
     try {
       const accessToken = await this.getValidAccessToken();
-      const response = await this.spotifyAccountApi.getTracks(
-        accessToken,
-        spotifyTrackIds,
-      );
+      const response = spotifyTrackIds.length
+        ? await this.spotifyAccountApi.getTracks(accessToken, spotifyTrackIds)
+        : [];
       const fetchedTracks = response.filter((track): track is SpotifyTrack =>
         Boolean(track),
       );
