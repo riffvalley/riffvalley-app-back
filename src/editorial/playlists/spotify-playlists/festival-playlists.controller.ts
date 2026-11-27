@@ -23,7 +23,7 @@ import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 import { CreateSyncedPlaylistDto } from './dto/create-synced-playlist.dto';
 import { LinkSpotifyPlaylistDto } from './dto/link-spotify-playlist.dto';
 import { SearchSpotifyTracksQueryDto } from './dto/search-spotify-tracks-query.dto';
-import { ReplaceFailedFestivalArtistTracksDto } from './dto/select-playlist-artist-tracks.dto';
+import { ReplaceFestivalArtistTracksDto } from './dto/select-playlist-artist-tracks.dto';
 import { SyncPlaylistArtistDto } from './dto/sync-playlist-artist.dto';
 import { TopSongsQueryDto } from './dto/top-songs-query.dto';
 import { UpdateSyncedPlaylistDto } from './dto/update-synced-playlist.dto';
@@ -185,12 +185,12 @@ export class FestivalPlaylistsController {
 
   @Put(':riffValleyPlaylistId/artists/:artistId/tracks')
   @Auth(ValidRoles.riffvalley)
-  replaceFailedArtistTracks(
+  replaceArtistTracks(
     @Param('riffValleyPlaylistId', ParseUUIDPipe) riffValleyPlaylistId: string,
     @Param('artistId', ParseUUIDPipe) artistId: string,
-    @Body() dto: ReplaceFailedFestivalArtistTracksDto,
+    @Body() dto: ReplaceFestivalArtistTracksDto,
   ) {
-    return this.spotifyPlaylistsService.replaceFailedFestivalArtistTracks(
+    return this.spotifyPlaylistsService.replaceFestivalArtistTracks(
       riffValleyPlaylistId,
       artistId,
       dto.spotifyTrackIds,

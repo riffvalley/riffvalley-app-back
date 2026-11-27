@@ -172,12 +172,12 @@ export class SpotifyPlaylistsService {
     );
   }
 
-  replaceFailedFestivalArtistTracks(
+  replaceFestivalArtistTracks(
     riffValleyPlaylistId: string,
     artistId: string,
     spotifyTrackIds: string[],
   ) {
-    return this.playlistArtistSyncService.replaceFailedFestivalArtistTracks(
+    return this.playlistArtistSyncService.replaceFestivalArtistTracks(
       riffValleyPlaylistId,
       artistId,
       spotifyTrackIds,

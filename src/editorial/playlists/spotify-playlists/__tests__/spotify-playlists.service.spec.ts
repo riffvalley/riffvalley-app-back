@@ -396,8 +396,8 @@ describe('SpotifyPlaylistsService', () => {
       replaceGenreArtistTracks: jest
         .spyOn(playlistArtistSyncService, 'replaceGenreArtistTracks')
         .mockResolvedValue(result),
-      replaceFailedFestivalArtistTracks: jest
-        .spyOn(playlistArtistSyncService, 'replaceFailedFestivalArtistTracks')
+      replaceFestivalArtistTracks: jest
+        .spyOn(playlistArtistSyncService, 'replaceFestivalArtistTracks')
         .mockResolvedValue(result),
       removeGenreArtist: jest
         .spyOn(playlistArtistSyncService, 'removeGenreArtist')
@@ -431,11 +431,7 @@ describe('SpotifyPlaylistsService', () => {
       service.replaceGenreArtistTracks('genre-id', 'artist-id', trackIds),
     ).resolves.toBe(result);
     await expect(
-      service.replaceFailedFestivalArtistTracks(
-        'festival-id',
-        'artist-id',
-        trackIds,
-      ),
+      service.replaceFestivalArtistTracks('festival-id', 'artist-id', trackIds),
     ).resolves.toBe(result);
     await expect(
       service.removeGenreArtist('genre-id', 'artist-id'),
@@ -465,7 +461,7 @@ describe('SpotifyPlaylistsService', () => {
       'artist-id',
       trackIds,
     );
-    expect(delegates.replaceFailedFestivalArtistTracks).toHaveBeenCalledWith(
+    expect(delegates.replaceFestivalArtistTracks).toHaveBeenCalledWith(
       'festival-id',
       'artist-id',
       trackIds,

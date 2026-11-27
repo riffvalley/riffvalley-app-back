@@ -166,9 +166,9 @@ export class SpotifyPlaylistArtistSyncService {
     if (!association) {
       throw new NotFoundException('Artist is not in this playlist');
     }
-    if (association.status !== PlaylistArtistSyncStatus.FAILED) {
+    if (association.status === PlaylistArtistSyncStatus.SYNCING) {
       throw new BadRequestException(
-        'Solo se pueden elegir canciones manualmente para artistas con error',
+        'No se pueden elegir canciones mientras el artista se está sincronizando',
       );
     }
     return this.searchArtistTracks(artistId, query);
@@ -236,7 +236,7 @@ export class SpotifyPlaylistArtistSyncService {
     );
   }
 
-  async replaceFailedFestivalArtistTracks(
+  async replaceFestivalArtistTracks(
     riffValleyPlaylistId: string,
     artistId: string,
     spotifyTrackIds: string[],
@@ -247,9 +247,9 @@ export class SpotifyPlaylistArtistSyncService {
     if (!existing) {
       throw new NotFoundException('Artist is not in this playlist');
     }
-    if (existing.status !== PlaylistArtistSyncStatus.FAILED) {
+    if (existing.status === PlaylistArtistSyncStatus.SYNCING) {
       throw new BadRequestException(
-        'Solo se pueden elegir canciones manualmente para artistas con error',
+        'No se pueden elegir canciones mientras el artista se está sincronizando',
       );
     }
     return this.saveManualArtistTracks(

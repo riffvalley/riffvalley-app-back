@@ -31,7 +31,7 @@ export class ReplacePlaylistArtistTracksDto {
   spotifyTrackIds: string[];
 }
 
-export class ReplaceFailedFestivalArtistTracksDto {
+export class ReplaceFestivalArtistTracksDto {
   @IsArray()
   @ArrayMaxSize(10)
   @ArrayUnique()
