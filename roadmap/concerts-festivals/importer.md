@@ -2,6 +2,8 @@
 
 La política actual para detectar eventos ya registrados está en [CON-F12e — Detección de eventos ya existentes](con-f12e-identity-policy.md).
 
+El contrato HTTP backend final, validado tras CON-F12b/c/e, está en [CON-F12i — Contrato backend de importación masiva](con-f12i-backend-contract.md). Ese documento es la referencia vigente para integración; no acredita compatibilidad del frontend.
+
 ## CON-F12d — Auditoría profunda del flujo de importación
 
 **Estado:** auditoría y diseño documentados; sin implementación de código, cambios de endpoint o frontend. La conclusión mantiene creación de referencias dentro de la transacción por Event y propone deduplicación previa de lectura más revalidación transaccional. Véanse el [análisis completo](con-f12d-import-strategies.md) y sus [mediciones PostgreSQL](con-f12d-import-strategies.md#5-rendimiento-y-límites).
@@ -10,7 +12,7 @@ La política actual para detectar eventos ya registrados está en [CON-F12e — 
 
 **Estado:** implementado y verificado con pruebas focalizadas e integración PostgreSQL aislada.
 
-El endpoint definitivo es `POST /api/events/import-batch`, protegido por JWT y rol mínimo `riffvalley`. Conserva el sobre JSON `{batchId, countryId, rows}` y ahora acepta hasta **50 filas** por petición. Cada fila sigue validándose de forma independiente; la respuesta contiene `{batchId, results}` con un resultado en la posición correspondiente a cada entrada (`created`, `conflict`, `invalid` o `failed`). El límite se aplica mediante `ArrayMaxSize(50)` en el DTO y el contrato de salida no cambia.
+El endpoint definitivo es `POST /api/events/import-batch`, protegido por JWT y rol mínimo `riffvalley`. Conserva el sobre JSON `{batchId, countryId, rows}` y acepta hasta **50 filas** por petición. Cada fila se valida de forma independiente; la respuesta contiene `{batchId, results}` en orden con un resultado por entrada (`created`, `unchanged`, `conflict`, `invalid` o `failed`). Véase el contrato final CON-F12i para el esquema, campos por estado, reintentos y ejemplos.
 
 Las filas persistibles se procesan secuencialmente. Cada una conserva su transacción y recibo de idempotencia independientes, incluyendo Event, EventArtist y entidades materializadas dentro de esa transacción. Un error de validación o conflicto de negocio solo afecta a esa fila. Ante errores de conexión PostgreSQL, falta de recursos del servidor o interrupción de conexión reconocible, la fila actual queda fallida y no se inician las siguientes; las filas exitosas previas permanecen confirmadas. Reintentar el mismo lote reproduce sus filas confirmadas desde sus recibos y vuelve a intentar las filas no confirmadas con las mismas identidades.
 
@@ -156,13 +158,13 @@ El servicio solo lee y no reemplaza la protección ante carreras de la fase que 
 }
 ```
 
-El sobre requiere `batchId`, `countryId` y un array de hasta 100 filas. Cada fila se valida de forma independiente y rechaza propiedades desconocidas; acepta hasta 100 artistas, UUIDs y fechas de calendario válidas, ciudad obligatoria, nombres de artista de hasta 100 caracteres, ciudad/provincia de hasta 150, recinto y gira de hasta 180, nombre de evento de hasta 240 y textos `price`/`otherInfo` de hasta 2.000/10.000 caracteres. Una fila inválida conserva su posición y no invalida el lote. `name` es opcional en conciertos y obligatorio en festivales y giras.
+En el contrato original de CON-B04d, el sobre aceptaba hasta 100 filas. CON-F12c redujo el máximo HTTP a **50**, y CON-F12e añadió el resultado `unchanged`; ambas decisiones vigentes están consolidadas en CON-F12i. Las restricciones por fila descritas en el resto de esta sección corresponden al DTO actual.
 
 `countryId` sirve de contexto para buscar localidades existentes y sus alias. Si no se encuentra la localidad, el resolutor actual requiere `administrativeRegionId` existente para preparar la geocodificación; no inventa regiones ni países. La región es opcional para localidades ya registradas. `province` solo ayuda a desambiguar. Esta diferencia respecto al ejemplo mínimo del contrato es intencional y queda registrada en la auditoría.
 
 ### Resultado y persistencia
 
-La respuesta devuelve `{ "batchId", "results": [...] }` en el orden de entrada, con un resultado identificado por `rowId` y estado `created`, `conflict`, `invalid` o `failed`. `created` incluye `eventId`, IDs reutilizables de localidad/recinto/artistas y `tourId` cuando aplique; un replay añade `replayed: true`. Conflictos incluyen código y, cuando el motor los entrega, conflictos tipados con filas relacionadas, eventos candidatos y artistas coincidentes/añadibles. Errores técnicos se registran internamente y responden con un mensaje genérico.
+La respuesta devuelve `{ "batchId", "results": [...] }` en el orden de entrada, con un resultado correlacionado por `rowId` y estado `created`, `unchanged`, `conflict`, `invalid` o `failed`. `created` incluye `eventId`, IDs de localidad/recinto/artistas y `tourId` cuando aplique; un replay añade `replayed: true`. `unchanged` incluye el `eventId` existente. Véase CON-F12i para los campos completos por estado.
 
 Cada fila admisible ejecuta una transacción corta que incluye recibo, materialización de Locality/Artist/Venue/Tour y escritura de Event/EventArtist. Un error revierte solo esa fila. Los artistas se inspeccionan en lote y se materializan con bloqueo normalizado; localidad, recinto y gira reutilizan sus bloqueos/restricciones y resolutores existentes. Los artistas/recintos/localidades/tours creados por una fila fallida revierten con ella; las filas posteriores pueden crearlos. Los eventos tipo `tour` se guardan como `concert`, con `Event.name = null` y `Event.tourId` asociado.
 

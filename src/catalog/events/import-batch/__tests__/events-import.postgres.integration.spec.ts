@@ -441,6 +441,9 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
     expect(replay.results.every((result) => result.replayed === true)).toBe(
       true,
     );
+    expect(replay.results).toEqual(
+      created.results.map((result) => ({ ...result, replayed: true })),
+    );
     const afterReplay = (await dataSource.query(
       'SELECT count(*)::int AS count FROM "events" WHERE "id" = ANY($1::uuid[])',
       [tourConcertIds],
@@ -566,6 +569,193 @@ integrationSuite('Concert import PostgreSQL integration and benchmark', () => {
       price: '20 EUR',
       other_info: 'Original details',
     });
+  });
+
+  it('creates 50 events, then classifies the same events as unchanged under new import identities without writes', async () => {
+    const rows = Array.from({ length: 50 }, (_, index) =>
+      row(
+        randomUUID(),
+        dateAt(30_000 + index),
+        [{ name: 'Septicflesh', artistId: artistIds.get('Septicflesh') }],
+        {
+          administrativeRegionId: regionId,
+          venue: 'La Riviera',
+          price: `${index} EUR`,
+          otherInfo: `Original row ${index}`,
+        },
+      ),
+    );
+    const createRequest = batch(rows);
+    createRequest.countryId = countryId;
+    logger.reset();
+    const initialRssBytes = process.memoryUsage().rss;
+    const createStartedAt = performance.now();
+    const created = await batchService.importBatch(editorId, createRequest);
+    const createElapsedMs = performance.now() - createStartedAt;
+    const createQueries = logger.queryCount;
+    const createTransactions = logger.transactionCount;
+    const createRssDeltaBytes = process.memoryUsage().rss - initialRssBytes;
+    expect(created.results).toHaveLength(50);
+    expect(created.results.every((result) => result.status === 'created')).toBe(
+      true,
+    );
+    const eventIds = created.results.flatMap((result) =>
+      result.status === 'created' && result.eventId ? [result.eventId] : [],
+    );
+    expect(eventIds).toHaveLength(50);
+    const exactReplay = await batchService.importBatch(editorId, createRequest);
+    expect(exactReplay.results).toEqual(
+      created.results.map((result) => ({ ...result, replayed: true })),
+    );
+
+    const snapshotTables = [
+      'artist',
+      'localities',
+      'venues',
+      'tours',
+      'events',
+      'event_artists',
+    ] as const;
+    const beforeSnapshots = await Promise.all(
+      snapshotTables.map(async (table) => {
+        const snapshot = (await dataSource.query(
+          `SELECT to_jsonb(item)::text AS value FROM "${table}" item ORDER BY item."id"`,
+        )) as Array<{ value: string }>;
+        return snapshot.map(({ value }) => value);
+      }),
+    );
+    const duplicateRows = rows.map((item, index) => ({
+      ...item,
+      rowId: randomUUID(),
+      venue: `Must not be created ${index}`,
+      price: '99 EUR',
+      otherInfo: 'Must not update the existing event',
+    }));
+    const duplicateRequest = batch(duplicateRows);
+    duplicateRequest.countryId = countryId;
+    logger.reset();
+    const duplicateStartedAt = performance.now();
+    const unchanged = await batchService.importBatch(
+      editorId,
+      duplicateRequest,
+    );
+    const duplicateElapsedMs = performance.now() - duplicateStartedAt;
+    const duplicateQueries = logger.queryCount;
+    const duplicateTransactions = logger.transactionCount;
+    const afterSnapshots = await Promise.all(
+      snapshotTables.map(async (table) => {
+        const snapshot = (await dataSource.query(
+          `SELECT to_jsonb(item)::text AS value FROM "${table}" item ORDER BY item."id"`,
+        )) as Array<{ value: string }>;
+        return snapshot.map(({ value }) => value);
+      }),
+    );
+    expect(unchanged.results).toHaveLength(50);
+    expect(
+      unchanged.results.every((result) => result.status === 'unchanged'),
+    ).toBe(true);
+    expect(unchanged.results.map((result) => result.eventId)).toEqual(eventIds);
+    expect(afterSnapshots).toEqual(beforeSnapshots);
+    expect(createTransactions).toBe(50);
+    expect(duplicateTransactions).toBe(0);
+    console.log(
+      `[CON-F12i 50-row contract] ${JSON.stringify({
+        inputExample: {
+          batchId: createRequest.batchId,
+          countryId: createRequest.countryId,
+          rows: [rows[0]],
+        },
+        createdExample: {
+          batchId: created.batchId,
+          results: [created.results[0]],
+        },
+        replayExample: {
+          batchId: exactReplay.batchId,
+          results: [exactReplay.results[0]],
+        },
+        unchangedExample: {
+          batchId: unchanged.batchId,
+          results: [unchanged.results[0]],
+        },
+        created: {
+          rows: created.results.length,
+          sqlQueries: createQueries,
+          transactions: createTransactions,
+          elapsedMs: Number(createElapsedMs.toFixed(2)),
+          approximateRssDeltaBytes: createRssDeltaBytes,
+        },
+        unchanged: {
+          rows: unchanged.results.length,
+          sqlQueries: duplicateQueries,
+          transactions: duplicateTransactions,
+          elapsedMs: Number(duplicateElapsedMs.toFixed(2)),
+        },
+      })}`,
+    );
+  });
+
+  it('keeps committed rows when a PostgreSQL query cancellation stops the batch mid-request', async () => {
+    const failureDate = '2052-02-02';
+    await dataSource.query(`
+      CREATE FUNCTION con_f12i_cancel_one_event() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW."start_date" = DATE '${failureDate}' THEN
+          RAISE EXCEPTION 'CON-F12i simulated statement cancellation'
+            USING ERRCODE = '57014';
+        END IF;
+        RETURN NEW;
+      END;
+      $$
+    `);
+    await dataSource.query(`
+      CREATE TRIGGER con_f12i_cancel_one_event
+      BEFORE INSERT ON "events"
+      FOR EACH ROW EXECUTE FUNCTION con_f12i_cancel_one_event()
+    `);
+    try {
+      const request = batch([
+        row(randomUUID(), '2052-02-01', [{ name: 'Septicflesh' }], {
+          administrativeRegionId: regionId,
+        }),
+        row(randomUUID(), failureDate, [{ name: 'Kvelertak' }], {
+          administrativeRegionId: regionId,
+        }),
+        row(randomUUID(), '2052-02-03', [{ name: 'Gojira' }], {
+          administrativeRegionId: regionId,
+        }),
+      ]);
+      request.countryId = countryId;
+      const result = await batchService.importBatch(editorId, request);
+      expect(result.results.map((item) => item.status)).toEqual([
+        'created',
+        'failed',
+        'failed',
+      ]);
+      const eventDates = (await dataSource.query(
+        `SELECT "start_date" FROM "events"
+         WHERE "start_date" BETWEEN DATE '2052-02-01' AND DATE '2052-02-03'
+         ORDER BY "start_date"`,
+      )) as Array<{ start_date: Date | string }>;
+      expect(
+        eventDates.map(({ start_date }) =>
+          start_date instanceof Date
+            ? start_date.toISOString().slice(0, 10)
+            : start_date,
+        ),
+      ).toEqual(['2052-02-01']);
+      console.log(
+        `[CON-F12i mid-batch failure] ${JSON.stringify({
+          batchId: result.batchId,
+          results: result.results,
+        })}`,
+      );
+    } finally {
+      await dataSource.query(
+        'DROP TRIGGER con_f12i_cancel_one_event ON "events"',
+      );
+      await dataSource.query('DROP FUNCTION con_f12i_cancel_one_event()');
+    }
   });
 
   it('marks repeated identities inside one batch as conflicts without materializing either row', async () => {
