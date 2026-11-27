@@ -4,13 +4,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { FindOptionsWhere, IsNull, Repository } from 'typeorm';
 import {
   Suggestion,
+  SuggestionCategoryFilter,
   SuggestionStatus,
   SuggestionType,
 } from './entities/suggestion.entity';
 import { CreateSuggestionDto } from './dto/create-suggestion.dto';
+import { SuggestionsQueryDto } from './dto/suggestions-query.dto';
 import {
   UpdateSuggestionDto,
   RejectSuggestionDto,
@@ -33,14 +35,32 @@ export class SuggestionsService {
     return this.repo.save(suggestion);
   }
 
-  private async getCounts(filters: { type?: SuggestionType; userId?: string }) {
+  private async getCounts(filters: {
+    type?: SuggestionType;
+    userId?: string;
+    category?: SuggestionCategoryFilter;
+  }) {
     const qb = this.repo
       .createQueryBuilder('s')
       .select('s.status', 'status')
       .addSelect('COUNT(*)', 'count');
-    if (filters.type) qb.where('s.type = :type', { type: filters.type });
-    if (filters.userId)
-      qb.andWhere('s.userId = :userId', { userId: filters.userId });
+    const conditions: string[] = [];
+    const parameters: Record<string, string> = {};
+    if (filters.type) {
+      conditions.push('s.type = :type');
+      parameters.type = filters.type;
+    }
+    if (filters.userId) {
+      conditions.push('s.userId = :userId');
+      parameters.userId = filters.userId;
+    }
+    if (filters.category === 'uncategorized') {
+      conditions.push('s.category IS NULL');
+    } else if (filters.category) {
+      conditions.push('s.category = :category');
+      parameters.category = filters.category;
+    }
+    if (conditions.length > 0) qb.where(conditions.join(' AND '), parameters);
     const rows = await qb.groupBy('s.status').getRawMany();
     return {
       in_progress: 0,
@@ -50,37 +70,51 @@ export class SuggestionsService {
     };
   }
 
-  async findAll(filters: { type?: SuggestionType; status?: SuggestionStatus }) {
+  async findAll(filters: SuggestionsQueryDto) {
     const where: FindOptionsWhere<Suggestion> = {};
     if (filters.type) where.type = filters.type;
     if (filters.status) where.status = filters.status;
+    this.applyCategoryFilter(where, filters.category);
     const [data, counts] = await Promise.all([
       this.repo.find({
         where,
         relations: ['versionItem'],
         order: { createdAt: 'DESC' },
       }),
-      this.getCounts({ type: filters.type }),
+      this.getCounts({ type: filters.type, category: filters.category }),
     ]);
     return { data, counts };
   }
 
-  async findByUser(
-    user: User,
-    filters: { type?: SuggestionType; status?: SuggestionStatus },
-  ) {
+  async findByUser(user: User, filters: SuggestionsQueryDto) {
     const where: FindOptionsWhere<Suggestion> = { userId: user.id };
     if (filters.type) where.type = filters.type;
     if (filters.status) where.status = filters.status;
+    this.applyCategoryFilter(where, filters.category);
     const [data, counts] = await Promise.all([
       this.repo.find({
         where,
         relations: ['versionItem'],
         order: { createdAt: 'DESC' },
       }),
-      this.getCounts({ type: filters.type, userId: user.id }),
+      this.getCounts({
+        type: filters.type,
+        userId: user.id,
+        category: filters.category,
+      }),
     ]);
     return { data, counts };
+  }
+
+  private applyCategoryFilter(
+    where: FindOptionsWhere<Suggestion>,
+    category?: SuggestionCategoryFilter,
+  ): void {
+    if (category === 'uncategorized') {
+      where.category = IsNull();
+    } else if (category) {
+      where.category = category;
+    }
   }
 
   async findOne(id: string): Promise<Suggestion> {
