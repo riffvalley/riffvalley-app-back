@@ -291,12 +291,17 @@ describe('session HTTP security helpers', () => {
 
   describe('refresh cookie policies', () => {
     const expiry = new Date('2026-11-20T10:00:00.000Z');
+    const beforeExpiry = new Date('2026-11-19T10:00:00.000Z');
 
     it.each([
       ['app', '__Secure-rv_app_refresh'],
       ['wiki', '__Secure-rv_wiki_refresh'],
     ] as const)('builds a host-only secure cookie for %s', (client, name) => {
-      const policy = createSessionRefreshCookiePolicy(client, expiry);
+      const policy = createSessionRefreshCookiePolicy(
+        client,
+        expiry,
+        beforeExpiry,
+      );
 
       expect(policy.name).toBe(name);
       expect(policy.options).toEqual({
