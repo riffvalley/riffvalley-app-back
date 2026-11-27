@@ -22,6 +22,7 @@ import { CreateNationalReleaseDto } from './dto/create-national-release.dto';
 import { UpdateNationalReleaseDto } from './dto/update-national-release.dto';
 import { LinkDiscDto } from './dto/link-disc.dto';
 import { CreateNationalReleaseFromDiscDto } from './dto/create-national-release-from-disc.dto';
+import { SyncNationalReleasesMonthDto } from './dto/sync-national-releases-month.dto';
 import { Auth } from 'src/identity/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/identity/auth/interfaces/valid-roles';
 
@@ -83,6 +84,12 @@ export class NationalReleasesController {
   @Auth(ValidRoles.riffvalley)
   createFromDisc(@Body() dto: CreateNationalReleaseFromDiscDto) {
     return this.service.createFromDisc(dto);
+  }
+
+  @Post('sync-month')
+  @Auth(ValidRoles.riffvalley)
+  syncMonth(@Body() dto: SyncNationalReleasesMonthDto) {
+    return this.service.syncNationalDiscsMonth(dto.month, dto.year);
   }
 
   @Post('bulk')

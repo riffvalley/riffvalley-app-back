@@ -16,9 +16,10 @@ describe('NationalReleasesController authorization metadata', () => {
   const handler = (method: keyof typeof NationalReleasesController.prototype) =>
     NationalReleasesController.prototype[method];
 
-  it('restricts the six role-protected operations only to riffvalley', () => {
+  it('restricts role-protected operations only to riffvalley', () => {
     const protectedRoutes = [
       ['createFromDisc', 1, 'from-disc'],
+      ['syncMonth', 1, 'sync-month'],
       ['createBulk', 1, 'bulk'],
       ['findAllAdmin', 0, 'all'],
       ['linkDisc', 4, ':id/link-disc'],
