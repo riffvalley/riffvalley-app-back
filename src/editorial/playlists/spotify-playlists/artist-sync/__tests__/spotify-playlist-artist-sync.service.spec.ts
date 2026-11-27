@@ -416,6 +416,37 @@ describe('SpotifyPlaylistArtistSyncService', () => {
     );
   });
 
+  it('permite buscar canciones para corregir un artista de festival ya sincronizado', async () => {
+    const playlist = playlistRecord({ id: 'playlist-local' });
+    playlistArtistRepository.findOne.mockResolvedValue(
+      playlistArtistRecord('association-one', []),
+    );
+    jest
+      .spyOn(playlistManagementService, 'getFestivalPlaylist')
+      .mockResolvedValue(playlist);
+    artistRepository.findOneBy.mockResolvedValue(artistRecord('Igorrr'));
+    spotifyAccountApi.searchTracks.mockResolvedValue([
+      spotifyTrack('track-one', 'Song one', 'Igorrr'),
+    ]);
+
+    await expect(
+      artistSyncService.searchFestivalArtistTracks(
+        playlist.id,
+        'artist-id',
+        '  ieuD  ',
+      ),
+    ).resolves.toEqual({
+      artist: { id: 'artist-id', name: 'Igorrr' },
+      query: 'ieuD',
+      tracks: [expect.objectContaining({ spotifyTrackId: 'track-one' })],
+    });
+    expect(spotifyAccountApi.searchTracks).toHaveBeenCalledWith(
+      'access-token',
+      'track:ieuD artist:Igorrr',
+      20,
+    );
+  });
+
   it('mantiene el matching normalizado, la consulta secuencial y el orden/deduplicación por URI', async () => {
     const playlist = {
       id: 'playlist-local',
@@ -613,7 +644,7 @@ describe('SpotifyPlaylistArtistSyncService', () => {
     );
   });
 
-  it('permite recuperar un artista fallido de festival con una sola canción', async () => {
+  it('permite corregir manualmente las canciones de un artista de festival sincronizado', async () => {
     const playlist = {
       id: 'playlist-local',
       spotifyPlaylistId: 'playlist-remote',
@@ -624,7 +655,7 @@ describe('SpotifyPlaylistArtistSyncService', () => {
       riffValleyPlaylistId: playlist.id,
       artistId: 'artist-id',
       spotifyArtistId: null,
-      status: 'failed',
+      status: 'synced',
       tracks: [],
     } as RiffValleyPlaylistArtist;
     artistRepository.findOneBy.mockResolvedValue(artistRecord('Igorrr'));
@@ -650,7 +681,7 @@ describe('SpotifyPlaylistArtistSyncService', () => {
     spotifyAccountApi.getTracks.mockResolvedValue([spotifyTrack]);
     spotifyAccountApi.addPlaylistItems.mockResolvedValue(undefined);
 
-    await artistSyncService.replaceFailedFestivalArtistTracks(
+    await artistSyncService.replaceFestivalArtistTracks(
       playlist.id,
       'artist-id',
       ['track-one'],
@@ -687,7 +718,7 @@ describe('SpotifyPlaylistArtistSyncService', () => {
       } as RiffValleyPlaylist);
 
     await expect(
-      artistSyncService.replaceFailedFestivalArtistTracks(
+      artistSyncService.replaceFestivalArtistTracks(
         'playlist-local',
         'artist-id',
         Array.from({ length: 11 }, (_, index) => `track-${index}`),

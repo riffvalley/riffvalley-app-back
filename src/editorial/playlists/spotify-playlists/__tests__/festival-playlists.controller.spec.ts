@@ -34,7 +34,7 @@ describe('FestivalPlaylistsController authorization metadata', () => {
         ':riffValleyPlaylistId/artists/:artistId/tracks',
       ],
       [
-        'replaceFailedArtistTracks',
+        'replaceArtistTracks',
         2,
         ':riffValleyPlaylistId/artists/:artistId/tracks',
       ],
